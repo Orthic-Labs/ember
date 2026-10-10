@@ -332,12 +332,19 @@ fn at_most(a: &CameraTone, b: &CameraTone) -> bool {
     })
 }
 
+/// Pixel cap for the embedded JPEG decoded for the fit. The codec checks it before decoding and
+/// decodes at full size, so a 66.5 MP full-frame ILCE-7RM6 JPEG transiently needs ~200 MB (3 B/px);
+/// 128 MP also admits 100 MP medium-format previews.
+const FIT_PREVIEW_MAX_PIXELS: u64 = 128_000_000;
 /// Same-size proxies of the sensor (white-balanced, baseline exposure, through `transform`'s
 /// matrix: the generic camera ≈ sRGB model) and of the file's embedded camera JPEG (linear Rec.2020),
 /// and per proxy pixel whether any sensor sample it covers is clipped.
 fn proxies(raw: &RawImage, bytes: &[u8], transform: &CameraTransform, size: usize) -> Option<(Rgb32f, Rgb32f, Vec<bool>)> {
     let edge = (2 * size).max(384) as u32;
-    let decoded = crate::files::decode_raw_preview(bytes, lightcraft_codecs::DecodeOptions { max_size: Some((edge, edge)), max_pixels: 64_000_000 })?;
+    let decoded = crate::files::decode_raw_preview(
+        bytes,
+        lightcraft_codecs::DecodeOptions { max_size: Some((edge, edge)), max_pixels: FIT_PREVIEW_MAX_PIXELS },
+    )?;
     let mut reference = decoded.to_working();
     let (a, crop) = (raw.active_area, raw.crop.clipped(raw.active_area.width, raw.active_area.height));
     if crop.width == 0 || crop.height == 0 || reference.width == 0 || reference.height == 0 {
@@ -3173,5 +3180,21 @@ mod tests {
         sorted.data.sort_by(|a, b| luminance_2020(*a).total_cmp(&luminance_2020(*b)));
         reference.data.iter_mut().for_each(|p| *p = [0.4; 3]);
         assert!(fit_tone_only(&sorted, &reference, None).is_none(), "a flat JPEG");
+    }
+
+    /// ILCE-7RM6 full-frame: the 66.5 MP camera JPEG exceeded the old 64 MP cap, so no look was fitted.
+    #[test]
+    fn corpus_arw6_full_frame_gets_a_camera_look() {
+        const { assert!(FIT_PREVIEW_MAX_PIXELS >= 100_000_000) };
+        let path = std::env::var_os("LIGHTCRAFT_CORPUS")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus"))
+            .join("raw/arw6-sony-ilce7rm6-ff-land-c.arw");
+        let Ok(bytes) = std::fs::read(&path) else {
+            eprintln!("skip: {} absent", path.display());
+            return;
+        };
+        let (_, info) = crate::files::load_bytes(&bytes, 400).unwrap();
+        assert!(info.camera_tone.is_some(), "no camera look fitted");
     }
 }
