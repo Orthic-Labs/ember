@@ -31,6 +31,8 @@ struct Task {
     completed: Arc<AtomicUsize>,
     cancel: Arc<AtomicBool>,
     worker: Option<std::thread::JoinHandle<()>>,
+    /// A Lightroom import's step-by-step progress; its status reports this instead of the counts.
+    progress: Option<lightcraft_engine::lightroom_job::LightroomProgress>,
 }
 
 enum Event {
@@ -188,6 +190,7 @@ impl Tasks {
             completed: completed.clone(),
             cancel: cancel.clone(),
             worker: None,
+            progress: None,
         };
         let tx = self.tx.clone();
         let id_for_worker = task_id.clone();
@@ -289,6 +292,7 @@ impl Tasks {
             completed: completed.clone(),
             cancel: cancel.clone(),
             worker: None,
+            progress: None,
         };
         let tx = self.tx.clone();
         let id_for_worker = task_id.clone();
@@ -336,6 +340,7 @@ impl Tasks {
             completed: completed.clone(),
             cancel: cancel.clone(),
             worker: None,
+            progress: None,
         };
         let tx = self.tx.clone();
         let id_for_worker = task_id.clone();
@@ -395,6 +400,7 @@ impl Tasks {
             completed: completed.clone(),
             cancel: cancel.clone(),
             worker: None,
+            progress: None,
         };
         let tx = self.tx.clone();
         let id_for_worker = task_id.clone();
@@ -528,6 +534,7 @@ impl Tasks {
             completed: completed.clone(),
             cancel: cancel.clone(),
             worker: None,
+            progress: None,
         };
         let tx = self.tx.clone();
         let id_for_worker = task_id.clone();
@@ -684,6 +691,7 @@ impl Tasks {
             completed,
             cancel: cancel.clone(),
             worker: None,
+            progress: None,
         };
         let tx = self.tx.clone();
         let id_for_worker = task_id.clone();
@@ -744,8 +752,8 @@ impl Tasks {
         let path = lightroom_path(params, "library.importLightroom")?;
         let update_existing = params.get("updateExisting").and_then(Value::as_bool).unwrap_or(false);
         let mut job = lightcraft_engine::lightroom_job::LightroomJob::new(session, path, update_existing).map_err(|error| error.to_string())?;
-        let total = job.total_atomic();
-        let completed = job.done_atomic();
+        let progress = job.progress();
+        let (total, completed) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
         let cancel = Arc::new(AtomicBool::new(false));
         let task_id = self.new_id("lightroomImport");
         let task = Task {
@@ -756,6 +764,7 @@ impl Tasks {
             completed,
             cancel: cancel.clone(),
             worker: None,
+            progress: Some(progress),
         };
         let tx = self.tx.clone();
         let id_for_worker = task_id.clone();
@@ -790,6 +799,7 @@ impl Tasks {
             completed: completed.clone(),
             cancel: cancel.clone(),
             worker: None,
+            progress: None,
         };
         let tx = self.tx.clone();
         let id_for_worker = task_id.clone();
@@ -841,6 +851,7 @@ impl Tasks {
             completed: completed.clone(),
             cancel: cancel.clone(),
             worker: None,
+            progress: None,
         };
         let tx = self.tx.clone();
         let id_for_worker = task_id.clone();
@@ -1131,14 +1142,12 @@ impl Tasks {
     pub(crate) fn statuses(&self) -> Vec<JobStatus> {
         self.jobs
             .values()
-            .map(|job| JobStatus {
-                id: job.id.clone(),
-                kind: job.kind.clone(),
-                label: job.label.clone(),
-                completed: job.completed.load(Ordering::Relaxed),
-                total: job.total.load(Ordering::Relaxed),
-                cancellable: true,
-                error: None,
+            .map(|job| {
+                let (label, completed, total) = match &job.progress {
+                    Some(progress) => lightroom_status(&job.label, progress),
+                    None => (job.label.clone(), job.completed.load(Ordering::Relaxed), job.total.load(Ordering::Relaxed)),
+                };
+                JobStatus { id: job.id.clone(), kind: job.kind.clone(), label, completed, total, cancellable: true, error: None }
             })
             .collect()
     }
@@ -1312,6 +1321,22 @@ fn merge_cancelled(worker_cancelled: bool, task: Option<&Task>) -> bool {
     worker_cancelled || task.is_some_and(|task| task.cancel.load(Ordering::Relaxed))
 }
 
+/// A Lightroom import's status: the step under way with its own count in the label, and the whole
+/// preparation as thousandths, so a long read of the originals moves the bar instead of looking hung.
+fn lightroom_status(label: &str, progress: &lightcraft_engine::lightroom_job::LightroomProgress) -> (String, usize, usize) {
+    use lightcraft_engine::lightroom_job::LightroomStep;
+    let (step, done, total) = progress.step();
+    let name = match step {
+        LightroomStep::Catalog => "Reading the catalog",
+        LightroomStep::ReadPhotos => "Reading photos",
+        LightroomStep::AddPhotos => "Adding photos",
+    };
+    let label = if total > 0 { format!("{label}: {name} ({done} of {total})") } else { format!("{label}: {name}") };
+    let fraction = progress.fraction();
+    let completed = if fraction.is_finite() { (fraction.clamp(0.0, 1.0) * 1000.0).round() as usize } else { 0 };
+    (label, completed, 1000)
+}
+
 fn lightroom_path(params: &Value, command: &str) -> Result<std::path::PathBuf, String> {
     let path = params.get("path").and_then(Value::as_str).ok_or_else(|| format!("{command} requires path"))?;
     if path.is_empty() || path.len() > 8_192 || path.contains('\0') {
@@ -1444,6 +1469,7 @@ impl Tasks {
             completed: Arc::new(AtomicUsize::new(0)),
             cancel,
             worker: Some(worker),
+            progress: None,
         };
         self.jobs.insert(id, task);
         (started, release)
@@ -1477,9 +1503,22 @@ mod tests {
                 completed: Arc::new(AtomicUsize::new(0)),
                 cancel: Arc::new(AtomicBool::new(false)),
                 worker: None,
+                progress: None,
             },
         );
         tasks.finish(id.into(), result, "merge", false);
+    }
+
+    #[test]
+    fn lightroom_status_names_the_step_and_moves_forward() {
+        let progress = lightcraft_engine::lightroom_job::LightroomProgress::default();
+        let (label, completed, total) = lightroom_status("Import LRCAT Catalog", &progress);
+        assert_eq!((label.as_str(), completed, total), ("Import LRCAT Catalog: Reading the catalog", 0, 1000));
+        progress.catalog_total.store(14, Ordering::Relaxed);
+        progress.catalog_done.store(7, Ordering::Relaxed);
+        let (label, completed, _) = lightroom_status("Import LRCAT Catalog", &progress);
+        assert_eq!(label, "Import LRCAT Catalog: Reading the catalog (7 of 14)");
+        assert!(completed > 0 && completed < 1000);
     }
 
     fn task_with_cancel(cancelled: bool) -> Task {
@@ -1491,6 +1530,7 @@ mod tests {
             completed: Arc::new(AtomicUsize::new(100)),
             cancel: Arc::new(AtomicBool::new(cancelled)),
             worker: None,
+            progress: None,
         }
     }
 
@@ -1503,6 +1543,7 @@ mod tests {
             completed: Arc::new(AtomicUsize::new(0)),
             cancel: Arc::new(AtomicBool::new(cancelled)),
             worker: None,
+            progress: None,
         }
     }
 
@@ -1614,6 +1655,7 @@ mod tests {
                 completed: Arc::new(AtomicUsize::new(0)),
                 cancel: Arc::new(AtomicBool::new(false)),
                 worker: None,
+                progress: None,
             },
         );
         assert_eq!(tasks.cancel(Some(&id)).expect("cull cancel")["cancelled"], 1);
@@ -1823,6 +1865,7 @@ mod tests {
                 completed: Arc::new(AtomicUsize::new(0)),
                 cancel: Arc::new(AtomicBool::new(false)),
                 worker: None,
+                progress: None,
             },
         );
         let mut session = Session::new();

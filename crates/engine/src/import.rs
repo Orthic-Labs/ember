@@ -550,13 +550,14 @@ pub(crate) fn probe_paths(s: &Session, paths: &[String]) -> Vec<Result<ProbeInfo
 }
 
 fn probe_all(probe: Option<&crate::media::FileProbe>, paths: &[String], progress: &ScanProgress) -> Vec<Result<ProbeInfo, String>> {
-    probe_all_with_cancel(probe, paths, progress, &progress.cancel)
+    probe_all_with_cancel(probe, paths, progress, &progress.done, &progress.cancel)
 }
 
 fn probe_all_with_cancel(
     probe: Option<&crate::media::FileProbe>,
     paths: &[String],
     progress: &ScanProgress,
+    done: &std::sync::atomic::AtomicUsize,
     cancel: &std::sync::atomic::AtomicBool,
 ) -> Vec<Result<ProbeInfo, String>> {
     use std::sync::atomic::Ordering::Relaxed;
@@ -601,7 +602,7 @@ fn probe_all_with_cancel(
                             if let Ok(info) = &r {
                                 progress.metrics.bytes_read.fetch_add(info.file_size, Relaxed);
                             }
-                            progress.done.fetch_add(1, Relaxed);
+                            done.fetch_add(1, Relaxed);
                             out.lock().unwrap_or_else(|e| e.into_inner())[i] = Some(r);
                         }
                     });
@@ -630,7 +631,7 @@ fn probe_all_with_cancel(
             if let Ok(info) = &r {
                 progress.metrics.bytes_read.fetch_add(info.file_size, Relaxed);
             }
-            progress.done.fetch_add(1, Relaxed);
+            done.fetch_add(1, Relaxed);
             r
         })
         .collect();
@@ -1047,6 +1048,10 @@ pub struct ImportJob {
     pub done: std::sync::Arc<std::sync::atomic::AtomicUsize>,
     /// Fixed-size diagnostics shared by preparation workers and their caller.
     pub metrics: std::sync::Arc<ImportMetrics>,
+    /// Of those, the files that have to be read first (not probed by a preceding scan) and the
+    /// ones read so far: the step before they are handled.
+    pub read_total: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    pub read_done: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 }
 
 /// The outcome of [`ImportJob::prepare`] for one batch, in file order.
@@ -1200,6 +1205,8 @@ impl ImportJob {
             total: Default::default(),
             done: Default::default(),
             metrics: Default::default(),
+            read_total: Default::default(),
+            read_done: Default::default(),
         })
     }
 
@@ -1268,8 +1275,11 @@ impl ImportJob {
             })
             .collect();
         let missing: Vec<String> = todo.iter().zip(&cached).filter(|(_, c)| c.is_none()).map(|(f, _)| f.clone()).collect();
+        // Reading the files is the slow part of adding them where they are: it is counted on its
+        // own ([`ImportJob::read_done`]), before they are handled.
+        self.read_total.fetch_add(missing.len(), Relaxed);
         let progress = ScanProgress::with_metrics(self.metrics.clone());
-        let mut fresh = probe_all_with_cancel(self.probe.as_ref(), &missing, &progress, cancel).into_iter();
+        let mut fresh = probe_all_with_cancel(self.probe.as_ref(), &missing, &progress, &self.read_done, cancel).into_iter();
         let probed: Vec<Result<ProbeInfo, String>> =
             cached.into_iter().map(|c| c.unwrap_or_else(|| fresh.next().unwrap_or_else(|| Err("not probed".into())))).collect();
         crate::memory::release();
@@ -1956,5 +1966,32 @@ mod prepared_tests {
         let cancelled = read_sidecars(&paths, &probes, &[true, true], crate::sidecar::SidecarNaming::Stem, &cancel, &metrics);
         assert!(cancelled.iter().all(Option::is_none));
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    fn unread_paths(n: usize) -> Vec<String> {
+        (0..n).map(|i| std::env::temp_dir().join(format!("lightcraft-probe-progress-{i}.jpg")).to_string_lossy().into()).collect()
+    }
+
+    /// Reading the files of a large import (a Lightroom catalog's originals) reported nothing:
+    /// the progress stood still at "14 of 24554" for as long as it took.
+    #[test]
+    fn prepare_counts_the_files_it_reads() {
+        use std::sync::atomic::Ordering::Relaxed;
+        let mut s = Session::new();
+        let seen = std::sync::Arc::new(AtomicUsize::new(0));
+        let (seen_in_probe, done_in_probe) = (seen.clone(), std::sync::Arc::new(AtomicUsize::new(0)));
+        let mut job = ImportJob::new(&mut s, ImportOptions { mode: ImportMode::Add, ..ImportOptions::default() }).unwrap();
+        let (done, last) = (job.read_done.clone(), done_in_probe.clone());
+        job.probe = Some(std::sync::Arc::new(move |_: &str| {
+            seen_in_probe.fetch_add(1, Relaxed);
+            last.fetch_max(done.load(Relaxed), Relaxed);
+            Ok(ProbeInfo { format: "JPEG".into(), ..ProbeInfo::default() })
+        }));
+        let prepared = job.prepare(&unread_paths(40), &std::sync::atomic::AtomicBool::new(false));
+        assert_eq!(prepared.items.len(), 40);
+        assert_eq!(seen.load(Relaxed), 40);
+        assert!(done_in_probe.load(Relaxed) > 0, "progress moves while files are read");
+        assert_eq!((job.read_done.load(Relaxed), job.read_total.load(Relaxed)), (40, 40), "every file read is counted");
+        assert_eq!((job.done.load(Relaxed), job.total.load(Relaxed)), (40, 40), "handling them is counted on its own");
     }
 }
