@@ -838,7 +838,7 @@ fn local_rows(app: &mut LightcraftApp, ui: &mut egui::Ui, now: &LocalNow) {
     for (i, (name, path)) in local.places.iter().enumerate() {
         let transient = local.browse_root.as_deref() == Some(path.as_str());
         let reveal = local.owner == Some(i);
-        folder_tree(app, ui, name, path, 0.0, current, reveal, transient);
+        folder_tree(app, ui, path, name, path, 0.0, current, reveal, transient);
     }
     if app.services.pick_folder.is_some() && row(app, ui, "local:browse", Icon::Plus, crate::i18n::tr("Browse Folder…"), None, false, 0.0).clicked()
     {
@@ -1030,10 +1030,14 @@ pub(crate) fn fs_cached<T: Clone + Send + 'static>(ui: &egui::Ui, kind: &'static
 /// subfolders. In the tree that holds the folder being browsed (`reveal`), the folders on the
 /// way down to it open whenever the browsed folder changes, so it shows highlighted in place.
 /// `transient`: a top-level row listed for this session only (it offers Keep in Local).
+/// `place`: the top-level folder this tree hangs from. A folder can be listed in more than one
+/// tree (Pictures on its own and inside Home): each row opens and closes by itself, and their
+/// triangles have ids of their own, else the copy drawn last takes the other's clicks (#1093).
 #[allow(clippy::too_many_arguments)]
 fn folder_tree(
     app: &mut LightcraftApp,
     ui: &mut egui::Ui,
+    place: &str,
     name: &str,
     path: &str,
     indent: f32,
@@ -1041,13 +1045,13 @@ fn folder_tree(
     reveal: bool,
     transient: bool,
 ) {
-    let open_id = egui::Id::new(("folder-open", path.to_string()));
+    let open_id = egui::Id::new(("folder-open", place.to_string(), path.to_string()));
     let sel = current.is_some_and(|c| same_folder(c, path));
     let on_the_way = !sel && current.is_some_and(|c| lightcraft_catalog::query::folder_within(c, path));
     let mut open = tree_open(ui, open_id, false);
     if reveal && on_the_way {
         // opened once per browsed folder: collapsing it again afterwards sticks
-        let revealed_id = egui::Id::new(("folder-revealed", path.to_string()));
+        let revealed_id = egui::Id::new(("folder-revealed", place.to_string(), path.to_string()));
         let target = current.map(str::to_string);
         if ui.data(|d| d.get_temp::<Option<String>>(revealed_id)) != Some(target.clone()) {
             open = true;
@@ -1110,7 +1114,7 @@ fn folder_tree(
     });
     if open && indent < 12.0 * 8.0 {
         for (n, p) in subfolders(ui, path) {
-            folder_tree(app, ui, &n, &p, indent + 12.0, current, reveal, false);
+            folder_tree(app, ui, place, &n, &p, indent + 12.0, current, reveal, false);
         }
     }
 }

@@ -896,6 +896,48 @@ fn local_folder_tree_expands_and_browses() {
     h.settle(SETTLE);
 }
 
+/// A folder listed twice in Local (Pictures as a place of its own and again inside Home) opens
+/// and closes on each row by itself: both copies of its triangle used to share one egui id, so
+/// the copy drawn later took the clicks of the one drawn first (issue #1093).
+#[test]
+fn local_folder_listed_twice_opens_and_closes_each_row() {
+    let base = std::env::temp_dir().join(format!("lc-ui-twice-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let inner = base.join("Inner");
+    std::fs::create_dir_all(inner.join("Sub")).unwrap();
+    let mut h = detail("panel.edit");
+    exec(&mut h, "view.leftPanel", json!({"show": true}));
+    h.hide_home_above(&base);
+    let (base_s, inner_s) = (base.to_string_lossy().to_string(), inner.to_string_lossy().to_string());
+    let sub = inner.join("Sub").to_string_lossy().to_string();
+    exec(&mut h, "local.addRoot", json!({"path": base_s}));
+    exec(&mut h, "local.addRoot", json!({"path": inner_s}));
+    h.settle(SETTLE);
+    let r = h.request("ui.clickWidget", json!({"id": format!("folderToggle:{base_s}")}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    let toggle = format!("folderToggle:{inner_s}");
+    h.step_until(SETTLE, |h| h.app.widgets.iter().filter(|(w, _)| *w == toggle).count() == 2);
+    let rows = |h: &Headless, id: &str| h.app.widgets.iter().filter(|(w, _)| w == id).count();
+    assert_eq!(rows(&h, &toggle), 2, "Inner is listed inside the base folder and as a place of its own");
+    let sub_row = format!("source:local:{sub}");
+    assert_eq!(rows(&h, &sub_row), 0);
+    // each copy's triangle opens that copy only, and closes it again
+    for copy in 0..2 {
+        let at = h.app.widgets.iter().filter(|(w, _)| *w == toggle).nth(copy).map(|(_, r)| r.center()).unwrap();
+        let r = h.request("ui.click", json!({"x": at.x, "y": at.y}), T);
+        assert_eq!(r["ok"], true, "{r}");
+        h.step_until(SETTLE, |h| h.app.widgets.iter().any(|(w, _)| *w == sub_row));
+        assert_eq!(rows(&h, &sub_row), 1, "copy {copy} opens, the other stays closed");
+        let at = h.app.widgets.iter().filter(|(w, _)| *w == toggle).nth(copy).map(|(_, r)| r.center()).unwrap();
+        let r = h.request("ui.click", json!({"x": at.x, "y": at.y}), T);
+        assert_eq!(r["ok"], true, "{r}");
+        h.settle(SETTLE);
+        assert_eq!(rows(&h, &sub_row), 0, "copy {copy} closes again");
+    }
+    let _ = std::fs::remove_dir_all(&base);
+    h.settle(SETTLE);
+}
+
 #[test]
 fn slideshow_advances_pauses_and_ends() {
     let mut h = detail("panel.edit");
