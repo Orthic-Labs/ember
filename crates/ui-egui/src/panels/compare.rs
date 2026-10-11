@@ -350,6 +350,8 @@ fn request_window(app: &mut LightcraftApp, v: &TileView) -> Option<crate::region
     // refused: what the window reads (a spot's source, an Auto Mask stroke) is too far for one
     // render; the pane keeps its whole-frame render
     let job = app.session.region_job(v.id, fw, fh, win, true)?;
+    // keyed as the renderer keys the texture (a display profile changes the key)
+    let job = app.renderer.job_for(Slot::CompareRegion(v.pane), job);
     let look = job.settings.hash64();
     let view = crate::region::RegionView { photo: v.id, before: false, key: job.key, full: (fw, fh), window: win, settings: look };
     // windows of other photos, looks and zooms of this pane can't be drawn any more

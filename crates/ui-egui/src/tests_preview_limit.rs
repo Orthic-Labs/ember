@@ -783,6 +783,53 @@ mod in_the_loupe {
         assert!(held(&h) > before / 3, "and they are still there");
     }
 
+    /// Load a Display P3 monitor profile (`app.displayProfile`), as Settings ▸ Display does.
+    fn use_display_profile(h: &mut Headless) {
+        let dir = std::env::temp_dir().join(format!("lightcraft-zoom-display-{}-{:?}", std::process::id(), std::thread::current().id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("p3.icc");
+        std::fs::write(&path, lightcraft_codecs::icc::write_named(lightcraft_codecs::NamedSpace::DisplayP3)).expect("profile written");
+        let r = h.request("engine.execute", json!({"command": "app.displayProfile", "params": {"path": path.to_string_lossy()}}), T);
+        assert_eq!(r["ok"], true, "{r}");
+        assert!(h.app.renderer.display_id().is_some());
+    }
+
+    // Given a monitor profile, when I zoom to 1:1, then the sharp window is painted over the
+    // whole-frame render, as without one (a display profile changes the texture's render key, and
+    // the window used to be looked up by the key it had before: never found, so only the
+    // whole-frame render, magnified and blurred, was shown)
+    #[test]
+    fn a_display_profile_keeps_the_sharp_window_at_one_to_one() {
+        let (mut h, native) = detail();
+        use_display_profile(&mut h);
+        h.request("engine.execute", json!({"command": "view.zoom100"}), T);
+        h.settle(SETTLE);
+        assert!(rendered_long_edge(&h) < native, "the whole frame is smaller than the photo");
+        let view = h.app.region_view.expect("a window render");
+        assert_eq!(view.full.0.max(view.full.1), native);
+        let (whole, window) = (drawn(&h, Slot::Main), drawn(&h, Slot::Region));
+        assert!(!whole.is_empty(), "the whole-frame render is painted");
+        assert!(!window.is_empty(), "the window is painted");
+        assert!(window[0].0 > whole[0].0, "over the whole-frame render");
+    }
+
+    // …and in Compare, each pane's window too
+    #[test]
+    fn a_display_profile_keeps_the_compare_windows_at_one_to_one() {
+        let (mut h, _) = detail();
+        use_display_profile(&mut h);
+        let r = h.request("engine.execute", json!({"command": "view.compare"}), T);
+        assert_eq!(r["ok"], true, "{r}");
+        h.app.ui.zoom = crate::state::Zoom::Percent(100.0);
+        h.settle(SETTLE);
+        for i in 0..2u8 {
+            assert!(h.app.compare_windows[i as usize].is_some(), "pane {i} asked for a window");
+            let (whole, window) = (drawn(&h, Slot::Compare(i)), drawn(&h, Slot::CompareRegion(i)));
+            assert!(!whole.is_empty() && !window.is_empty(), "pane {i}: both are painted");
+            assert!(window[0].0 > whole[0].0, "pane {i}: the window is painted over the whole-frame render");
+        }
+    }
+
     /// Compare view of the demo library at `zoom`, settled.
     fn compare_at(zoom: crate::state::Zoom) -> Headless {
         let (mut h, _) = detail();
