@@ -634,6 +634,32 @@ pub enum MetadataPolicy {
     None,
 }
 
+/// Transfer curve of an HDR AVIF export (`hdrTransfer`): PQ (absolute, SDR white at 203 cd/m²) or
+/// HLG (relative to the display; BT.2100 with SDR white at signal 0.75).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HdrCurve {
+    #[default]
+    Pq,
+    Hlg,
+}
+
+impl HdrCurve {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "pq" => Some(Self::Pq),
+            "hlg" => Some(Self::Hlg),
+            _ => None,
+        }
+    }
+    fn codec(self) -> lightcraft_codecs::HdrTransfer {
+        match self {
+            Self::Pq => lightcraft_codecs::HdrTransfer::Pq,
+            Self::Hlg => lightcraft_codecs::HdrTransfer::Hlg,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ExportOptions {
@@ -692,6 +718,8 @@ pub struct ExportOptions {
     pub add_to_photos: bool,
     /// The Photos album they go into, made when missing (empty = none).
     pub photos_album: String,
+    /// The curve of an HDR AVIF: PQ (default) or HLG.
+    pub hdr_transfer: HdrCurve,
 }
 
 impl Default for ExportOptions {
@@ -721,6 +749,7 @@ impl Default for ExportOptions {
             jxl_progressive: false,
             add_to_photos: false,
             photos_album: String::new(),
+            hdr_transfer: HdrCurve::Pq,
         }
     }
 }
@@ -762,6 +791,7 @@ pub const OPTION_PARAMS: &[&str] = &[
     "jxlProgressive",
     "addToPhotos",
     "photosAlbum",
+    "hdrTransfer",
 ];
 
 /// Why an export can't add its files to Apple Photos on this platform (`None`: it can, when the
@@ -934,6 +964,7 @@ impl ExportOptions {
                 }
                 "sharpen" => one_of(k, v, &["none", "screen", "matte", "glossy"])?,
                 "sharpenAmount" => one_of(k, v, &["low", "standard", "high"])?,
+                "hdrTransfer" => one_of(k, v, &["pq", "hlg"])?,
                 "conflict" => one_of(k, v, &["unique", "overwrite", "skip"])?,
                 "tiffCompression" => one_of(k, v, &["none", "lzw", "zip", "deflate"])?,
                 "jxlEffort" => one_of(k, v, &["fast", "normal"])?,
@@ -1072,6 +1103,7 @@ impl ExportOptions {
             jxl_progressive: p.get("jxlProgressive").and_then(Value::as_bool).unwrap_or(d.jxl_progressive),
             add_to_photos: p.get("addToPhotos").and_then(Value::as_bool).unwrap_or(d.add_to_photos),
             photos_album: s("photosAlbum").map_or(d.photos_album, |a| a.trim().to_string()),
+            hdr_transfer: s("hdrTransfer").and_then(HdrCurve::parse).unwrap_or(d.hdr_transfer),
         }
     }
 
@@ -1470,7 +1502,7 @@ pub fn encode_deep(img: &DeepImage, o: &ExportOptions, meta: Option<&Metadata>) 
             return lightcraft_raw::write_rendered_dng(img.width, img.height, v, &img.space.rgb_space(), &m, xmp.clone()).map_err(|e| e.to_string());
         }
         (ExportFormat::Avif, DeepSamples::F32(v)) if img.space == OutputSpace::Rec2020 => {
-            lightcraft_codecs::encode_avif_pq(w, h, v, o.quality, 8, &meta)
+            lightcraft_codecs::encode_avif_hdr(w, h, v, o.quality, 8, &meta, o.hdr_transfer.codec())
         }
         (ExportFormat::Avif, _) => encode::encode_avif(&e, o.quality, 8, &meta),
         (ExportFormat::Jxl, DeepSamples::F32(_)) if img.space == OutputSpace::Rec2020 => {

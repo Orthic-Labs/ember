@@ -27,6 +27,7 @@ mod appearance;
 mod control_server;
 mod dialog_filter;
 mod editors;
+mod hdr_display;
 mod logging;
 #[cfg(target_os = "macos")]
 mod native_menu;
@@ -873,6 +874,8 @@ fn main() -> eframe::Result {
                 // (never required: without it, AI masks offer to download it; see docs/ai-masks.md)
                 // and the user's own download locations, one base URL per line (LIGHTCRAFT_SAM3_MIRRORS too)
                 session = session.with_default_sam3_model();
+                // HDR display: SDR unless the surface, platform and display all allow HDR
+                hdr_display::report(cc.wgpu_render_state.as_ref().map(|r| r.target_format));
                 let mut app = LightcraftApp::new(session, services(cc, app_log_file.as_deref()));
                 if let Some(ui) = prefs {
                     app.ui = ui;

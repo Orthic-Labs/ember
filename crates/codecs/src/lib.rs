@@ -39,8 +39,8 @@ mod tiff_codec;
 mod webp;
 
 pub use encode::{
-    ChromaSubsampling, EncodeImage, EncodeMeta, HDR_REFERENCE_WHITE_NITS, Samples, TiffCompression, encode_avif, encode_avif_pq, encode_jpeg,
-    encode_png, encode_png_pq, encode_psd, encode_tiff, encode_webp_lossless,
+    ChromaSubsampling, EncodeImage, EncodeMeta, HDR_REFERENCE_WHITE_NITS, HLG_REFERENCE_PEAK_NITS, HdrTransfer, Samples, TiffCompression,
+    encode_avif, encode_avif_hdr, encode_avif_pq, encode_jpeg, encode_png, encode_png_pq, encode_psd, encode_tiff, encode_webp_lossless, hlg_signal,
 };
 pub use jxl_encode::{JxlColour, JxlEffort, JxlOptions, encode_jxl};
 pub use sniff::{Format, sniff};
