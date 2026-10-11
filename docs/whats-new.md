@@ -104,6 +104,11 @@
   Each such bug used to take one of the render threads with it, so after a few of them no photo rendered until
   LightCraft was restarted. The bug is still written to the log (Help ▸ Open Log Folder) for a report.
 
+### Library sorting
+- Photos that tie on the sort key (equal ratings, one import batch, a burst shot within the same second) now sort by
+  file name, then id, instead of import order. Recently Added keeps a batch in file name order, and Auto-Stack orders a
+  burst by file name, so the first file is the cover.
+
 ## 2026-10-10
 
 ### Dialogs fit the window
