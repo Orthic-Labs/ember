@@ -21,6 +21,12 @@ pub(crate) fn content_width(ctx: &egui::Context) -> f32 {
 /// The most a row asks for its name: longer ones are cut when there is no more room.
 const MAX_NAME_NEED: f32 = 140.0;
 
+/// Height of a sidebar row.
+const ROW_HEIGHT: f32 = 29.0;
+
+/// Temp-data key of the keyword (lower-case path) the sidebar scrolls to, and the frame it was asked for.
+const KEYWORD_SCROLL_TO: &str = "left-keyword-scroll-to";
+
 /// A row says how wide it needs to be.
 fn note_width(ui: &egui::Ui, w: f32) {
     ui.data_mut(|d| {
@@ -75,7 +81,7 @@ fn row_sensed(
 ) -> egui::Response {
     let label = if matches!(id, "all" | "recentlyAdded" | "picks" | "missing" | "recentlyDeleted") { crate::i18n::tr(label) } else { label };
     let t = Tokens::get(ui.ctx());
-    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 29.0), sense);
+    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), sense);
     register(ui.ctx(), format!("source:{id}"), r);
     let said = spoken.unwrap_or(label);
     let name = match count {
@@ -638,6 +644,9 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                     above.push_str(name);
                     set_tree_open(ui, egui::Id::new(("kw-open", above.to_lowercase())), true);
                 }
+                // …and the sidebar scrolls to it when its row is drawn (`keyword_rows`)
+                let frame = ui.ctx().cumulative_frame_nr();
+                ui.data_mut(|d| d.insert_temp(egui::Id::new(KEYWORD_SCROLL_TO), (path.to_lowercase(), frame)));
             }
             // Local keeps track of the folder being browsed whether or not it is drawn
             let local = local_now(app, ui);
@@ -1833,13 +1842,34 @@ fn folder_menu_for_library(app: &mut LightcraftApp, resp: &egui::Response, n: &F
 /// filters the grid by the keyword (children included), the triangle opens a level, and the
 /// context menu renames, merges or deletes the keyword across the library.
 fn keyword_rows(app: &mut LightcraftApp, ui: &mut egui::Ui, nodes: &[KeywordNode], indent: f32) {
+    // the keyword just made from the header, to scroll to (asked for a frame or two ago)
+    let scroll_id = egui::Id::new(KEYWORD_SCROLL_TO);
+    let frame = ui.ctx().cumulative_frame_nr();
+    let scroll_to = ui.data(|d| d.get_temp::<(String, u64)>(scroll_id)).filter(|(_, asked)| frame.saturating_sub(*asked) <= 2).map(|(p, _)| p);
     for n in nodes {
-        let open_id = egui::Id::new(("kw-open", n.path.to_lowercase()));
+        let lower = n.path.to_lowercase();
+        let reveal = scroll_to.as_deref() == Some(lower.as_str());
+        let open_id = egui::Id::new(("kw-open", lower));
         let mut open = tree_open(ui, open_id, false);
+        // a row out of sight only takes its room: a library can have thousands of keywords, and
+        // drawing them all every frame slows the whole app down (issue #1011)
+        let next = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), ROW_HEIGHT));
+        if !reveal && !ui.is_rect_visible(next) {
+            ui.allocate_space(next.size());
+            note_width(ui, 42.0 + indent + 18.0);
+            if open && !n.children.is_empty() {
+                keyword_rows(app, ui, &n.children, indent + 16.0);
+            }
+            continue;
+        }
         let sel = app.session.filter.keyword.as_deref().is_some_and(|k| k.eq_ignore_ascii_case(&n.path));
         let resp = row(app, ui, &format!("keyword:{}", n.path), Icon::Tag, &n.name, Some(n.count), sel, indent);
         if !n.children.is_empty() {
             tree_toggle(ui, &resp, indent, open_id, &mut open, format!("keywordToggle:{}", n.path));
+        }
+        if reveal {
+            ui.scroll_to_rect_animation(resp.rect, None, egui::style::ScrollAnimation::none());
+            ui.data_mut(|d| d.remove::<(String, u64)>(scroll_id));
         }
         let resp = resp.on_hover_text(if n.children.is_empty() { n.path.clone() } else { format!("{} (includes the keywords below it)", n.path) });
         if resp.clicked() {

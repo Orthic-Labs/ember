@@ -80,6 +80,8 @@ mod tests_keyword_list;
 #[cfg(test)]
 mod tests_keyword_set;
 #[cfg(test)]
+mod tests_keyword_sidebar;
+#[cfg(test)]
 mod tests_keywording;
 #[cfg(test)]
 mod tests_labels;

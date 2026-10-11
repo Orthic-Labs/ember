@@ -889,6 +889,10 @@ fn the_keywords_header_creates_a_keyword() {
     h.step();
     h.step();
     assert!(has(&h, "source:keyword:zebra crossing"), "the new keyword is listed");
+    // the sidebar scrolls to it: it is listed last, below what the panel shows
+    h.settle(SETTLE);
+    let (row, panel) = (widget(&h, "source:keyword:zebra crossing"), widget(&h, "panel:left_panel"));
+    assert!(panel.contains_rect(row), "the new keyword is in sight: {row:?} in {panel:?}");
 }
 
 /// A folded section's row count sits to the left of its header button; a section without a button
