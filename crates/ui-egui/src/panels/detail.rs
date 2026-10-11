@@ -1134,7 +1134,7 @@ type RenderingWait = Option<([Option<u64>; 4], f64, bool)>;
 /// no new texture `keys` on screen. The wait starts when the render starts coming (an idle app draws
 /// no frames, so the last one may be long ago), and once up the pill stays until nothing is coming:
 /// drafts slower than the wait don't make it blink.
-fn rendering_overdue(wait: &mut RenderingWait, keys: [Option<u64>; 4], coming: bool, now: f64) -> bool {
+pub(crate) fn rendering_overdue(wait: &mut RenderingWait, keys: [Option<u64>; 4], coming: bool, now: f64) -> bool {
     if !coming {
         *wait = None;
         return false;
@@ -1152,7 +1152,7 @@ fn rendering_overdue(wait: &mut RenderingWait, keys: [Option<u64>; 4], coming: b
 /// loupe's "Rendering…" says the pixels on screen aren't final, so it isn't an activity row (see
 /// docs/background-tasks.md); "This photo can't be opened" says the stand-in on screen is all
 /// there will be.
-fn loupe_pill(ui: &egui::Ui, canvas: Rect, over: Rect, navigator: Option<Rect>, id: &str, text: &str, caution: bool) -> Rect {
+pub(crate) fn loupe_pill(ui: &egui::Ui, canvas: Rect, over: Rect, navigator: Option<Rect>, id: &str, text: &str, caution: bool) -> Rect {
     let t = Tokens::get(ui.ctx());
     let p = ui.painter_at(canvas);
     let g = p.layout_no_wrap(text.to_string(), t.font(12.0), Color32::from_gray(225));

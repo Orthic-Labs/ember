@@ -258,6 +258,36 @@ fn photo_tile(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId, slot: Slo
     if active {
         p.rect_stroke(display.intersect(img_area.shrink(1.0)), 0.0, Stroke::new(2.0, Color32::WHITE), StrokeKind::Outside);
     }
+    // Compare and Reference are where sharpness is judged: as in the loupe, say when what is on
+    // screen isn't the render on its way (a thumbnail, the last render after an edit, a magnified
+    // frame under its window), or when that render failed
+    if matches!(app.ui.view, ViewMode::Compare | ViewMode::Reference) {
+        let i = slot_index(slot);
+        let r = &app.renderer;
+        let mine = |s: Slot| r.textures.get(&s).filter(|t| t.photo == id).map(|t| t.key);
+        let waits = |s: Slot| r.is_pending(s) && !r.retrying(s);
+        // a slider drag on this photo: Compare has no drafts, so its render can't keep up until the drag ends
+        let dragging = app.session.interaction.is_some() && app.session.selection.active == Some(id);
+        let coming = (waits(slot) && !dragging) || (window.is_some() && waits(Slot::CompareRegion(i)));
+        let keys = [mine(slot), mine(Slot::CompareRegion(i)), None, None];
+        let now = ui.input(|i| i.time);
+        // (the wait belongs to the photo in the pane: one moved in starts its own)
+        let rendering = ui.ctx().data_mut(|d| {
+            let (photo, wait) = d.get_temp_mut_or(egui::Id::new(("compare-rendering", i)), (id, None));
+            if *photo != id {
+                (*photo, *wait) = (id, None);
+            }
+            super::detail::rendering_overdue(wait, keys, coming, now)
+        });
+        let failed = (!rendering && mine(slot).is_none() && (!r.is_pending(slot) || r.retrying(slot))).then(|| r.failure_of(slot, id)).flatten();
+        let over = display.intersect(img_area);
+        let over = if over.is_positive() { over } else { img_area };
+        if let Some(e) = failed {
+            super::detail::failed_pill(ui, app, &photo, img_area, over, None, &format!("compare:renderFailed:{i}"), e);
+        } else if rendering {
+            super::detail::loupe_pill(ui, img_area, over, None, &format!("compare:rendering:{i}"), crate::i18n::tr("Rendering…"), false);
+        }
+    }
     // caption: label · file name · stars · flag
     // caption right under the image (at the bottom when zoomed in)
     let cap_top = (display.bottom() + 2.0).min(img_area.bottom());
