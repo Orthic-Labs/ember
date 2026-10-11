@@ -10,7 +10,11 @@ use lightcraft_raster::{
     Rgb32f,
     resample::{Filter, fit, resize},
 };
-use lightcraft_raw::{RawFormat, RawImage, color::CameraTransform, profile::HsvTable};
+use lightcraft_raw::{
+    ColorData, RawFormat, RawImage,
+    color::CameraTransform,
+    profile::{HsvTable, ProfileLook, ToneCurve},
+};
 
 /// The version of the camera-look fit: how a raw's colour matrix, hue/saturation table and tone
 /// and chroma curves are chosen. Smart previews record it in their header (`look_version`), because
@@ -105,6 +109,68 @@ fn starting_colour_with(
     // only a black-and-white JPEG: a colour one that gave no look pays nothing more
     let look = if black_and_white { monochrome(raw, &t) } else { None };
     (xy, t, look)
+}
+
+/// The colour a raw starts from ([`starting_colour`]) as DNG colour tags, for a DNG of the raw's camera RGB (Photo
+/// Merge, issue #965): without them a merge of CR2s, whose colour comes from a look fitted to their JPEG, rendered
+/// green and dark. `None` when the file has colour matrices of its own (a DNG keeps them).
+pub(crate) fn starting_colour_tags(raw: &mut RawImage, bytes: &[u8]) -> Option<ColorData> {
+    if lightcraft_raw::color::has_matrix(&raw.color) {
+        return None;
+    }
+    let (_, t, look) = starting_colour(raw, bytes);
+    dng_colour(&raw.color, &t, look.as_ref())
+}
+
+/// DNG tags that render white-balanced camera RGB at its as-shot white as `t` with `look` on top does: one forward
+/// matrix (with a colour matrix and as-shot neutral that agree with it at that white), the look's hue/saturation
+/// table as `ProfileHueSatMap` and its tone curve as `ProfileToneCurve`. Not quite the same render: a DNG table
+/// doesn't keep each pixel's luminance as the fitted one does ([`HueSat`]), and the chroma curve has no tag; on two
+/// CC0 CR2s (EOS 550D, 40D) an HDR merge of three copies renders within mean CIE76 ΔE 1.07 and 0.47 of the photo
+/// (1.47 and 0.66 without the table; 26 and 23 with no colour tags at all).
+/// `None` when the white balance or the matrix can't give tags.
+fn dng_colour(tags: &ColorData, t: &CameraTransform, look: Option<&CameraLook>) -> Option<ColorData> {
+    let m = look.map_or(t.matrix, |l| l.matrix.mul(&t.matrix));
+    // the DNG model renders the camera's white at unit brightness: what a look does to white's brightness goes
+    // into the baseline exposure
+    let white = m.apply([1.0; 3]);
+    let k = (white[0] + white[1] + white[2]) / 3.0;
+    if !(k.is_finite() && k > 1e-6) || !t.wb.iter().all(|w| w.is_finite() && *w > 0.0) {
+        return None;
+    }
+    let m = Mat3(m.0.map(|r| r.map(|v| v / k)));
+    let forward = bradford(D65, D50).mul(&REC2020.to_xyz()).mul(&m);
+    let wb = t.wb.map(f64::from);
+    let neutral = wb.map(|w| wb.iter().cloned().fold(f64::MAX, f64::min) / w);
+    let camera_to_xyz = bradford(D50, t.white_xy).mul(&forward).mul(&Mat3::diag(1.0 / neutral[0], 1.0 / neutral[1], 1.0 / neutral[2]));
+    Some(ColorData {
+        illuminant: [21, 0],
+        color_matrix: [Some(camera_to_xyz.inverse()?), None],
+        forward_matrix: [Some(forward), None],
+        camera_calibration: [None, None],
+        analog_balance: None,
+        as_shot_neutral: Some(neutral),
+        as_shot_white_xy: None,
+        baseline_exposure: t.baseline_exposure + k.log2(),
+        baseline_sharpness: tags.baseline_sharpness,
+        profile: ProfileLook {
+            hue_sat_map: [look.and_then(|l| l.hue_sat.clone()), None],
+            tone_curve: look.and_then(|l| dng_tone_curve(&l.tone)),
+            ..Default::default()
+        },
+    })
+}
+
+/// A camera tone curve as a DNG `ProfileToneCurve` (linear in, linear out, 1 = white): sampled densely over the
+/// 12 stops below white, the range the curve is read back over (`files::dng_tone_curve`).
+fn dng_tone_curve(tone: &CameraTone) -> Option<ToneCurve> {
+    const N: usize = 256;
+    let samples = (0..=N).map(|i| {
+        let x = 2f32.powf(-12.0 + 12.0 * i as f32 / N as f32);
+        [x, tone.apply(x).min(1.0)]
+    });
+    let flat: Vec<f64> = std::iter::once([0.0, 0.0]).chain(samples).flatten().map(f64::from).collect();
+    ToneCurve::from_tag(&flat)
 }
 
 /// The look fitted to the file's camera JPEG, and whether that JPEG is black and white ([`monochrome`]).
@@ -2060,6 +2126,43 @@ mod tests {
         };
         let (_, info) = crate::files::load_bytes(&bytes, 400).unwrap();
         assert!(info.camera_tone.is_some(), "no camera look fitted");
+    }
+
+    /// A merged DNG of a raw's camera RGB (issue #965) carries the colour the raw opens with: its tags give the same
+    /// white balance, colour and brightness as the fitted look at the as-shot white, the look's hue/saturation
+    /// table and its tone curve; without a look, those of the camera transform.
+    #[test]
+    fn dng_colour_renders_like_the_raws_starting_colour() {
+        use lightcraft_raw::color::{as_shot_white_of, camera_transform_of};
+        let t = camera_transform_of(&ColorData::default(), Xy::new(0.36, 0.37));
+        assert!(t.wb.iter().any(|w| (w - 1.0).abs() > 0.1), "a white balance to keep: {:?}", t.wb);
+        let look = dro_test_look(&std::array::from_fn(|i| 0.005 * 1.2f32.powi(i as i32)), &|x| 0.95 * x / (x + 0.1));
+        let samples = [[0.2, 0.3, 0.1], [0.05, 0.02, 0.4], [0.6, 0.6, 0.6], [0.01, 0.5, 0.03]];
+        let render = |m: &Mat3, wb: [f32; 3], ev: f64, c: [f64; 3]| m.apply(std::array::from_fn(|i| c[i] * wb[i] as f64)).map(|v| v * ev.exp2());
+        for look in [Some(&look), None] {
+            let dng = dng_colour(&ColorData::default(), &t, look).unwrap();
+            let back = camera_transform_of(&dng, as_shot_white_of(&dng, None));
+            for i in 0..3 {
+                assert!((back.wb[i] - t.wb[i]).abs() < 1e-4 * t.wb[i], "{:?} vs {:?}", back.wb, t.wb);
+            }
+            let m = look.map_or(t.matrix, |l| l.matrix.mul(&t.matrix));
+            for c in samples {
+                let (want, got) = (render(&m, t.wb, t.baseline_exposure, c), render(&back.matrix, back.wb, dng.baseline_exposure, c));
+                assert!(want.iter().zip(got).all(|(a, b)| (a - b).abs() < 1e-5), "{c:?}: {want:?} vs {got:?}");
+            }
+            assert_eq!(dng.profile.hue_sat_for(1.0), look.and_then(|l| l.hue_sat.clone()));
+            let tone = dng.profile.tone_curve.as_ref().and_then(crate::files::dng_tone_curve);
+            match look {
+                Some(look) => {
+                    let tone = tone.expect("the look's tone curve");
+                    let worst =
+                        (0..=120).map(|i| 2f32.powf(-10.0 + i as f32 / 12.0)).map(|x| (tone.apply(x) - look.tone.apply(x)).abs()).fold(0.0, f32::max);
+                    // (the reader resamples a `ProfileToneCurve` at 32 knots: 0.0031 of white at worst here)
+                    assert!(worst < 4e-3, "{worst}");
+                }
+                None => assert!(tone.is_none()),
+            }
+        }
     }
 
     /// A look with tone curve `f` at knots `xs` and a colour model and chroma curve to keep.

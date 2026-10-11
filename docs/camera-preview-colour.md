@@ -151,6 +151,22 @@ A proxy older than the constant is brought up to date by the existing Build Smar
 - when the original can't be read (offline drive), the proxy and its curve are kept exactly as they are (`staleKept`). The old version in its header is the mark: the next Build Smart Previews with the original online rebuilds it. A rebuilt proxy carries the current version, so nothing is rebuilt twice. A proxy is only ever rebuilt from the original, never from another proxy;
 - the two never write the same proxy at once: each proxy is checked and written under one lock.
 
+## Photo Merge
+
+A merge (HDR, panorama, HDR panorama) writes a linear DNG of the sources' camera RGB, with the reference frame's colour
+tags. A raw without colour matrices of its own has none to give, so its merge used to render with no camera colour: an
+HDR merge of CR2s came out green and dark (issue #965). Each source now goes through `starting_colour` as when it is
+opened alone, and `starting_colour_tags` writes the result as DNG tags: one forward matrix (from the look's matrix on
+top of the camera transform) with a colour matrix and `AsShotNeutral` that agree with it at the as-shot white, the
+look's brightness of white as baseline exposure, its hue/saturation table as `ProfileHueSatMap` and its tone curve as
+`ProfileToneCurve`. Raws with their own matrices (DNG) keep their tags. Without a look the tags give the colour the raw
+falls back to (spectral matrices or the neutral fallback).
+
+The DNG renders close to, not exactly like, the source: a DNG hue/saturation table doesn't keep each pixel's luminance
+as the fitted table does, and the chroma curve has no DNG tag, so it is left out. On two CC0 CR2s (EOS 550D, 40D), an
+HDR merge of three copies of the photo against the photo alone (200 px, CIE76): mean ΔE 1.07 and 0.47, 95th
+percentile 2.65 and 1.15 (26 and 23 before, with no colour tags; 1.47 and 0.66 with the table left out too).
+
 ## Nikon crop and preview colour metadata
 
 Nikon maker-note `CropArea` (0x0045) supplies the default `[left, top, width, height]` crop. The decoder validates the rectangle against the active sensor area and falls back to that area for missing or invalid values. The CFA origin is unchanged; cropping follows demosaicing.
