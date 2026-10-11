@@ -521,17 +521,21 @@ fn section(
 
 // ------------------------------------------------------------------------------ histogram
 
-fn histogram(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
-    let t = Tokens::get(ui.ctx());
-    let w = ui.available_width();
-    // the loupe render of this photo, else its thumbnail (grid view before the loupe has rendered it)
-    let hist = app
-        .renderer
+/// The current photo's existing preview histogram, shared by Histogram and Tone Curve.
+fn preview_histogram(app: &LightcraftApp, id: PhotoId) -> Option<lightcraft_raster::Histogram> {
+    app.renderer
         .textures
         .get(&Slot::Main)
         .filter(|t| t.photo == id)
         .and_then(|t| t.histogram.clone())
-        .or_else(|| app.renderer.textures.get(&Slot::Thumb(id)).and_then(|t| t.histogram.clone()));
+        .or_else(|| app.renderer.textures.get(&Slot::Thumb(id)).and_then(|t| t.histogram.clone()))
+}
+
+fn histogram(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
+    let t = Tokens::get(ui.ctx());
+    let w = ui.available_width();
+    // the loupe render of this photo, else its thumbnail
+    let hist = preview_histogram(app, id);
     // an HDR edit's histogram (`pipeline::hdr_histogram`) gets a colour bar and an SDR / HDR label
     // row under the plot
     let hdr = hist.as_ref().and_then(|h| h.hdr);
@@ -740,6 +744,52 @@ fn soft_proofing(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
 
 // ------------------------------------------------------------------------------ tone curve
 
+/// A 256-point, peak-normalized display profile of the photo histogram.
+/// For HDR, only the SDR portion maps to a curve's input (0..1).
+fn curve_histogram_profile(h: &lightcraft_raster::Histogram, channel: &str) -> [f32; 256] {
+    let source = match channel {
+        "red" => &h.r,
+        "green" => &h.g,
+        "blue" => &h.b,
+        _ => &h.luma,
+    };
+    let bins = h.hdr.map_or(256, |hdr| hdr.from.clamp(2, 256));
+    let samples: [f32; 256] = std::array::from_fn(|i| {
+        let j = i * (bins - 1) / 255;
+        let start = j.saturating_sub(2);
+        let end = (j + 3).min(bins);
+        let sum: f32 = (start..end).map(|k| source.get(k).copied().unwrap_or(0) as f32).sum();
+        sum / (end - start) as f32
+    });
+    let peak = samples.iter().copied().fold(1.0_f32, f32::max);
+    samples.map(|v| (v / peak).sqrt())
+}
+
+/// Show the currently rendered photo's tonal distribution behind the editable
+/// curve, without requesting another render or blocking pointer interactions.
+fn draw_curve_histogram(p: &egui::Painter, r: Rect, h: &lightcraft_raster::Histogram, channel: &str) {
+    let profile = curve_histogram_profile(h, channel);
+    let color = match channel {
+        "red" => hex("#dd3333"),
+        "green" => hex("#33bb55"),
+        "blue" => hex("#3377ee"),
+        _ => Color32::from_gray(130),
+    }
+    .gamma_multiply(0.27);
+    let mut mesh = Mesh::default();
+    for (i, height) in profile.into_iter().enumerate() {
+        let x = r.left() + r.width() * i as f32 / 255.0;
+        let top = pos2(x, r.bottom() - r.height() * height);
+        mesh.vertices.push(Vertex { pos: top, uv: Pos2::ZERO, color });
+        mesh.vertices.push(Vertex { pos: pos2(x, r.bottom()), uv: Pos2::ZERO, color });
+        if i > 0 {
+            let k = i as u32 * 2;
+            mesh.indices.extend([k - 2, k - 1, k, k - 1, k + 1, k]);
+        }
+    }
+    p.add(mesh);
+}
+
 fn curve_editor(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId, d: &DevelopSettings) {
     let t = Tokens::get(ui.ctx());
     // channel selector
@@ -796,6 +846,9 @@ fn curve_editor(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId, d: &Dev
     resp.context_menu(|ui| curve_reset_menu(app, ui, &ch));
     let p = ui.painter();
     p.rect_filled(r, 2.0, t.canvas);
+    if let Some(hist) = preview_histogram(app, id) {
+        draw_curve_histogram(p, r, &hist, &ch);
+    }
     for i in 1..4 {
         let f = i as f32 / 4.0;
         p.line_segment(
@@ -1454,4 +1507,31 @@ fn quick_develop(app: &mut LightcraftApp, ui: &mut egui::Ui, n: usize) {
             }
         });
     });
+}
+
+#[cfg(test)]
+mod curve_histogram_tests {
+    use super::*;
+
+    #[test]
+    fn curve_backdrop_tracks_luma_and_selected_channel() {
+        let img = lightcraft_raster::Rgba8::from_fn(64, 32, |x, _| {
+            if x < 32 { [32, 100, 32, 255] } else { [224, 100, 224, 255] }
+        });
+        let h = lightcraft_raster::Histogram::of_srgb8(&img);
+        let red = curve_histogram_profile(&h, "red");
+        let green = curve_histogram_profile(&h, "green");
+        let luma = curve_histogram_profile(&h, "master");
+        assert!(red[32] > red[150] && red[224] > red[150]);
+        assert!(green[100] > green[32] && green[100] > green[224]);
+        assert!(luma.iter().any(|v| *v > 0.0));
+    }
+
+    #[test]
+    fn hdr_backdrop_uses_only_the_sdr_bins_and_never_overflows() {
+        let h = lightcraft_raster::Histogram::of_hdr(&[[0.1, 0.1, 0.1], [1.0, 1.0, 1.0], [8.0, 8.0, 8.0]], 4.0);
+        let values = curve_histogram_profile(&h, "parametric");
+        assert!(values.iter().all(|v| v.is_finite() && (0.0..=1.0).contains(v)));
+        assert!(values.iter().any(|v| *v > 0.0));
+    }
 }
