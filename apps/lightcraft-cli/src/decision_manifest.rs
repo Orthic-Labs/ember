@@ -380,11 +380,20 @@ fn classify_history(history: &[BTreeMap<String, Value>]) -> HistoryDecision {
     }
     let mut entries = Vec::with_capacity(history.len());
     for row in history {
-        let Some(text) = row.get("text").and_then(Value::as_str) else {
+        let named_operation = row.get("name").and_then(Value::as_str).filter(|name| !name.trim().is_empty());
+        let Some(text) = named_operation.or_else(|| row.get("text").and_then(Value::as_str)) else {
             return HistoryDecision { class: "unknown", confidence: None, reason: Some("history_label_missing_or_unknown") };
         };
         match classify_history_label(text) {
-            Some(kind) => entries.push((row.get("id_local").and_then(Value::as_i64), kind)),
+            Some("human") if named_operation.is_some() => {
+                let delta = row.get("relValueString").and_then(Value::as_str).and_then(|value| value.trim().parse::<f64>().ok());
+                if !delta.is_some_and(|delta| delta.is_finite() && delta != 0.0) {
+                    return HistoryDecision { class: "unknown", confidence: None, reason: Some("manual_change_evidence_missing") };
+                }
+                entries.push((row.get("dateCreated").and_then(Value::as_f64).filter(|time| time.is_finite()), "human"));
+            }
+            Some("human") => return HistoryDecision { class: "unknown", confidence: None, reason: Some("manual_change_evidence_missing") },
+            Some(kind) => entries.push((row.get("dateCreated").and_then(Value::as_f64).filter(|time| time.is_finite()), kind)),
             None => return HistoryDecision { class: "unknown", confidence: None, reason: Some("history_label_missing_or_unknown") },
         }
     }
@@ -394,7 +403,7 @@ fn classify_history(history: &[BTreeMap<String, Value>]) -> HistoryDecision {
         if entries.iter().any(|(id, _)| id.is_none()) {
             return HistoryDecision { class: "unknown", confidence: None, reason: Some("history_order_unavailable") };
         }
-        entries.sort_by_key(|(id, _)| *id);
+        entries.sort_by(|(left, _), (right, _)| left.unwrap_or(f64::INFINITY).total_cmp(&right.unwrap_or(f64::INFINITY)));
         if entries.windows(2).any(|window| window.first().and_then(|entry| entry.0) == window.get(1).and_then(|entry| entry.0)) {
             return HistoryDecision { class: "unknown", confidence: None, reason: Some("history_order_ambiguous") };
         }
@@ -601,11 +610,18 @@ mod tests {
     use super::*;
 
     fn history(label: &str) -> Vec<BTreeMap<String, Value>> {
-        vec![BTreeMap::from([("text".to_owned(), Value::String(label.to_owned()))])]
+        vec![BTreeMap::from([
+            ("name".to_owned(), Value::String(label.to_owned())),
+            ("text".to_owned(), json!("s = { Exposure2012 = 0.25 }")),
+            ("relValueString".to_owned(), json!("+0.25")),
+        ])]
     }
 
     fn history_step(label: &str, id: i64) -> BTreeMap<String, Value> {
-        BTreeMap::from([("id_local".to_owned(), json!(id)), ("text".to_owned(), Value::String(label.to_owned()))])
+        let mut row = history(label).remove(0);
+        row.insert("id_local".into(), json!(id));
+        row.insert("dateCreated".into(), json!(id));
+        row
     }
 
     #[test]
@@ -617,6 +633,11 @@ mod tests {
         assert_eq!(classify_history(&history("s = { Exposure2012 = 0 }")).reason, Some("history_label_missing_or_unknown"));
         assert_eq!(classify_history(&history("s = { Exposure2012 = 0.5 }")).reason, Some("history_label_missing_or_unknown"));
         assert_eq!(classify_history(&history("Exposure")).confidence, Some("high"));
+        let mut no_change = history("Exposure");
+        no_change[0].insert("relValueString".into(), json!("0"));
+        assert_eq!(classify_history(&no_change).reason, Some("manual_change_evidence_missing"));
+        let text_only = vec![BTreeMap::from([("text".to_owned(), json!("Exposure"))])];
+        assert_eq!(classify_history(&text_only).reason, Some("manual_change_evidence_missing"));
     }
 
     #[test]
