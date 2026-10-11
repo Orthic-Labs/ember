@@ -84,29 +84,29 @@ fn resolve_ai(s: &mut Session, shape: &mut MaskShape, c: &str) -> Result<Later> 
     match shape {
         MaskShape::Object { seg: Some(_), .. } | MaskShape::Prompt { seg: Some(_), .. } => {}
         MaskShape::Object { hint, exclude, .. } if !hint.is_empty() && background => {
-            s.segmenter.model_dir().map_err(ai_err)?;
+            s.segmenter.require_model()?;
             return Ok(Later::Clicks(std::mem::take(hint), std::mem::take(exclude)));
         }
         MaskShape::Object { hint, exclude, seg, .. } if !hint.is_empty() => {
-            *seg = Some(s.segment_clicks(id, &clicks_of(hint, exclude)).map_err(ai_err)?);
+            *seg = Some(segment(s, |s| s.segment_clicks(id, &clicks_of(hint, exclude)))?);
         }
         MaskShape::Object { .. } => {
             // the clicks come later: refuse an Object mask that could never be computed (no
             // model) rather than leave an empty one; in the app, analyze the photo meanwhile
-            s.segmenter.model_dir().map_err(ai_err)?;
+            s.segmenter.require_model()?;
             if background {
-                s.segment_prepare(id).map_err(ai_err)?;
+                segment(s, |s| s.segment_prepare(id))?;
             }
         }
         MaskShape::Prompt { text, .. } if background => {
-            s.segmenter.model_dir().map_err(ai_err)?;
+            s.segmenter.require_model()?;
             if text.trim().is_empty() {
                 return Err(ai_err("describe what to select"));
             }
             return Ok(Later::Text(text.clone()));
         }
         MaskShape::Prompt { text, seg, .. } => {
-            let found = s.segment_text(id, text).map_err(ai_err)?;
+            let found = segment(s, |s| s.segment_text(id, text))?;
             *seg = Some(found.ok_or_else(|| ai_err(format!("nothing matching “{text}” was found in this photo")))?);
         }
         _ => {}
@@ -118,7 +118,7 @@ fn resolve_ai(s: &mut Session, shape: &mut MaskShape, c: &str) -> Result<Later> 
 fn queue_later(s: &mut Session, later: Later, mask: u32, comp: usize, mut out: Value) -> Result<Value> {
     if let Later::Clicks(hint, exclude) = later {
         let id = s.active().ok_or_else(|| ai_err("no active photo"))?;
-        s.segment_clicks_later(id, mask, comp, hint, exclude).map_err(ai_err)?;
+        segment(s, |s| s.segment_clicks_later(id, mask, comp, hint, exclude))?;
         out["pending"] = json!(true);
     }
     Ok(out)
@@ -127,6 +127,13 @@ fn queue_later(s: &mut Session, later: Later, mask: u32, comp: usize, mut out: V
 /// AI mask failures are shown as they are (not as "invalid parameters").
 fn ai_err(msg: impl Into<String>) -> crate::EngineError {
     crate::EngineError::Other(msg.into())
+}
+
+/// A segmentation call: the model is checked first, so a missing one is [`crate::EngineError::ModelMissing`]
+/// (the segmenter's own errors are text).
+fn segment<T>(s: &mut Session, f: impl FnOnce(&mut Session) -> std::result::Result<T, String>) -> Result<T> {
+    s.segmenter.require_model()?;
+    f(s).map_err(ai_err)
 }
 
 pub(crate) fn clicks_of(include: &[Point], exclude: &[Point]) -> Vec<Click> {
@@ -173,7 +180,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 let name = str_param(p, "name").map(str::to_string);
                 if let Later::Text(text) = &later {
                     let id = s.active().ok_or_else(|| bad("mask.add", "no active photo"))?;
-                    s.segment_text_later(id, None, "add", name, text).map_err(ai_err)?;
+                    segment(s, |s| s.segment_text_later(id, None, "add", name, text))?;
                     return Ok(json!({"pending": true}));
                 }
                 let next = s.active().and_then(|id| s.develop_of(id)).map(|d| d.next_mask_id()).unwrap_or(1);
@@ -211,7 +218,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 let later = resolve_ai(s, &mut shape, "mask.addComponent")?;
                 if let Later::Text(text) = &later {
                     let op = p.get("op").and_then(Value::as_str).unwrap_or("add");
-                    s.segment_text_later(id, Some(mid), op, None, text).map_err(ai_err)?;
+                    segment(s, |s| s.segment_text_later(id, Some(mid), op, None, text))?;
                     return Ok(json!({"pending": true}));
                 }
                 let mut comp = 0;
@@ -371,10 +378,10 @@ pub fn specs() -> Vec<CommandSpec> {
                 }
                 if s.segmenter.background && !hint.is_empty() {
                     let out = json!({"include": hint.len(), "exclude": ex.len(), "pending": true});
-                    s.segment_clicks_later(id, mid, k, hint, ex).map_err(ai_err)?;
+                    segment(s, |s| s.segment_clicks_later(id, mid, k, hint, ex))?;
                     return Ok(out);
                 }
-                let seg = if hint.is_empty() { None } else { Some(s.segment_clicks(id, &clicks_of(&hint, &ex)).map_err(ai_err)?) };
+                let seg = if hint.is_empty() { None } else { Some(segment(s, |s| s.segment_clicks(id, &clicks_of(&hint, &ex)))?) };
                 let out = json!({"include": hint.len(), "exclude": ex.len()});
                 masks_edit(s, c, "Object Mask", |masks, _| {
                     let i = find(masks, mid, c)?;
@@ -407,7 +414,7 @@ pub fn specs() -> Vec<CommandSpec> {
                         .rposition(|x| matches!(x.shape, MaskShape::Object { .. } | MaskShape::Prompt { .. }))
                         .ok_or_else(|| bad(c, "the mask has no Object or Describe selection"))?,
                 };
-                let started = s.segment_detail(id, mid, k).map_err(ai_err)?;
+                let started = segment(s, |s| s.segment_detail(id, mid, k))?;
                 Ok(json!({"started": started}))
             }
         ),
@@ -421,7 +428,7 @@ pub fn specs() -> Vec<CommandSpec> {
             |s, _| {
                 let c = "segment.prepare";
                 let id = s.active().ok_or_else(|| bad(c, "no active photo"))?;
-                s.segment_prepare(id).map_err(ai_err)?;
+                segment(s, |s| s.segment_prepare(id))?;
                 Ok(json!({"busy": s.segmenter.busy()}))
             }
         ),
@@ -721,7 +728,7 @@ pub fn specs() -> Vec<CommandSpec> {
             |s, p| {
                 let c = "spot.findBlemishes";
                 let id = s.active().ok_or_else(|| bad(c, "no active photo"))?;
-                let detector = super::face_detect::detector(s).map_err(|e| bad(c, e))?;
+                let detector = super::face_detect::detector(s).map_err(|e| e.into_error(c))?;
                 // the uncropped photo, so positions are the spots' own coordinates
                 let job = s.render_job(id, 1600, 1600, false, false).ok_or_else(|| bad(c, "no photo"))?;
                 let img = job.run().rendered.map_err(|e| bad(c, e))?.image;
