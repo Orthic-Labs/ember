@@ -4114,6 +4114,57 @@ mod tests {
         assert!(!h.app.widgets.iter().any(|(w, _)| w == "canvas:navigator"), "toggled off");
     }
 
+    /// While an edit renders, the loupe shows the last render: it says "Rendering…" once that has
+    /// lasted a moment (not at once after a spell away from the loupe, when no frames were drawn),
+    /// and stops when the render lands.
+    #[test]
+    fn the_loupe_says_rendering_while_an_edit_renders() {
+        use crate::render::{RenderOffload, Slot};
+        use lightcraft_engine::media::{RenderJob, RenderResult};
+        use std::{cell::Cell, rc::Rc};
+        /// Renders wait until the gate opens.
+        struct Gate(Rc<Cell<bool>>, Vec<(Slot, RenderJob)>);
+        impl RenderOffload for Gate {
+            fn try_start(&mut self, slot: Slot, job: RenderJob) -> Option<RenderJob> {
+                if !self.0.get() {
+                    return Some(job);
+                }
+                self.1.push((slot, job));
+                None
+            }
+            fn finished(&mut self) -> Vec<(Slot, RenderResult, f64)> {
+                self.1.drain(..).map(|(slot, job)| (slot, job.run(), 0.0)).collect()
+            }
+        }
+        let pill = |h: &Headless| h.app.widgets.iter().any(|(w, _)| w == "loupe:rendering");
+        let mut h = demo([1000.0, 700.0]);
+        let t = Duration::from_secs(10);
+        h.request("ui.set", json!({"view": "detail", "right": "none"}), t);
+        h.settle(SETTLE);
+        assert!(!pill(&h), "a finished render");
+        let open = Rc::new(Cell::new(false));
+        h.app.renderer.set_offload(Box::new(Gate(open.clone(), Vec::new())));
+        // half a second in the grid: the loupe draws no frames
+        h.request("ui.set", json!({"view": "photoGrid"}), t);
+        for _ in 0..30 {
+            h.step();
+        }
+        h.request("engine.execute", json!({"command": "develop.set", "params": {"control": "light.exposure", "value": 0.5}}), t);
+        h.request("ui.set", json!({"view": "detail"}), t);
+        for _ in 0..12 {
+            h.step();
+        }
+        assert!(h.app.renderer.is_pending(Slot::Main), "the edit's render is held");
+        assert!(!pill(&h), "not at once");
+        for _ in 0..30 {
+            h.step();
+        }
+        assert!(pill(&h), "the last render is on screen and the edit's is on its way");
+        open.set(true);
+        assert!(h.step_until(SETTLE, |h| !pill(h)), "gone once the render lands");
+        assert!(!h.app.renderer.is_pending(Slot::Main));
+    }
+
     #[test]
     fn screenshot_request_is_answered_without_a_window() {
         let mut h = demo([800.0, 500.0]);
