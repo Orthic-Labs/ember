@@ -124,6 +124,34 @@ fn disk_cache_roundtrip_and_prune() {
 }
 
 #[test]
+fn disk_cache_overwrite_accounts_for_replaced_jpeg_only_once() {
+    let dir = temp_dir("overwrite");
+    let cache = DiskCache::new(&dir, 1 << 20);
+    let (a, b) = (hash_bytes(b"overwrite-a"), hash_bytes(b"overwrite-b"));
+    let first = gradient(80, 60, 4);
+    cache.put(a, &first);
+    cache.put(b, &gradient(80, 60, 7));
+    let initial = cache.size();
+
+    // Re-rendering the same key used to double-count bytes although the
+    // replacement occupied exactly the same pathname on disk.
+    cache.put(a, &first);
+    assert_eq!(cache.size(), initial);
+    assert!(cache.get(b).is_some());
+
+    // A replacement with a different encoded size must also update the total.
+    cache.put(a, &gradient(120, 90, 9));
+    let path = |key: Hash128| {
+        let hex = key.to_string();
+        dir.join(&hex[..2]).join(format!("{hex}.jpg"))
+    };
+    let actual = std::fs::metadata(path(a)).unwrap().len() + std::fs::metadata(path(b)).unwrap().len();
+    assert_eq!(cache.size(), actual);
+    cache.clear();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn preview_cache_memory_then_disk() {
     let dir = temp_dir("pc");
     let k = hash_bytes(b"x");
