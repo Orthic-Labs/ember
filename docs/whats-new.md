@@ -126,6 +126,14 @@
   file name, then id, instead of import order. Recently Added keeps a batch in file name order, and Auto-Stack orders a
   burst by file name, so the first file is the cover.
 
+### Large preset collections
+- A library holding thousands of presets (a Lightroom collection imported whole: 11 000 presets, a 42 MB
+  presets.json) stays responsive. Every command used to re-serialize the whole list to see whether it had changed
+  (~0.6 s per slider tick); now the list is saved only after it changes, and a slider tick takes ~2 ms.
+- The Presets panel builds only the rows in view (and their thumbnails) instead of every preset on every frame; the
+  preset pickers in Import and Settings ▸ Import scroll the same way.
+- Importing a large collection and opening its library no longer compare every preset with every other.
+
 ## 2026-10-10
 
 ### Dialogs fit the window

@@ -1260,16 +1260,9 @@ pub fn body(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &mut ImportDialog) {
             if ui.selectable_label(d.preset.is_empty(), crate::i18n::tr("None")).clicked() {
                 d.preset.clear();
             }
-            for p in &app.session.presets {
-                if ui
-                    .selectable_label(
-                        d.preset == p.id,
-                        format!("{} — {}", crate::i18n::builtin_label(&p.group, p.builtin), crate::i18n::builtin_label(&p.name, p.builtin)),
-                    )
-                    .clicked()
-                {
-                    d.preset = p.id.clone();
-                }
+            let selected = (!d.preset.is_empty()).then_some(d.preset.as_str());
+            if let Some(pid) = crate::panels::presets::picker_rows(ui, "import-preset", &app.session.presets, selected) {
+                d.preset = pid;
             }
         });
     });

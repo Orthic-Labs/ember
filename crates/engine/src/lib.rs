@@ -229,7 +229,8 @@ pub struct Session {
     pub previous_active: Option<PhotoId>,
     /// Groups last used for Copy (Lightroom remembers them).
     pub copy_groups: Vec<lightcraft_develop::SettingsGroup>,
-    pub presets: Vec<lightcraft_develop::Preset>,
+    /// Built-in then user presets; its generation tells savers and caches when it changed.
+    pub presets: presets::PresetList,
     /// Favourite profile ids (persisted with the library, like preset favourites).
     pub profile_favorites: Vec<String>,
     /// Recently applied profile ids, newest first (at most [`presets::RECENT_PROFILES`]).
@@ -362,7 +363,7 @@ impl Session {
             library_folder: None,
             previous_active: None,
             copy_groups: lightcraft_develop::SettingsGroup::default_copy(),
-            presets: presets::builtin(),
+            presets: presets::PresetList::new(presets::builtin()),
             profile_favorites: Vec::new(),
             profile_recent: Vec::new(),
             journal: Vec::new(),
@@ -1067,6 +1068,8 @@ mod tests_organize;
 mod tests_persist;
 #[cfg(test)]
 mod tests_prefs;
+#[cfg(test)]
+mod tests_presets_scale;
 #[cfg(test)]
 mod tests_process;
 #[cfg(test)]

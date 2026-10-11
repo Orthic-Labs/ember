@@ -4,9 +4,11 @@
 //! files.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use egui::{Align2, Color32, Rect, Sense, pos2, vec2};
 use lightcraft_develop::{ControlSpec, Preset, Section, Track};
+use lightcraft_engine::presets::PresetList;
 use serde_json::json;
 
 use crate::icons::{Icon, paint};
@@ -73,16 +75,14 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         let current = active.and_then(|id| app.session.develop_of(id)).map(|d| (*d).clone());
         let thumbs = app.ui.preset_thumbs && active.is_some();
         let row_h = if thumbs { 54.0 } else { 26.0 };
+        let groups = grouped(ui.ctx(), &app.session.presets);
         let scroll = egui::ScrollArea::vertical().id_salt("presets-scroll").auto_shrink([false, false]).show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
-            let mut groups: BTreeMap<String, Vec<Preset>> = BTreeMap::new();
-            for p in &app.session.presets {
-                groups.entry(p.group.clone()).or_default().push(p.clone());
-            }
-            for (g, items) in groups {
-                // A group holding stock presets is a stock group (shown in the UI language), even
-                // when user presets share its name; a group of user presets keeps its name.
-                let builtin = items.iter().any(|p| p.builtin);
+            // Only the rows in view are laid out, drawn and given thumbnails: a Lightroom collection
+            // imported whole is 10 000+ presets, and building every row each frame took seconds.
+            let visible = ui.clip_rect().expand(row_h);
+            for grp in groups.iter() {
+                let (g, builtin) = (grp.name.clone(), grp.builtin);
                 let open_id = egui::Id::new(("preset-group", &g));
                 let open: bool = ui.data(|d| d.get_temp(open_id)).unwrap_or(true);
                 let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
@@ -111,7 +111,12 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                 if !open {
                     continue;
                 }
-                for pr in items {
+                let (first, end) = rows_in_view(ui.cursor().top(), row_h, grp.items.len(), visible);
+                if first > 0 {
+                    ui.allocate_space(vec2(ui.available_width(), first as f32 * row_h));
+                }
+                for &i in grp.items.get(first..end).unwrap_or_default() {
+                    let Some(pr) = app.session.presets.get(i).cloned() else { continue };
                     let (pid, name, fav) = (pr.id.clone(), crate::i18n::builtin_label(&pr.name, pr.builtin).to_string(), pr.favorite);
                     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
                     register(ui.ctx(), format!("preset:{pid}"), r);
@@ -175,10 +180,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                             crate::panels::dialogs::prompt(app, "Rename Preset", "Preset name", &name, "preset.rename", json!({"id": pid}), "name");
                         }
                         ui.menu_button(crate::i18n::tr("Move to Group"), |ui| {
-                            let mut groups: Vec<String> = app.session.presets.iter().filter(|p| !p.builtin).map(|p| p.group.clone()).collect();
-                            groups.sort();
-                            groups.dedup();
-                            for g in groups.iter().filter(|g| **g != group) {
+                            for g in groups.iter().filter(|x| x.user && x.name != group).map(|x| &x.name) {
                                 if ui.button(g).clicked() {
                                     let _ = app.run("preset.move", json!({"id": pid, "group": g}));
                                 }
@@ -201,6 +203,9 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                         }
                     });
                 }
+                if end < grp.items.len() {
+                    ui.allocate_space(vec2(ui.available_width(), (grp.items.len() - end) as f32 * row_h));
+                }
             }
             ui.add_space(30.0);
         });
@@ -219,6 +224,107 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
             ui.data_mut(|d| d.remove::<(lightcraft_catalog::PhotoId, Preset, String)>(last_hover_id));
         }
     });
+}
+
+/// A preset group as the panel lists it: indices into the session's presets.
+struct Group {
+    name: String,
+    /// Holds a stock preset: a stock group (shown in the UI language), even when user presets
+    /// share its name; a group of user presets keeps its name.
+    builtin: bool,
+    /// Holds a user preset (a Move to Group target).
+    user: bool,
+    items: Vec<usize>,
+}
+
+/// The presets by group (groups sorted by name, presets in list order), rebuilt only when the
+/// list changed (its generation).
+fn grouped(ctx: &egui::Context, presets: &PresetList) -> Arc<Vec<Group>> {
+    let id = egui::Id::new("presets-grouped");
+    if let Some((generation, groups)) = ctx.data(|d| d.get_temp::<(u64, Arc<Vec<Group>>)>(id))
+        && generation == presets.generation()
+    {
+        return groups;
+    }
+    let mut by_name: BTreeMap<&str, Group> = BTreeMap::new();
+    for (i, p) in presets.iter().enumerate() {
+        let g = by_name.entry(&p.group).or_insert_with(|| Group { name: p.group.clone(), builtin: false, user: false, items: Vec::new() });
+        g.builtin |= p.builtin;
+        g.user |= !p.builtin;
+        g.items.push(i);
+    }
+    let groups = Arc::new(by_name.into_values().collect::<Vec<_>>());
+    ctx.data_mut(|d| d.insert_temp(id, (presets.generation(), groups.clone())));
+    groups
+}
+
+/// The presets as the rows of a picker (a combo box's list), in list order with a header row
+/// wherever the group changes. Only the rows in view are built (10 000+ presets made an open
+/// picker take seconds a frame). Returns the id of the preset clicked.
+pub fn picker_rows(ui: &mut egui::Ui, salt: &str, presets: &PresetList, selected: Option<&str>) -> Option<String> {
+    let id = egui::Id::new("preset-picker-rows");
+    let rows = match ui.ctx().data(|d| d.get_temp::<(u64, Arc<Vec<PickRow>>)>(id)) {
+        Some((generation, rows)) if generation == presets.generation() => rows,
+        _ => {
+            let mut rows = Vec::with_capacity(presets.len() + 16);
+            let mut group: Option<&str> = None;
+            for (i, p) in presets.iter().enumerate() {
+                if group != Some(p.group.as_str()) {
+                    group = Some(&p.group);
+                    rows.push(PickRow::Header(crate::i18n::builtin_label(&p.group, p.builtin).to_string()));
+                }
+                rows.push(PickRow::Preset(i));
+            }
+            let rows = Arc::new(rows);
+            ui.ctx().data_mut(|d| d.insert_temp(id, (presets.generation(), rows.clone())));
+            rows
+        }
+    };
+    let row_h = ui.spacing().interact_size.y;
+    let mut out = None;
+    egui::ScrollArea::vertical().id_salt(("preset-picker", salt)).max_height(300.0).auto_shrink([false, true]).show_rows(
+        ui,
+        row_h,
+        rows.len(),
+        |ui, range| {
+            for row in rows.get(range).unwrap_or_default() {
+                let size = vec2(ui.available_width(), row_h);
+                match row {
+                    PickRow::Header(g) => {
+                        ui.add_sized(size, egui::Label::new(egui::RichText::new(g).size(10.5).weak()));
+                    }
+                    PickRow::Preset(i) => {
+                        let Some(p) = presets.get(*i) else { continue };
+                        let label = crate::i18n::builtin_label(&p.name, p.builtin);
+                        if ui.add_sized(size, egui::Button::selectable(selected == Some(p.id.as_str()), label)).clicked() {
+                            out = Some(p.id.clone());
+                        }
+                    }
+                }
+            }
+        },
+    );
+    out
+}
+
+#[derive(Clone)]
+enum PickRow {
+    /// A group's name (in the UI language for stock groups).
+    Header(String),
+    /// An index into the session's presets.
+    Preset(usize),
+}
+
+/// The rows `first..end` of a block of `n` rows `row_h` high starting at `top` that meet
+/// `visible`.
+fn rows_in_view(top: f32, row_h: f32, n: usize, visible: Rect) -> (usize, usize) {
+    if row_h <= 0.0 || !top.is_finite() {
+        return (0, n);
+    }
+    // `as usize` saturates (negative and NaN give 0)
+    let first = (((visible.top() - top) / row_h).floor() as usize).min(n);
+    let end = (((visible.bottom() - top) / row_h).ceil() as usize).clamp(first, n);
+    (first, end)
 }
 
 /// The part of a `size` image that covers `r` (centre crop), as texture coordinates.

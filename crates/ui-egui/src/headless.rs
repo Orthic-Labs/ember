@@ -1594,6 +1594,51 @@ mod tests {
         h.settle(SETTLE);
     }
 
+    /// A collection of thousands of presets (a Lightroom library imported whole) lists only the
+    /// rows in view: a few dozen widgets and thumbnails a frame, not one per preset (every frame
+    /// built all of them and froze the app for seconds); scrolling brings later rows in.
+    #[test]
+    fn presets_panel_with_thousands_of_presets_builds_only_visible_rows() {
+        let mut h = demo([1400.0, 900.0]);
+        let t = Duration::from_secs(10);
+        let many = (0..5000)
+            .map(|i| lightcraft_develop::Preset {
+                id: format!("user.big.{i}"),
+                name: format!("Look {i}"),
+                group: format!("Big {:02}", i / 500),
+                settings: json!({"light": {"exposure": (i % 20) as f64 / 10.0}}),
+                favorite: false,
+                builtin: false,
+            })
+            .collect();
+        assert_eq!(h.app.session.add_presets(many).len(), 5000);
+        h.request("ui.set", json!({"view": "detail"}), t);
+        h.request("engine.execute", json!({"command": "panel.presets"}), t);
+        h.app.ui.preset_thumbs = true;
+        h.settle(SETTLE);
+        h.step();
+        let rows = |h: &Headless| h.app.widgets.iter().filter(|(w, _)| w.starts_with("preset:")).map(|(w, _)| w.clone()).collect::<Vec<_>>();
+        let first = rows(&h);
+        assert!((5..60).contains(&first.len()), "{} rows built", first.len());
+        assert!(h.app.renderer.variant_textures() < 60, "{} thumbnails", h.app.renderer.variant_textures());
+        assert!(h.app.widgets.iter().any(|(w, _)| w == "presetGroup:Big 09"), "every group header is listed");
+        let started = std::time::Instant::now();
+        h.step();
+        eprintln!("presets panel frame with 5000 presets: {:?}", started.elapsed());
+        // scroll far down over the list: later presets come into view
+        let r = h.request("ui.hoverWidget", json!({"id": first[first.len() / 2]}), t);
+        assert_eq!(r["ok"], true, "{r}");
+        for _ in 0..20 {
+            h.request("ui.scroll", json!({"dy": -2000}), t);
+            h.step();
+        }
+        h.step();
+        let later = rows(&h);
+        assert!((5..60).contains(&later.len()), "{} rows built", later.len());
+        let deep = later.iter().filter_map(|w| w.strip_prefix("preset:user.big.")).filter_map(|n| n.parse::<usize>().ok()).max();
+        assert!(deep.is_some_and(|n| n > 500), "scrolled rows: {later:?}");
+    }
+
     /// The filter bar drives `library.filter` and saves the view as a smart album.
     #[test]
     fn filter_bar_filters_and_saves_a_smart_album() {
