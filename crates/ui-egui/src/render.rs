@@ -199,9 +199,10 @@ pub struct Renderer {
     stages: HashMap<Slot, Arc<StageCache>>,
     /// Slot → key of the last quick job requested for it (each is tried once).
     quick_tried: HashMap<Slot, u64>,
-    /// Jobs that failed (unreadable or missing file…), by slot and job key, with the error: not
-    /// requested again until the key changes (an edit, another size) — the grid asks every frame.
-    failed: HashMap<Slot, (u64, String, u64)>,
+    /// Jobs that failed (unreadable or missing file…), by slot and job key, with the error and
+    /// the photo: not requested again until the key changes (an edit, another size) — the grid
+    /// asks every frame.
+    failed: HashMap<Slot, (u64, String, u64, PhotoId)>,
     /// The catalog revision seen at the last poll: a failure is retried once the catalog changes
     /// (a relinked or re-imported file).
     catalog_rev: u64,
@@ -569,6 +570,18 @@ impl Renderer {
         self.failed.get(&slot).map(|f| f.1.as_str())
     }
 
+    /// Why the last render of `photo` for `slot` failed: a view slot shows one photo after
+    /// another, and another photo's error isn't this one's.
+    pub fn failure_of(&self, slot: Slot, photo: PhotoId) -> Option<&str> {
+        self.failed.get(&slot).filter(|f| f.3 == photo).map(|f| f.1.as_str())
+    }
+
+    /// Whether `slot`'s pending render asks again for the key that last failed (a library change
+    /// retries failures): what is on screen stays what the failure left until it answers.
+    pub fn retrying(&self, slot: Slot) -> bool {
+        self.pending.get(&slot).zip(self.failed.get(&slot)).is_some_and(|(p, f)| p.0 == f.0)
+    }
+
     /// The slots with a render pending (diagnostics: `ui.inspect`).
     pub fn pending_slots(&self) -> Vec<String> {
         self.pending.keys().map(|s| format!("{s:?}")).collect()
@@ -740,7 +753,7 @@ impl Renderer {
                 Err(e) => {
                     if !matches!(slot, Slot::Prefetch(_)) {
                         log::warn!("render {slot:?}: {e}");
-                        self.failed.insert(slot, (r.key, e, self.catalog_rev));
+                        self.failed.insert(slot, (r.key, e, self.catalog_rev, r.photo));
                     }
                     continue;
                 }
@@ -991,8 +1004,10 @@ mod thumbnail_tests {
         r.remember_thumb(&p, 384, 77, false);
         r.pending.insert(Slot::ThumbQuick(p.id), (77, 11));
         assert!(!r.thumb_current(&p, 384, 10));
-        r.failed.insert(slot, (77, "no decoder".into(), 0));
+        r.failed.insert(slot, (77, "no decoder".into(), 0, p.id));
         assert!(r.thumb_current(&p, 384, 10));
+        assert_eq!(r.failure_of(slot, p.id), Some("no decoder"));
+        assert_eq!(r.failure_of(slot, PhotoId(p.id.0 + 1)), None, "another photo's error");
         r.catalog_rev = 1;
         assert!(!r.thumb_current(&p, 384, 10));
     }

@@ -630,7 +630,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     } else {
         shown = draw(Slot::Main, img_rect, canvas);
         if shown == "none" {
-            match app.renderer.failure(Slot::Main) {
+            match app.renderer.failure_of(Slot::Main, id) {
                 Some(e) => {
                     p.text(
                         canvas.center() - vec2(0.0, 10.0),
@@ -766,13 +766,29 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     } else {
         &[Slot::Main]
     };
-    let coming = !matches!(shown, "none" | "hover") && whole.iter().chain(windows.iter().map(|(v, _)| &v.slot)).any(|s| app.renderer.is_pending(*s));
+    let coming = !matches!(shown, "none" | "hover")
+        && whole.iter().chain(windows.iter().map(|(v, _)| &v.slot)).any(|s| app.renderer.is_pending(*s) && !app.renderer.retrying(*s));
     let keys =
         [Slot::Main, Slot::Before, Slot::Region, Slot::RegionBefore].map(|s| app.renderer.textures.get(&s).filter(|t| t.photo == id).map(|t| t.key));
-    if ui.ctx().data_mut(|d| rendering_overdue(d.get_temp_mut_or(egui::Id::new("loupe-rendering"), None), keys, coming, now)) {
+    let rendering = ui.ctx().data_mut(|d| rendering_overdue(d.get_temp_mut_or(egui::Id::new("loupe-rendering"), None), keys, coming, now));
+    // the render failed while a stand-in is up: what is on screen is all there will be (also while
+    // a library change retries it)
+    let failed = (!rendering
+        && !(show_before && !split)
+        && !matches!(shown, "render" | "none" | "hover")
+        && (!app.renderer.is_pending(Slot::Main) || app.renderer.retrying(Slot::Main)))
+    .then(|| app.renderer.failure_of(Slot::Main, id))
+    .flatten();
+    if rendering || failed.is_some() {
         // over the photo (the After in two views); in the crop tool's wide margin, under it
         let over = if crop_tool { canvas } else { img_rect.intersect(if split { main_area } else { canvas }) };
-        rendering_pill(ui, canvas, if over.is_positive() { over } else { canvas }, nav);
+        let over = if over.is_positive() { over } else { canvas };
+        match failed {
+            Some(e) => failed_pill(ui, app, &photo, canvas, over, nav, "loupe:renderFailed", e),
+            None => {
+                loupe_pill(ui, canvas, over, nav, "loupe:rendering", crate::i18n::tr("Rendering…"), false);
+            }
+        }
     }
     if let Some(why) = photo.preview_only.as_deref().filter(|_| !fullscreen) {
         preview_only_pill(ui, canvas, why);
@@ -1128,21 +1144,49 @@ fn rendering_overdue(wait: &mut RenderingWait, keys: [Option<u64>; 4], coming: b
     *up
 }
 
-/// The pill saying "Rendering…" (registered as `loupe:rendering`), 12 pt above the bottom of `over`,
-/// or just above the Navigator when that is in the way. It says the pixels on screen aren't final,
-/// so it isn't an activity row (see docs/background-tasks.md).
-fn rendering_pill(ui: &egui::Ui, canvas: Rect, over: Rect, navigator: Option<Rect>) {
+/// A pill over the photo, 12 pt above the bottom of `over` or just above the Navigator when that
+/// is in the way, registered as `id`; `caution` adds the preview-only pill's caution icon. The
+/// loupe's "Rendering…" says the pixels on screen aren't final, so it isn't an activity row (see
+/// docs/background-tasks.md); "This photo can't be opened" says the stand-in on screen is all
+/// there will be.
+fn loupe_pill(ui: &egui::Ui, canvas: Rect, over: Rect, navigator: Option<Rect>, id: &str, text: &str, caution: bool) -> Rect {
     let t = Tokens::get(ui.ctx());
     let p = ui.painter_at(canvas);
-    let g = p.layout_no_wrap(crate::i18n::tr("Rendering…").to_string(), t.font(12.0), Color32::from_gray(225));
-    let size = vec2(g.size().x + 20.0, 20.0);
+    let g = p.layout_no_wrap(text.to_string(), t.font(12.0), Color32::from_gray(225));
+    let inset = if caution { 29.0 } else { 10.0 };
+    let size = vec2(g.size().x + inset + 10.0, 20.0);
     let mut r = Rect::from_center_size(pos2(over.center().x, over.bottom() - 12.0 - size.y / 2.0), size);
     if let Some(nav) = navigator.filter(|n| n.expand(8.0).intersects(r)) {
         r = Rect::from_min_size(pos2(nav.right() - size.x, nav.top() - 8.0 - size.y), size);
     }
     p.rect_filled(r, 10.0, Color32::from_black_alpha(185));
-    p.galley(pos2(r.left() + 10.0, r.center().y - g.size().y / 2.0), g, Color32::from_gray(225));
-    register(ui.ctx(), "loupe:rendering", r);
+    if caution {
+        crate::icons::paint(&p, Rect::from_center_size(pos2(r.left() + 16.0, r.center().y), vec2(13.0, 13.0)), crate::icons::Icon::Info, t.caution);
+    }
+    p.galley(pos2(r.left() + inset, r.center().y - g.size().y / 2.0), g, Color32::from_gray(225));
+    register(ui.ctx(), id, r);
+    r
+}
+
+/// The caution pill saying a render failed behind the stand-in on screen (see [`loupe_pill`]):
+/// "Original offline · no smart preview" when that is why, else "This photo can't be opened", with
+/// the error on hover and for screen readers.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn failed_pill(
+    ui: &egui::Ui,
+    app: &LightcraftApp,
+    photo: &lightcraft_catalog::Photo,
+    canvas: Rect,
+    over: Rect,
+    navigator: Option<Rect>,
+    id: &str,
+    error: &str,
+) {
+    let offline = matches!(&photo.source, lightcraft_catalog::Source::File { path } if app.session.media.availability.is_offline(path));
+    let text = crate::i18n::tr(if offline { "Original offline · no smart preview" } else { "This photo can't be opened" });
+    let r = loupe_pill(ui, canvas, over, navigator, id, text, true);
+    let resp = ui.interact(r, egui::Id::new(("render-failed", id)), Sense::hover()).on_hover_text(error);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, format!("{text}: {error}")));
 }
 
 fn quick_name(q: lightcraft_engine::media::QuickSource) -> &'static str {
