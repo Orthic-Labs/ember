@@ -533,7 +533,10 @@ fn filter_presets_save_and_apply() {
 fn auto_writes_region_masks_once_and_undoes_them_with_the_values() {
     let mut s = demo();
     s.execute("mask.add", &json!({"kind": "radial", "center": [0.3, 0.3], "name": "mine"})).unwrap();
+    // a mask of the user's that looks exactly like one of Auto's is still theirs
+    s.execute("mask.add", &json!({"kind": "sky", "name": "Auto: sky"})).unwrap();
     let before = active_dev(&s);
+    assert!(before.masks.iter().all(|m| !m.auto));
     let r = s.execute("develop.auto", &json!({"dryRun": true})).unwrap();
     assert!(r.get("exposure").is_some() && r.get("regions").is_some(), "{r}");
     assert_eq!(active_dev(&s), before, "dry run changes nothing");
@@ -542,6 +545,7 @@ fn auto_writes_region_masks_once_and_undoes_them_with_the_values() {
     let auto_masks = |d: &lightcraft_develop::DevelopSettings| d.masks.iter().filter(|m| lightcraft_pipeline::auto::regions::is_auto_mask(m)).count();
     let n = auto_masks(&d);
     assert!(d.masks.iter().any(|m| m.name == "mine"), "the user's mask stays");
+    assert!(d.masks.iter().any(|m| m.name == "Auto: sky" && !m.auto), "the user's look-alike stays");
     // every Auto mask carries an adjustment and a semantic shape; ids are unique
     let mut ids: Vec<u32> = d.masks.iter().map(|m| m.id).collect();
     ids.dedup();

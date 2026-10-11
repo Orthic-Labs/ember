@@ -68,11 +68,16 @@ impl Region {
         format!("{NAME_PREFIX}{what}")
     }
 
-    pub fn shape(self) -> MaskShape {
+    /// The mask components covering exactly the pixels the region was fitted on: the
+    /// background is everything that is neither subject nor sky.
+    pub fn components(self) -> Vec<MaskComponent> {
+        let add = |shape| MaskComponent { name: None, op: MaskOp::Add, invert: false, shape };
         match self {
-            Region::Subject => MaskShape::Subject,
-            Region::Background => MaskShape::Background,
-            Region::Sky => MaskShape::Sky,
+            Region::Subject => vec![add(MaskShape::Subject)],
+            Region::Background => {
+                vec![add(MaskShape::Background), MaskComponent { name: None, op: MaskOp::Subtract, invert: false, shape: MaskShape::Sky }]
+            }
+            Region::Sky => vec![add(MaskShape::Sky)],
         }
     }
 }
@@ -100,8 +105,8 @@ impl RegionAuto {
         RegionAuto { global, regions: Vec::new() }
     }
 
-    /// The masks to write into a photo's settings, ids from `first_id` up. Replace any mask
-    /// whose name starts with [`NAME_PREFIX`] first ([`is_auto_mask`]).
+    /// The masks to write into a photo's settings, ids from `first_id` up, marked as Auto's
+    /// (`Mask::auto`). Replace the masks [`is_auto_mask`] accepts first.
     pub fn masks(&self, first_id: u32) -> Vec<Mask> {
         self.regions
             .iter()
@@ -109,20 +114,20 @@ impl RegionAuto {
             .map(|(i, r)| Mask {
                 id: first_id.saturating_add(i as u32),
                 name: r.region.name(),
-                components: vec![MaskComponent { name: None, op: MaskOp::Add, invert: false, shape: r.region.shape() }],
+                components: r.region.components(),
                 adjust: r.adjust,
+                auto: true,
                 ..Default::default()
             })
             .collect()
     }
 }
 
-/// A mask region Auto wrote (by its name and shape), so the next run replaces it and a mask
-/// the user made or renamed stays.
+/// A mask Auto wrote and nobody changed since: it carries Auto's provenance flag and still has
+/// the name and components Auto gave it. The next Auto replaces it; a mask a person made
+/// (never flagged, whatever its name), renamed or extended stays.
 pub fn is_auto_mask(m: &Mask) -> bool {
-    m.name.starts_with(NAME_PREFIX)
-        && m.components.len() == 1
-        && m.components.iter().all(|c| matches!(c.shape, MaskShape::Subject | MaskShape::Background | MaskShape::Sky))
+    m.auto && [Region::Subject, Region::Background, Region::Sky].iter().any(|r| m.name == r.name() && m.components == r.components())
 }
 
 /// The alpha planes of the three regions on the proxy (same size as a 512 px box fit of the
@@ -145,6 +150,8 @@ pub fn inside(alpha: f32) -> bool {
 /// The proxy as the masks see it: white-balanced scene-linear pixels, their log luminance, and
 /// the alpha planes of the three regions.
 struct Regions {
+    /// The proxy as decoded, before white balance (what a render takes).
+    raw: Rgb32f,
     img: Rgb32f,
     /// Scene EV of each proxy pixel (`None` where invalid).
     ev: Vec<Option<f32>>,
@@ -157,7 +164,8 @@ fn regions(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) -> Option<Regio
     if src.width == 0 || src.height == 0 || src.data.is_empty() {
         return None;
     }
-    let mut img = lightcraft_raster::resample::fit(src, PROXY, PROXY, lightcraft_raster::resample::Filter::Box);
+    let raw = lightcraft_raster::resample::fit(src, PROXY, PROXY, lightcraft_raster::resample::Filter::Box);
+    let mut img = raw.clone();
     let base = DevelopSettings { wb: s.wb, ..DevelopSettings::default() };
     crate::local::scene_linear_pre(&mut img, info, &base);
     let (w, h) = (img.width, img.height);
@@ -190,7 +198,7 @@ fn regions(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) -> Option<Regio
             e.is_finite().then_some(e)
         })
         .collect();
-    Some(Regions { img, ev, subject, background, sky })
+    Some(Regions { raw, img, ev, subject, background, sky })
 }
 
 /// Sorted scene EVs of the pixels inside `alpha`, and their share of the valid pixels.
@@ -310,10 +318,14 @@ pub fn region_auto(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) -> Regi
 
     // --- settle the subject's exposure against the real render: the local sliders' units are
     // not the global ones, so the subject's median is bisected to its target on the proxy
-    // rendered with every mask in place (monotone in the local exposure)
+    // rendered as the photo will be: the un-white-balanced proxy under the photo's own settings
+    // (white balance, the person's masks, their other edits; an earlier Auto's masks replaced),
+    // the global values, and Auto's masks after theirs (monotone in the local exposure)
     let want = rendered(info, want_ev, 0.0);
     let mut base = DevelopSettings { crop: Default::default(), orientation: Default::default(), ..s.clone() };
     base = crate::look::settings_with(&base, global);
+    base.masks.retain(|m| !is_auto_mask(m));
+    let next_id = base.masks.iter().map(|m| m.id).max().map_or(1, |id| id.saturating_add(1));
     let build = |subject: LocalAdjustments| {
         let mut regions = vec![RegionAdjust { region: Region::Subject, share: subject_share, adjust: subject }];
         if let Some(a) = background {
@@ -329,8 +341,8 @@ pub fn region_auto(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) -> Regi
         crate::RenderRequest { space: OutputSpace::Rec2020, depth: OutputDepth::F32Linear, ..crate::RenderRequest::fit(r.img.width, r.img.height) };
     let render_median = |e: f32| -> Option<f32> {
         let mut d = base.clone();
-        d.masks = RegionAuto { global, regions: build(LocalAdjustments { exposure: e as f64, ..subject }) }.masks(1);
-        let rendered = crate::render(&r.img, info, &d, &req);
+        d.masks.extend(RegionAuto { global, regions: build(LocalAdjustments { exposure: e as f64, ..subject }) }.masks(next_id));
+        let rendered = crate::render(&r.raw, info, &d, &req);
         let linear = rendered.deep.as_ref().and_then(crate::look::deep_to_linear)?;
         if linear.width != r.img.width || linear.height != r.img.height {
             return None;
@@ -360,20 +372,24 @@ mod tests {
     use crate::RenderRequest;
     use lightcraft_color::transfer::decode_srgb8;
 
-    /// A dark subject (centre disc) on a bright, washed-out background: low contrast, lifted
-    /// blacks, slightly blue.
-    fn washed_out() -> Rgb32f {
+    /// A dark subject (centre disc, `subject` scene-linear, about 4 EV under the background at
+    /// 0.02) on a bright, washed-out background: low contrast, lifted blacks, slightly blue.
+    fn washed_out_with(subject: f32) -> Rgb32f {
         Rgb32f::from_fn(128, 128, |x, y| {
             let (dx, dy) = (x as f32 - 63.5, y as f32 - 63.5);
             let t = ((x * 7 + y * 3) % 17) as f32 / 17.0;
             if dx * dx + dy * dy < 26.0 * 26.0 {
-                let v = 0.02 + 0.03 * t;
+                let v = subject * (1.0 + 1.5 * t);
                 [v * 1.1, v, v * 0.9]
             } else {
                 let v = 0.5 + 0.12 * t;
                 [v * 0.95, v, v * 1.08]
             }
         })
+    }
+
+    fn washed_out() -> Rgb32f {
+        washed_out_with(0.02)
     }
 
     fn inside(x: usize, y: usize, w: usize, h: usize) -> bool {
@@ -445,6 +461,7 @@ mod tests {
         let r = region_auto(&washed_out(), &SourceInfo::default(), &DevelopSettings::default());
         let masks = r.masks(7);
         assert!(masks.iter().all(is_auto_mask));
+        assert!(masks.iter().all(|m| m.auto));
         assert_eq!(masks[0].id, 7);
         assert_eq!(masks[0].name, "Auto: subject");
         let mut renamed = masks[0].clone();
@@ -453,6 +470,68 @@ mod tests {
         let mut brushed = masks[0].clone();
         brushed.components.push(MaskComponent { name: None, op: MaskOp::Add, invert: false, shape: MaskShape::Brush { strokes: vec![] } });
         assert!(!is_auto_mask(&brushed));
+        // a person's mask that happens to look like Auto's is theirs
+        let theirs = Mask { auto: false, ..masks[0].clone() };
+        assert!(!is_auto_mask(&theirs));
+        // the background mask covers what the background was fitted on: not the sky
+        let bg = masks.iter().find(|m| m.name == "Auto: background").expect("background");
+        assert_eq!(bg.components.len(), 2);
+        assert!(matches!(bg.components[1], MaskComponent { op: MaskOp::Subtract, shape: MaskShape::Sky, .. }));
+        // round trip keeps the provenance
+        let json = serde_json::to_string(&masks[0]).unwrap();
+        assert!(json.contains("\"auto\":true"), "{json}");
+        assert!(is_auto_mask(&serde_json::from_str::<Mask>(&json).unwrap()));
+    }
+
+    /// The settle step predicts the output: the subject lands on its target under the photo's
+    /// own white balance and with the person's masks in place.
+    #[test]
+    fn settling_sees_the_photo_s_white_balance_and_masks() {
+        // a milder subject (about 2 EV under), so the lift has headroom under its cap
+        let src = washed_out_with(0.08);
+        let info = SourceInfo::default();
+        let mut s = DevelopSettings::default();
+        s.wb.temp = info.as_shot_temp + 1500.0;
+        s.wb.tint = info.as_shot_tint - 20.0;
+        // a darkening mask of theirs over the whole frame, and a stale Auto mask to replace
+        s.masks.push(Mask {
+            id: 3,
+            name: "mine".into(),
+            components: vec![MaskComponent {
+                name: None,
+                op: MaskOp::Add,
+                invert: false,
+                shape: MaskShape::LuminanceRange { lo: 0.0, hi: 1.0, lo_feather: 0.0, hi_feather: 0.0 },
+            }],
+            adjust: LocalAdjustments { exposure: -0.3, ..Default::default() },
+            ..Default::default()
+        });
+        s.masks.push(Mask {
+            id: 4,
+            name: "Auto: subject".into(),
+            components: Region::Subject.components(),
+            adjust: LocalAdjustments { exposure: 1.5, ..Default::default() },
+            auto: true,
+            ..Default::default()
+        });
+        let r = region_auto(&src, &info, &s);
+        // the settle compensated for their darkening (and did not run into the cap doing it)
+        let alone = region_auto(&src, &info, &DevelopSettings { masks: vec![], ..s.clone() });
+        let lift = |r: &RegionAuto| r.regions.iter().find(|x| x.region == Region::Subject).map(|x| x.adjust.exposure).unwrap_or(0.0);
+        assert!(lift(&r) > lift(&alone) && lift(&r) < SUBJECT_EV.1 as f64, "{} vs {}", lift(&r), lift(&alone));
+        // apply as the engine does
+        let mut d = crate::look::settings_with(&s, r.global);
+        d.masks.retain(|m| !is_auto_mask(m));
+        let next = d.masks.iter().map(|m| m.id).max().map_or(1, |i| i + 1);
+        d.masks.extend(r.masks(next));
+        assert!(d.masks.iter().any(|m| m.name == "mine"));
+        assert_eq!(d.masks.iter().filter(|m| m.name == "Auto: subject").count(), 1);
+        let planes = region_planes(&src, &info, &s).unwrap();
+        let e = encoded(&src, &d);
+        let region = sorted(e.iter().zip(&planes.subject.data).filter(|(_, a)| super::inside(**a)).map(|(v, _)| *v));
+        let want = rendered(&info, key_target(SceneKey::default()), 0.0);
+        let got = percentile(&region, 0.5);
+        assert!((got - want).abs() < 0.06, "subject region median {got} vs target {want}; {r:?}");
     }
 
     #[test]
