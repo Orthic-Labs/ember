@@ -41,6 +41,11 @@
   the other editor (Edit in Other Editor, now ⌥⌘E), and where PhotoCraft is if you use a portable copy.
 - Export can write PSD too (flat, 8- or 16-bit).
 
+### Faster GPU exports
+- Exports with noise reduction, Texture, Clarity, Dehaze or Highlights and Shadows can be much faster on the GPU,
+  depending on the graphics card. On a Windows laptop with an AMD Radeon 780M, a full-size export of a 24 MP raw
+  with those edits went from about 3.7 s to 1.9 s. Photos look the same as before.
+
 ### Reliability
 - Upgrading from a Windows installer older than 0.6 (such as 0.5.0) keeps Ember in the folder it was installed
   in, instead of moving it back to Program Files (issue #399). If that folder has been deleted since, the upgrade

@@ -139,7 +139,8 @@ walks the drive.
 - Kernels (`crates/gpu/src/wgsl/`): `geom` (orientation pixel map, bilinear through the
   crop/straighten/flip affine or the full lens + perspective warp), `resize` (separable resample
   with the CPU's taps; Mitchell prefilter, box/bilinear for the fast guided filter), `blur` (box
-  passes with running sums over pixel chunks; three each way = the CPU's Gaussian), `map`
+  passes, three each way = the CPU's Gaussian: horizontal ones sum each pixel's window, so adjacent
+  threads read adjacent pixels; vertical ones slide running sums down chunks of a column), `map`
   (log luminance, dark channel, guided-filter steps, white balance, luminance / colour NR, airlight
   sampling), `mask` (linear / radial / luminance / colour range / brush shapes, combine, finalize),
   `finish` (the whole per-pixel stage) — each mirrors a named CPU function.
@@ -233,7 +234,7 @@ noise-reduction size come from the whole frame, and a window that spots or Auto 
 cut back after the readback. The tests skip (pass with a note) when no adapter exists.
 
 Remaining differences come from f32 vs f64 coordinate math, fast-math transcendental functions on
-Metal and running-sum order in the box filters — all far below one 8-bit step.
+Metal and summation order in the box filters — all far below one 8-bit step.
 
 ## Measurements
 `render_bench` on `corpus/raw/arw-sony-a7m3-compressed.arw` (24 MP; loupe = 2560 px preview →
@@ -250,6 +251,14 @@ so CPU numbers are pessimistic; the GPU numbers are less affected):
 | NR drag, draft / 1920×1280 (warm) | 186 / 301–471 ms | 10 / 18 ms |
 | per-pixel stage 1920×1280, + vibrance/saturation | 53–65 ms | 5 ms |
 | export render 6000×4000 | 1037–1414 ms | 291–330 ms |
+
+On Windows (Radeon 780M iGPU, DX12), a full-size JPEG export of the same raw with heavy edits (NR 30
+/ 25, clarity, texture, dehaze, sharpening, highlights / shadows) took 3.6–4.0 s on the GPU against
+1.9–2.0 s on the CPU: the horizontal box pass had each thread slide a running sum over 16 pixels, so
+the threads of a workgroup read pixels 16 apart, and it took 9–15× as long as the vertical pass.
+Summing each pixel's window instead (adjacent threads, adjacent pixels): 1.9–2.0 s, with the GPU's
+NR stage 1.5 → 0.4 s and spatial planes 0.89 → 0.29 s (`LIGHTCRAFT_PROFILE`). The ignored test
+`bench_kernels` (`crates/gpu/src/render.rs`) times the passes on a 24 MP plane.
 
 GPU timings include the readback of the 8-bit result and the histogram. Device creation + kernel
 compilation: ~0.4 s once per process — the desktop app starts it on a background thread at launch
