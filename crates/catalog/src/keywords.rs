@@ -239,16 +239,19 @@ impl Catalog {
         use std::collections::HashMap;
         // every keyword level (`travel`, `travel|italy`…), one per lower-case path: the name and
         // path as first written, and the photos counted (once per photo, even when two of its
-        // keywords share a parent: `seen` is the last photo counted)
+        // keywords share a parent: `seen` is the last photo counted); `sort` is the name in lower case
         struct Level {
             name: String,
+            sort: String,
             path: String,
             count: usize,
-            parent: Option<usize>,
             seen: usize,
         }
         let mut levels: Vec<Level> = Vec::new();
         let mut by_lower: HashMap<String, usize> = HashMap::new();
+        // each level's children (by index), and the top level
+        let mut kids: Vec<Vec<usize>> = Vec::new();
+        let mut roots: Vec<usize> = Vec::new();
         // the keyword list first (no photos counted): a listed keyword is there without photos
         let listed: Vec<String> = self.listed_keywords().map(|k| k.path.clone()).collect();
         // each keyword as written → its levels (its own and those above it), worked out once: a
@@ -258,7 +261,7 @@ impl Catalog {
         for (photo, (counts, keywords)) in std::iter::once((false, listed.as_slice())).chain(photos).enumerate() {
             for k in keywords {
                 let chain = chains.entry(k.as_str()).or_insert_with(|| {
-                    let mut chain = Vec::new();
+                    let mut chain: Vec<usize> = Vec::new();
                     let mut path = String::new();
                     let mut lower = String::new();
                     for part in k.split(SEP).map(str::trim).filter(|s| !s.is_empty()) {
@@ -267,13 +270,18 @@ impl Catalog {
                             lower.push(SEP);
                         }
                         path.push_str(part);
-                        lower.push_str(&part.to_lowercase());
+                        let sort = part.to_lowercase();
+                        lower.push_str(&sort);
                         let i = match by_lower.get(&lower) {
                             Some(&i) => i,
                             None => {
                                 let i = levels.len();
-                                let parent = chain.last().copied();
-                                levels.push(Level { name: part.to_string(), path: path.clone(), count: 0, parent, seen: 0 });
+                                match chain.last().and_then(|&p| kids.get_mut(p)) {
+                                    Some(k) => k.push(i),
+                                    None => roots.push(i),
+                                }
+                                levels.push(Level { name: part.to_string(), sort, path: path.clone(), count: 0, seen: 0 });
+                                kids.push(Vec::new());
                                 by_lower.insert(lower.clone(), i);
                                 i
                             }
@@ -294,17 +302,8 @@ impl Catalog {
                 }
             }
         }
-        // each level's children; `roots` the top level
-        let mut kids: Vec<Vec<usize>> = vec![Vec::new(); levels.len()];
-        let mut roots = Vec::new();
-        for (i, l) in levels.iter().enumerate() {
-            match l.parent.and_then(|p| kids.get_mut(p)) {
-                Some(k) => k.push(i),
-                None => roots.push(i),
-            }
-        }
         fn build(mut list: Vec<usize>, levels: &[Level], kids: &mut [Vec<usize>]) -> Vec<KeywordNode> {
-            list.sort_by_cached_key(|&i| levels.get(i).map(|l| l.name.to_lowercase()));
+            list.sort_by(|&a, &b| levels.get(a).map(|l| &l.sort).cmp(&levels.get(b).map(|l| &l.sort)));
             list.into_iter()
                 .filter_map(|i| {
                     let lv = levels.get(i)?;

@@ -729,7 +729,7 @@ fn the_header_of_a_long_section_stays_in_sight() {
 }
 
 /// Scroll the sidebar (the pointer over it) by `dy`.
-fn scroll_sidebar(h: &mut Headless, dy: f32) {
+pub(crate) fn scroll_sidebar(h: &mut Headless, dy: f32) {
     h.request("ui.move", json!({"x": 120.0, "y": 400.0}), T);
     let r = h.request("ui.scroll", json!({"dy": dy}), T);
     assert_eq!(r["ok"], true, "{r}");

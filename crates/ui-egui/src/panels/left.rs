@@ -24,8 +24,9 @@ const MAX_NAME_NEED: f32 = 140.0;
 /// Height of a sidebar row.
 const ROW_HEIGHT: f32 = 29.0;
 
-/// Temp-data key of the keyword (lower-case path) the sidebar scrolls to, and the frame it was asked for.
-const KEYWORD_SCROLL_TO: &str = "left-keyword-scroll-to";
+/// Temp-data key of the row (its widget id after `source:`, lower-case) the sidebar scrolls to
+/// this frame: set before the sections are drawn, cleared after.
+const SCROLL_TO_ROW: &str = "left-scroll-to-row";
 
 /// A row says how wide it needs to be.
 fn note_width(ui: &egui::Ui, w: f32) {
@@ -82,7 +83,11 @@ fn row_sensed(
     let label = if matches!(id, "all" | "recentlyAdded" | "picks" | "missing" | "recentlyDeleted") { crate::i18n::tr(label) } else { label };
     let t = Tokens::get(ui.ctx());
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), sense);
+    if scroll_asked(ui, id) {
+        ui.scroll_to_rect_animation(r, None, egui::style::ScrollAnimation::none());
+    }
     register(ui.ctx(), format!("source:{id}"), r);
+    let mark_w = if mark.is_some() { MARK_W } else { 0.0 };
     let said = spoken.unwrap_or(label);
     let name = match count {
         Some(n) => crate::i18n::tr_format!("{label}, {n} photos", label = said, n = n),
@@ -114,7 +119,6 @@ fn row_sensed(
     let label_left = r.left() + 42.0 + indent;
     let count_left = count_galley.as_ref().map_or(edge - 18.0, |g| edge - 18.0 - g.size().x);
     // a label's dot sits just before the count
-    let mark_w = if mark.is_some() { MARK_W } else { 0.0 };
     if let Some(c) = mark {
         let dot = Rect::from_center_size(pos2(count_left - MARK_W / 2.0, r.center().y), vec2(8.0, 8.0));
         ui.painter().circle_filled(dot.center(), 4.0, c);
@@ -128,18 +132,45 @@ fn row_sensed(
     let label_rect = ui.painter().text(pos2(label_left, r.center().y), Align2::LEFT_CENTER, &shown, font.clone(), color);
     register(ui.ctx(), format!("label:{id}"), label_rect);
     let resp = if shown != label { resp.on_hover_text(label) } else { resp };
-    // a row asks for room for its name up to a share of a panel, so one very long name does not
-    // make everything scroll: depth does that
-    let mut needed = 42.0 + indent + full_w.min(MAX_NAME_NEED) + 18.0 + mark_w;
+    note_width(ui, row_need(indent, full_w, mark_w, count_galley.as_ref().map(|g| g.size().x)));
     if let Some(galley) = count_galley {
         let rect = Rect::from_min_size(pos2(edge - 18.0 - galley.size().x, r.center().y - galley.size().y / 2.0), galley.size());
-        needed += rect.width() + 16.0;
         register(ui.ctx(), format!("count:{id}"), rect);
         ui.painter().galley(rect.min, galley, t.text_dim);
     }
-    note_width(ui, needed);
-    let _ = app;
     resp
+}
+
+/// Whether the row `id` about to be drawn is out of sight: then it only takes its room, is listed
+/// for the control channel and asks for its width (so the content does not widen and narrow as
+/// rows scroll by), and the caller skips it. A library can have thousands of keywords or folders,
+/// and drawing them all every frame slows the whole app down (issue #1011). A row the sidebar is
+/// asked to scroll to is drawn. `label`, `count` and `mark` as for [`row_sensed`].
+fn out_of_sight(app: &LightcraftApp, ui: &mut egui::Ui, id: &str, label: &str, count: Option<usize>, indent: f32, mark: bool) -> bool {
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), ROW_HEIGHT));
+    if ui.is_rect_visible(r) || scroll_asked(ui, id) {
+        return false;
+    }
+    ui.allocate_space(r.size());
+    register(ui.ctx(), format!("source:{id}"), r);
+    let t = Tokens::get(ui.ctx());
+    let painter = ui.painter();
+    let name_w = painter.layout_no_wrap(label.to_string(), t.font(13.5), t.text_label).size().x;
+    let count_w = count.filter(|_| app.ui.show_counts).map(|n| painter.layout_no_wrap(n.to_string(), t.font(12.5), t.text_dim).size().x);
+    note_width(ui, row_need(indent, name_w, if mark { MARK_W } else { 0.0 }, count_w));
+    true
+}
+
+/// Whether the sidebar is asked to scroll to the row `id` this frame ([`SCROLL_TO_ROW`]).
+fn scroll_asked(ui: &egui::Ui, id: &str) -> bool {
+    ui.data(|d| d.get_temp::<String>(egui::Id::new(SCROLL_TO_ROW))).is_some_and(|want| want == id.to_lowercase())
+}
+
+/// How wide a row needs to be, from its indent, name, colour dot and count widths. It asks for
+/// room for its name up to a share of a panel, so one very long name does not make everything
+/// scroll: depth does that.
+fn row_need(indent: f32, name_w: f32, mark_w: f32, count_w: Option<f32>) -> f32 {
+    42.0 + indent + name_w.min(MAX_NAME_NEED) + 18.0 + mark_w + count_w.map_or(0.0, |w| w + 16.0)
 }
 
 /// The disclosure triangle at the left of a tree row (`indent` is the row's): right-pointing
@@ -272,7 +303,7 @@ fn pinned_header(app: &mut LightcraftApp, ui: &mut egui::Ui, placed: &[PlacedSec
 /// `sidebarEmpty:<id>`), so the section stays where it is instead of disappearing.
 fn empty_hint(ui: &mut egui::Ui, section: SidebarSection) {
     let t = Tokens::get(ui.ctx());
-    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 29.0), Sense::hover());
+    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), Sense::hover());
     register(ui.ctx(), format!("sidebarEmpty:{}", section.id()), r);
     let text = crate::i18n::tr(section.empty_hint());
     let galley = ui.painter().layout_no_wrap(text.to_string(), t.font(12.5), t.text_dim);
@@ -644,9 +675,8 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                     above.push_str(name);
                     set_tree_open(ui, egui::Id::new(("kw-open", above.to_lowercase())), true);
                 }
-                // …and the sidebar scrolls to it when its row is drawn (`keyword_rows`)
-                let frame = ui.ctx().cumulative_frame_nr();
-                ui.data_mut(|d| d.insert_temp(egui::Id::new(KEYWORD_SCROLL_TO), (path.to_lowercase(), frame)));
+                // …and the sidebar scrolls to it
+                ui.data_mut(|d| d.insert_temp(egui::Id::new(SCROLL_TO_ROW), format!("keyword:{path}").to_lowercase()));
             }
             // Local keeps track of the folder being browsed whether or not it is drawn
             let local = local_now(app, ui);
@@ -680,6 +710,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                 };
                 placed.push(at);
             }
+            ui.data_mut(|d| d.remove::<String>(egui::Id::new(SCROLL_TO_ROW)));
             // room below the last section (a section dragged to the end is dropped here)
             ui.add_space(SECTION_GAP * 2.0);
             pinned_header(app, ui, &placed, view_top);
@@ -1674,42 +1705,49 @@ fn folder_rows(app: &mut LightcraftApp, ui: &mut egui::Ui, nodes: &[FolderNode],
         let leads_on = n.own == 0 && n.children.len() == 1;
         let mut open = tree_open(ui, open_id, n.volume || leads_on);
         // a row whose path would cover other disks' photos too only opens and closes
-        let selectable = n.selectable;
-        let sel = selectable
-            && app.session.source == LibrarySource::LibraryFolder
-            && app.session.library_folder.as_deref().is_some_and(|f| same_folder(f, &n.path));
-        let name = if selectable { n.name.clone() } else { crate::i18n::tr("This Computer").to_string() };
-        // the label is said with the name, as it is shown beside it
-        let spoken = match n.label {
-            Some(l) => format!("{name}, {}", crate::i18n::color_label(&app.session.catalog, l)),
-            None => name.clone(),
-        };
-        let mark = n.label.map(crate::theme::label_color);
+        let name = if n.selectable { n.name.clone() } else { crate::i18n::tr("This Computer").to_string() };
         let id = format!("libfolder:{}", n.path);
-        let resp = row_sensed(app, ui, &id, Icon::Folder, &name, Some(&spoken), Some(n.count), sel, indent, Sense::click(), mark);
-        let mut toggled = false;
-        if !n.children.is_empty() {
-            let tr = tree_toggle(ui, &resp, indent, open_id, &mut open, format!("libraryFolderToggle:{}", n.path));
-            toggled = tr.clicked();
-            // the triangle sits on the row and takes its clicks: the menu opens from it too
-            row_menu(app, &tr, n);
+        if !out_of_sight(app, ui, &id, &name, Some(n.count), indent, n.label.is_some()) {
+            folder_row(app, ui, n, &id, &name, indent, open_id, &mut open);
         }
-        let tip = if n.children.is_empty() { n.path.clone() } else { format!("{} ({})", n.path, crate::i18n::tr("includes the folders inside it")) };
-        let resp = resp.on_hover_text(tip);
-        if resp.clicked() && !toggled {
-            if selectable {
-                // a source like an album or a Local folder: it replaces what the grid showed
-                let _ = app.run("library.source", json!({"kind": "libraryFolder", "path": n.path}));
-            } else {
-                open = !open;
-                set_tree_open(ui, open_id, open);
-            }
-        }
-        row_menu(app, &resp, n);
         if open && !n.children.is_empty() {
             folder_rows(app, ui, &n.children, indent + 16.0);
         }
     }
+}
+
+/// One drawn row of [`folder_rows`], shown as `name`; `open_id` and `open` are its triangle's.
+#[allow(clippy::too_many_arguments)]
+fn folder_row(app: &mut LightcraftApp, ui: &mut egui::Ui, n: &FolderNode, id: &str, name: &str, indent: f32, open_id: egui::Id, open: &mut bool) {
+    let sel = n.selectable
+        && app.session.source == LibrarySource::LibraryFolder
+        && app.session.library_folder.as_deref().is_some_and(|f| same_folder(f, &n.path));
+    // the label is said with the name, as it is shown beside it
+    let spoken = match n.label {
+        Some(l) => format!("{name}, {}", crate::i18n::color_label(&app.session.catalog, l)),
+        None => name.to_string(),
+    };
+    let mark = n.label.map(crate::theme::label_color);
+    let resp = row_sensed(app, ui, id, Icon::Folder, name, Some(&spoken), Some(n.count), sel, indent, Sense::click(), mark);
+    let mut toggled = false;
+    if !n.children.is_empty() {
+        let tr = tree_toggle(ui, &resp, indent, open_id, open, format!("libraryFolderToggle:{}", n.path));
+        toggled = tr.clicked();
+        // the triangle sits on the row and takes its clicks: the menu opens from it too
+        row_menu(app, &tr, n);
+    }
+    let tip = if n.children.is_empty() { n.path.clone() } else { format!("{} ({})", n.path, crate::i18n::tr("includes the folders inside it")) };
+    let resp = resp.on_hover_text(tip);
+    if resp.clicked() && !toggled {
+        if n.selectable {
+            // a source like an album or a Local folder: it replaces what the grid showed
+            let _ = app.run("library.source", json!({"kind": "libraryFolder", "path": n.path}));
+        } else {
+            *open = !*open;
+            set_tree_open(ui, open_id, *open);
+        }
+    }
+    row_menu(app, &resp, n);
 }
 
 /// The context menu of a Folders row: a folder's own, a disk's (remove it), none for the
@@ -1842,64 +1880,52 @@ fn folder_menu_for_library(app: &mut LightcraftApp, resp: &egui::Response, n: &F
 /// filters the grid by the keyword (children included), the triangle opens a level, and the
 /// context menu renames, merges or deletes the keyword across the library.
 fn keyword_rows(app: &mut LightcraftApp, ui: &mut egui::Ui, nodes: &[KeywordNode], indent: f32) {
-    // the keyword just made from the header, to scroll to (asked for a frame or two ago)
-    let scroll_id = egui::Id::new(KEYWORD_SCROLL_TO);
-    let frame = ui.ctx().cumulative_frame_nr();
-    let scroll_to = ui.data(|d| d.get_temp::<(String, u64)>(scroll_id)).filter(|(_, asked)| frame.saturating_sub(*asked) <= 2).map(|(p, _)| p);
     for n in nodes {
-        let lower = n.path.to_lowercase();
-        let reveal = scroll_to.as_deref() == Some(lower.as_str());
-        let open_id = egui::Id::new(("kw-open", lower));
-        let mut open = tree_open(ui, open_id, false);
-        // a row out of sight only takes its room: a library can have thousands of keywords, and
-        // drawing them all every frame slows the whole app down (issue #1011)
-        let next = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), ROW_HEIGHT));
-        if !reveal && !ui.is_rect_visible(next) {
-            ui.allocate_space(next.size());
-            note_width(ui, 42.0 + indent + 18.0);
-            if open && !n.children.is_empty() {
-                keyword_rows(app, ui, &n.children, indent + 16.0);
-            }
-            continue;
+        // leaves (most keywords) have no open state to look up
+        let open_id = (!n.children.is_empty()).then(|| egui::Id::new(("kw-open", n.path.to_lowercase())));
+        let mut open = open_id.is_some_and(|k| tree_open(ui, k, false));
+        let id = format!("keyword:{}", n.path);
+        if !out_of_sight(app, ui, &id, &n.name, Some(n.count), indent, false) {
+            keyword_row(app, ui, n, &id, indent, open_id, &mut open);
         }
-        let sel = app.session.filter.keyword.as_deref().is_some_and(|k| k.eq_ignore_ascii_case(&n.path));
-        let resp = row(app, ui, &format!("keyword:{}", n.path), Icon::Tag, &n.name, Some(n.count), sel, indent);
-        if !n.children.is_empty() {
-            tree_toggle(ui, &resp, indent, open_id, &mut open, format!("keywordToggle:{}", n.path));
-        }
-        if reveal {
-            ui.scroll_to_rect_animation(resp.rect, None, egui::style::ScrollAnimation::none());
-            ui.data_mut(|d| d.remove::<(String, u64)>(scroll_id));
-        }
-        let resp = resp.on_hover_text(if n.children.is_empty() { n.path.clone() } else { format!("{} (includes the keywords below it)", n.path) });
-        if resp.clicked() {
-            let v = if sel { serde_json::Value::Null } else { json!(n.path) };
-            browse_all_photos(app, !sel);
-            let _ = app.run("library.filter", json!({"keyword": v}));
-        }
-        resp.context_menu(|ui| {
-            let has_sel = app.session.active().is_some();
-            if ui.add_enabled(has_sel, egui::Button::new(crate::i18n::tr("Add to Selected Photos"))).clicked() {
-                let _ = app.run("photo.setMeta", json!({"addKeywords": [n.path]}));
-            }
-            if ui.add_enabled(has_sel, egui::Button::new(crate::i18n::tr("Remove from Selected Photos"))).clicked() {
-                let _ = app.run("photo.setMeta", json!({"removeKeywords": [n.path]}));
-            }
-            ui.separator();
-            if ui.button(crate::i18n::tr("Rename Keyword…")).clicked() {
-                app.ui.dialog = Some(crate::state::Dialog::RenameKeyword { from: n.path.clone(), to: n.path.clone() });
-            }
-            if ui.button(crate::i18n::tr("Merge into…")).clicked() {
-                app.ui.dialog = Some(crate::state::Dialog::MergeKeywords { from: vec![n.path.clone()], into: String::new() });
-            }
-            if ui.button(crate::i18n::tr("Delete Keyword")).clicked() {
-                let _ = app.run("keyword.delete", json!({"keyword": n.path}));
-            }
-        });
-        if open && !n.children.is_empty() {
+        if open {
             keyword_rows(app, ui, &n.children, indent + 16.0);
         }
     }
+}
+
+/// One drawn row of [`keyword_rows`]; `open_id` and `open` are its triangle's when it has rows inside it.
+fn keyword_row(app: &mut LightcraftApp, ui: &mut egui::Ui, n: &KeywordNode, id: &str, indent: f32, open_id: Option<egui::Id>, open: &mut bool) {
+    let sel = app.session.filter.keyword.as_deref().is_some_and(|k| k.eq_ignore_ascii_case(&n.path));
+    let resp = row(app, ui, id, Icon::Tag, &n.name, Some(n.count), sel, indent);
+    if let Some(k) = open_id {
+        tree_toggle(ui, &resp, indent, k, open, format!("keywordToggle:{}", n.path));
+    }
+    let resp = resp.on_hover_text(if n.children.is_empty() { n.path.clone() } else { format!("{} (includes the keywords below it)", n.path) });
+    if resp.clicked() {
+        let v = if sel { serde_json::Value::Null } else { json!(n.path) };
+        browse_all_photos(app, !sel);
+        let _ = app.run("library.filter", json!({"keyword": v}));
+    }
+    resp.context_menu(|ui| {
+        let has_sel = app.session.active().is_some();
+        if ui.add_enabled(has_sel, egui::Button::new(crate::i18n::tr("Add to Selected Photos"))).clicked() {
+            let _ = app.run("photo.setMeta", json!({"addKeywords": [n.path]}));
+        }
+        if ui.add_enabled(has_sel, egui::Button::new(crate::i18n::tr("Remove from Selected Photos"))).clicked() {
+            let _ = app.run("photo.setMeta", json!({"removeKeywords": [n.path]}));
+        }
+        ui.separator();
+        if ui.button(crate::i18n::tr("Rename Keyword…")).clicked() {
+            app.ui.dialog = Some(crate::state::Dialog::RenameKeyword { from: n.path.clone(), to: n.path.clone() });
+        }
+        if ui.button(crate::i18n::tr("Merge into…")).clicked() {
+            app.ui.dialog = Some(crate::state::Dialog::MergeKeywords { from: vec![n.path.clone()], into: String::new() });
+        }
+        if ui.button(crate::i18n::tr("Delete Keyword")).clicked() {
+            let _ = app.run("keyword.delete", json!({"keyword": n.path}));
+        }
+    });
 }
 
 #[cfg(test)]

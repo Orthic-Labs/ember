@@ -35,9 +35,10 @@ fn app(photos: u64, keywords: u64) -> Headless {
     h
 }
 
-/// The keyword rows drawn this frame.
+/// The keyword rows drawn this frame (every row is listed as `source:…`; only a drawn one has its
+/// `label:…`).
 fn keyword_rows(h: &Headless) -> Vec<String> {
-    h.app.widgets.iter().filter_map(|(w, _)| w.strip_prefix("source:keyword:")).map(str::to_string).collect()
+    h.app.widgets.iter().filter_map(|(w, _)| w.strip_prefix("label:keyword:")).map(str::to_string).collect()
 }
 
 /// Given a library with 2,000 keywords, when the sidebar's Keywords section is open, then a frame
@@ -52,13 +53,7 @@ fn keywords_section_draws_only_the_rows_near_the_screen() {
     assert!(!rows.is_empty() && rows.len() < 100, "{} of {KEYWORDS} keyword rows drawn", rows.len());
     assert!(rows.contains(&"Keyword 00000".to_string()), "{rows:?}");
     // all the way down
-    h.request("ui.move", json!({"x": 120.0, "y": 400.0}), T);
-    for _ in 0..40 {
-        let r = h.request("ui.scroll", json!({"dy": -5000.0}), T);
-        assert_eq!(r["ok"], true, "{r}");
-        h.step();
-    }
-    h.settle(SETTLE);
+    crate::tests_panels::scroll_sidebar(&mut h, -(KEYWORDS as f32) * 40.0);
     let rows = keyword_rows(&h);
     assert!(!rows.is_empty() && rows.len() < 100, "{} of {KEYWORDS} keyword rows drawn", rows.len());
     assert!(rows.contains(&"Keyword 01999".to_string()), "the last keyword is reached: {rows:?}");
