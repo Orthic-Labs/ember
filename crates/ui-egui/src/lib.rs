@@ -8,6 +8,7 @@
 
 pub mod album_picker;
 pub mod brush_live;
+mod command_error;
 pub mod control;
 pub mod credits;
 pub mod date_picker;
@@ -63,6 +64,8 @@ mod tests_date_picker;
 mod tests_dialog_fit;
 #[cfg(test)]
 mod tests_dialogs;
+#[cfg(test)]
+mod tests_error_kinds;
 #[cfg(test)]
 mod tests_filmstrip;
 #[cfg(test)]
@@ -130,9 +133,10 @@ mod tests_zoom_keys;
 
 use std::sync::mpsc::{Receiver, Sender};
 
-use lightcraft_engine::Session;
+use lightcraft_engine::{AiModel, ErrorKind, Session};
 use serde_json::Value;
 
+pub use command_error::CommandError;
 pub use control::{ControlRequest, ControlResponse};
 pub use state::UiState;
 
@@ -503,14 +507,20 @@ impl LightcraftApp {
 
     /// Run a UI or engine command by id. The single entry point for every frontend path.
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
+        self.run_typed(id, params).map_err(|e| e.message)
+    }
+
+    /// [`LightcraftApp::run`], keeping what kind of error a refusal is: for code that decides on it
+    /// (offer a model's download, treat a cancel as one) instead of reading the message.
+    pub fn run_typed(&mut self, id: &str, params: Value) -> Result<Value, CommandError> {
         if let Some(result) = model_setup::intercept(self, id, &params) {
-            return result;
+            return result.map_err(CommandError::from);
         }
         if let Some(r) = menus::run_ui_command(self, id, &params) {
             if r.is_ok() {
                 docking::reveal_command(self, id)?;
             }
-            return r;
+            return r.map_err(CommandError::from);
         }
         let params = if id == "crop.aspect"
             && params.get("aspect").and_then(Value::as_str) == Some("toggle")
@@ -521,7 +531,7 @@ impl LightcraftApp {
         } else {
             params
         };
-        let r = self.session.execute(id, &params).map_err(|e| e.to_string());
+        let r = self.session.execute(id, &params).map_err(CommandError::from);
         if r.is_ok() && matches!(id, "crop.aspect" | "crop.rotateAspect") {
             self.ui.crop_default_aspect = if id == "crop.aspect" && params.get("aspect").and_then(Value::as_str) == Some("original") {
                 Some(serde_json::json!("original"))
@@ -574,9 +584,9 @@ impl LightcraftApp {
         match &r {
             Err(e) => {
                 log::warn!("{id}: {e}");
-                self.ui.status = e.clone();
+                self.ui.status = e.message.clone();
                 // no detector yet: offer it (its terms first) instead of only saying so
-                if id == "faces.detect" && e.contains("Settings > Faces") {
+                if id == "faces.detect" && e.kind == ErrorKind::ModelMissing(AiModel::FaceDetector) {
                     panels::faces::offer_detector(self);
                 }
             }
@@ -756,16 +766,11 @@ impl LightcraftApp {
         if self.ui.sam_downloading && !download.running {
             self.ui.sam_downloading = false;
             let open = matches!(self.ui.dialog, Some(state::Dialog::SamModel { .. }));
-            match (&download.error, open) {
-                (_, true) => {}
-                (Some(e), false) if e.contains("cancelled") => {
-                    self.toast(ctx, crate::i18n::tr("SAM 3 download stopped: it resumes where it left off next time."))
-                }
-                (Some(e), false) => self.toast_error(ctx, crate::i18n::tr_format!("The SAM 3 download failed: {e}", e = e)),
-                (None, false) if download.finished => {
-                    self.toast_error(ctx, crate::i18n::tr("The SAM 3 model is installed: Object and Describe masks are ready."))
-                }
-                (None, false) => {}
+            match sam_download_ended(&download) {
+                _ if open => {}
+                Some((text, true)) => self.toast_error(ctx, text),
+                Some((text, false)) => self.toast(ctx, text),
+                None => {}
             }
         }
         if let Some((due, mask)) = self.ui.detail_due {
@@ -784,13 +789,14 @@ impl LightcraftApp {
     }
 
     /// An AI mask error: when the model isn't installed, the dialog that offers to download it
-    /// (`then`: the AI mask to start afterwards); otherwise a toast.
-    pub fn ai_error(&mut self, ctx: &egui::Context, e: impl Into<String>, then: Option<(&str, &str)>) {
+    /// (`then`: the AI mask to start afterwards); otherwise a toast. Decided on the error's kind
+    /// ([`ErrorKind::ModelMissing`]), not its words.
+    pub fn ai_error(&mut self, ctx: &egui::Context, e: impl Into<CommandError>, then: Option<(&str, &str)>) {
         let e = e.into();
-        if lightcraft_engine::segment::Segmenter::AVAILABLE && e.starts_with(lightcraft_engine::segment::NOT_INSTALLED) {
+        if lightcraft_engine::segment::Segmenter::AVAILABLE && e.kind == ErrorKind::ModelMissing(AiModel::Sam3) {
             self.offer_sam_download(then);
         } else {
-            self.toast_error(ctx, e);
+            self.toast_error(ctx, e.message);
         }
     }
 
@@ -1395,6 +1401,19 @@ fn detect_summary(v: &Value) -> String {
         (0, n) => format!("No faces found in {}", plural(n, "photo")),
         (f, 1) => format!("Found {}", plural(f, "face")),
         (f, _) => format!("Found {} in {}", plural(f, "face"), plural(with, "photo")),
+    }
+}
+
+/// What to say when a SAM 3 download ended while its dialog was closed: the text, and whether it is
+/// shown as an error toast. A cancel is told by `cancelled`, not by the error's words.
+fn sam_download_ended(download: &lightcraft_engine::segment::DownloadStatus) -> Option<(String, bool)> {
+    match &download.error {
+        Some(_) if download.cancelled => {
+            Some((crate::i18n::tr("SAM 3 download stopped: it resumes where it left off next time.").to_string(), false))
+        }
+        Some(e) => Some((crate::i18n::tr_format!("The SAM 3 download failed: {e}", e = e), true)),
+        None if download.finished => Some((crate::i18n::tr("The SAM 3 model is installed: Object and Describe masks are ready.").to_string(), true)),
+        None => None,
     }
 }
 

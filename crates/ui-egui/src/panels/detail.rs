@@ -1924,7 +1924,7 @@ fn mask_overlay(app: &mut LightcraftApp, ui: &mut egui::Ui, resp: &egui::Respons
         {
             let n = map.norm(q);
             let exclude = ui.input(|i| i.modifiers.alt);
-            match app.run("mask.objectPoint", json!({"x": n.x, "y": n.y, "exclude": exclude})) {
+            match app.run_typed("mask.objectPoint", json!({"x": n.x, "y": n.y, "exclude": exclude})) {
                 Ok(_) => {
                     if let Some(mid) = app.session.active_mask {
                         app.ui.detail_due = Some((ui.input(|i| i.time) + 1.0, mid));
