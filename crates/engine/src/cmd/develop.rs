@@ -289,25 +289,51 @@ pub fn specs() -> Vec<CommandSpec> {
                 Ok(json!({"mix": m}))
             }
         ),
-        cmd!("develop.auto", "Auto Settings", ["Photo"], Some("Shift+A"), "{}", has_active, |s, _| {
-            let id = active(s, "develop.auto")?;
-            let src = s.source_now(id, SourceLevel::Thumb).map_err(|e| bad("develop.auto", e))?;
-            let info = s.source_info(id);
-            let d = s.develop_of(id).unwrap_or_default();
-            let a = lightcraft_pipeline::auto::auto_tone(&src, &info, &d);
-            edit(s, "develop.auto", "Auto", |d| {
-                d.light.exposure = a.exposure;
-                d.light.contrast = a.contrast;
-                d.light.highlights = a.highlights;
-                d.light.shadows = a.shadows;
-                d.light.whites = a.whites;
-                d.light.blacks = a.blacks;
-                d.color.vibrance = a.vibrance;
-                d.color.saturation = a.saturation;
-                Ok(())
-            })?;
-            Ok(serde_json::to_value(a).unwrap_or_default())
-        }),
+        cmd!(
+            "develop.auto",
+            "Auto Settings",
+            ["Photo"],
+            Some("Shift+A"),
+            "{regions?: bool (default true: the subject, background and sky get their own masks, \"Auto: …\", replaced on the next run), dryRun?: bool}",
+            has_active,
+            |s, p| {
+                use lightcraft_pipeline::auto::regions::{RegionAuto, is_auto_mask, region_auto};
+                let c = "develop.auto";
+                let id = active(s, c)?;
+                let src = s.source_now(id, SourceLevel::Thumb).map_err(|e| bad(c, e))?;
+                let info = s.source_info(id);
+                let d = s.develop_of(id).unwrap_or_default();
+                let r = if bool_or(p, "regions", true) {
+                    region_auto(&src, &info, &d)
+                } else {
+                    RegionAuto::global_only(lightcraft_pipeline::auto::auto_tone(&src, &info, &d))
+                };
+                if !bool_or(p, "dryRun", false) {
+                    let a = r.global;
+                    let regions = r.regions.clone();
+                    edit(s, c, "Auto", |d| {
+                        d.light.exposure = a.exposure;
+                        d.light.contrast = a.contrast;
+                        d.light.highlights = a.highlights;
+                        d.light.shadows = a.shadows;
+                        d.light.whites = a.whites;
+                        d.light.blacks = a.blacks;
+                        d.color.vibrance = a.vibrance;
+                        d.color.saturation = a.saturation;
+                        d.masks.retain(|m| !is_auto_mask(m));
+                        let masks = RegionAuto { global: a, regions }.masks_for(&d.masks).ok_or_else(|| bad(c, "no free Auto mask IDs"))?;
+                        d.masks.extend(masks);
+                        Ok(())
+                    })?;
+                    if let Some(active) = s.active_mask
+                        && !s.develop_of(id).is_some_and(|d| d.masks.iter().any(|m| m.id == active))
+                    {
+                        s.active_mask = None;
+                    }
+                }
+                Ok(serde_json::to_value(&r).unwrap_or_default())
+            }
+        ),
         cmd!("develop.autoNoise", "Auto Noise Reduction", ["Photo"], None, "{dryRun?: bool}", has_active, |s, p| {
             // Reads the original at native resolution: a proxy has already averaged the noise away.
             let c = "develop.autoNoise";

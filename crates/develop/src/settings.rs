@@ -835,15 +835,32 @@ pub struct Mask {
     /// Refine Edges 0..100: the mask's edges snap to the photo's (guided filter).
     #[serde(skip_serializing_if = "is_zero")]
     pub refine: f64,
+    /// Written by Auto (`develop.auto`): the next Auto replaces it. Never set on a mask a
+    /// person made, whatever it is named.
+    #[serde(skip_serializing_if = "is_false")]
+    pub auto: bool,
 }
 
 fn is_zero(v: &f64) -> bool {
     *v == 0.0
 }
 
+fn is_false(v: &bool) -> bool {
+    !*v
+}
+
 impl Default for Mask {
     fn default() -> Self {
-        Self { id: 0, name: "Mask 1".into(), visible: true, invert: false, components: Vec::new(), adjust: LocalAdjustments::default(), refine: 0.0 }
+        Self {
+            id: 0,
+            name: "Mask 1".into(),
+            visible: true,
+            invert: false,
+            components: Vec::new(),
+            adjust: LocalAdjustments::default(),
+            refine: 0.0,
+            auto: false,
+        }
     }
 }
 

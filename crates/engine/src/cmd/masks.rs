@@ -136,8 +136,14 @@ pub(crate) fn clicks_of(include: &[Point], exclude: &[Point]) -> Vec<Click> {
 fn masks_edit(s: &mut Session, c: &str, label: &str, f: impl FnOnce(&mut Vec<Mask>, &mut Option<u32>) -> Result<()>) -> Result<Value> {
     let id = s.active().ok_or_else(|| bad(c, "no active photo"))?;
     let mut d = (*s.develop_of(id).unwrap_or_default()).clone();
+    let before = d.masks.clone();
     let mut active = s.active_mask;
     f(&mut d.masks, &mut active)?;
+    for mask in &mut d.masks {
+        if mask.auto && before.iter().find(|old| old.id == mask.id) != Some(&*mask) {
+            mask.auto = false;
+        }
+    }
     s.set_develop(id, d, label)?;
     s.active_mask = active;
     Ok(json!({"activeMask": active}))

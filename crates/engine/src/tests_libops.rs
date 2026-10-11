@@ -94,6 +94,20 @@ fn keyword_rename_merge_delete_undo_and_replay() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Renaming a differently-cased Unicode prefix must preserve descendant levels without slicing
+/// through a multi-byte lowercase expansion (ẞ → ß).
+#[test]
+fn keyword_filter_follows_unicode_rename_and_merge() {
+    let mut s = Session::with_demo();
+    let id = s.visible_cloned()[0].0;
+    s.execute("photo.setMeta", &json!({"ids": [id], "keywords": ["ßßa|é"]})).unwrap();
+    s.execute("library.filter", &json!({"keyword": "ßßa|é"})).unwrap();
+    s.execute("keyword.rename", &json!({"from": "ẞẞA", "to": "Road"})).unwrap();
+    assert_eq!(s.filter.keyword.as_deref(), Some("Road|é"));
+    s.execute("keyword.merge", &json!({"from": ["ROAD"], "into": "Weg"})).unwrap();
+    assert_eq!(s.filter.keyword.as_deref(), Some("Weg|é"));
+}
+
 fn write_png(path: &std::path::Path, seed: u8) {
     let (w, h) = (24usize, 16usize);
     let data: Vec<[u8; 4]> = (0..w * h).map(|i| [(i % w * 9) as u8, (i / w * 11) as u8, seed, 255]).collect();
@@ -355,9 +369,9 @@ fn label_sets_and_xmp_label_names() {
     p.label = Some(ColorLabel::Green);
     let x = crate::sidecar::sidecar_packet(&p, &s.catalog);
     assert!(x.contains("Approved"), "{x}");
-    let sc = crate::sidecar::parse_sidecar(&x, false).unwrap().resolve_label(&s.catalog);
+    let sc = crate::sidecar::parse_sidecar(&x, crate::crs::Target::Rendered).unwrap().resolve_label(&s.catalog);
     assert_eq!(sc.label, Some(Some(ColorLabel::Green)));
-    let plain = crate::sidecar::parse_sidecar(&x.replace("Approved", "Blue"), false).unwrap().resolve_label(&s.catalog);
+    let plain = crate::sidecar::parse_sidecar(&x.replace("Approved", "Blue"), crate::crs::Target::Rendered).unwrap().resolve_label(&s.catalog);
     assert_eq!(plain.label, Some(Some(ColorLabel::Blue)), "colour names still work");
     s.execute("label.deleteSet", &json!({"name": "Studio"})).unwrap();
     assert!(s.execute("label.deleteSet", &json!({"name": "Review"})).is_err(), "built-ins stay");

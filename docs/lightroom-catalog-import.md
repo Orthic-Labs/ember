@@ -41,6 +41,11 @@ models, some masking/retouch fields and process-version algorithms are not repro
 fields are reported. When a recovery archive is saved, it retains source settings/history/snapshots
 and original smart-collection rules. Smart collections become regular albums with current
 membership. Archived history and snapshots are source data, not native Ember history yet.
+Custom white balance on a raw Ember develops relative to its as-shot look (ARW, NEF, RW2, RAF,
+CR3, CR2, PEF; Lightroom names these `RAW`) cannot be treated as absolute Kelvin. The catalog
+keeps no as-shot white for Custom photos, so those photos stay As Shot and `Temperature, Tint` are
+reported. DNG keeps its Kelvin value. XMP with `crs:AsShotTemperature` can be shifted from that
+reference (see [xmp-interop.md](xmp-interop.md)).
 Lightroom's `-999999` deferred-adjustment sentinel is omitted from both catalog and XMP mappings;
 it is reported, included in any saved archive, and never clamped into a real slider value. Deferred automatic tone
 is not evaluated by the importer; Ember's Auto control remains available after migration.

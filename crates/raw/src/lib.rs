@@ -511,6 +511,10 @@ pub struct ColorData {
     pub as_shot_white_xy: Option<Xy>,
     /// EV to add for a "normal" rendering (`BaselineExposure` + `BaselineExposureOffset`).
     pub baseline_exposure: f64,
+    /// `BaselineSharpness`: sharpening relative to a reference camera (`None`: the DNG default,
+    /// 1). Read and written back by DNG export; rendering doesn't use it yet.
+    #[serde(default)]
+    pub baseline_sharpness: Option<f64>,
     /// The file's own camera-profile look (`ProfileHueSatMap*`, `ProfileLookTable*`,
     /// `ProfileToneCurve`), applied by [`color`]'s users at render time.
     #[serde(default)]

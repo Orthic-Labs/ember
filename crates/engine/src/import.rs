@@ -627,7 +627,8 @@ fn read_sidecars(
         let raw = info.kind == MediaKind::Raw;
         let packet =
             crate::sidecar::find_sidecar(&paths[i], naming).and_then(|f| read_sidecar_packet(&f)).or_else(|| info.xmp.clone().filter(|_| raw));
-        let sidecar = packet.and_then(|x| match crate::sidecar::parse_sidecar(&x, raw) {
+        let target = crate::crs::Target::for_file(info.kind, &info.format, info.preview_only.is_some());
+        let sidecar = packet.and_then(|x| match crate::sidecar::parse_sidecar(&x, target) {
             Ok(sc) => Some(sc),
             Err(e) => {
                 log::warn!("import {}: XMP: {e}", paths[i]);

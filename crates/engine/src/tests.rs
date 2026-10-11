@@ -530,6 +530,79 @@ fn filter_presets_save_and_apply() {
 }
 
 #[test]
+fn auto_writes_region_masks_once_and_undoes_them_with_the_values() {
+    let mut s = demo();
+    s.execute("mask.add", &json!({"kind": "radial", "center": [0.3, 0.3], "name": "mine"})).unwrap();
+    // a mask of the user's that looks exactly like one of Auto's is still theirs
+    s.execute("mask.add", &json!({"kind": "sky", "name": "Auto: sky"})).unwrap();
+    let before = active_dev(&s);
+    assert!(before.masks.iter().all(|m| !m.auto));
+    let r = s.execute("develop.auto", &json!({"dryRun": true})).unwrap();
+    assert!(r.get("exposure").is_some() && r.get("regions").is_some(), "{r}");
+    assert_eq!(active_dev(&s), before, "dry run changes nothing");
+    s.execute("develop.auto", &json!({})).unwrap();
+    let d = active_dev(&s);
+    let auto_masks = |d: &lightcraft_develop::DevelopSettings| d.masks.iter().filter(|m| lightcraft_pipeline::auto::regions::is_auto_mask(m)).count();
+    let n = auto_masks(&d);
+    assert!(d.masks.iter().any(|m| m.name == "mine"), "the user's mask stays");
+    assert!(d.masks.iter().any(|m| m.name == "Auto: sky" && !m.auto), "the user's look-alike stays");
+    // every Auto mask carries an adjustment and a semantic shape; ids are unique
+    let mut ids: Vec<u32> = d.masks.iter().map(|m| m.id).collect();
+    ids.dedup();
+    assert_eq!(ids.len(), d.masks.len());
+    // running Auto again replaces, never stacks
+    s.execute("develop.auto", &json!({})).unwrap();
+    assert_eq!(auto_masks(&active_dev(&s)), n);
+    assert!(active_dev(&s).masks.iter().any(|m| m.name == "mine"));
+    // one undo step removes the values and the masks together
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(active_dev(&s), before);
+    // regions off: the global values only, no masks added
+    s.execute("develop.auto", &json!({"regions": false})).unwrap();
+    assert_eq!(auto_masks(&active_dev(&s)), 0);
+    assert_ne!(active_dev(&s).light, before.light);
+}
+
+#[test]
+fn auto_preserves_manually_changed_auto_masks_and_maximum_ids() {
+    use lightcraft_develop::{Mask, MaskComponent, MaskOp, MaskShape};
+    for (command, params) in [
+        ("mask.adjust", json!({"id": 7, "values": {"exposure": 0.25}})),
+        ("mask.refine", json!({"id": 7, "value": 25})),
+        ("mask.invert", json!({"id": 7})),
+    ] {
+        let mut s = demo();
+        let id = s.active().unwrap();
+        let mut d = active_dev(&s);
+        d.masks = vec![
+            Mask {
+                id: 7,
+                name: "Auto: sky".into(),
+                components: vec![MaskComponent { name: None, op: MaskOp::Add, invert: false, shape: MaskShape::Sky }],
+                auto: true,
+                ..Default::default()
+            },
+            Mask { id: u32::MAX, name: "maximum manual id".into(), ..Default::default() },
+        ];
+        s.set_develop(id, d, "fixture").unwrap();
+        s.execute(command, &params).unwrap();
+        let edited = active_dev(&s).masks.into_iter().find(|mask| mask.id == 7).unwrap();
+        assert!(!edited.auto, "{command} transfers ownership");
+        s.execute("develop.auto", &json!({"regions": false})).unwrap();
+        assert!(active_dev(&s).masks.contains(&edited));
+        s.execute("develop.auto", &json!({})).unwrap();
+        let after = active_dev(&s);
+        assert!(after.masks.contains(&edited));
+        assert!(after.masks.iter().any(|mask| mask.id == u32::MAX));
+        let mut ids: Vec<_> = after.masks.iter().map(|mask| mask.id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), after.masks.len());
+    }
+}
+
+#[test]
 fn auto_noise_reduction_measures_then_applies_in_one_undo_step() {
     let mut s = demo();
     let before = active_dev(&s);
