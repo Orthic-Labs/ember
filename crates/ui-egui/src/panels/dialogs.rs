@@ -98,8 +98,8 @@ fn watermark_preview(
                 let (out, repaint) = (base.clone(), ctx.clone());
                 let work = move || {
                     for job in jobs {
-                        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job.run().rendered.map(|r| r.image)))
-                            .unwrap_or_else(|_| Err("the preview failed unexpectedly".into()));
+                        // (a panic in the render is its failure: `RenderJob::run`)
+                        let r = job.run().rendered.map(|r| r.image);
                         let mut got = out.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                         // a failed sharp render keeps the thumbnail
                         if r.is_ok() || !matches!(got.1, Some(Ok(_))) {

@@ -1101,6 +1101,39 @@ mod thumbnail_tests {
         let _ = std::fs::remove_dir_all(&lib);
     }
 
+    /// A render that panics (a decoder bug) is a failure like any other: the slot stops waiting,
+    /// the error is kept (not retried every frame), and the pool's workers live on. Before, the
+    /// worker died without an answer and the slot stayed pending forever.
+    #[test]
+    fn a_panicking_render_is_a_failure_not_a_dead_worker() {
+        let (mut app, _, ctx) = fixture_with(Session::new(), (*photo()).clone());
+        app.session.media.file_loader = Some(Arc::new(|_, _| panic!("decoder bug")));
+        app.renderer.offload = None; // the real job pool
+        let slot = Slot::Thumb(PhotoId(1));
+        let ask = |app: &mut crate::LightcraftApp| {
+            if let Some(job) = app.session.thumb_job(PhotoId(1), 256) {
+                app.renderer.request(slot, job, 30);
+            }
+            app.renderer.poll(&ctx, &mut app.session);
+        };
+        ask(&mut app);
+        let t0 = std::time::Instant::now();
+        while app.renderer.is_pending(slot) {
+            assert!(t0.elapsed() < std::time::Duration::from_secs(20), "the render never answered");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            app.renderer.poll(&ctx, &mut app.session);
+        }
+        assert_eq!(app.renderer.failure(slot), Some("the render failed unexpectedly: decoder bug"));
+        let workers = app.renderer.live_workers();
+        assert!(workers > 0, "the worker that panicked is still there");
+        let done = app.renderer.completed;
+        for _ in 0..30 {
+            ask(&mut app);
+        }
+        assert!(!app.renderer.is_pending(slot) && app.renderer.completed == done, "no retry loop");
+        assert_eq!(app.renderer.live_workers(), workers);
+    }
+
     #[test]
     fn raw_quick_path_frames_build_no_jobs() {
         // an unedited raw: the grid shows its embedded preview (held here until released) and stops

@@ -45,6 +45,10 @@
 - Upgrading from a Windows installer older than 0.6 (such as 0.5.0) keeps Ember in the folder it was installed
   in, instead of moving it back to Program Files (issue #399). If that folder has been deleted since, the upgrade
   installs to Program Files.
+- A photo that runs into a bug in LightCraft while it renders (in a raw decoder or the editing pipeline) now fails
+  like a photo that can't be opened, with the reason, instead of rendering forever; its thumbnail stops waiting too.
+  Each such bug used to take one of the render threads with it, so after a few of them no photo rendered until
+  LightCraft was restarted. The bug is still written to the log (Help ▸ Open Log Folder) for a report.
 
 ## 2026-10-10
 

@@ -803,7 +803,31 @@ impl RenderJob {
         self
     }
 
+    /// Render. A panic inside (a decoder or pipeline bug) is this job's failure: the view waiting
+    /// for it is told, instead of waiting forever on a worker that died (the pool doesn't replace
+    /// it, so a few such panics used to stop every render).
     pub fn run(self) -> RenderResult {
+        let failed = self.failed(String::new());
+        crate::guard::catch("the render", || self.run_unguarded()).unwrap_or_else(|e| RenderResult { rendered: Err(e), ..failed })
+    }
+
+    /// This job's result when it fails with `e`.
+    fn failed(&self, e: String) -> RenderResult {
+        RenderResult {
+            request_id: self.request_id,
+            source_key: self.source_key,
+            photo: self.photo,
+            level: self.level,
+            key: self.key,
+            rendered: Err(e),
+            gpu_fallback: None,
+            loaded: None,
+            quick: None,
+            display: None,
+        }
+    }
+
+    fn run_unguarded(self) -> RenderResult {
         if let Some((cache, key)) = &self.cache
             && let Some(img) = cache.get_at(self.cache_generation, *key)
         {
@@ -908,18 +932,7 @@ impl RenderJob {
                     display,
                 }
             }
-            Err(e) => RenderResult {
-                request_id: self.request_id,
-                source_key: self.source_key,
-                photo: self.photo,
-                level: self.level,
-                key: self.key,
-                rendered: Err(e),
-                gpu_fallback: None,
-                loaded: None,
-                quick: None,
-                display: None,
-            },
+            Err(e) => self.failed(e),
         }
     }
 }
@@ -1007,7 +1020,25 @@ pub struct QuickJob {
 }
 
 impl QuickJob {
+    /// The stand-in, from the first source that has one. A panic inside is this job's failure
+    /// (see [`RenderJob::run`]).
     pub fn run(self) -> RenderResult {
+        let (request_id, photo, key) = (self.request_id, self.photo, self.key);
+        crate::guard::catch("the render", || self.run_unguarded()).unwrap_or_else(|e| RenderResult {
+            request_id,
+            source_key: None,
+            photo,
+            level: SourceLevel::Thumb,
+            key,
+            rendered: Err(e),
+            gpu_fallback: None,
+            loaded: None,
+            quick: None,
+            display: None,
+        })
+    }
+
+    fn run_unguarded(self) -> RenderResult {
         let (photo, key) = (self.photo, self.key);
         let request_id = self.request_id;
         let done = |rendered: Result<Rendered, String>, quick| RenderResult {
@@ -1622,6 +1653,31 @@ mod thumbnail_hash_tests {
         s.media.forget(PhotoId(1));
         s.accept(&old);
         assert_eq!(s.media.source_usage().0, 0);
+    }
+    /// A panic while rendering (here in the decoder) used to end the pool's worker thread without
+    /// an answer, so the view that asked showed "Rendering…" forever. It is the job's failure now,
+    /// for renders and for stand-ins, answering the request it came from.
+    #[test]
+    fn a_render_that_panics_fails_instead_of_never_answering() {
+        let mut s = session();
+        s.media.file_loader = Some(Arc::new(|_, _| panic!("decoder bug")));
+        let mut job = s.thumb_job(PhotoId(1), 256).unwrap();
+        job.request_id = 42;
+        let (key, level, source_key) = (job.key, job.level, job.source_key);
+        let r = job.run();
+        assert_eq!((r.request_id, r.photo, r.key, r.level, r.source_key), (42, PhotoId(1), key, level, source_key));
+        assert_eq!(r.rendered.err().as_deref(), Some("the render failed unexpectedly: decoder bug"));
+        let quick = QuickJob {
+            request_id: 7,
+            photo: PhotoId(1),
+            key: 9,
+            cached: Vec::new(),
+            embedded: Some(("x.arw".into(), Arc::new(|_: &str, _: usize| -> Option<Rgba8> { panic!("preview reader bug") }), 256)),
+            small: None,
+        };
+        let r = quick.run();
+        assert_eq!((r.request_id, r.key), (7, 9));
+        assert_eq!(r.rendered.err().as_deref(), Some("the render failed unexpectedly: preview reader bug"));
     }
 }
 
