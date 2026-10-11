@@ -1052,3 +1052,24 @@ fn two_samples_per_pixel_are_refused_not_a_panic() {
     let n = lightcraft_raw::Normalized { width: 2, height: 1, cpp: 2, data: vec![0.1, 0.2, 0.3, 0.4], cfa: None };
     assert_eq!(lightcraft_raw::demosaic(&n, Method::Ahd).data, vec![[0.1, 0.2, 0.2], [0.3, 0.4, 0.4]]);
 }
+
+/// The DNG CFAPattern is anchored at the top-left of the ActiveArea: a DNG whose area starts on an odd row or
+/// column still demosaics with the pattern the tag states (#1086), and the writer states it back the same way.
+#[test]
+fn cfa_pattern_is_relative_to_the_active_area() {
+    let (w, h) = (20, 12);
+    for (top, left, sensor_name) in [(0u32, 0u32, "GRBG"), (1, 0, "BGGR"), (0, 1, "RGGB"), (1, 1, "GBRG"), (3, 5, "GBRG"), (2, 4, "GRBG")] {
+        let mut raw = base_ifd(w, h, 16, 1, true);
+        raw.set_image(ImageData::Strips { rows_per_strip: h as u32, strips: vec![u16_bytes(&pattern(w, h, 1, 16), ByteOrder::Little)] });
+        raw.set(t::WHITE_LEVEL, Value::Short(vec![65535]));
+        raw.set(t::ACTIVE_AREA, Value::Long(vec![top, left, h as u32 - 1, w as u32 - 1]));
+        let img = decode(&dng(raw, ByteOrder::Little)).unwrap();
+        assert_eq!(img.cfa.as_ref().unwrap().name(), sensor_name, "sensor anchor for area at ({left}, {top})");
+        assert_eq!(img.normalized().unwrap().cfa.unwrap().name(), "GRBG", "tag pattern for area at ({left}, {top})");
+        let back =
+            decode(&write_dng(&img, &DngWriteOptions { compression: DngCompression::Uncompressed, order: ByteOrder::Little, xmp: None }).unwrap())
+                .unwrap();
+        assert_eq!(back.cfa.as_ref().unwrap().name(), sensor_name);
+        assert_eq!(back.normalized().unwrap().cfa.unwrap().name(), "GRBG");
+    }
+}

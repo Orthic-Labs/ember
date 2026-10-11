@@ -303,7 +303,9 @@ pub(crate) fn decode_as(bytes: &[u8], mode: Mode, format: RawFormat) -> Result<R
         if cpp != 1 {
             return Err(RawError::Unsupported("CFA data with several samples per pixel".into()));
         }
-        Some(Cfa { width: cols, height: rows, pattern })
+        // the tag is anchored at the top-left of the ActiveArea (DNG spec); `RawImage::cfa` is anchored at the
+        // sensor origin (the crop to the active area shifts it back), so move the anchor out by the area's offset
+        Some(Cfa { width: cols, height: rows, pattern }.shifted(cols - active_area.x % cols, rows - active_area.y % rows))
     } else {
         None
     };

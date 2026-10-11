@@ -125,7 +125,9 @@ pub fn write_dng(raw: &RawImage, opts: &DngWriteOptions) -> Result<Vec<u8>> {
 
     if let Some(cfa) = &raw.cfa {
         ifd.set(t::CFA_REPEAT_PATTERN_DIM, Value::Short(vec![cfa.height as u16, cfa.width as u16]));
-        ifd.set(t::CFA_PATTERN_EP, Value::Byte(cfa.pattern.clone()));
+        // the tag is anchored at the ActiveArea's top-left, `raw.cfa` at the sensor origin
+        let a = raw.active_area;
+        ifd.set(t::CFA_PATTERN_EP, Value::Byte(cfa.shifted(a.x, a.y).pattern));
         ifd.set(t::CFA_PLANE_COLOR, Value::Byte(vec![0, 1, 2]));
         ifd.set(t::CFA_LAYOUT, Value::Short(vec![1]));
     }
