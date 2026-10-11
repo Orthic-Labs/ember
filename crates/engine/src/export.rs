@@ -28,6 +28,8 @@ pub enum ExportFormat {
     Original,
     /// A DNG of the raw data (raw photos only), the edits embedded as XMP.
     Dng,
+    /// Render to DNG: a linear DNG (16-bit float) of the rendered photo, the edit baked in.
+    RenderedDng,
 }
 
 impl ExportFormat {
@@ -42,6 +44,7 @@ impl ExportFormat {
             "jxl" | "jpegxl" | "jpeg-xl" | "jpeg_xl" => Self::Jxl,
             "original" => Self::Original,
             "dng" => Self::Dng,
+            "rendereddng" | "renderdng" | "render-dng" | "lineardng" => Self::RenderedDng,
             _ => return None,
         })
     }
@@ -56,7 +59,7 @@ impl ExportFormat {
             Self::Jxl => "jxl",
             // the original keeps its own extension (see `ExportOptions::file_name_for`)
             Self::Original => "",
-            Self::Dng => "dng",
+            Self::Dng | Self::RenderedDng => "dng",
         }
     }
 
@@ -1141,6 +1144,8 @@ impl ExportOptions {
             (ExportFormat::Tiff, Some(32)) if self.hdr => OutputDepth::F32Hdr,
             (ExportFormat::Tiff, Some(32)) => OutputDepth::F32Linear,
             (ExportFormat::Tiff, _) => OutputDepth::U16,
+            (ExportFormat::RenderedDng, _) if self.hdr => OutputDepth::F32Hdr,
+            (ExportFormat::RenderedDng, _) => OutputDepth::F32Linear,
             (ExportFormat::Psd, Some(8)) => OutputDepth::U8,
             (ExportFormat::Psd, _) => OutputDepth::U16,
             (ExportFormat::Avif, _) if self.hdr => OutputDepth::F32Hdr,
@@ -1159,6 +1164,7 @@ impl ExportOptions {
             ExportFormat::Png => &[(8, "8-bit"), (16, "16-bit")],
             ExportFormat::Tiff => &[(16, "16-bit"), (8, "8-bit"), (32, "32-bit float")],
             ExportFormat::Psd => &[(16, "16-bit"), (8, "8-bit")],
+            ExportFormat::RenderedDng => &[(16, "16-bit float")],
             ExportFormat::Avif => &[(8, "8-bit"), (10, "10-bit")],
             ExportFormat::Jxl => &[(8, "8-bit"), (16, "16-bit")],
         }
@@ -1349,6 +1355,7 @@ pub fn encode_with_metadata(img: &Rgba8, o: &ExportOptions, meta: Option<&Metada
         ExportFormat::Avif => encode::encode_avif(&e, o.quality, 8, &meta),
         ExportFormat::Jxl => lightcraft_codecs::encode_jxl(&e, &o.jxl(space, false), &meta),
         f @ (ExportFormat::Original | ExportFormat::Dng) => return Err(format!("{f:?} export does not encode pixels")),
+        ExportFormat::RenderedDng => return Err("Render to DNG needs a float render".into()),
     };
     r.map_err(|e| e.to_string())
 }
@@ -1439,6 +1446,7 @@ pub fn encode_rendered(r: &lightcraft_pipeline::Rendered, o: &ExportOptions, met
 
 /// Encode a high-bit-depth image (see [`encode_rendered`]).
 pub fn encode_deep(img: &DeepImage, o: &ExportOptions, meta: Option<&Metadata>) -> Result<Vec<u8>, String> {
+    let meta_src = meta;
     let img = finish_deep(img, o);
     let profile = match img.samples {
         DeepSamples::F32(_) => icc::write_matrix_trc(&img.space.rgb_space(), &lightcraft_codecs::Trc::Linear),
@@ -1457,6 +1465,10 @@ pub fn encode_deep(img: &DeepImage, o: &ExportOptions, meta: Option<&Metadata>) 
         (ExportFormat::Png, _) => encode::encode_png(&e, &meta),
         (ExportFormat::Tiff, _) => encode::encode_tiff(&e, o.tiff_compression, &meta),
         (ExportFormat::Psd, _) => encode::encode_psd(&e, &meta),
+        (ExportFormat::RenderedDng, DeepSamples::F32(v)) => {
+            let m = meta_src.cloned().unwrap_or_default();
+            return lightcraft_raw::write_rendered_dng(img.width, img.height, v, &img.space.rgb_space(), &m, xmp.clone()).map_err(|e| e.to_string());
+        }
         (ExportFormat::Avif, DeepSamples::F32(v)) if img.space == OutputSpace::Rec2020 => {
             lightcraft_codecs::encode_avif_pq(w, h, v, o.quality, 8, &meta)
         }
@@ -3246,6 +3258,26 @@ mod tests {
     }
 
     // Issue #496: photos rendered side by side give the same files, names, order and progress as
+    // Render to DNG: the rendered photo as a linear float DNG that reads back as the same picture
+    #[test]
+    fn rendered_dng_matches_the_rendered_tiff() {
+        let mut s = crate::Session::with_demo();
+        let id = s.visible()[0];
+        let dng = export_photo(&mut s, id, &ExportOptions::from_json(&json!({"format": "rendereddng", "width": 64})), 1).unwrap();
+        assert!(dng.file_name.ends_with(".dng"), "{}", dng.file_name);
+        let png = export_photo(&mut s, id, &ExportOptions::from_json(&json!({"format": "png", "width": 64})), 1).unwrap();
+        let raw = lightcraft_raw::decode(&dng.bytes).unwrap();
+        assert_eq!((raw.width, raw.height, raw.cpp), (dng.width, dng.height, 3));
+        assert!(raw.color.profile.tone_curve.is_some(), "identity tone curve keeps converters from adding one");
+        let back = raw.develop(lightcraft_raw::Method::Bilinear).unwrap();
+        let reference = lightcraft_codecs::decode_thumbnail(&png.bytes, 4096).unwrap().image;
+        assert_eq!((reference.width, reference.height), (back.width, back.height));
+        // mean brightness: the PNG holds 8-bit sRGB, the DNG linear sRGB
+        let mean_dng: f32 = back.data.iter().map(|p| lightcraft_color::transfer::linear_to_srgb(p[1].min(1.0))).sum::<f32>() / back.data.len() as f32;
+        let mean_tif: f32 = reference.data.iter().map(|p| p[1] as f32 / 255.0).sum::<f32>() / reference.data.len() as f32;
+        assert!((mean_dng - mean_tif).abs() < 0.02, "{mean_dng} vs {mean_tif}");
+    }
+
     // one at a time, and a cancel stops at the same photo
     #[test]
     fn side_by_side_batches_match_one_at_a_time() {

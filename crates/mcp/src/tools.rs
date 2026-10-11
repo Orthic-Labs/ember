@@ -239,7 +239,7 @@ pub fn helper_tools(has_ui: bool) -> Vec<Value> {
                 "conflict": {"type": "string", "enum": ["unique", "overwrite", "skip"]},
                 "tiffCompression": {"type": "string", "enum": ["none", "lzw", "zip"]},
                 "dngCompression": {"type": "string", "enum": ["lossless", "deflate", "uncompressed"]},
-                "format": {"type": "string", "enum": ["jpeg", "png", "tiff", "psd", "webp", "avif", "jxl", "original", "dng"], "description": "psd = a flat PSD (no layers); original = the file as is + an XMP sidecar with the edits; dng = raw photos as DNG with the edits embedded"},
+                "format": {"type": "string", "enum": ["jpeg", "png", "tiff", "psd", "webp", "avif", "jxl", "original", "dng", "rendereddng"], "description": "psd = a flat PSD (no layers); rendereddng = Render to DNG, a linear 16-bit float DNG of the rendered photo with the edit baked in; original = the file as is + an XMP sidecar with the edits; dng = raw photos as DNG with the edits embedded"},
                 "longEdge": {"type": "integer", "description": "Output long edge in px. When no size param is given: 3000; 0 = full size (cropped, native resolution)"},
                 "shortEdge": {"type": "integer", "description": "Output short edge in px"},
                 "width": {"type": "integer", "description": "Output width in px (with height: fit inside width × height, either orientation)"},

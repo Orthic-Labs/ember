@@ -678,13 +678,21 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     });
                     ui.add_space(4.0);
                     let before = opts.format;
+                    // "Rendered DNG" is a DNG option (below), not a format of its own in this list
+                    let mut shown = if opts.format == F::RenderedDng { F::Dng } else { opts.format };
                     choices(
                         ui,
                         "Format",
                         "exportFormat",
                         &[(F::Jpeg, "JPEG"), (F::Png, "PNG"), (F::Tiff, "TIFF"), (F::Psd, "PSD"), (F::Webp, "WebP"), (F::Avif, "AVIF"), (F::Jxl, "JPEG XL"), (F::Dng, "DNG"), (F::Original, "Original files")],
-                        &mut opts.format,
+                        &mut shown,
                     );
+                    if shown != opts.format && !(shown == F::Dng && opts.format == F::RenderedDng) {
+                        opts.format = shown;
+                    }
+                    if matches!(opts.format, F::Dng | F::RenderedDng) {
+                        choices(ui, "DNG of", "exportDngKind", &[(F::Dng, "Raw data"), (F::RenderedDng, "Rendered photo")], &mut opts.format);
+                    }
                     if !opts.format.is_rendered() {
                         let note = if opts.format == F::Dng {
                             "Raw photos as DNG, with the edits embedded. Size, color and output options don't apply."
