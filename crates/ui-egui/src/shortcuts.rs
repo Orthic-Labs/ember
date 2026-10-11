@@ -198,6 +198,10 @@ pub const ALIASES: &[(&str, &str, &str)] = &[
     ("Shift+E", "dialog.export", "{}"),
     ("Cmd+E", "app.exportPrevious", "{}"),
     ("Space", "view.zoomToggle", "{}"),
+    // Lightroom Classic: F6 toggles the filmstrip, F7 the left library panel.
+    // Keep existing primary shortcuts and honour custom keymap assignments.
+    ("F6", "view.filmstrip", "{}"),
+    ("F7", "view.leftPanel", "{}"),
     ("Shift+M", "version.create", "{}"),
     ("Shift+X", "photo.flag", r#"{"flag": "reject", "advance": true}"#),
     ("Shift+Z", "photo.flag", r#"{"flag": "pick", "advance": true}"#),
@@ -631,6 +635,20 @@ mod tests {
             assert_eq!(h.app.session.catalog.photo(PhotoId(1)).unwrap().flag, Flag::None);
             assert_eq!(h.app.session.active(), Some(PhotoId(1)));
         }
+    }
+
+    #[test]
+    fn classic_f6_and_f7_toggle_the_filmstrip_and_left_panel() {
+        let mut h = library();
+        let (filmstrip, left) = (h.app.ui.filmstrip, h.app.ui.left_panel);
+        key(&mut h, "F6", false);
+        assert_eq!(h.app.ui.filmstrip, !filmstrip);
+        assert_eq!(h.app.ui.left_panel, left);
+        key(&mut h, "F7", false);
+        assert_eq!(h.app.ui.left_panel, !left);
+        key(&mut h, "F6", false);
+        key(&mut h, "F7", false);
+        assert_eq!((h.app.ui.filmstrip, h.app.ui.left_panel), (filmstrip, left));
     }
 
     #[test]
