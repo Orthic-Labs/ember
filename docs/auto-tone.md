@@ -38,4 +38,4 @@ Regression `a_dark_subject_on_a_washed_out_background_gets_two_treatments`: subj
 
 ## Next
 
-A segmentation model behind the Subject / Sky shapes (the region-aware Auto improves with it, no code change), face weighting of the exposure target (YuNet is in `crates/segment`; its weights are not yet pinned for product use), raw clipped-channel share capping recovery, scene priors from DINOv2 embeddings blended by probability, & spatial / face-weighted look targets. Evaluation: `docs/personal-auto-evaluation.md` (shoot-disjoint preference against this baseline).
+A segmentation model behind the Subject / Sky shapes (the region-aware Auto improves with it, no code change), face weighting of the exposure target (YuNet is in `crates/segment`; its weights are not yet pinned for product use), raw clipped-channel share capping recovery, scene priors from DINOv2 embeddings blended by probability, a learned decision model that predicts target residuals from these measurements ([`auto-decision-model.md`](auto-decision-model.md)), & spatial / face-weighted look targets. Evaluation: `docs/personal-auto-evaluation.md` (shoot-disjoint preference against this baseline).
