@@ -141,7 +141,7 @@ fn dropping_the_lock_frees_the_library_while_another_thread_spawns_processes() {
             let mut spawned = 0usize;
             while !stop.load(Ordering::Relaxed) {
                 if let Ok(mut c) =
-                    std::process::Command::new("/bin/true").stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn()
+                    std::process::Command::new("true").stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn()
                 {
                     let _ = c.wait();
                     spawned += 1;
