@@ -379,10 +379,11 @@ pub fn slider(ui: &mut Ui, spec: &ControlSpec, value: f64, enabled: bool, label_
 }
 
 /// Convert vertical wheel movement to bounded slider steps, keeping sub-notch
-/// trackpad movement between frames without amplifying a single large event.
+/// trackpad movement between frames without amplifying a single large event. One mouse-wheel
+/// notch ([`crate::theme::WHEEL_LINE_POINTS`]) is one step.
 fn wheel_nudges(remainder: &mut f32, delta: f32) -> f64 {
-    const POINTS_PER_STEP: f32 = 40.0;
-    let total = (*remainder + delta).clamp(-400.0, 400.0);
+    const POINTS_PER_STEP: f32 = crate::theme::WHEEL_LINE_POINTS;
+    let total = (*remainder + delta).clamp(-10.0 * POINTS_PER_STEP, 10.0 * POINTS_PER_STEP);
     let steps = (total / POINTS_PER_STEP).trunc();
     *remainder = total - steps * POINTS_PER_STEP;
     f64::from(steps)
@@ -635,13 +636,18 @@ mod tests {
 
     #[test]
     fn wheel_steps_accumulate_small_movements_and_preserve_direction() {
+        // one mouse-wheel notch is one step, whatever a notch scrolls
+        let notch = crate::theme::WHEEL_LINE_POINTS;
         let mut remainder = 0.0;
-        assert_eq!(wheel_nudges(&mut remainder, 15.0), 0.0);
-        assert_eq!(wheel_nudges(&mut remainder, 25.0), 1.0);
+        assert_eq!(wheel_nudges(&mut remainder, notch * 0.375), 0.0);
+        assert_eq!(wheel_nudges(&mut remainder, notch * 0.625), 1.0);
         assert_eq!(remainder, 0.0);
-        assert_eq!(wheel_nudges(&mut remainder, -100.0), -2.0);
-        assert_eq!(wheel_nudges(&mut remainder, -20.0), -1.0);
+        assert_eq!(wheel_nudges(&mut remainder, -notch * 2.5), -2.0);
+        assert_eq!(wheel_nudges(&mut remainder, -notch * 0.5), -1.0);
         assert_eq!(remainder, 0.0);
+        assert_eq!(wheel_nudges(&mut remainder, notch), 1.0, "a single notch is a single nudge");
+        assert_eq!(remainder, 0.0);
+        assert_eq!(wheel_nudges(&mut remainder, notch * 50.0), 10.0, "a single huge event is capped");
     }
 
     /// Shift-drag moves a tenth of the pointer's way along the track, also on the Kelvin track (where a pixel of

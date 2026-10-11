@@ -343,6 +343,13 @@ fn craft_font_name(f: &lightcraft_engine::CraftFont) -> String {
     format!("craft-fonts {} {}", f.family, f.style)
 }
 
+/// Points one mouse-wheel notch (a line) scrolls.
+pub const WHEEL_LINE_POINTS: f32 = 100.0;
+
+/// Zoom per wheel point (`exp(speed × points)`): egui's 1/200 at its stock 40-point notch, rescaled so
+/// one notch still zooms the same amount now that it scrolls [`WHEEL_LINE_POINTS`].
+pub const WHEEL_ZOOM_PER_POINT: f32 = 40.0 / 200.0 / WHEEL_LINE_POINTS;
+
 fn theme_id() -> egui::Id {
     egui::Id::new("lightcraft-theme")
 }
@@ -362,6 +369,14 @@ pub fn apply(ctx: &egui::Context) {
 pub fn apply_kind(ctx: &egui::Context, kind: ThemeKind) {
     // Keep photo zoom shortcuts from resizing egui itself.
     ctx.options_mut(|o| o.zoom_with_keyboard = false);
+    // A mouse wheel notch scrolls 100 points (egui's default 40 took 50+ notches through an open
+    // Edit panel; Lightroom moves about this much per notch). Trackpads report points and are
+    // unaffected.
+    // A modifier-wheel (and the loupe's plain-wheel) zoom notch stays about 1.22x, as it was at 40 points.
+    ctx.options_mut(|o| {
+        o.input_options.line_scroll_speed = WHEEL_LINE_POINTS;
+        o.input_options.scroll_zoom_speed = WHEEL_ZOOM_PER_POINT;
+    });
     let t = Tokens::for_kind(kind);
     ctx.data_mut(|d| {
         d.insert_temp(egui::Id::NULL, t);
@@ -409,6 +424,19 @@ pub fn apply_kind(ctx: &egui::Context, kind: ThemeKind) {
 mod tests {
     use super::*;
     use crate::i18n::{Locale, set_language};
+
+    /// Every theme scrolls 100 points a wheel notch, and a zoom notch stays egui's stock ~1.22x
+    /// (`exp(40 / 200)`) instead of growing with the longer scroll.
+    #[test]
+    fn a_wheel_notch_scrolls_further_but_zooms_as_before_in_every_theme() {
+        for kind in [ThemeKind::Charcoal, ThemeKind::Midnight, ThemeKind::Silver, ThemeKind::Paper] {
+            let ctx = egui::Context::default();
+            apply_kind(&ctx, kind);
+            let (line, zoom) = ctx.options(|o| (o.input_options.line_scroll_speed, o.input_options.scroll_zoom_speed));
+            assert_eq!(line, WHEEL_LINE_POINTS, "{kind:?}");
+            assert!(((zoom * line).exp() - (40.0_f32 / 200.0).exp()).abs() < 1e-4, "{kind:?}: a notch zooms {}", (zoom * line).exp());
+        }
+    }
 
     /// #736: a Thai folder name drew boxes because only CJK craft-fonts faces were fallbacks. With a
     /// craft-fonts build that carries a Thai face, an English UI offers it in every family.

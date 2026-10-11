@@ -1066,7 +1066,19 @@ fn tat_button(app: &mut LightcraftApp, ui: &mut egui::Ui, tool: &str, tip: &str)
     let active = app.ui.tool == tool;
     let id = tool.replace(':', "-");
     if crate::widgets::icon_button(ui, &id, Icon::Target, vec2(26.0, 26.0), active, true, tip).clicked() {
-        app.ui.tool = if active { String::new() } else { tool.to_string() };
+        set_tat(app, ui.ctx(), tool, active);
+    }
+}
+
+/// Turn targeted-adjustment tool `tool` off (`active`) or on. Turning it on says how to use and
+/// leave it: while it is on, dragging on the photo adjusts instead of zooming or panning, which is
+/// easy to miss when the button looks like a tab.
+fn set_tat(app: &mut LightcraftApp, ctx: &egui::Context, tool: &str, active: bool) {
+    if active {
+        app.ui.tool.clear();
+    } else {
+        app.ui.tool = tool.to_string();
+        app.toast(ctx, crate::i18n::tr("Targeted adjustment on: drag up or down on the photo · Esc to stop"));
     }
 }
 
@@ -1108,7 +1120,7 @@ fn mixer(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &DevelopSettings) {
                     .on_hover_text(crate::i18n::tr("Targeted adjustment: drag up/down on the photo to adjust the colours there"))
                     .clicked()
                 {
-                    app.ui.tool = if active { String::new() } else { tool };
+                    set_tat(app, ui.ctx(), &tool, active);
                 }
             }
         });

@@ -1398,9 +1398,12 @@ fn a_selected_develop_slider_accepts_wheel_nudges() {
 
     // A wheel event over the selected control adjusts exposure instead of
     // scrolling the right sidebar (an unselected slider leaves scrolling alone).
+    // (120 points is more than one notch, `theme::WHEEL_LINE_POINTS`; egui smooths it over a few frames)
     let result = h.request("ui.scroll", json!({"dy": 120.0}), T);
     assert_eq!(result["ok"], true, "{result}");
-    h.step();
+    for _ in 0..10 {
+        h.step();
+    }
     let after = lightcraft_develop::controls::get(&develop(&h), "light.exposure").expect("exposure");
     assert!(after > before, "selected exposure did not increase: {before} -> {after}");
 }
