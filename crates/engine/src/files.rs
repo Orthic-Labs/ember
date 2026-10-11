@@ -719,9 +719,10 @@ fn fit_box(max_edge: usize) -> lightcraft_codecs::DecodeOptions {
 /// Filesystem-backed embedded-preview hook (native).
 ///
 /// The quick path reads the file's header and its embedded preview and nothing else (see
-/// [`preview_window`]); a format whose preview the header cannot point at falls back to the
-/// whole-file path, which is what every format used to cost. The memory gate still counts the whole
-/// file, which is what the decode of one can hold.
+/// [`preview_window`]); a container the header cannot point into is planned from its tags
+/// (`lightcraft_raw::sparse::preview_plan`, the same module the import path probes with), and only a
+/// file the planner cannot describe falls back to the whole-file path. The memory gate still counts
+/// the whole file, which is what the decode of one can hold.
 pub fn fs_preview_loader() -> PreviewLoader {
     Arc::new(|path: &str, max_edge: usize| {
         let len = std::fs::metadata(path).map(|m| usize::try_from(m.len()).unwrap_or(usize::MAX)).unwrap_or(0);
@@ -744,6 +745,10 @@ pub struct PreviewRead {
     /// Whether the preview came from a bounded read (`false`: the whole file was read, which is what
     /// every preview cost before the header path existed).
     pub header_path: bool,
+    /// Whether the sparse planner named the ranges, rather than a format's own header fields: the
+    /// path a Canon CR3 and the TIFF raws whose preview tag sits past the prefix take (`false` on
+    /// the header path, and on the whole-file fallback).
+    pub planned: bool,
 }
 
 impl PreviewRead {
@@ -783,7 +788,13 @@ pub fn preview_window(path: &str) -> Result<Option<(Vec<u8>, Vec<u8>, PreviewRea
     {
         prefix = read_prefix_at(&mut file, path, extent.min(total))?;
     }
-    let Some(range) = lightcraft_raw::bounded_preview(&prefix) else { return Ok(None) };
+    let Some(range) = lightcraft_raw::bounded_preview(&prefix) else {
+        // The header carries no pointer this path reads — a Canon CR3's boxes, a TIFF raw whose
+        // preview tag sits past the prefix, the containers whose preview only a scan finds: ask the
+        // sparse planner which ranges `embedded_preview` reads before handing the caller the
+        // whole-file fallback.
+        return planned_preview(&mut file, path, total);
+    };
     // A preview at the file's end may have been padded past it: clamp rather than fail.
     let end = range.offset.saturating_add(range.window_len).min(total);
     let len = usize::try_from(end.saturating_sub(range.offset)).map_err(|_| format!("{path}: preview too large"))?;
@@ -805,13 +816,114 @@ pub fn preview_window(path: &str) -> Result<Option<(Vec<u8>, Vec<u8>, PreviewRea
     if lightcraft_raw::embedded_preview_from_range(&window, range).is_none() {
         return Ok(None);
     }
-    let read = PreviewRead { read: bytes_read, total, header_path: true };
+    let read = PreviewRead { read: bytes_read, total, header_path: true, planned: false };
     // On a network share the bytes are the wait, so say what this preview actually cost. A window
     // taken from the prefix cost nothing beyond the prefix itself.
     if lightcraft_pipeline::profiling() {
         eprintln!("[profile] preview {path}: read {} of {} bytes (header {}, window {})", read.read, total, prefix_len, window.len());
     }
     Ok(Some((prefix, window, read)))
+}
+
+/// The most times the sparse planner may name ranges before the preview gives up: the plan is
+/// monotone (it never asks for a range twice), so a real file needs a handful.
+const MAX_PREVIEW_PLAN_ROUNDS: usize = 8;
+/// Tenths of a file the planner may have read before the preview gives up and the whole-file path
+/// takes over. The import path bounds its own loop the same way; a "preview" that wants most of the
+/// file has stopped being one.
+const MAX_PREVIEW_PLAN_SHARE: u64 = 6;
+/// The largest file the planner path builds its buffer for. The raws it serves are far below this;
+/// a file past it is read whole as before rather than allocating its length up front.
+const MAX_PREVIEW_PLAN_BYTES: u64 = 1 << 30;
+/// The header the quick path is handed on the planner route. The header route grows its prefix to
+/// the preview's declared extent, so `quick_image_srgb` can read the file's own EXIF orientation out
+/// of it when the preview JPEG carries none; this route reads a bounded prefix instead, big enough
+/// for IFD0 (which is where that tag lives) and for a CR3's metadata boxes.
+const PLAN_PREFIX: u64 = 64 * 1024;
+
+/// The preview of a container the header-only path cannot answer for, from the byte ranges
+/// [`lightcraft_raw::sparse::preview_plan`] says [`lightcraft_raw::embedded_preview`] reads.
+///
+/// The planner is asked about a buffer of the file's whole length in which only the ranges named so
+/// far hold bytes, and only those ranges are read: the sensor data in the bulk ranges is not. The
+/// buffer is the file's length, which the loader's memory gate already counts, and its untouched
+/// pages stay zero and are never written — though on macOS a freed buffer of that size may stay in
+/// the allocator's cache rather than going back to the OS (measured on a 38k-photo import, #832), so
+/// this path's cost is the bytes read, not a promise about RSS.
+///
+/// `None` — the caller's cue to read the file whole, exactly as when the header declines — when the
+/// planner says it cannot describe the file (NEF, ORF and PEF probe from samples; a structure it
+/// does not trust), when the ranges it names do not fit the buffer or want most of the file, or when
+/// the quick path could not reproduce what the whole-file path shows (the two container facts
+/// below). The planner's contract is the one its corpus test asserts over real files (what it loaded
+/// gives what the whole file gives), so a window that still fails to decode ends in the same
+/// whole-file fallback in [`fs_preview_loader`], never in a wrong picture.
+fn planned_preview(file: &mut std::fs::File, path: &str, total: u64) -> Result<Option<(Vec<u8>, Vec<u8>, PreviewRead)>, String> {
+    use std::io::{Read, Seek, SeekFrom};
+
+    if total > MAX_PREVIEW_PLAN_BYTES {
+        return Ok(None);
+    }
+    let Ok(len) = usize::try_from(total) else { return Ok(None) };
+    let mut buf = vec![0u8; len];
+    let header = read_prefix_at(file, path, PLAN_PREFIX.min(total))?;
+    let Some(head) = buf.get_mut(..header.len()) else { return Ok(None) };
+    head.copy_from_slice(&header);
+    let mut loaded = lightcraft_raw::sparse::Ranges::new();
+    loaded.insert(0, header.len() as u64);
+    for _ in 0..MAX_PREVIEW_PLAN_ROUNDS {
+        match lightcraft_raw::sparse::preview_plan(&buf, &loaded) {
+            lightcraft_raw::sparse::HeaderPlan::Need(ranges) => {
+                let wanted = loaded.total().saturating_add(ranges.total());
+                if wanted.saturating_mul(10) > total.saturating_mul(MAX_PREVIEW_PLAN_SHARE) {
+                    return Ok(None);
+                }
+                for &(start, end) in ranges.spans() {
+                    let (Ok(a), Ok(b)) = (usize::try_from(start), usize::try_from(end)) else { return Ok(None) };
+                    let Some(dst) = buf.get_mut(a..b) else { return Ok(None) };
+                    file.seek(SeekFrom::Start(start)).map_err(|e| format!("{path}: {e}"))?;
+                    file.read_exact(dst).map_err(|e| format!("{path}: {e}"))?;
+                    loaded.insert(start, end);
+                }
+            }
+            lightcraft_raw::sparse::HeaderPlan::Ready => {
+                let Some(window) = lightcraft_raw::embedded_preview(&buf) else { return Ok(None) };
+                // The quick path hands the JPEG to the decoder alone, so what the *container* says
+                // about the preview has to be something the bytes it is handed can show. Two container
+                // facts change the pixels and are not in the JPEG: the preview's colour space (which
+                // the whole-file path applies through `decode_raw_preview`) and, when the JPEG carries
+                // no orientation of its own, the file's EXIF orientation. Where either is present and
+                // the header cannot answer for it, the whole-file path keeps the preview — exactly as
+                // it already does for a container-declared colour space. A container that says sRGB
+                // agrees with the JPEG-only decode (its own declaration, else sRGB), so only the other
+                // space declines.
+                if lightcraft_raw::embedded_preview_color_space(&buf) == Some(lightcraft_raw::PreviewColorSpace::AdobeRgb) {
+                    return Ok(None);
+                }
+                // `extract` copies a TIFF's bytes to hand on its Exif block, so ask the cheap side
+                // first: a JPEG that carries its own orientation needs nothing from the container.
+                if lightcraft_meta::extract(&window).orientation.is_none()
+                    && lightcraft_meta::extract(&header).orientation.is_none()
+                    && lightcraft_meta::extract(&buf).orientation.is_some()
+                {
+                    return Ok(None);
+                }
+                let read = PreviewRead { read: loaded.total(), total, header_path: true, planned: true };
+                // A plan-driven preview is the one that used to cost the whole file, so it is worth
+                // saying what it cost now too.
+                if lightcraft_pipeline::profiling() {
+                    eprintln!("[profile] preview {path}: read {} of {} bytes (plan, window {})", read.read, total, window.len());
+                }
+                // The planner's buffer is the file's length, so give its pages back the way a decode
+                // does (see `fs_pair_loader`).
+                drop(buf);
+                crate::memory::release();
+                return Ok(Some((header, window, read)));
+            }
+            lightcraft_raw::sparse::HeaderPlan::Whole(_) => return Ok(None),
+        }
+    }
+    Ok(None)
 }
 
 /// The file's first [`lightcraft_raw::PREVIEW_PREFIX`] bytes (or the whole file when it is shorter),
@@ -1075,6 +1187,7 @@ mod tests {
         let (header, window, read) = preview_window(&path).expect("the file reads").expect("it has a preview");
         assert_eq!(header.len(), lightcraft_raw::PREVIEW_PREFIX, "the header prefix is bounded");
         assert!(read.header_path, "the header path is what answered");
+        assert!(!read.planned, "a RAF pointer in the header needs no planner");
         assert_eq!(read.total, file.len() as u64);
         assert!(read.fraction() < 0.5, "the read is a fraction of the file: {read:?}");
         assert!(window.len() < file.len() / 2, "the raw tail must not be read: {} of {} bytes", window.len(), file.len());
@@ -1090,6 +1203,155 @@ mod tests {
         std::fs::write(&plain, &jpeg).unwrap();
         assert!(preview_window(&plain.to_string_lossy()).expect("a plain file reads").is_none());
         assert!(preview_window(&dir.join("nope.raf").to_string_lossy()).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// What a fixture's IFD0 says about itself: the tag that makes `probe` call the file a raw, the
+    /// file's own orientation, and the EXIF colour space the container declares for its preview.
+    #[derive(Clone, Copy, Default)]
+    struct Fixture {
+        dng: bool,
+        sony: bool,
+        orientation: Option<u16>,
+        /// EXIF `ColorSpace` (0xA001): 1 = sRGB, 0xFFFF with an "R03" InteropIndex = Adobe RGB.
+        color_space: Option<u16>,
+    }
+
+    /// A TIFF-family raw no header field points into: IFD0 is the JPEG-compressed preview strip (the
+    /// shape a DNG's `PreviewImage`, a CR2's or an ARW's preview takes), IFD1 a CFA "sensor" strip of
+    /// `tail` bytes. The writer puts each IFD's table after its own chunk, so a `strip` bigger than
+    /// the plan's bounded header puts IFD0 (and any orientation tag in it) out of that header's reach.
+    fn tiff_with_preview_strip(strip: &[u8], tail: usize, what: Fixture) -> Vec<u8> {
+        use lightcraft_tiff::{IfdBuilder, ImageData, TiffWriter, Value, tags as t};
+        let mut preview = IfdBuilder::new();
+        if what.dng {
+            preview.set(t::DNG_VERSION, Value::Byte(vec![1, 4, 0, 0]));
+        }
+        if what.sony {
+            preview.set(t::MAKE, Value::Ascii("SONY".into()));
+        }
+        if let Some(o) = what.orientation {
+            preview.set(t::ORIENTATION, Value::Short(vec![o]));
+        }
+        if let Some(space) = what.color_space {
+            let mut exif = IfdBuilder::new();
+            exif.set(0xA001, Value::Short(vec![space]));
+            if space == 0xFFFF {
+                let mut interop = IfdBuilder::new();
+                interop.set(0x0001, Value::Undefined(b"R03".to_vec()));
+                exif.set_child(t::INTEROP_IFD, interop);
+            }
+            preview.set_child(t::EXIF_IFD, exif);
+        }
+        preview.set(t::COMPRESSION, Value::Short(vec![7]));
+        preview.set(t::PHOTOMETRIC, Value::Short(vec![t::photometric::RGB]));
+        preview.set(t::IMAGE_WIDTH, Value::Long(vec![48]));
+        preview.set(t::IMAGE_LENGTH, Value::Long(vec![32]));
+        preview.set_image(ImageData::Strips { rows_per_strip: 32, strips: vec![strip.to_vec()] });
+        let mut raw = IfdBuilder::new();
+        raw.set(t::COMPRESSION, Value::Short(vec![1]));
+        raw.set(t::PHOTOMETRIC, Value::Short(vec![t::photometric::CFA]));
+        raw.set(t::IMAGE_WIDTH, Value::Long(vec![6000]));
+        raw.set(t::IMAGE_LENGTH, Value::Long(vec![4000]));
+        raw.set_image(ImageData::Strips { rows_per_strip: 4000, strips: vec![vec![0x33u8; tail]] });
+        TiffWriter::default().write(&[preview, raw]).expect("the fixture writes")
+    }
+
+    /// A raw whose preview only its tags locate — a Canon CR3's JPEG track, a TIFF raw whose preview
+    /// tag sits past the prefix — is read in part too: `sparse::preview_plan` names the ranges
+    /// `embedded_preview` reads, so the preview strip is read and the sensor strip is not. The pixels
+    /// must equal the whole-file path's, exactly; a file the planner cannot describe must decline
+    /// rather than guess, so the caller keeps reading it whole.
+    #[test]
+    fn preview_loading_plans_the_ranges_it_needs() {
+        let (w, h) = (48u32, 32u32);
+        let rgb: Vec<u8> = (0..w * h * 3).map(|i| (i * 29 % 241) as u8).collect();
+        let img = EncodeImage::new(w, h, 3, Samples::U8(&rgb));
+        let jpeg = encode_jpeg(&img, 90, ChromaSubsampling::S420, &EncodeMeta::default()).unwrap();
+        let file = tiff_with_preview_strip(&jpeg, 400_000, Fixture { dng: true, ..Default::default() });
+        let dir = crate::tests_xmp::temp_dir("preview-plan");
+        let path = dir.join("preview.dng");
+        std::fs::write(&path, &file).unwrap();
+        let path = path.to_string_lossy().into_owned();
+        let max_edge = 512;
+
+        let (header, window, read) = preview_window(&path).expect("the file reads").expect("the plan locates its preview");
+        assert_eq!(header.len(), PLAN_PREFIX as usize, "the plan's header is bounded");
+        assert!(read.planned, "the planner is what answered");
+        assert!(read.header_path, "and it is still a bounded read");
+        assert_eq!(read.total, file.len() as u64);
+        assert!(read.fraction() < 0.5, "the read is a fraction of the file: {read:?} of {} bytes", file.len());
+        assert!(window.len() < file.len() / 2, "the sensor strip must not be read: {} of {} bytes", window.len(), file.len());
+
+        // The plan path and the whole-file path agree byte for byte.
+        let quick = quick_image_srgb(&header, &window, max_edge).expect("the window holds a decodable preview");
+        let whole = embedded_preview_srgb(&file, max_edge).expect("the whole file decodes too");
+        assert_eq!((quick.width, quick.height), (whole.width, whole.height), "same preview size");
+        assert_eq!(quick.data, whole.data, "byte for byte");
+
+        // The same structure without the tag that makes it a raw: the planner declines, and the
+        // caller's whole-file read is what answers (no guessing at what a file might hold).
+        let not_a_raw = tiff_with_preview_strip(&jpeg, 400_000, Fixture::default());
+        std::fs::write(&path, &not_a_raw).unwrap();
+        assert!(preview_window(&path).expect("the file reads").is_none(), "an unknown container falls back");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A file whose preview the quick path could not show the way the whole-file path does is left to
+    /// the whole file. Here the orientation tag sits in an IFD0 past the bounded header (its chunk is
+    /// bigger than that header) and the preview JPEG carries none of its own, so a window read would
+    /// come out unrotated where the whole-file path rotates it — the plan must decline instead of
+    /// handing on a wrong picture.
+    #[test]
+    fn preview_loading_declines_an_orientation_only_the_whole_file_shows() {
+        let (w, h) = (48u32, 32u32);
+        let rgb: Vec<u8> = (0..w * h * 3).map(|i| (i * 17 % 239) as u8).collect();
+        let img = EncodeImage::new(w, h, 3, Samples::U8(&rgb));
+        let jpeg = encode_jpeg(&img, 90, ChromaSubsampling::S420, &EncodeMeta::default()).unwrap();
+        // the strip (what the IFD's chunk covers) is padded past the plan's header, which is what puts
+        // IFD0 out of its reach; `embedded_preview` trims back to the JPEG's end-of-image
+        let mut strip = jpeg.clone();
+        strip.extend(std::iter::repeat_n(0u8, PLAN_PREFIX as usize));
+        let file = tiff_with_preview_strip(&strip, 400_000, Fixture { dng: true, orientation: Some(6), ..Default::default() });
+        let dir = crate::tests_xmp::temp_dir("preview-plan-orientation");
+        let path = dir.join("rotated.dng");
+        std::fs::write(&path, &file).unwrap();
+        let path = path.to_string_lossy().into_owned();
+
+        assert_eq!(lightcraft_meta::extract(&file).orientation, Some(Orientation::from_exif(6)), "the fixture states an orientation");
+        assert!(lightcraft_meta::extract(&file[..PLAN_PREFIX as usize]).orientation.is_none(), "which the bounded header cannot see");
+        assert!(lightcraft_meta::extract(&jpeg).orientation.is_none(), "and the preview JPEG carries none of its own");
+        assert!(preview_window(&path).expect("the file reads").is_none(), "the whole-file path keeps it");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A container can declare what its preview JPEG is in, and the whole-file path applies that
+    /// declaration (`decode_raw_preview`). A JPEG-only decode has the JPEG's own space, else sRGB, so
+    /// a container that declares Adobe RGB must keep the whole-file path — while one that declares
+    /// sRGB (what most bodies write) must **not** take the fast path away: that half is a regression
+    /// test, since a guard that declined every declared space did exactly that to a real Sony ARW.
+    #[test]
+    fn preview_loading_declines_only_a_container_colour_space_it_cannot_apply() {
+        use lightcraft_raw::PreviewColorSpace;
+        let (w, h) = (48u32, 32u32);
+        let rgb: Vec<u8> = (0..w * h * 3).map(|i| (i * 23 % 233) as u8).collect();
+        let img = EncodeImage::new(w, h, 3, Samples::U8(&rgb));
+        let jpeg = encode_jpeg(&img, 90, ChromaSubsampling::S420, &EncodeMeta::default()).unwrap();
+        let dir = crate::tests_xmp::temp_dir("preview-plan-space");
+        let path = dir.join("space.arw");
+        let path = path.to_string_lossy().into_owned();
+
+        let adobe = tiff_with_preview_strip(&jpeg, 400_000, Fixture { sony: true, color_space: Some(0xFFFF), ..Default::default() });
+        assert_eq!(lightcraft_raw::embedded_preview_color_space(&adobe), Some(PreviewColorSpace::AdobeRgb), "the fixture declares Adobe RGB");
+        std::fs::write(&path, &adobe).unwrap();
+        assert!(preview_window(&path).expect("the file reads").is_none(), "the whole-file path applies the space");
+
+        let srgb = tiff_with_preview_strip(&jpeg, 400_000, Fixture { sony: true, color_space: Some(1), ..Default::default() });
+        assert_eq!(lightcraft_raw::embedded_preview_color_space(&srgb), Some(PreviewColorSpace::Srgb), "the fixture declares sRGB");
+        std::fs::write(&path, &srgb).unwrap();
+        let (_, window, read) = preview_window(&path).expect("the file reads").expect("sRGB is what the JPEG-only decode assumes");
+        assert!(read.planned, "the plan still answers");
+        assert!(window.starts_with(&[0xff, 0xd8]), "and hands on the JPEG");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
