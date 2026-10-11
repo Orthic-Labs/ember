@@ -187,10 +187,14 @@ pub(crate) fn navigate_gesture(app: &mut LightcraftApp, ui: &mut egui::Ui, resp:
     true
 }
 
-/// The largest texture the GPU behind `ctx` takes (egui reports it; 2048 when it doesn't, the
+/// The largest texture the GPU behind `ctx` takes (egui reports it; 2048 until it does, the
 /// smallest limit WebGL devices have).
+///
+/// The value egui keeps, not the frame's raw input: a native host (egui-winit) reports the limit
+/// in the first frame's input only, so the raw value is `None` from the second frame on
+/// (issue #652: every window render was cut to 2048 px, with blurry strips beside it).
 pub(crate) fn texture_side(ctx: &egui::Context) -> usize {
-    ctx.input(|i| i.raw.max_texture_side).unwrap_or(2048)
+    ctx.input(|i| i.max_texture_side)
 }
 
 /// The photo's own pixels as it is shown: its size after the crop and the user's rotation (what
@@ -2015,7 +2019,23 @@ fn straighten_overlay(app: &mut LightcraftApp, ui: &mut egui::Ui, resp: &egui::R
 
 #[cfg(test)]
 mod tests {
-    use super::film_label;
+    use super::{film_label, texture_side};
+
+    /// Issue #652: a native host reports the GPU's texture limit in the first frame's input only.
+    /// The loupe must still know it in every later frame (it read the raw input, found nothing and
+    /// cut every window render to 2048 px).
+    #[test]
+    fn the_texture_limit_outlives_the_frame_it_was_reported_in() {
+        let ctx = egui::Context::default();
+        assert_eq!(texture_side(&ctx), 2048, "until the host says: the smallest limit there is");
+        let mut seen = Vec::new();
+        for reported in [Some(8192), None, None] {
+            let raw = egui::RawInput { max_texture_side: reported, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| seen.push(texture_side(ui.ctx())));
+            out.textures_delta.clear();
+        }
+        assert_eq!(seen, [8192, 8192, 8192]);
+    }
 
     #[test]
     fn film_labels_cut_on_characters_not_bytes() {

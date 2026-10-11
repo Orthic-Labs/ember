@@ -12,7 +12,7 @@ use lightcraft_color::perceptual::oklab_from_2020;
 use lightcraft_color::{REC2020, Xy, bradford, luminance_2020};
 use lightcraft_develop::DevelopSettings;
 use lightcraft_raster::Rgb32f;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::SourceInfo;
 use crate::local::effective_wb;
@@ -21,7 +21,8 @@ use crate::local::effective_wb;
 /// (Personal Auto) bind baseline values to it.
 pub const REVISION: &str = "lightcraft.deterministic-auto.v3";
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AutoTone {
     pub exposure: f64,
     pub contrast: f64,
@@ -141,11 +142,22 @@ pub fn scene_population(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) ->
 
 /// Compute auto tone values for `src` under the current white balance (ignores current tone values).
 pub fn auto_tone(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) -> AutoTone {
-    let Some(pop) = scene_population(src, info, s) else { return AutoTone::default() };
+    scene_population(src, info, s).map(|pop| auto_tone_of(&pop, info)).unwrap_or_default()
+}
+
+/// Scene EV (over middle grey) Auto aims a scene's key median at.
+pub(crate) fn key_target(key: SceneKey) -> f32 {
+    -0.9 * key.low + 0.65 * key.high
+}
+
+/// Auto tone values for a measured scene ([`scene_population`], possibly with its `median`
+/// replaced by a region-aware one).
+pub fn auto_tone_of(pop: &ScenePopulation, info: &SourceInfo) -> AutoTone {
     let ScenePopulation { ev, median, p05, p95, p995, chroma_p90 } = pop;
+    let (ev, median, p05, p95, p995, chroma_p90) = (ev.as_slice(), *median, *p05, *p95, *p995, *chroma_p90);
     let key = SceneKey::of(median, p05, p95, p995);
 
-    let target = -0.9 * key.low + 0.65 * key.high;
+    let target = key_target(key);
     let median_gain = 1.0 - 0.15 * key.low.max(key.high);
     // BaselineExposure has already been applied by the RAW loader. Keep an ordinary scene's
     // median on target instead of adding a second, undocumented underexposure bias here.
@@ -155,7 +167,7 @@ pub fn auto_tone(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) -> AutoTo
     exposure -= key.backlit * (exposure - 2.0).max(0.0);
     let exposure = (exposure as f64 * 100.0).round() / 100.0;
 
-    let shape = fit::fit(&ev, exposure as f32, key, info);
+    let shape = fit::fit(ev, exposure as f32, key, info);
 
     let colour_headroom = ((0.16 - chroma_p90) / 0.16).clamp(0.0, 1.0);
     let vibrance = (14.0 * colour_headroom).round();
@@ -564,6 +576,8 @@ mod bw_tests {
         assert_eq!(auto_bw_mix(&grey, &SourceInfo::default(), &DevelopSettings::default()), [0.0; 8]);
     }
 }
+
+pub mod regions;
 
 #[cfg(test)]
 mod auto_regression;

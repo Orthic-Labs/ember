@@ -163,7 +163,7 @@ fn exposure_for_median(median_ev: f32, target: f32, info: &SourceInfo) -> f32 {
 }
 
 /// A float linear Rec. 2020 deep render as an image (`None` for any other sample format).
-fn deep_to_linear(d: &DeepImage) -> Option<Rgb32f> {
+pub(crate) fn deep_to_linear(d: &DeepImage) -> Option<Rgb32f> {
     let DeepSamples::F32(v) = &d.samples else { return None };
     if d.space != OutputSpace::Rec2020 || v.len() != d.width * d.height * 3 {
         return None;

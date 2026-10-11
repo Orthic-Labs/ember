@@ -24,10 +24,12 @@ pub fn is_under(k: &str, parent: &str) -> bool {
     k == p || k.strip_prefix(&p).is_some_and(|rest| rest.starts_with(SEP))
 }
 
-/// Replace the `from` prefix of `k` (which [`is_under`] `from`) with `to`.
-fn reparent(k: &str, from: &str, to: &str) -> String {
-    let rest = &k[from.len().min(k.len())..];
-    if to.is_empty() { rest.trim_start_matches(SEP).to_string() } else { format!("{to}{rest}") }
+/// Replace the `from` prefix of `k` (which [`is_under`] `from`). By levels, not bytes:
+/// `from` may be written in another case, which can change a letter's length (ẞ / ß).
+pub fn reparent(k: &str, from: &str, to: &str) -> String {
+    let skip = from.split(SEP).filter(|s| !s.trim().is_empty()).count();
+    let rest: Vec<&str> = k.split(SEP).filter(|s| !s.trim().is_empty()).skip(skip).collect();
+    std::iter::once(to).filter(|t| !t.is_empty()).chain(rest).collect::<Vec<_>>().join("|")
 }
 
 /// Keep the first of case-insensitively equal keywords.

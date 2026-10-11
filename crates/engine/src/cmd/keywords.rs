@@ -1,7 +1,7 @@
 //! Library-wide keyword commands: list (tree with counts), suggestions, rename, delete, merge;
 //! keyword sets (nine keywords a keystroke away: ⌥1–⌥9) and Recent Keywords.
 
-use lightcraft_catalog::keywords::{clean, is_under};
+use lightcraft_catalog::keywords::{clean, is_under, reparent};
 use serde_json::{Value, json};
 
 use super::{CommandSpec, always, bad, cmd, str_param};
@@ -197,9 +197,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 let to = str_param(p, "to").ok_or_else(|| bad("keyword.rename", "missing `to`"))?.to_string();
                 let op = s.catalog.rename_keyword_ops(&from, &to).map_err(|e| bad("keyword.rename", e.to_string()))?;
                 let (f, t) = (clean(&from), clean(&to));
-                commit_keywords(s, "Rename Keyword", op, |k| {
-                    Some(if is_under(k, &f) { format!("{t}{}", &k[f.len().min(k.len())..]) } else { k.to_string() })
-                })
+                commit_keywords(s, "Rename Keyword", op, |k| Some(if is_under(k, &f) { reparent(k, &f, &t) } else { k.to_string() }))
             }
         ),
         cmd!(
@@ -230,7 +228,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 let (from, into) = (from.iter().map(|f| clean(f)).collect::<Vec<_>>(), clean(&into));
                 commit_keywords(s, "Merge Keywords", op, |k| {
                     Some(match from.iter().find(|f| is_under(k, f)) {
-                        Some(f) => format!("{into}{}", &k[f.len().min(k.len())..]),
+                        Some(f) => reparent(k, f, &into),
                         None => k.to_string(),
                     })
                 })

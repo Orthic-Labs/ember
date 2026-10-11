@@ -107,8 +107,8 @@ names are read (e.g. `Exposure2012`, not the older `Exposure`).
 | `Exposure2012` | `light.exposure` | EV, 1:1 |
 | `Contrast2012`, `Highlights2012`, `Shadows2012`, `Whites2012`, `Blacks2012` | `light.contrast` … `light.blacks` | −100..100, 1:1 |
 | `WhiteBalance` | `wb.mode` | `As Shot`, `Auto`, `Daylight`, `Cloudy`, `Shade`, `Tungsten`, `Fluorescent`, `Flash`; other names → custom |
-| `Temperature`, `Tint` | `wb.temp`, `wb.tint` | Kelvin / tint for raw files (and presets) |
-| `IncrementalTemperature`, `IncrementalTint` | `wb.temp`, `wb.tint` | rendered files: −100..100 on our relative scale (mired shift around 6500 K, same as the Temp slider) |
+| `Temperature`, `Tint` | `wb.temp`, `wb.tint` | Kelvin / tint as written for raws with a measured illuminant (DNG) and presets. Raws developed relative to their as-shot look (ARW, NEF, RW2, RAF, CR3, CR2, PEF; Lightroom calls these `RAW`) take the same mired shift from packet `AsShotTemperature` / `AsShotTint`; without that reference custom Kelvin stays As Shot and is reported (`Temperature, Tint (custom white balance without AsShotTemperature: kept As Shot)`) to avoid a large cast (issue #510). |
+| `IncrementalTemperature`, `IncrementalTint` | `wb.temp`, `wb.tint` | rendered files: −100..100 on our relative scale (mired shift around 6500 K, same as the Temp slider); rendered files with only `Temperature` shift from `AsShotTemperature` when present |
 | `Vibrance`, `Saturation` | `color.vibrance`, `color.saturation` | 1:1 |
 | `Texture`, `Clarity2012`, `Dehaze` | `effects.texture`, `effects.clarity`, `effects.dehaze` | 1:1 |
 | `HueAdjustment<Band>`, `SaturationAdjustment<Band>`, `LuminanceAdjustment<Band>` | `mixer.<band>.hue/sat/lum` | bands Red, Orange, Yellow, Green, Aqua, Blue, Purple, Magenta |

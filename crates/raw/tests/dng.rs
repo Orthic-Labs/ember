@@ -39,6 +39,7 @@ fn synthetic(w: usize, h: usize, cfa: Option<Cfa>, cpp: usize) -> RawImage {
         ],
         as_shot_neutral: Some([0.5, 1.0, 0.7]),
         baseline_exposure: 0.35,
+        baseline_sharpness: Some(1.5),
         ..Default::default()
     };
     let metadata = lightcraft_meta::Metadata { make: Some("Synth".into()), model: Some("Cam 1".into()), rating: Some(3), ..Default::default() };
@@ -84,6 +85,7 @@ fn assert_same(a: &RawImage, b: &RawImage) {
     let (n1, n2) = (a.color.as_shot_neutral.unwrap(), b.color.as_shot_neutral.unwrap());
     assert!((0..3).all(|i| (n1[i] - n2[i]).abs() < 1e-6));
     assert!((a.color.baseline_exposure - b.color.baseline_exposure).abs() < 1e-6);
+    assert!(b.color.baseline_sharpness.is_some_and(|v| (v - 1.5).abs() < 1e-6), "{:?}", b.color.baseline_sharpness);
     assert_eq!(b.metadata.make.as_deref(), Some("Synth"));
     assert_eq!(b.metadata.rating, Some(3));
 }
@@ -547,4 +549,20 @@ fn malformed_profile_look_tags_are_ignored() {
     // and without any of the tags there is nothing to apply
     let plain = decode(&profile_dng(ByteOrder::Little, |_| {})).unwrap();
     assert!(plain.color.profile.is_empty());
+}
+
+/// `BaselineSharpness` is read from IFD 0 when plausible; malformed or extreme values are ignored.
+#[test]
+fn baseline_sharpness_is_read_when_plausible() {
+    for (value, want) in [((3, 2), Some(1.5)), ((0, 1), None), ((1, 0), None), ((100, 1), None)] {
+        let bytes = profile_dng(ByteOrder::Big, |ifd0| {
+            ifd0.set(t::BASELINE_SHARPNESS, Value::Rational(vec![value]));
+        });
+        assert_eq!(decode(&bytes).unwrap().color.baseline_sharpness, want, "{value:?}");
+    }
+    let bytes = profile_dng(ByteOrder::Big, |ifd0| {
+        ifd0.set(t::BASELINE_SHARPNESS, Value::SRational(vec![(-1, 1)]));
+    });
+    assert_eq!(decode(&bytes).unwrap().color.baseline_sharpness, None);
+    assert_eq!(decode(&profile_dng(ByteOrder::Big, |_| {})).unwrap().color.baseline_sharpness, None);
 }

@@ -18,6 +18,37 @@ use serde_json::{Map, Value, json};
 /// Properties keyed `prefix:name` (as produced by [`lightcraft_meta::parse_xmp`]).
 pub type Props = BTreeMap<String, Vec<String>>;
 
+/// The target determines how CRS white balance values map to our develop scale.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Target {
+    /// A preset with no known target: absolute Kelvin first, then relative temperature.
+    Any,
+    /// Rendered files and raws shown from an embedded preview use relative white balance.
+    Rendered,
+    /// A raw developed using an absolute measured illuminant.
+    RawAbsolute,
+    /// A raw developed relative to its as-shot look because no illuminant is available.
+    RawRelative,
+}
+
+impl Target {
+    /// Select the CRS mapping target from a file's media kind and format.
+    pub fn for_file(kind: lightcraft_catalog::MediaKind, format: &str, preview_only: bool) -> Target {
+        if kind != lightcraft_catalog::MediaKind::Raw || preview_only {
+            Target::Rendered
+        } else if lightcraft_catalog::relative_wb_format(format) {
+            Target::RawRelative
+        } else {
+            Target::RawAbsolute
+        }
+    }
+
+    /// Select the CRS mapping target from an existing catalog photo.
+    pub fn for_photo(photo: &lightcraft_catalog::Photo) -> Target {
+        Target::for_file(photo.kind, &photo.format, photo.preview_only.is_some())
+    }
+}
+
 /// Band names as they appear in `crs:` field names, in our mixer order.
 const CRS_BANDS: [&str; 8] = ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"];
 
@@ -69,12 +100,22 @@ pub fn has_adjustments(props: &Props) -> bool {
 thread_local! {
     /// Keys read by [`to_partial`] while [`to_partial_report`] runs.
     static READ: std::cell::RefCell<Option<std::collections::BTreeSet<String>>> = const { std::cell::RefCell::new(None) };
+    /// Adjustments deliberately omitted by [`to_partial`], for its report.
+    static SKIPPED: std::cell::RefCell<Option<Vec<String>>> = const { std::cell::RefCell::new(None) };
 }
 
 fn note(k: &str) {
     READ.with(|r| {
         if let Some(s) = r.borrow_mut().as_mut() {
             s.insert(k.to_string());
+        }
+    });
+}
+
+fn skipped(what: &str) {
+    SKIPPED.with(|r| {
+        if let Some(values) = r.borrow_mut().as_mut() {
+            values.push(what.to_string());
         }
     });
 }
@@ -138,10 +179,8 @@ fn curve(props: &Props, k: &str) -> Option<Value> {
 
 /// Map the `crs:` fields of an XMP packet to a partial develop-settings JSON object.
 ///
-/// `raw`: the target is a raw file (absolute Kelvin white balance) — `Some(false)` prefers the
-/// relative `Incremental*` white balance used for rendered files, `None` (presets) takes whichever
-/// is present, absolute first.
-pub fn to_partial(props: &Props, raw: Option<bool>) -> Value {
+/// `target` determines whether CRS temperature is absolute Kelvin or relative to an as-shot white.
+pub fn to_partial(props: &Props, target: Target) -> Value {
     let mut out = Value::Object(Map::new());
     let o = &mut out;
     let n = |o: &mut Value, crs: &str, path: &str| {
@@ -200,10 +239,28 @@ pub fn to_partial(props: &Props, raw: Option<bool>) -> Value {
     let rel = num(props, "crs:IncrementalTemperature")
         .or(num(props, "crs:IncrementalTint").map(|_| 0.0))
         .map(|t| (rel_to_kelvin(t), num(props, "crs:IncrementalTint")));
-    let wb = match raw {
-        Some(true) => abs,
-        Some(false) => rel.or(abs),
-        None => abs.or(rel),
+    let shifted = || {
+        let (temperature, tint) = abs?;
+        let as_shot = num(props, "crs:AsShotTemperature").filter(|kelvin| *kelvin > 0.0)?;
+        if temperature <= 0.0 {
+            return None;
+        }
+        let relative = (1e6 / as_shot - 1e6 / temperature) / 0.8;
+        if !relative.is_finite() {
+            return None;
+        }
+        let temperature = rel_to_kelvin(relative);
+        let tint = tint.and_then(|value| {
+            let shift = value - num(props, "crs:AsShotTint").unwrap_or(0.0);
+            shift.is_finite().then_some(shift)
+        });
+        temperature.is_finite().then_some((temperature, tint))
+    };
+    let wb = match target {
+        Target::RawAbsolute => abs,
+        Target::Any => abs.or(rel),
+        Target::Rendered => rel.or_else(shifted).or(abs),
+        Target::RawRelative => rel.or_else(shifted),
     };
     match (mode, wb) {
         (Some(m), _) if m != "custom" => put(o, "wb.mode", json!(m)),
@@ -213,6 +270,10 @@ pub fn to_partial(props: &Props, raw: Option<bool>) -> Value {
             if let Some(tint) = tint {
                 put(o, "wb.tint", json!(tint));
             }
+        }
+        (_, None) if target == Target::RawRelative && abs.is_some() => {
+            put(o, "wb.mode", json!("asShot"));
+            skipped("Temperature, Tint (custom white balance without AsShotTemperature: kept As Shot)");
         }
         (Some(m), None) => put(o, "wb.mode", json!(m)),
         (None, None) => {}
@@ -375,11 +436,12 @@ pub fn to_partial(props: &Props, raw: Option<bool>) -> Value {
 /// With `values` (the packet's structured properties), local corrections become masks too
 /// ([`crate::crs_masks`]; radial masks fitted to `aspect` = width / height); components that
 /// can't be carried over are reported as `Mask: <kind>`.
-pub fn to_partial_report(props: &Props, values: Option<&crate::crs_masks::Values>, raw: Option<bool>, aspect: f64) -> (Value, Vec<String>) {
+pub fn to_partial_report(props: &Props, values: Option<&crate::crs_masks::Values>, target: Target, aspect: f64) -> (Value, Vec<String>) {
     READ.with(|r| *r.borrow_mut() = Some(Default::default()));
-    let mut out = to_partial(props, raw);
+    SKIPPED.with(|r| *r.borrow_mut() = Some(Vec::new()));
+    let mut out = to_partial(props, target);
     let mut read = READ.with(|r| r.borrow_mut().take()).unwrap_or_default();
-    let mut mask_skips = Vec::new();
+    let mut mask_skips = SKIPPED.with(|r| r.borrow_mut().take()).unwrap_or_default();
     if let Some(values) = values {
         let (masks, skipped) = crate::crs_masks::masks(values, aspect);
         if !masks.is_empty() {
@@ -387,7 +449,7 @@ pub fn to_partial_report(props: &Props, values: Option<&crate::crs_masks::Values
         }
         if values.keys().any(|k| crate::crs_masks::CONTAINERS.contains(&k.as_str())) {
             read.extend(crate::crs_masks::CONTAINERS.iter().map(|c| c.to_string()));
-            mask_skips = skipped.into_iter().map(|k| format!("Mask: {k}")).collect();
+            mask_skips.extend(skipped.into_iter().map(|k| format!("Mask: {k}")));
         }
     }
     // fields that only switch a panel on/off or name things: not adjustments by themselves; an
@@ -421,7 +483,7 @@ pub fn to_partial_report(props: &Props, values: Option<&crate::crs_masks::Values
 pub fn preset_from_xmp(xmp: &str, fallback_name: &str) -> Option<Preset> {
     let d = lightcraft_meta::parse_xmp(xmp).ok()?;
     let props = &d.properties;
-    let settings = to_partial(props, None);
+    let settings = to_partial(props, Target::Any);
     if settings.as_object().is_none_or(Map::is_empty) {
         return None;
     }
@@ -474,7 +536,7 @@ mod tests {
     fn maps_common_fields() {
         let p = props(SIDECAR);
         assert!(has_adjustments(&p));
-        let partial = to_partial(&p, Some(true));
+        let partial = to_partial(&p, Target::RawAbsolute);
         let s = apply_partial(&DevelopSettings::for_raw(5000.0, 0.0), &partial, 1.0);
         assert_eq!(s.wb.mode, WbMode::Custom);
         assert_eq!((s.wb.temp, s.wb.tint), (5150.0, 12.0));
@@ -516,7 +578,7 @@ mod tests {
     fn only_present_fields_are_in_the_partial() {
         let x = r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description
             xmlns:c="http://ns.adobe.com/camera-raw-settings/1.0/" c:Vibrance="+30" c:GrainAmount="10"/></rdf:RDF>"#;
-        let partial = to_partial(&props(x), None);
+        let partial = to_partial(&props(x), Target::Any);
         assert_eq!(partial, json!({"color": {"vibrance": 30.0}, "grain": {"amount": 10.0}}));
     }
 
@@ -531,12 +593,12 @@ mod tests {
             <crs:Temperature>4800</crs:Temperature>
           </rdf:Description></rdf:RDF></x:xmpmeta>"#;
         let p = props(x);
-        let rendered = apply_partial(&DevelopSettings::default(), &to_partial(&p, Some(false)), 1.0);
+        let rendered = apply_partial(&DevelopSettings::default(), &to_partial(&p, Target::Rendered), 1.0);
         assert_eq!(rendered.treatment, lightcraft_develop::Treatment::Bw);
         assert_eq!(rendered.bw_mix.blue, -35.0);
         assert!((rendered.wb.temp - rel_to_kelvin(25.0)).abs() < 1e-6 && rendered.wb.temp > 6500.0);
         assert_eq!(rendered.wb.tint, -6.0);
-        let raw = apply_partial(&DevelopSettings::default(), &to_partial(&p, Some(true)), 1.0);
+        let raw = apply_partial(&DevelopSettings::default(), &to_partial(&p, Target::RawAbsolute), 1.0);
         assert_eq!(raw.wb.temp, 4800.0);
     }
 
@@ -545,11 +607,57 @@ mod tests {
         let x = r#"<rdf:Description xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
              crs:WhiteBalance="Daylight" crs:Temperature="5500" crs:Tint="10" crs:AlreadyApplied="True"/>"#;
         let p = props(x);
-        assert_eq!(to_partial(&p, Some(true)), json!({"wb": {"mode": "daylight"}}));
+        assert_eq!(to_partial(&p, Target::RawAbsolute), json!({"wb": {"mode": "daylight"}}));
         assert!(!has_adjustments(&p));
         let bookkeeping = r#"<rdf:Description xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
              xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/" crs:Version="1" crs:HasSettings="True"/>"#;
         assert!(!has_adjustments(&props(bookkeeping)));
+    }
+
+    #[test]
+    fn custom_kelvin_shifts_from_as_shot_for_relative_white_balance_targets() {
+        // Issue #510's observed values: 3650 K to 3578 K is a small shift, not 3578 K from neutral.
+        let x = r#"<rdf:Description xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
+             crs:WhiteBalance="Custom" crs:Temperature="3578" crs:Tint="-5" crs:AsShotTemperature="3650" crs:AsShotTint="-2"/>"#;
+        let p = props(x);
+        let relative = to_partial(&p, Target::RawRelative);
+        let temperature = relative["wb"]["temp"].as_f64().unwrap();
+        assert!((temperature - 6275.0).abs() < 5.0, "{temperature}");
+        assert_eq!(relative["wb"]["tint"], -3.0);
+        assert_eq!(relative["wb"]["mode"], "custom");
+        assert_eq!(to_partial(&p, Target::Rendered)["wb"]["temp"], relative["wb"]["temp"]);
+        assert_eq!(to_partial(&p, Target::RawAbsolute)["wb"]["temp"], 3578.0);
+        assert_eq!(to_partial(&p, Target::Any)["wb"]["temp"], 3578.0);
+        assert!(to_partial_report(&p, None, Target::RawRelative, 1.5).1.is_empty());
+
+        let without_as_shot = props(&x.replace(r#" crs:AsShotTint="-2""#, ""));
+        assert_eq!(to_partial(&without_as_shot, Target::RawRelative)["wb"]["tint"], -5.0);
+    }
+
+    #[test]
+    fn custom_kelvin_without_as_shot_reference_stays_as_shot_and_is_reported() {
+        let x = r#"<rdf:Description xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
+             crs:WhiteBalance="Custom" crs:Temperature="3578" crs:Tint="-5" crs:Exposure2012="0.3"/>"#;
+        let p = props(x);
+        let (partial, unmapped) = to_partial_report(&p, None, Target::RawRelative, 1.5);
+        assert_eq!(partial["wb"], json!({"mode": "asShot"}));
+        assert_eq!(partial["light"]["exposure"], 0.3);
+        assert_eq!(unmapped.len(), 1, "{unmapped:?}");
+        assert!(unmapped[0].starts_with("Temperature, Tint"), "{unmapped:?}");
+        assert_eq!(to_partial(&p, Target::RawAbsolute)["wb"]["temp"], 3578.0);
+        assert_eq!(to_partial(&p, Target::Rendered)["wb"]["temp"], 3578.0);
+        assert!(to_partial_report(&p, None, Target::RawAbsolute, 1.5).1.is_empty());
+    }
+
+    #[test]
+    fn target_selection_matches_file_development_path() {
+        use lightcraft_catalog::MediaKind;
+        assert_eq!(Target::for_file(MediaKind::Raw, "ARW", false), Target::RawRelative);
+        assert_eq!(Target::for_file(MediaKind::Raw, "nef", false), Target::RawRelative);
+        assert_eq!(Target::for_file(MediaKind::Raw, "RAW", false), Target::RawRelative);
+        assert_eq!(Target::for_file(MediaKind::Raw, "DNG", false), Target::RawAbsolute);
+        assert_eq!(Target::for_file(MediaKind::Raw, "ARW", true), Target::Rendered);
+        assert_eq!(Target::for_file(MediaKind::Image, "JPG", false), Target::Rendered);
     }
 
     #[test]
@@ -594,15 +702,15 @@ mod tests {
           </rdf:Description></rdf:RDF></x:xmpmeta>"#
             )
         };
-        let alone = to_partial(&props(&packet("")), Some(true));
+        let alone = to_partial(&props(&packet("")), Target::RawAbsolute);
         assert!(alone.pointer("/curve/green").is_none(), "{alone}");
         let master = "<crs:ToneCurvePV2012><rdf:Seq><rdf:li>0, 0</rdf:li><rdf:li>255, 255</rdf:li></rdf:Seq></crs:ToneCurvePV2012>";
-        let with = to_partial(&props(&packet(master)), Some(true));
+        let with = to_partial(&props(&packet(master)), Target::RawAbsolute);
         assert!(with.pointer("/curve/green").is_some() && with.pointer("/curve/master").is_some(), "{with}");
     }
 
     fn unmapped(x: &str) -> Vec<String> {
-        to_partial_report(&props(x), None, None, 1.5).1
+        to_partial_report(&props(x), None, Target::Any, 1.5).1
     }
 
     #[test]
@@ -622,8 +730,8 @@ mod tests {
         let p = props(&preset_packet("", ""));
         let mut d = DevelopSettings::default();
         d.optics.lens_profile = true;
-        assert!(apply_partial(&d, &to_partial(&p, None), 1.0).optics.lens_profile);
+        assert!(apply_partial(&d, &to_partial(&p, Target::Any), 1.0).optics.lens_profile);
         let on = props(&preset_packet("", "").replace(r#"crs:LensProfileEnable="0""#, r#"crs:LensProfileEnable="1""#));
-        assert!(apply_partial(&DevelopSettings::default(), &to_partial(&on, None), 1.0).optics.lens_profile);
+        assert!(apply_partial(&DevelopSettings::default(), &to_partial(&on, Target::Any), 1.0).optics.lens_profile);
     }
 }
