@@ -135,13 +135,7 @@ struct CameraLevels {
 
 /// Canon's versioned word arrays. Offsets are word indices from the published tag tables, not
 /// byte offsets. The four as-shot WB values are R, G, G, B, independent of the CFA layout.
-///
-/// Version 66 (EOS R6 Mark III) keeps version 64's as-shot WB and black level offsets, measured on
-/// 33 files from 12 shoots: the as-shot quadruple is followed by its colour temperature and then
-/// the fixed preset table (Daylight 5200 K, Shade 7000 K, ...), and the black levels equal the
-/// masked-column levels in every file. Its word 661 (14351 or 13995) is not the clipping point:
-/// highlights pile up at 16383 and run smoothly through the range between, so the white level is
-/// measured from the data instead.
+/// A version without a white-level offset takes its white level from the data (see `docs/cr3.md`).
 fn camera_levels(maker: Option<&Ifd>, bits: u8) -> CameraLevels {
     let Some(values) = maker.and_then(|m| m.u64s(COLOR_DATA)) else { return CameraLevels::default() };
     let offsets = match values.first().copied() {
@@ -534,7 +528,7 @@ mod tests {
             assert_eq!(levels.black, Some([100.0, 101.0, 102.0, 103.0]));
             assert_eq!(levels.white, Some(15000.0));
         }
-        // Version 66 (EOS R6 Mark III): as-shot WB and black from the table, white from the data.
+        // A version without a white-level offset leaves the white level to the data.
         let levels = camera_levels(Some(&maker(66, 105, 383, 661)), 14);
         assert_eq!(levels.wb, Some([2.0, 1.0, 1.5]));
         assert_eq!(levels.black, Some([100.0, 101.0, 102.0, 103.0]));
