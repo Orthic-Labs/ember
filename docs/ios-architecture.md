@@ -1,0 +1,123 @@
+# Ember iOS & iPadOS architecture
+
+**Status:** design proposal · 2026-10-13. No iOS implementation or scaffolding starts until Mac RightKit mandatory requirements settle. Rust remains authoritative; SwiftUI supplies native mobile presentation. Android is outside scope.
+
+## What users can do
+
+V1 supports import from Photos or Files → browse & cull → adjust supported edits → export/share → continue selected collections on Mac through personal iCloud sync. iPhone has collection navigation, responsive grid, photo viewer & compact editing sheets. iPad adds persistent sidebar/inspector, filmstrip, keyboard commands & Pencil input.
+
+V1 covers ratings, picks/rejects, keywords, albums, crop/rotation, Light/Color adjustments, supported presets, before/after, undo, named versions & JPEG export. UI dispatches existing Rust commands & derives control ranges/defaults from Rust specifications. RAW support follows qualified Rust decoders with explicit supported-format reporting. Existing masks survive synchronization; only qualified mobile mask tools become editable.
+
+Later stages add advanced masking, large-library refinement, qualified AI, HDR & collaborative collections. Sharing follows personal-sync qualification. Simultaneous live brush editing is outside initial scope. No learned feature is promised merely because corpus preparation exists.
+
+## Runtime & authority
+
+```mermaid
+flowchart TB
+    UI[SwiftUI iPhone / iPad] --> Bridge[Versioned mobile host bridge]
+    Bridge --> Engine[Rust commands / catalog / develop / render / export]
+    Engine --> Local[Local catalog journal + app-managed media]
+    Local --> Adapter[Ember portable-entity adapter]
+    Adapter --> RK[RightKit sync / assets / credentials]
+    RK <--> CK[CloudKit private database]
+    RK <--> Shared[CloudKit shared collection zones — later]
+    CK <--> Mac[Mac RightKit sync adapter + Ember Rust engine]
+    Purchase[StoreKit via RightKitPurchases] --> Access[Shared RightKit entitlement policy]
+    Access --> Engine
+```
+
+One mobile host owns one Rust session per open library. SwiftUI state stays on `MainActor`; bounded command, decode & render queues run away from main thread. Callback arrival never directly mutates UI or catalog. Cancelled/replaced previews carry generations; stale results are discarded.
+
+Reuse contracts in `crates/desktop-host/src/lib.rs`: command dispatch, snapshots, generation-aware `view_slice`, previews, preferences, persistence & orderly shutdown. Factor portable session/controller responsibilities from desktop-specific polling, auto-import & process-exit behavior. React/Tauri desktop presentation remains intact.
+
+A versioned bridge exposes typed requests/responses, cancellation, progress, structured errors & preview handles. Large pixels stay outside JSON; descriptors carry dimensions, stride, colour space, generation & explicit lifetime. No panic crosses ABI boundary.
+
+Generated CI will package Rust device/simulator libraries as an XCFramework. `aarch64-apple-ios` & `aarch64-apple-ios-sim` are supported Rust targets; Ember linking/runtime qualification remains future work. [Rust platform support](https://doc.rust-lang.org/rustc/platform-support.html)
+
+Bridge ownership is pending RightKit audit. Prefer shared native adapter/generation support. Any required ABI glue belongs behind isolated safe APIs; current production `unsafe` restrictions cannot silently expand. Mobile in-process supervision must be a qualified RightKit owner adapter, rather than copying desktop child-process supervision into Ember.
+
+## Portable data, separate from local catalog
+
+Keep Rust catalog journal/snapshot format. `crates/catalog/src/lib.rs` makes `Op` mutations authoritative for replay, undo & recovery. CloudKit carries portable entities, never replicas of device-specific `catalog.snap` or `catalog.log`.
+
+Current photo/album/stack IDs are local `u64`s; file sources contain local paths. Introduce stable portable UUIDs mapped to existing IDs, preserving old catalogs. Entity envelope carries schema, library/collection identity, entity/revision UUIDs, parent revision IDs, originating device & optional author identity.
+
+Portable entities cover photo identity/original digest/capture metadata, collections & membership/order, ratings/flags/keywords, immutable develop revisions, named versions/virtual copies, media/mask asset manifests, deletion state & conflict references. Device paths, Photos identifiers, security-scoped bookmarks, model locations, selection, window preferences & caches stay local.
+
+Rust owns domain validation, migration & reconciliation. RightKit owns transport, cursors, account fences, retries & durable delivery. Cloud records cannot insert unvalidated settings into catalog. Incoming page acknowledgement follows durable apply; catalog commit & outgoing queue must be crash-consistent, through journal-backed/replay-derived publication.
+
+## Original media & proxies
+
+Imports copy selected media into app-managed storage, preserving source files. Native Photos picker is initial route; broader library permission is requested only for workflows requiring it. Files access remains scoped to transfer. Export writes new output.
+
+Cloud membership is explicit per collection. Metadata & bounded thumbnails synchronize first; original upload/download follows chosen storage policy. Available Offline pins required media & confirmed local edits. Eviction never deletes sole original or an unuploaded edit. Corpus/training folders are excluded from automatic product sync.
+
+A JPEG thumbnail supports browsing/rating/metadata; it does not become RAW editing source. Editing needs original or a qualified editable proxy. Later proxy optimization uses Rust-generated scene-linear source, original digest, orientation, colour/decode fingerprint & format version. Sensor-dependent detail, demosaic, RAW denoise & original-quality export require original. UI states proxy/export resolution.
+
+RightKit assets need file-backed streaming, checksums, limits & cancellation. Current `SyncValue.asset(Data)` eagerly materializes bytes; it cannot serve large RAW transport unchanged.
+
+## Edit synchronization & conflicts
+
+Completed edit gesture commits immutable revision with complete `DevelopSettings`, process/schema versions & masks. Slider motion stays transient/local; cloud publishes committed gestures. Named versions reference immutable revisions.
+
+Parentage establishes causality without trusting device clocks. Independent metadata edits can merge per field using ancestry & deterministic ties. Concurrent develop edits create branches; retain both & show Edited on another device. User selects branch or explicitly merges. Never silently combine competing crop geometry or mask arrays.
+
+Masks remain atomic inside revision for V1. Normalized coordinates preserve portability; raster payloads reference immutable checksummed assets with source/model provenance. Local mask IDs remain meaningful only within their revision.
+
+Unsupported future settings/process versions become read-only, preserving original payload & requesting compatible update. Existing engine process-version fallback is insufficient for claiming identical cross-device rendering; mobile compatibility guard is required before editing. See [process versions](process-versions.md).
+
+Publish payload dependencies before head reference; incomplete revisions remain pending/invisible. Recently Deleted is reversible lifecycle state, separate from irreversible tombstone. Restore may need fresh identity under current RightKit permanent-tombstone semantics. Delete-versus-edit preserves losing edit in recovery branch without resurrecting deleted membership. Original deletion remains explicit storage operation.
+
+## Same person versus different users
+
+Personal sync joins Mac/iPhone/iPad using same CloudKit container/schema & iCloud account, with independent local replicas. Orthic login & App Store purchases do not select iCloud identity. Apple distinguishes private, public & shared databases. [CloudKit databases](https://developer.apple.com/documentation/cloudkit/ckdatabase)
+
+Cross-user collaboration uses CKShare with dedicated collection zone in owner's private database; participant reads granted records through shared database. Keep unrelated private photos outside shared zone. Shared export omits private GPS/captions unless owner includes them. [Apple shared records](https://developer.apple.com/documentation/cloudkit/shared-records)
+
+Sharing UI covers invitation, acceptance, participants, read-only/edit permissions, leave & revoke. Rust checks effective permission at command boundary; CloudKit checks remote authorization. Offline edits after revocation become private recovery branch & cannot upload. Revocation cannot recall independently exported recipient files. Removing share does not delete separately imported originals.
+
+RightKit must extend shared-database scope, owner-qualified zone IDs, invitation lifecycle, permissions & revocation. Evaluate Apple's CKSyncEngine within shared owner; Ember adds no competing transport.
+
+## StoreKit & access
+
+Use `RightKitPurchases` for verified transactions, updates, restore & cached ledger; `RightKitLicense` supplies shared policy. Rust checks protected command entitlement. iCloud data identity, App Store purchase identity & optional Orthic account/license remain separate.
+
+`appAccountToken` associates purchases with developer-account identity; it grants neither iCloud identity nor sharing permission. [Apple appAccountToken](https://developer.apple.com/documentation/storekit/product/purchaseoption/appaccounttoken(_:))
+
+Refund/revocation changes access without deleting library or blocking recovery/export of owned work. Verified current entitlements exclude revoked/refunded products; offline expiry follows settled product policy. Shared album membership does not transfer paid access. Family Sharing is separately configured. [Apple current entitlements](https://developer.apple.com/documentation/storekit/transaction/currententitlements)
+
+Mac/iOS universal purchase needs corresponding App Store Connect arrangement; direct Mac/Windows licensing needs explicit verified bridge. HeardRight's mobile/full split is evidence of distinct policies, not Ember pricing decision. [Apple universal purchase](https://developer.apple.com/help/glossary/universal-purchase)
+
+Windows initially retains local catalog & portable transfer bundles with originals/proxies/manifests/revisions. Existing macOS CloudKit helper is not Windows transport. Future cross-platform synchronization extends RightKit after identity & sharing qualification.
+
+## Shared ownership & current gaps
+
+| Capability | Owner to reuse | Work before implementation |
+|---|---|---|
+| Photo commands/catalog/develop/render/export | Ember Rust engine & desktop-host contracts | Factor portable host; mobile bridge |
+| Cloud delivery | `rightkit-sync`, `RightKitCloudSync` | Causal heads, compare-and-save, shared zones, file-backed assets |
+| Commerce/access | `RightKitPurchases`, `RightKitLicense`, `rightkit-license` | Unified explicit mobile/Mac/Windows policy |
+| Credentials | `RightKitAppleCredentials`, `rightkit-secrets` | Account-switch isolation; native adapters |
+| Settings | `rightkit-settings` & native owner adapter | Common schema, device/cloud distinction |
+| Jobs/files/storage | `rightkit-jobs`, `rightkit-fs`, `rightkit-db` where applicable | Mobile adapters; preserve Rust domain catalog |
+| Diagnostics | `RightKitDiagnostics`, logs/crash owners | Native hooks, redaction, bounded retention |
+| Presentation | SwiftUI + qualified shared native UI owner | Navigation, accessibility & mobile frame |
+| Release/QA | Generated RightKit Actions/release/QA | Device/simulator/XCFramework/distribution qualification |
+
+Complete mandatory adoption also covers shell/frame, service/data locations, messaging/CLI, legal/onboarding, HTTP, updates, MCP, test-mode & release-switch enforcement. Current Mac owner list is pending, not an approved exemption for mobile. Desktop package APIs cannot simply be assumed available on iOS. Every portable/native profile must retain shared ownership, with product-specific photo behavior in Ember.
+
+Source findings: current CloudKit transport uses private database/custom zone; authoritative `.allKeys` writes & date-based merge defaults need extension for concurrent photo edits. Cloud-sync ownership index reports staged/declaration-only; product presence is not qualification.
+
+HeardRight evidence: `ios-native/HeardRight/TranscriptCloudSync.swift` composes shared engine with transcript adapter; `StoreKitProController.swift` wraps shared purchases. Its native production paths remain in progress. Reuse infrastructure boundaries, not transcript merge policy or pricing. Source lookup used local `D:\Claude\heardright` & `D:\Claude\rightkit`; Mac mandatory audit came from Update RightKit app requirements chat, `01a12eef-a184-7df1-942d-9f7301866854`. No implementation effects were delegated or run.
+
+## Qualification & sequence
+
+After mandatory owner closure: qualify bridge/local import/edit/export → personal sync → shared collections. Minimum OS, oldest supported hardware, commerce policy & original-storage defaults remain product decisions before implementation; no guessed deployment floor is encoded.
+
+Generated CI binds source revision, package versions, XCFramework hashes & native artifact identity. Test real iPhone/iPad/Mac pairs, separate iCloud users, offline conflicts, future schemas, account switch, interrupted transfer, cloud quota/full disk, malformed media, permissions/revocation & StoreKit restore/refund.
+
+Measure opening, draft slider latency, export, memory & thermal behavior on selected oldest device. Existing draft/loupe budgets become measured mobile targets, not claimed results. Bound decode concurrency; GPU failure has CPU fallback.
+
+Foreground resumes synchronization promptly; background delivery follows iOS scheduling. Persist completed edits before suspension & expose pending transfer state. [Apple background strategies](https://developer.apple.com/documentation/backgroundtasks/choosing-background-strategies-for-your-app)
+
+Acceptance: restart recovery, preserved originals, deterministic revision convergence, retained conflict branches, enforced permissions & matching qualified Rust renders. Release only qualified native artifacts through settled RightKit ownership chain.

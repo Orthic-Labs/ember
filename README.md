@@ -43,6 +43,8 @@ Use generated `ci` & `release-candidate` Actions lanes for compilation, eight Ru
 
 ## Documentation
 
+[iOS & iPadOS architecture proposal](docs/ios-architecture.md) scopes native mobile editing, personal iCloud sync & later shared collections. Implementation follows mandatory RightKit owner qualification.
+
 - [Branding & existing library/preferences compatibility](docs/branding.md)
 - [Fork strategy & selective upstream absorption](docs/fork-strategy.md)
 - [LRCAT catalog import](docs/lightroom-catalog-import.md)
