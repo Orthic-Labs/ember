@@ -23,7 +23,7 @@
 
 mod sraw;
 
-use super::{black_from_columns, white_from_data};
+use super::{active_rows, black_from_columns, white_from_data};
 use crate::{BlackLevel, Cfa, ColorData, Mode, OpcodeLists, RawData, RawError, RawFormat, RawImage, Rect, Result, ljpeg};
 use lightcraft_geom::Orientation;
 use lightcraft_tiff::image::chunk_bytes;
@@ -189,7 +189,7 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
     }
     let wb = mn.as_ref().and_then(|m| m.ifd.value(COLOR_BALANCE).map(|v| words(v, m.order))).and_then(|v| wb_from_color_balance(&v));
     let cfa = cfa_from_tag(raw.u64(CR2_CFA_PATTERN)).unwrap_or_else(|| Cfa::bayer_static("RGGB"));
-    let white = white_from_data(&data, prec as u32);
+    let white = white_from_data(&active_rows(&data, width, active), prec as u32);
     let black = match masked_columns(&data, width, active, white) {
         cols if cols.len() >= 2 => black_from_columns(&data, width, cols, active.y..active.y + active.height, active),
         _ => BlackLevel::uniform(0.0),
@@ -233,6 +233,11 @@ pub(crate) mod tests {
     /// Like [`synthetic_cr2`], with `note` as the Exif maker note (bytes as stored).
     fn synthetic_cr2_note(w: usize, h: usize, slices: Option<[u16; 3]>, note: Option<Vec<u8>>) -> (Vec<u8>, Vec<u16>) {
         let img: Vec<u16> = (0..w * h).map(|i| 1024 + ((i * 7919) % 12000) as u16).collect();
+        (synthetic_cr2_of(&img, w, h, slices, note), img)
+    }
+
+    /// A synthetic CR2 whose sensor samples are `img` (`w`×`h`, 14-bit), with `note` as the Exif maker note.
+    fn synthetic_cr2_of(img: &[u16], w: usize, h: usize, slices: Option<[u16; 3]>, note: Option<Vec<u8>>) -> Vec<u8> {
         let widths: Vec<usize> = match slices {
             Some([n, sw, last]) => {
                 let mut v = vec![sw as usize; n as usize];
@@ -269,10 +274,9 @@ pub(crate) mod tests {
         }
         ifd3.set_image(ImageData::Strips { rows_per_strip: h as u32, strips: vec![enc] });
         // (real files also carry a "CR\x02\0" signature at offset 8; probe recognises the structure without it)
-        let bytes = TiffWriter::new(ByteOrder::Little, false)
+        TiffWriter::new(ByteOrder::Little, false)
             .write(&[ifd0, IfdBuilder::new().with(1, Value::Short(vec![0])), IfdBuilder::new().with(1, Value::Short(vec![0])), ifd3])
-            .unwrap();
-        (bytes, img)
+            .unwrap()
     }
 
     #[test]
@@ -352,13 +356,13 @@ pub(crate) mod tests {
         assert!(masked_columns(&[], w, active, 15000.0).is_empty());
     }
 
-    /// A maker note holding only `ColorData` (`0x4001`) as `ty` (3 = SHORT, 7 = UNDEFINED) with `n` values, a plain
-    /// IFD whose value offset is relative to the TIFF header (patched once the note's position is known).
-    fn note_with_color_data(ty: u16, data: &[u8]) -> Vec<u8> {
+    /// A maker note holding only `tag` as `ty` (3 = SHORT, 7 = UNDEFINED) with `data`, a plain IFD whose value
+    /// offset is relative to the TIFF header (patched by [`patch_note`] once the note's position is known).
+    fn note_with(tag: u16, ty: u16, data: &[u8]) -> Vec<u8> {
         let count = if ty == 3 { data.len() / 2 } else { data.len() } as u32;
         let mut note = Vec::new();
         note.extend_from_slice(&1u16.to_le_bytes());
-        note.extend_from_slice(&COLOR_BALANCE.to_le_bytes());
+        note.extend_from_slice(&tag.to_le_bytes());
         note.extend_from_slice(&ty.to_le_bytes());
         note.extend_from_slice(&count.to_le_bytes());
         note.extend_from_slice(&0u32.to_le_bytes()); // value offset, patched below
@@ -367,12 +371,16 @@ pub(crate) mod tests {
         note
     }
 
-    fn decode_with_color_data(ty: u16, data: &[u8]) -> RawImage {
-        let (mut bytes, _) = synthetic_cr2_note(64, 10, None, Some(note_with_color_data(ty, data)));
-        let tiff = Tiff::parse(&bytes).unwrap();
+    fn patch_note(bytes: &mut [u8]) {
+        let tiff = Tiff::parse(bytes).unwrap();
         let e = tiff.exif().unwrap().get(t::MAKER_NOTE).unwrap();
         let off = e.offset as usize;
         bytes[off + 10..off + 14].copy_from_slice(&(e.offset as u32 + 18).to_le_bytes());
+    }
+
+    fn decode_with_color_data(ty: u16, data: &[u8]) -> RawImage {
+        let (mut bytes, _) = synthetic_cr2_note(64, 10, None, Some(note_with(COLOR_BALANCE, ty, data)));
+        patch_note(&mut bytes);
         crate::decode(&bytes).unwrap()
     }
 
@@ -387,5 +395,27 @@ pub(crate) mod tests {
             let wb = decode_with_color_data(ty, &bytes).wb_multipliers.unwrap_or_else(|| panic!("type {ty}: no WB"));
             assert!((wb[0] - 1988.0 / 745.0).abs() < 1e-5 && wb[1] == 1.0 && (wb[2] - 1641.0 / 745.0).abs() < 1e-5, "type {ty}: {wb:?}");
         }
+    }
+
+    /// Masked rows above the image full of samples at 16383 (EOS 50D, issue #1272): the white level is the image's
+    /// own saturation plateau, not the edge of that strip, so clipped highlights still reach 1.0.
+    #[test]
+    fn white_from_active_area_only() {
+        let (w, h, top, left) = (64, 40, 4, 8);
+        let img: Vec<u16> = (0..w * h)
+            .map(|i| match (i % w, i / w) {
+                (_, y) if y < top => 16383,
+                (x, _) if x < left => 1024,
+                _ if i % 7 == 0 => 13433,
+                _ => 1024 + ((i * 7919) % 11000) as u16,
+            })
+            .collect();
+        // SensorInfo: width, height, three unused words, then the inclusive left/top/right/bottom borders
+        let si: Vec<u8> = [w, h, 0, 0, 0, left, top, w - 1, h - 1].iter().flat_map(|&v| (v as u16).to_le_bytes()).collect();
+        let mut bytes = synthetic_cr2_of(&img, w, h, None, Some(note_with(SENSOR_INFO, 3, &si)));
+        patch_note(&mut bytes);
+        let r = crate::decode(&bytes).unwrap();
+        assert_eq!(r.active_area, Rect::new(left, top, w - left, h - top));
+        assert!((13300.0..=13433.0).contains(&r.white[0]), "{:?}", r.white);
     }
 }

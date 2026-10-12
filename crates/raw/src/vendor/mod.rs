@@ -63,6 +63,13 @@ pub(crate) fn black_from_columns(data: &[u16], width: usize, cols: Range<usize>,
     BlackLevel { repeat_rows: 2, repeat_cols: 2, values: (0..4).map(|i| (sum[i] / n[i] as f64) as f32).collect(), delta_h: vec![], delta_v: vec![] }
 }
 
+/// Samples of up to 512 evenly spaced rows of the active area, for [`white_from_data`]: the borders can hold
+/// their own saturated runs (0xffff junk on RW2, masked rows at 16383 on some Canon CR2s).
+pub(crate) fn active_rows(data: &[u16], w: usize, a: Rect) -> Vec<u16> {
+    let step = (a.height / 512).max(1);
+    (a.y..a.y + a.height).step_by(step).filter_map(|y| data.get(y * w + a.x..y * w + a.x + a.width)).flatten().copied().collect()
+}
+
 /// White level estimate: the saturation plateau if a noticeable number of samples sit at the maximum value,
 /// otherwise the full `bits` range. A few stray samples above the plateau (hot pixels, e.g. on a Canon EOS 70D
 /// CR2) don't hide it.
