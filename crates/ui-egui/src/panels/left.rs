@@ -1070,7 +1070,7 @@ fn folder_tree(
     resp.context_menu(|ui| {
         if (transient || indent > 0.0)
             && ui
-                .button(if transient { "Keep in Local" } else { "Add to Local" })
+                .button(crate::i18n::tr(if transient { "Keep in Local" } else { "Add to Local" }))
                 .on_hover_text(crate::i18n::tr("List this folder in Local from now on"))
                 .clicked()
         {
