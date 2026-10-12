@@ -1124,6 +1124,17 @@ mod tests {
         assert!(probe_bytes("x.jpg", b"not an image").is_err());
     }
 
+    /// Issue #1212: a transparent PNG develops on white (what renders, previews, exports and contact sheets
+    /// start from), not on the black its transparent pixels store.
+    #[test]
+    fn transparent_png_develops_on_white() {
+        let rgba = [200, 40, 40, 255, 0, 0, 0, 0];
+        let png = lightcraft_codecs::encode_png(&EncodeImage::new(2, 1, 4, Samples::U8(&rgba)), &EncodeMeta::default()).unwrap();
+        let (img, _) = load_bytes(&png, 64).unwrap();
+        assert!(img.get(0, 0)[0] > 0.3 && img.get(0, 0)[1] < 0.1, "{:?}", img.get(0, 0));
+        assert!(img.get(1, 0).iter().all(|&c| (c - 1.0).abs() < 1e-4), "{:?}", img.get(1, 0));
+    }
+
     /// Issue #548: a small preview bins the mosaic by 8; specular points that clip a single green sample
     /// of a block on a grey surface must not become green speckles (the block's green used to take the
     /// clip level, which highlight reconstruction then kept).

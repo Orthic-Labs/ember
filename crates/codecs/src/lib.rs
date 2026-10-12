@@ -244,12 +244,24 @@ pub fn decode_unguarded(bytes: &[u8], format: Format, opts: &DecodeOptions) -> R
 }
 
 /// Convert a decode result to linear Rec.2020 D65 (Bradford-adapted), the develop working space.
+///
+/// The working space has no alpha: transparency is flattened onto white, in linear light like the rest
+/// of the pipeline (issue #1212).
 pub fn to_working(d: &Decoded) -> Rgb32f {
-    if d.space.is_working() {
-        return d.image.clone();
+    let mut img = if d.space.is_working() {
+        d.image.clone()
+    } else {
+        let m = d.space.to_working().to_f32();
+        d.image.map(|p| mat_apply(&m, p))
+    };
+    // white is (1, 1, 1) in the working space too: the conversion is white-preserving
+    if let Some(a) = d.alpha.as_ref().filter(|a| a.width == img.width && a.height == img.height) {
+        for (p, &av) in img.data.iter_mut().zip(&a.data) {
+            let av = av.clamp(0.0, 1.0);
+            *p = p.map(|c| c * av + (1.0 - av));
+        }
     }
-    let m = d.space.to_working().to_f32();
-    d.image.map(|p| mat_apply(&m, p))
+    img
 }
 
 /// Where a thumbnail came from.
