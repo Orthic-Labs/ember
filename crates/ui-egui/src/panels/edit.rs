@@ -1089,8 +1089,11 @@ fn curve_footer(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &DevelopSettings)
 
 /// Right-click menu of the curve graph.
 fn curve_reset_menu(app: &mut LightcraftApp, ui: &mut egui::Ui, ch: &str) {
-    let label =
-        if ch == "parametric" { "Reset Parametric Curve".to_string() } else { crate::i18n::tr_format!("Reset {} Channel", channel_label(ch)) };
+    let label = if ch == "parametric" {
+        crate::i18n::tr("Reset Parametric Curve").to_string()
+    } else {
+        crate::i18n::tr_format!("Reset {} Channel", crate::i18n::tr(channel_label(ch)))
+    };
     let r = ui.button(label);
     register(ui.ctx(), "curveMenu:resetChannel", r.rect);
     if r.clicked() {
