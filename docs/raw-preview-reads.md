@@ -111,17 +111,36 @@ Measured on the real folder: idle for a minute, the app read 12 previews (**26.9
 **zero** raws for thumbnails, against 638 MB of whole-file reads for the same 12 photos before. The
 render queue stayed empty.
 
+## The smallest JPEG that covers the box
+
+Many TIFF-based raws keep more than one embedded JPEG. A Sony A7R VI ARW holds a 1616 × 1080 one
+(0.3 MB) beside the 9984 × 6656 one (5.6 MB), and Nikon NEF and Panasonic RW2 files have mid-sized
+copies too. The loupe stand-in and the grid thumbnail (`embedded_preview_srgb`) decode the smallest
+JPEG whose long edge is at least the size asked for (`lightcraft_raw::embedded_preview_covering`).
+They take the largest one when no other JPEG is big enough. The plan route picks the same way
+(`preview_window` takes the size asked for), so a raw read through the plan gets the JPEG the whole
+file would give. A smaller JPEG only counts as a copy of the picture when its aspect ratio is within
+1 % of the largest one's and it has the same number of colour components. That rules out letterboxed
+thumbnails of another shape and the grey masks an iPhone ProRAW DNG keeps at the picture's shape.
+Sources for editing (an unsupported raw's JPEG, `load_embedded_preview`) and the camera-look fit still
+use the largest JPEG, so their geometry and colour do not depend on the size level.
+
 ## Tests
 
 - `crates/raw/src/preview.rs`: the header-only range matches `embedded_preview` byte for byte; a
   clamped prefix, a padded extent, a late pointer, a lying pointer and a non-JPEG window are all
-  covered.
+  covered. `a_stand_in_takes_the_smallest_covering_jpeg_of_the_same_shape` covers the picker: a
+  smaller JPEG that covers the box is taken, the largest when none does, and a thumbnail of another
+  shape or a grey mask never is.
 - `crates/engine/src/files.rs`: on a synthetic RAF with a 200 KB tail, the quick path and the
   whole-file path produce identical pixels, and the read stays under half the file. On a synthetic
   TIFF/DNG whose preview only its tags locate — the plan path — the same identity holds and the CFA
   strip is not read; the same structure without the tag that makes it a raw declines instead of
   guessing, and the caller keeps reading it whole. So do a file whose own orientation or Adobe RGB
   colour space only the whole-file path can show, while one that states sRGB stays on the fast path.
+  A synthetic DNG with a full-size and a half-size JPEG gets, on the plan path, the half-size one for
+  a box it covers and the full-size one otherwise, with the same pixels as the whole-file path
+  (`preview_loading_plans_the_smallest_covering_jpeg`).
 - `crates/raw/tests/sparse_corpus.rs`: `preview_plan` is asked for **every** corpus file, not only
   the ones whose header plan is `Ready`, and the preview it yields must equal the whole file's with
   the skipped bytes `0` and `0xFF`. The test prints what each format reads.
