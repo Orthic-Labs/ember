@@ -133,7 +133,8 @@ fn single_photo(op: &Op, depth: usize) -> Option<PhotoId> {
         | Op::SetMeta { id, .. }
         | Op::SetVersions { id, .. }
         | Op::SetHistory { id, .. }
-        | Op::PushHistory { id, .. } => Some(*id),
+        | Op::PushHistory { id, .. }
+        | Op::SetHistoryCursor { id, .. } => Some(*id),
         Op::Batch { ops } if depth < 8 => {
             let mut ids = ops.iter().map(|o| single_photo(o, depth + 1));
             let first = ids.next()??;
@@ -1044,6 +1045,8 @@ mod tests_filesystem_history;
 mod tests_folders;
 #[cfg(test)]
 mod tests_forget_local;
+#[cfg(test)]
+mod tests_history_cursor;
 #[cfg(test)]
 mod tests_import;
 #[cfg(test)]

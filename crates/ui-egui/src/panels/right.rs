@@ -1105,6 +1105,23 @@ fn short_time(iso: &str) -> String {
     }
 }
 
+/// How a History row is drawn: the step the settings are at is highlighted, the steps after it
+/// (still there to return to until a new edit) are greyed out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HistoryRow {
+    Done,
+    Current,
+    Undone,
+}
+
+fn history_row(i: usize, cursor: Option<usize>) -> HistoryRow {
+    match cursor {
+        Some(c) if i == c => HistoryRow::Current,
+        Some(c) if i > c => HistoryRow::Undone,
+        _ => HistoryRow::Done,
+    }
+}
+
 fn activity(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
     let Some(p) = app.session.catalog.photo(id).cloned() else { return };
     header(ui, "History");
@@ -1113,19 +1130,24 @@ fn activity(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
         if p.history.is_empty() {
             ui.label(egui::RichText::new(crate::i18n::tr("No edits yet.")).color(t.text_dim));
         }
+        let cursor = p.history_index();
         for (i, h) in p.history.iter().enumerate().rev() {
             let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
             register(ui.ctx(), format!("history:{i}"), r);
-            if resp.hovered() {
+            let row = history_row(i, cursor);
+            if row == HistoryRow::Current {
+                ui.painter().rect_filled(r, 3.0, t.pressed);
+            } else if resp.hovered() {
                 ui.painter().rect_filled(r, 3.0, t.hover);
             }
-            paint(ui.painter(), Rect::from_min_size(r.min + vec2(0.0, 4.0), vec2(16.0, 16.0)), Icon::Clock, t.icon);
+            let (icon, text) = if row == HistoryRow::Undone { (t.text_disabled, t.text_disabled) } else { (t.icon, t.text_label) };
+            paint(ui.painter(), Rect::from_min_size(r.min + vec2(0.0, 4.0), vec2(16.0, 16.0)), Icon::Clock, icon);
             ui.painter().text(
                 pos2(r.left() + 24.0, r.center().y),
                 Align2::LEFT_CENTER,
                 crate::i18n::history_label(&h.label, &app.session.presets),
                 t.font(12.5),
-                t.text_label,
+                text,
             );
             if resp.clicked() {
                 let _ = app.run("history.restore", json!({"index": i}));
@@ -1149,6 +1171,16 @@ fn activity(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
 
 #[cfg(test)]
 mod tests {
+    // Feature: the History panel greys out the steps after the cursor
+    #[test]
+    fn history_rows_after_the_cursor_are_greyed() {
+        use super::{HistoryRow, history_row};
+        let rows: Vec<_> = (0..4).map(|i| history_row(i, Some(1))).collect();
+        assert_eq!(rows, [HistoryRow::Done, HistoryRow::Current, HistoryRow::Undone, HistoryRow::Undone]);
+        assert_eq!(history_row(3, Some(3)), HistoryRow::Current, "at the latest step nothing is greyed");
+        assert_eq!(history_row(0, None), HistoryRow::Done);
+    }
+
     // Feature: the aspect button tells what is locked
     #[test]
     fn aspect_label_names_presets_in_either_orientation() {

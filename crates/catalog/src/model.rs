@@ -247,6 +247,11 @@ pub struct Photo {
     pub versions: Vec<Version>,
     #[serde(default)]
     pub history: Vec<HistoryStep>,
+    /// The History step the photo's settings are at, when it isn't the latest one (Go to History
+    /// Step moved back): later steps stay listed and can be returned to until a new edit drops
+    /// them. `None` (and catalogs written before the cursor existed) = the latest step.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_cursor: Option<usize>,
     /// In "Recently Deleted".
     #[serde(default)]
     pub deleted: bool,
@@ -328,6 +333,12 @@ pub fn relative_wb_camera(format: &str, camera: &str) -> bool {
 }
 
 impl Photo {
+    /// The History step the settings are at (the cursor, clamped to the list; `None` = no history).
+    pub fn history_index(&self) -> Option<usize> {
+        let last = self.history.len().checked_sub(1)?;
+        Some(self.history_cursor.map_or(last, |c| c.min(last)))
+    }
+
     pub fn new(id: PhotoId, source: Source, file_name: &str, format: &str, width: u32, height: u32, imported: &str) -> Photo {
         Photo {
             id,
@@ -348,6 +359,7 @@ impl Photo {
             edited: None,
             versions: Vec::new(),
             history: Vec::new(),
+            history_cursor: None,
             deleted: false,
             local: false,
             duration: None,
