@@ -232,11 +232,11 @@ function windowBootstrap(): WindowBootstrap {
 }
 
 const HELP_URLS: Record<string, string> = {
-  'app.help': 'https://github.com/Orthic-Labs/lightcraft/tree/main/docs',
-  'app.discord': 'https://github.com/Orthic-Labs/lightcraft/issues',
-  'app.feedback': 'https://github.com/Orthic-Labs/lightcraft/issues/new',
-  'app.website': 'https://github.com/Orthic-Labs/lightcraft',
-  'app.github': 'https://github.com/Orthic-Labs/lightcraft',
+  'app.help': 'https://github.com/Orthic-Labs/ember/tree/main/docs',
+  'app.discord': 'https://github.com/Orthic-Labs/ember/issues',
+  'app.feedback': 'https://github.com/Orthic-Labs/ember/issues/new',
+  'app.website': 'https://github.com/Orthic-Labs/ember',
+  'app.github': 'https://github.com/Orthic-Labs/ember',
   'app.artcraft': 'https://github.com/Orthic-Labs',
 };
 

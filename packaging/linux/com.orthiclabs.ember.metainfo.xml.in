@@ -18,10 +18,10 @@
   <launchable type="desktop-id">com.orthiclabs.ember.desktop</launchable>
   <icon type="stock">com.orthiclabs.ember</icon>
   <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
-  <url type="homepage">https://github.com/Orthic-Labs/lightcraft</url>
-  <url type="bugtracker">https://github.com/Orthic-Labs/lightcraft/issues</url>
-  <url type="help">https://github.com/Orthic-Labs/lightcraft</url>
-  <url type="contact">https://github.com/Orthic-Labs/lightcraft/issues</url>
+  <url type="homepage">https://github.com/Orthic-Labs/ember</url>
+  <url type="bugtracker">https://github.com/Orthic-Labs/ember/issues</url>
+  <url type="help">https://github.com/Orthic-Labs/ember</url>
+  <url type="contact">https://github.com/Orthic-Labs/ember/issues</url>
   <categories>
     <category>Graphics</category>
     <category>RasterGraphics</category>

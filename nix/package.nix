@@ -201,7 +201,7 @@ rustPlatform.buildRustPackage {
       layer as its UI. It ships with lightcraft-cli, a headless renderer, command runner and MCP
       server for AI agents.
     '';
-    homepage = "https://github.com/Orthic-Labs/lightcraft";
+    homepage = "https://github.com/Orthic-Labs/ember";
     license = with lib.licenses; [
       mit
       asl20

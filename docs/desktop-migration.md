@@ -4,7 +4,7 @@ macOS & Windows presentation uses React 19, Tauri 2 & published RightKit shell p
 
 ## Execution boundary
 
-Public `Orthic-Labs/lightcraft` builds, tests, packages & qualifies through generated `@rightkit/git@0.2.26` workflows. Local commands may inspect, format, typecheck without emit, validate source contracts & check workflow drift. Local public builds, tests & installers are outside this route.
+Public `Orthic-Labs/ember` builds, tests, packages & qualifies through generated `@rightkit/git@0.2.26` workflows. Local commands may inspect, format, typecheck without emit, validate source contracts & check workflow drift. Local public builds, tests & installers are outside this route.
 
 ```text
 node scripts/desktop/static-check.mjs

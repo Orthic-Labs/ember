@@ -29,9 +29,9 @@
 
     <Icon Id="LightcraftIcon.ico" SourceFile="$(var.IconPath)" />
     <Property Id="ARPPRODUCTICON" Value="LightcraftIcon.ico" />
-    <Property Id="ARPURLINFOABOUT" Value="https://github.com/Orthic-Labs/lightcraft" />
-    <Property Id="ARPURLUPDATEINFO" Value="https://github.com/Orthic-Labs/lightcraft" />
-    <Property Id="ARPHELPLINK" Value="https://github.com/Orthic-Labs/lightcraft/issues" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/Orthic-Labs/ember" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://github.com/Orthic-Labs/ember" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/Orthic-Labs/ember/issues" />
 
     <StandardDirectory Id="ProgramFiles6432Folder">
       <Directory Id="INSTALLFOLDER" Name="Ember" />

@@ -1,19 +1,19 @@
 //! Community and project links (Help menu, About dialog, top-bar Discord button).
 
-/// Historical repository slug, retained for source compatibility.
-pub const APP: &str = "lightcraft";
+/// Ember repository slug.
+pub const APP: &str = "ember";
 /// Ember community destination; legacy constant retained for callers.
-pub const DISCORD: &str = "https://github.com/Orthic-Labs/lightcraft/issues";
+pub const DISCORD: &str = "https://github.com/Orthic-Labs/ember/issues";
 /// Maintainer organization.
 pub const WEBSITE: &str = "https://github.com/Orthic-Labs";
 /// Fork project page.
-pub const APP_PAGE: &str = "https://github.com/Orthic-Labs/lightcraft";
+pub const APP_PAGE: &str = "https://github.com/Orthic-Labs/ember";
 /// This app's source repository.
-pub const GITHUB: &str = "https://github.com/Orthic-Labs/lightcraft";
+pub const GITHUB: &str = "https://github.com/Orthic-Labs/ember";
 
 /// (UI command id, menu label, URL) for each link, in Help-menu order.
 /// The user documentation (docs/ in the repository).
-pub const HELP: &str = "https://github.com/Orthic-Labs/lightcraft";
+pub const HELP: &str = "https://github.com/Orthic-Labs/ember";
 
 pub const LINKS: &[(&str, &str, &str)] = &[
     ("app.help", "Ember Help", HELP),
@@ -25,7 +25,7 @@ pub const LINKS: &[(&str, &str, &str)] = &[
 ];
 
 /// Where feedback and bug reports go.
-pub const FEEDBACK: &str = "https://github.com/Orthic-Labs/lightcraft/issues/new";
+pub const FEEDBACK: &str = "https://github.com/Orthic-Labs/ember/issues/new";
 
 /// The URL behind a link command id.
 pub fn url_of(cmd: &str) -> Option<&'static str> {

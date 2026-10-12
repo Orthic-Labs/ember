@@ -335,7 +335,7 @@ fn about_info() -> Result<Value, String> {
     Ok(json!({
         "name": lightcraft_engine::branding::NAME,
         "version": env!("CARGO_PKG_VERSION"),
-        "repository": "https://github.com/Orthic-Labs/lightcraft",
+        "repository": "https://github.com/Orthic-Labs/ember",
         "source": {
             "repo": credits.get("repo").cloned().unwrap_or(Value::Null),
             "branch": credits.get("branch").cloned().unwrap_or(Value::Null),

@@ -955,7 +955,7 @@ function SamModelSetupDialogHost({ desktop }: { desktop: DesktopContextValue }) 
     <code className="lc-path-value">{text(status?.dir, 'No model folder configured')}</code>
     <div className="lc-dialog-toolbar"><Button disabled={busy || !status?.dir} onClick={() => void openFolder()}>Open Model Folder</Button><Button disabled={busy} onClick={() => void chooseFolder()}>Select Existing Model Folder…</Button></div>
     <p>Licence: SAM License (Meta). Downloading means accepting Meta’s terms.</p>
-    <div className="lc-dialog-toolbar"><Button onClick={() => void desktop.native('openUrl', { url: licenseUrl })}>Read SAM License</Button><Button onClick={() => void desktop.native('openUrl', { url: 'https://github.com/Orthic-Labs/lightcraft/blob/HEAD/docs/ai-masks.md' })}>SAM 3 Install Guide</Button></div>
+    <div className="lc-dialog-toolbar"><Button onClick={() => void desktop.native('openUrl', { url: licenseUrl })}>Read SAM License</Button><Button onClick={() => void desktop.native('openUrl', { url: 'https://github.com/Orthic-Labs/ember/blob/HEAD/docs/ai-masks.md' })}>SAM 3 Install Guide</Button></div>
     {!installed && !running && <Check checked={accepted} onChange={setAccepted}>I accept SAM License terms & want to download this model.</Check>}
     {mirrors === 0 && !installed && <Note tone="warning">No HTTPS download mirror is configured. Set LIGHTCRAFT_SAM3_MIRRORS or install files manually, then select their folder.</Note>}
     {running && <div className="lc-progress" aria-live="polite"><div className="lc-progress-label"><span>{text(downloadState.file, 'Downloading SAM 3…')}</span><span>{percent}%</span></div><progress max={100} value={percent} /></div>}

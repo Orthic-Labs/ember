@@ -14,7 +14,7 @@ section: graphics
 priority: optional
 maintainer: ${LIGHTCRAFT_MAINTAINER}
 vendor: Orthic Labs
-homepage: https://github.com/Orthic-Labs/lightcraft
+homepage: https://github.com/Orthic-Labs/ember
 license: MIT OR Apache-2.0
 description: |-
   Open-source, native photo library and raw developer that works the way
