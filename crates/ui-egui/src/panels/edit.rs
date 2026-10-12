@@ -915,7 +915,7 @@ fn curve_editor(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId, d: &Dev
     };
     let line: Vec<Pos2> = (0..=96).map(|i| to_screen(i as f64 / 96.0, curve.eval(i as f64 / 96.0).clamp(0.0, 1.0))).collect();
     p.add(egui::Shape::line(line, Stroke::new(2.0, color)));
-    // interaction: drag a point (both axes, between its neighbours), drag empty space to add and
+    // interaction: drag a point (both axes, between its neighbours; ⌥ = fine), drag empty space to add and
     // drag a new point, click empty space to add, double-click a point to delete it
     let drag_id = egui::Id::new(("curve-drag", &ch));
     // the point being dragged (stored as `Option<usize>` so a stale value can be cleared)
@@ -976,8 +976,17 @@ fn curve_editor(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId, d: &Dev
     } else if resp.dragged()
         && let (Some(i), Some(q)) = (dragging, resp.interact_pointer_pos())
     {
-        let (mut x, y) = from_screen(q);
         let mut v = pts.clone();
+        // ⌥-drag = fine adjustment, as in Lightroom: the point moves a tenth of the pointer's
+        // motion (relative to where it is, so pressing ⌥ mid-drag doesn't make it jump)
+        let fine = ui.input(|i| i.modifiers.alt);
+        let (mut x, y) = match v.get(i) {
+            Some(cur) if fine => {
+                let dd = ui.input(|i| i.pointer.delta());
+                ((cur.x + (dd.x / r.width()) as f64 * 0.1).clamp(0.0, 1.0), (cur.y - (dd.y / r.height()) as f64 * 0.1).clamp(0.0, 1.0))
+            }
+            _ => from_screen(q),
+        };
         if i < v.len() {
             let lo = if i == 0 { 0.0 } else { v[i - 1].x + 0.01 };
             let hi = if i + 1 >= v.len() { 1.0 } else { v[i + 1].x - 0.01 };
