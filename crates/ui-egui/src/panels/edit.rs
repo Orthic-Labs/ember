@@ -1374,6 +1374,9 @@ fn grading_wheel(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &DevelopSettings
     let zone = r.expand(10.0);
     let hovering = ui.rect_contains_pointer(zone);
     let resp = ui.interact(r, egui::Id::new(("wheel", key)), Sense::click_and_drag());
+    let resp = resp.on_hover_text(crate::i18n::tr(
+        "Drag to set hue and saturation. Hold Shift to keep the hue, Cmd/Ctrl to keep the saturation, Alt/Option to fine-adjust. Double-click to reset.",
+    ));
     register(ui.ctx(), format!("wheel:{key}"), r);
     paint_wheel(ui.painter(), c, rad);
     if hidden {
@@ -1390,25 +1393,40 @@ fn grading_wheel(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &DevelopSettings
     }
     let a = (wh.hue as f32).to_radians();
     let dot = c + vec2(a.cos(), -a.sin()) * rad * (wh.sat as f32 / 100.0);
-    // Shift-drag: saturation only, the hue locked to the spoke the point is on (as in LRCAT).
-    // Pressing or releasing Shift mid-drag turns the lock on or off there.
-    let lock_id = egui::Id::new(("wheelHueLock", key));
-    let shift = ui.input(|i| i.modifiers.shift);
-    let lock = match resp.interact_pointer_pos() {
-        Some(q) if resp.dragged() && shift => {
-            // a point at the centre has no hue yet: lock to where the pointer is
-            let start = if wh.sat >= 1.0 { wh.hue as f32 } else { wheel_pick(q - c, rad, None).0 };
-            Some(ui.data_mut(|m| *m.get_temp_mut_or_insert_with(lock_id, || start)))
+    // Modifiers (as in LRCAT): Shift keeps the hue, Cmd/Ctrl keeps the saturation, Alt moves
+    // the puck a tenth as far as the pointer. Pressing or releasing one mid-drag re-grabs the
+    // puck as it is at that moment.
+    let grab_id = egui::Id::new(("wheelGrab", key));
+    let mods = ui.input(|i| WheelMods::from_modifiers(i.modifiers));
+    let grab = match resp.interact_pointer_pos() {
+        Some(q) if resp.dragged() || resp.clicked() => {
+            let held = ui.data(|m| m.get_temp::<WheelGrab>(grab_id)).filter(|g| g.mods == mods && !resp.drag_started());
+            Some(held.unwrap_or_else(|| {
+                // a fine drag counts the pointer's travel from the press, not from the frame
+                // egui first called it a drag
+                let origin = if resp.drag_started() { ui.input(|i| i.pointer.press_origin()).unwrap_or(q) } else { q };
+                let g = WheelGrab::new(mods, wh.hue as f32, wh.sat as f32, origin - c, rad);
+                ui.data_mut(|m| m.insert_temp(grab_id, g));
+                g
+            }))
         }
         _ => {
-            ui.data_mut(|m| m.remove::<f32>(lock_id));
+            ui.data_mut(|m| m.remove::<WheelGrab>(grab_id));
             None
         }
     };
-    // while locked: the whole spoke, a guide for the saturation-only move
-    if let Some(h) = lock {
-        let a = h.to_radians();
-        ui.painter().line_segment([c, c + vec2(a.cos(), -a.sin()) * rad], Stroke::new(1.5, Color32::from_white_alpha(170)));
+    // while a constraint is held: the guide for the one move left (the whole spoke for the hue,
+    // the circle for the saturation)
+    let guide = Stroke::new(1.5, Color32::from_white_alpha(170));
+    match grab.and_then(|g| g.lock()) {
+        Some(WheelLock::Hue(h)) => {
+            let a = h.to_radians();
+            ui.painter().line_segment([c, c + vec2(a.cos(), -a.sin()) * rad], guide);
+        }
+        Some(WheelLock::Sat(s)) => {
+            ui.painter().circle_stroke(c, rad * s / 100.0, guide);
+        }
+        None => {}
     }
     // the neutral centre (issue #559), under the point
     ui.painter().circle_filled(c, 2.0, Color32::WHITE);
@@ -1421,7 +1439,7 @@ fn grading_wheel(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &DevelopSettings
     if (resp.dragged() || resp.clicked())
         && let Some(q) = resp.interact_pointer_pos()
     {
-        let (hue, sat) = wheel_pick(q - c, rad, lock);
+        let (hue, sat) = grab.map_or_else(|| wheel_pick(q - c, rad, None), |g| g.pick(q - c, rad));
         let _ = app.run("develop.set", json!({"values": {format!("grading.{key}.hue"): hue.round(), format!("grading.{key}.sat"): sat.round()}}));
     }
     if resp.drag_stopped() || resp.clicked() {
@@ -1454,17 +1472,98 @@ fn grading_wheel(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &DevelopSettings
     }
 }
 
+/// A wheel's modifier state. Shift keeps the hue, Cmd/Ctrl the saturation (Shift wins when both
+/// are down: keeping both would freeze the puck), Alt fine-adjusts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct WheelMods {
+    pub keep_hue: bool,
+    pub keep_sat: bool,
+    pub fine: bool,
+}
+
+impl WheelMods {
+    pub(crate) fn from_modifiers(m: egui::Modifiers) -> Self {
+        Self { keep_hue: m.shift, keep_sat: m.command && !m.shift, fine: m.alt }
+    }
+}
+
+/// What a constraint holds still while the pointer moves.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum WheelLock {
+    /// Keep this hue (degrees): only the saturation changes, along the spoke at that hue.
+    Hue(f32),
+    /// Keep this saturation (0..100): only the hue changes, round the circle at that radius.
+    Sat(f32),
+}
+
+/// Pointer travel to puck travel with Alt held, as for a slider's fine adjust.
+const WHEEL_FINE: f32 = 0.1;
+
+/// The puck as it was when the pointer grabbed it (or a modifier last changed): the hue and
+/// saturation a constraint keeps, and the origin a fine adjust measures the pointer's travel from.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct WheelGrab {
+    pub mods: WheelMods,
+    /// The puck's hue (degrees) and saturation (0..100) at the grab.
+    hue: f32,
+    sat: f32,
+    /// The pointer at the grab, as an offset from the wheel's centre.
+    origin: egui::Vec2,
+}
+
+impl WheelGrab {
+    /// Grab a puck at `hue` / `sat` with the pointer `origin` from the centre of a wheel of
+    /// radius `rad`. The kept hue is the puck's own, never the angle the pointer happens to be
+    /// at. A puck at the centre (saturation under 1) has no hue yet, so there it is the angle of
+    /// the pointer at the grab; the same rule covers a non-finite hue.
+    pub(crate) fn new(mods: WheelMods, hue: f32, sat: f32, origin: egui::Vec2, rad: f32) -> Self {
+        let sat = if sat.is_finite() { sat.clamp(0.0, 100.0) } else { 0.0 };
+        let hue = if hue.is_finite() && sat >= 1.0 { hue.rem_euclid(360.0) } else { wheel_pick(origin, rad, None).0 };
+        Self { mods, hue, sat, origin }
+    }
+
+    /// The constraint this grab holds, if any.
+    pub(crate) fn lock(&self) -> Option<WheelLock> {
+        if self.mods.keep_hue {
+            Some(WheelLock::Hue(self.hue))
+        } else if self.mods.keep_sat {
+            Some(WheelLock::Sat(self.sat))
+        } else {
+            None
+        }
+    }
+
+    /// The new hue and saturation for the pointer at offset `v` from the centre.
+    pub(crate) fn pick(&self, v: egui::Vec2, rad: f32) -> (f32, f32) {
+        let v = if self.mods.fine {
+            // the puck where it was, moved a tenth of the pointer's travel since the grab
+            let a = self.hue.to_radians();
+            let puck = vec2(a.cos(), -a.sin()) * rad.max(1.0) * (self.sat / 100.0);
+            puck + (v - self.origin) * WHEEL_FINE
+        } else {
+            v
+        };
+        wheel_pick(v, rad, self.lock())
+    }
+}
+
 /// Hue (degrees) and saturation (0..100) for a pointer at offset `v` from a wheel's centre.
-/// `lock`: keep this hue and take the saturation from `v` projected onto its spoke (Shift-drag).
-pub(crate) fn wheel_pick(v: egui::Vec2, rad: f32, lock: Option<f32>) -> (f32, f32) {
+/// `lock`: hold the hue (the saturation is `v` projected onto that hue's spoke) or hold the
+/// saturation (the hue is the angle of `v`). A non-finite `v` gives a finite answer (the locked
+/// value, else 0).
+pub(crate) fn wheel_pick(v: egui::Vec2, rad: f32, lock: Option<WheelLock>) -> (f32, f32) {
     let rad = rad.max(1.0);
+    let v = if v.x.is_finite() && v.y.is_finite() { v } else { egui::Vec2::ZERO };
+    let angle = || ((-v.y).atan2(v.x).to_degrees() + 360.0) % 360.0;
     match lock {
-        Some(h) => {
+        Some(WheelLock::Hue(h)) => {
+            let h = if h.is_finite() { h } else { 0.0 };
             let a = h.to_radians();
             let along = v.x * a.cos() - v.y * a.sin();
             (h, (along / rad * 100.0).clamp(0.0, 100.0))
         }
-        None => (((-v.y).atan2(v.x).to_degrees() + 360.0) % 360.0, (v.length() / rad * 100.0).min(100.0)),
+        Some(WheelLock::Sat(s)) => (angle(), if s.is_finite() { s.clamp(0.0, 100.0) } else { 0.0 }),
+        None => (angle(), (v.length() / rad * 100.0).min(100.0)),
     }
 }
 
