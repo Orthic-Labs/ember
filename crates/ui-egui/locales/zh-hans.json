@@ -1995,5 +1995,6 @@
   "Ember Community…": "上游社区…",
   "Largest long edge the Detail view renders at; larger is sharper on big displays but slower.": "详细视图渲染的最大长边；在大显示器上越大越清晰，但速度更慢。",
   "Ember Project": "Ember 网站",
-  "Ember project": "Ember 网站"
+  "Ember project": "Ember 网站",
+  "Files with the same content as another file in this import: only the first is imported.": "与本次导入中另一个文件内容相同的文件：只导入第一个。"
 }

@@ -179,6 +179,7 @@ pub fn probe_bytes(name: &str, bytes: &[u8]) -> Result<ProbeInfo, String> {
             file_size: bytes.len() as u64,
             source_stamp: None,
             captured,
+            file_modified: None,
             meta,
             as_shot_wb,
             content_hash,
@@ -211,6 +212,7 @@ pub fn probe_bytes(name: &str, bytes: &[u8]) -> Result<ProbeInfo, String> {
         file_size: bytes.len() as u64,
         source_stamp: None,
         captured,
+        file_modified: None,
         meta,
         as_shot_wb: None,
         content_hash,
@@ -1043,9 +1045,18 @@ pub fn fs_hooks() -> (FileLoader, FileProbe) {
         // `Some(0)` marks a native probe whose filesystem cannot provide a timestamp: its cache
         // entry will fail the later metadata check instead of being reused by size alone.
         info.source_stamp = Some(after_stamp.unwrap_or(0));
+        info.file_modified = file_modified(path);
         Ok(info)
     });
     (loader, probe)
+}
+
+/// `path`'s modification time as ISO 8601 (see [`ProbeInfo::file_modified`]); `None` when the
+/// filesystem doesn't say or the time is before 1970.
+fn file_modified(path: &str) -> Option<String> {
+    let t = std::fs::metadata(path).ok()?.modified().ok()?;
+    let secs = i64::try_from(t.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs()).ok()?;
+    Some(crate::import::civil(secs))
 }
 
 impl crate::Session {
@@ -1425,6 +1436,31 @@ mod tests {
         let (_, window, read) = preview_window(&path, usize::MAX).expect("the file reads").expect("sRGB is what the JPEG-only decode assumes");
         assert!(read.planned, "the plan still answers");
         assert!(window.starts_with(&[0xff, 0xd8]), "and hands on the JPEG");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A JPEG with no date in its metadata (an export saved without it) takes the file's date, as
+    /// in Lightroom, instead of grouping under "Unknown Date"; a dated one keeps its capture time.
+    #[test]
+    fn undated_files_take_the_file_date() {
+        let dir = std::env::temp_dir().join(format!("lightcraft-undated-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let rgb = vec![128u8; 16 * 16 * 3];
+        let img = EncodeImage::new(16, 16, 3, Samples::U8(&rgb));
+        let jpeg = encode_jpeg(&img, 90, ChromaSubsampling::S420, &EncodeMeta::default()).unwrap();
+        let path = dir.join("export.jpg");
+        std::fs::write(&path, &jpeg).unwrap();
+        let path = path.to_string_lossy().to_string();
+        let mtime = std::fs::metadata(&path).unwrap().modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let want = crate::import::civil(mtime as i64);
+        let (_, probe) = fs_hooks();
+        let info = probe(&path).unwrap();
+        assert_eq!(info.captured, None, "the file itself has no date");
+        assert_eq!(info.file_modified.as_deref(), Some(want.as_str()));
+        let mut s = crate::Session::new().with_fs();
+        let r = crate::import::import(&mut s, &[path], crate::import::ImportMode::Add).unwrap();
+        let id = lightcraft_catalog::PhotoId(r.imported[0]);
+        assert_eq!(s.catalog.photo(id).unwrap().captured.as_deref(), Some(want.as_str()));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

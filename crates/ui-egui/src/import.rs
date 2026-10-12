@@ -922,18 +922,30 @@ fn show_existing(app: &mut LightcraftApp, ctx: &egui::Context, existing: &[u64])
     true
 }
 
+/// Skipped candidates: (already in the library, identical copies within the source, in Recently
+/// Deleted). Files of photos in Recently Deleted are not "already in the library", and a file with
+/// the same bytes as one earlier in the list (no library photo) is a copy in the source.
+fn dup_counts(d: &ImportDialog) -> (usize, usize, usize) {
+    let trashed = d.trashed.iter().filter(|t| **t).count();
+    let in_source = d.candidates.iter().filter(|c| c.duplicate.as_deref() == Some("content") && c.existing.is_none()).count();
+    let dups = d.candidates.iter().filter(|c| c.duplicate.is_some()).count().saturating_sub(trashed).saturating_sub(in_source);
+    (dups, in_source, trashed)
+}
+
 /// The dialog body: options, then the candidate grid.
 pub fn body(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &mut ImportDialog) {
     let t = Tokens::get(ui.ctx());
     let n = d.candidates.len();
-    let trashed = d.trashed.iter().filter(|t| **t).count();
-    // files of photos in Recently Deleted are not "already in the library": they are counted apart
-    let dups = d.candidates.iter().filter(|c| c.duplicate.is_some()).count().saturating_sub(trashed);
+    let (dups, in_source, trashed) = dup_counts(d);
     let sel = d.selected_paths().len();
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(crate::i18n::tr_format!("{n} found · {sel} selected", n = n, sel = sel)).color(t.text));
         if dups > 0 {
             ui.label(egui::RichText::new(crate::i18n::tr_format!("· {dups} already in the library", dups = dups)).color(t.text_dim));
+        }
+        if in_source > 0 {
+            ui.label(egui::RichText::new(crate::i18n::tr_format!("· {in_source} identical copies", in_source = in_source)).color(t.text_dim))
+                .on_hover_text(crate::i18n::tr("Files with the same content as another file in this import: only the first is imported."));
         }
         if trashed > 0 {
             ui.label(egui::RichText::new(crate::i18n::tr_format!("· {trashed} in Recently Deleted", trashed = trashed)).color(t.text_dim));
@@ -1558,6 +1570,19 @@ mod tests {
         let mut candidates: Vec<ImportCandidate> = (0..6).map(|i| ImportCandidate { path: format!("img{i}.jpg"), ..Default::default() }).collect();
         candidates[3].duplicate = Some("content".into());
         ImportDialog::new(candidates)
+    }
+
+    /// Identical copies inside the source folder are not "already in the library" (a fresh library
+    /// said "8 already in the library").
+    #[test]
+    fn copies_within_the_source_are_not_counted_as_in_the_library() {
+        let mut d = dialog();
+        assert_eq!(dup_counts(&d), (0, 1, 0), "same bytes as an earlier file, no library photo");
+        d.candidates[4].duplicate = Some("content".into());
+        d.candidates[4].existing = Some(7);
+        d.candidates[5].duplicate = Some("path".into());
+        d.candidates[5].existing = Some(8);
+        assert_eq!(dup_counts(&d), (2, 1, 0));
     }
 
     /// A toggle per file type: the raws only, without the JPEGs beside them (issue #344).

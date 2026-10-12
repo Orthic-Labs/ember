@@ -1599,6 +1599,10 @@ pub struct ProbeInfo {
     /// native probes use `Some(0)` when a filesystem cannot provide a stamp, disabling reuse.
     pub source_stamp: Option<u128>,
     pub captured: Option<String>,
+    /// The file's modification time (ISO 8601, the clock of [`crate::import::system_clock`]): the
+    /// capture date of a file whose metadata has none, as Lightroom does (exports saved without
+    /// metadata would otherwise all land under "Unknown Date").
+    pub file_modified: Option<String>,
     pub meta: lightcraft_catalog::Meta,
     pub as_shot_wb: Option<(f64, f64)>,
     /// Hash of the file's bytes (hex), for duplicate detection. When it is a 32-digit

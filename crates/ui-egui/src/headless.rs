@@ -3374,10 +3374,16 @@ mod tests {
         let img = lightcraft_raster::Rgba8 { width: 8, height: 8, data: vec![[40, 3, 9, 255]; 64] };
         let png = lightcraft_codecs::encode_png(&lightcraft_codecs::EncodeImage::rgba8(&img), &lightcraft_codecs::EncodeMeta::default()).unwrap();
         std::fs::write(src.join("IMG_01.png"), png).unwrap();
+        // undated files are filed by the file's date (2026-01-14T05:58:48)
+        std::fs::File::options()
+            .write(true)
+            .open(src.join("IMG_01.png"))
+            .unwrap()
+            .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(1_768_370_328))
+            .unwrap();
         let dest_s = dest.to_string_lossy().to_string();
         let services = crate::Services { png: None, pick_folder: Some(Box::new(move || Some(dest_s.clone()))), ..Default::default() };
         let mut session = lightcraft_engine::Session::with_demo().with_fs();
-        // undated files are filed by the import time
         session.clock = Box::new(|| "2026-01-14T05:58:48".to_string());
         let mut app = LightcraftApp::new(session, services);
         app.ui.view = crate::state::ViewMode::PhotoGrid;
@@ -3427,6 +3433,12 @@ mod tests {
             let img = lightcraft_raster::Rgba8 { width: 8, height: 8, data: vec![[40 + i, 3, 9, 255]; 64] };
             let png = lightcraft_codecs::encode_png(&lightcraft_codecs::EncodeImage::rgba8(&img), &lightcraft_codecs::EncodeMeta::default()).unwrap();
             std::fs::write(src.join(format!("IMG_0{i}.png")), png).unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(src.join(format!("IMG_0{i}.png")))
+                .unwrap()
+                .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(1_768_370_328))
+                .unwrap();
         }
         let dest_s = dest.to_string_lossy().to_string();
         let services = crate::Services { png: None, pick_folder: Some(Box::new(move || Some(dest_s.clone()))), ..Default::default() };

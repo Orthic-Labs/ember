@@ -379,6 +379,10 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             };
             app.ui.grid_info = next;
             app.ui.show_filenames = true;
+            // the caption is drawn on Square Grid cells only: from Photo Grid, show it there
+            if app.ui.view == ViewMode::PhotoGrid {
+                app.ui.view = ViewMode::SquareGrid;
+            }
             Ok(json!({"info": app.ui.grid_info}))
         }
         "tool.keywordPainter" => {

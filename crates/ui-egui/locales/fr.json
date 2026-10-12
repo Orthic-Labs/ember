@@ -1951,5 +1951,6 @@
   "Adding to Apple Photos…": "Ajout à Apple Photos…",
   "not added to Apple Photos (cancelled)": "non ajouté à Apple Photos (annulé)",
   "The first time, macOS asks whether Ember may control Photos.": "La première fois, macOS demande si Ember peut contrôler Photos.",
-  "Adding to Apple Photos": "Ajout à Apple Photos"
+  "Adding to Apple Photos": "Ajout à Apple Photos",
+  "Files with the same content as another file in this import: only the first is imported.": "Fichiers au contenu identique à un autre fichier de cette importation : seul le premier est importé."
 }

@@ -2115,5 +2115,6 @@
   "Ember Community…": "Upstream-Community…",
   "Largest long edge the Detail view renders at; larger is sharper on big displays but slower.": "Längste Kante beim Rendern der Detailansicht; größere Werte sind auf großen Bildschirmen schärfer, aber langsamer.",
   "Ember Project": "Ember-Website",
-  "Ember project": "Ember-Website"
+  "Ember project": "Ember-Website",
+  "Files with the same content as another file in this import: only the first is imported.": "Dateien mit demselben Inhalt wie eine andere Datei dieses Imports: Nur die erste wird importiert."
 }

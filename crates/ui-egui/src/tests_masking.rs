@@ -1122,6 +1122,10 @@ fn grid_info_cycles_caption() {
     exec(&mut h, "view.squareGrid", json!({}));
     exec(&mut h, "view.gridInfo", json!({"info": "exposure"}));
     h.settle(SETTLE);
+    // Photo Grid has no captions: picking one shows it in Square Grid
+    exec(&mut h, "view.photoGrid", json!({}));
+    exec(&mut h, "view.gridInfo", json!({"info": "date"}));
+    assert_eq!(h.app.ui.view, crate::state::ViewMode::SquareGrid);
 }
 
 #[test]

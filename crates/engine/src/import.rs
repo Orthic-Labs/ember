@@ -222,6 +222,9 @@ pub struct ImportCandidate {
     /// Camera metadata retained for conservative descendant export pairing.
     #[serde(skip)]
     pub pairing_camera: String,
+    /// The capture time from the file's metadata, without the file-date fallback in `captured`.
+    #[serde(skip)]
+    pub pairing_captured: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -864,6 +867,7 @@ impl ScanInput {
                     height: p.height,
                     file_size: p.file_size,
                     captured: p.captured.clone(),
+                    pairing_captured: p.captured.clone(),
                     duplicate: Some("path".into()),
                     existing: Some(p.id.0),
                     ..Default::default()
@@ -958,6 +962,11 @@ pub fn scan_with(mut input: ScanInput, paths: &[String], progress: &ScanProgress
                 (c.format, c.kind, c.width, c.height, c.file_size, c.captured) =
                     (info.format.clone(), info.kind, info.width, info.height, info.file_size, info.captured.clone());
                 c.pairing_camera = info.meta.camera.clone();
+                // pairing compares capture times from metadata only: two unrelated files saved in
+                // the same second must not pair on their file dates
+                c.pairing_captured = info.captured.clone();
+                // as the import will date it (a sidecar's date, when there is one, still wins there)
+                c.captured = c.captured.or_else(|| info.file_modified.clone());
                 c.preview_only = info.preview_only.clone();
                 if let Some(h) = &info.content_hash {
                     match seen_hash.get(h) {
@@ -987,7 +996,7 @@ fn annotate_pairings(candidates: &mut [ImportCandidate], policy: RawJpegImportPo
         .map(|c| crate::import_pairs::PairInput {
             path: c.path.clone(),
             kind: c.kind,
-            captured: c.captured.clone(),
+            captured: c.pairing_captured.clone(),
             camera: c.pairing_camera.clone(),
             width: c.width,
             height: c.height,
@@ -1334,6 +1343,10 @@ impl ImportJob {
             }
             if info.captured.is_none() {
                 info.captured = sidecar.as_ref().and_then(|sc| sc.captured.clone());
+            }
+            // no date in the file or its sidecar: the file's own date, as Lightroom does
+            if info.captured.is_none() {
+                info.captured = info.file_modified.clone();
             }
             let stored = match (mode, &self.copy_root) {
                 (ImportMode::Copy | ImportMode::Move, Some(root))
@@ -1818,6 +1831,30 @@ impl Session {
 #[cfg(test)]
 mod prepared_tests {
     use super::*;
+
+    /// A file with no capture date takes its file date for the library (978312b5), but RAW + JPEG
+    /// pairing compares metadata capture times only: a raw and an unrelated JPEG saved in the same
+    /// second must not pair on their file dates.
+    #[test]
+    fn file_dates_do_not_pair_raw_and_jpeg() {
+        let candidate = |path: &str, kind: MediaKind, pairing_captured: Option<&str>| ImportCandidate {
+            path: path.into(),
+            kind,
+            captured: Some("2026-01-01T10:00:00".into()),
+            pairing_captured: pairing_captured.map(str::to_string),
+            pairing_camera: "Canon EOS R5".into(),
+            width: 6000,
+            height: 4000,
+            ..Default::default()
+        };
+        let mut by_file_date = [candidate("/shots/IMG_001.CR3", MediaKind::Raw, None), candidate("/shots/IMG_001.JPG", MediaKind::Image, None)];
+        annotate_pairings(&mut by_file_date, RawJpegImportPolicy::default());
+        assert!(by_file_date.iter().all(|c| c.pairing.is_none()), "paired on file dates");
+        let at = Some("2026-01-01T10:00:00");
+        let mut by_metadata = [candidate("/shots/IMG_001.CR3", MediaKind::Raw, at), candidate("/shots/IMG_001.JPG", MediaKind::Image, at)];
+        annotate_pairings(&mut by_metadata, RawJpegImportPolicy::default());
+        assert!(by_metadata.iter().all(|c| c.pairing.is_some()), "metadata capture times still pair");
+    }
     use std::sync::atomic::AtomicUsize;
 
     #[test]
