@@ -171,32 +171,42 @@ pub(crate) fn decode_huffman(src: &[u8], h: &Huffman, w: usize, hgt: usize, bits
     Ok(out)
 }
 
-/// The image area without all-dark leading/trailing columns and rows (masked or empty), kept at even offsets. With
+/// The image area without leading/trailing lines that hold no picture (masked or empty), kept at even offsets. With
 /// the maker-note `black` level, a line is dark when its mean is at most 1/256 of the remaining range (at least 16)
-/// above it: masked lines sit at the black level plus noise, while dark real content (a night sky) is well above.
-/// The tolerance is the one `cr2::masked_columns` uses. Without it, below 5% of the interior's mean.
+/// above it, the tolerance `cr2::masked_columns` uses: masked lines sit at the black level plus noise, while dark
+/// real content (a night sky) is well above. Without it, below 5% of the interior's mean.
 fn dark_trimmed(d: &[u16], w: usize, h: usize, black: Option<f64>, white: f32) -> Rect {
     if w < 256 || h < 256 {
         return Rect::new(0, 0, w, h);
     }
     let (xstep, ystep) = (w / 256, h / 256);
-    let col_mean = |x: usize| (0..h).step_by(ystep).map(|y| d[y * w + x] as f64).sum::<f64>() / h.div_ceil(ystep) as f64;
-    let row_mean = |y: usize| (0..w).step_by(xstep).map(|x| d[y * w + x] as f64).sum::<f64>() / w.div_ceil(xstep) as f64;
+    let at = |x: usize, y: usize| d.get(y * w + x).map_or(0.0, |&v| f64::from(v));
+    let col_mean = |x: usize| (0..h).step_by(ystep).map(|y| at(x, y)).sum::<f64>() / h.div_ceil(ystep) as f64;
+    let row_mean = |y: usize| (0..w).step_by(xstep).map(|x| at(x, y)).sum::<f64>() / w.div_ceil(xstep) as f64;
     let interior = (w / 4..w * 3 / 4).step_by(w / 64).map(col_mean).sum::<f64>() / 32.0;
-    let dark = match black {
-        Some(b) => b + ((f64::from(white) - b) / 256.0).max(16.0),
-        None => interior * 0.05,
+    let (base, tol) = match black {
+        Some(b) => (b, ((f64::from(white) - b) / 256.0).max(16.0)),
+        None => (0.0, interior * 0.05),
+    };
+    // a frame no brighter than masked lines (a lens-cap shot) has nothing to tell them from picture
+    if interior - base <= tol {
+        return Rect::new(0, 0, w, h);
+    }
+    let range = f64::from(white) - base;
+    // lines from one edge that hold no picture: within `tol` of the outermost line's level when that sits a little
+    // above black (K-70, K-1: 65 over BlackPoint), and saturated lines when dark ones follow (645Z)
+    let run = |mean: &dyn Fn(usize) -> f64| {
+        let saturated = (0..64).take_while(|&k| mean(k) - base >= range * 0.98).count();
+        let outer = mean(saturated) - base;
+        let level = if outer > 0.0 && outer < range * 0.01 { outer } else { 0.0 };
+        match (saturated..64).take_while(|&k| mean(k) - base < level + tol).count() {
+            0 => 0,
+            dark => saturated + dark,
+        }
     };
     let edges = |n: usize, mean: &dyn Fn(usize) -> f64| {
-        let mut lo = 0;
-        while lo < 64 && mean(lo) < dark {
-            lo += 1;
-        }
-        let mut hi = n;
-        while hi > n - 64 && mean(hi - 1) < dark {
-            hi -= 1;
-        }
-        let lo = lo.next_multiple_of(2);
+        let lo = run(mean).next_multiple_of(2);
+        let hi = n - run(&|k| mean(n - 1 - k));
         (lo, (hi - lo) & !1)
     };
     let (left, width) = edges(w, &col_mean);
@@ -534,11 +544,10 @@ mod tests {
         assert_eq!(img.cfa, Some(Cfa::bayer_static("BGGR")));
     }
 
-    /// A 512 x 384 big-endian PEF of plain 16-bit words without area tags, whose maker note has only a BlackPoint
-    /// of `black`, with `px(x, y)` as the samples.
-    fn pef_with_black_point(black: u16, px: impl Fn(usize, usize) -> u16) -> Vec<u8> {
+    /// A `w x h` big-endian 14-bit PEF of plain 16-bit words without area tags, whose maker note has only a
+    /// BlackPoint of `black`, with `px(x, y)` as the samples.
+    fn pef_with_black_point(w: usize, h: usize, black: u16, px: impl Fn(usize, usize) -> u16) -> Vec<u8> {
         use lightcraft_tiff::{IfdBuilder, ImageData, TiffWriter, Value};
-        let (w, h) = (512usize, 384usize);
         let strip: Vec<u8> = (0..w * h).flat_map(|i| px(i % w, i / w).to_be_bytes()).collect();
         let build = |levels_at: u32| {
             let mut ifd = IfdBuilder::new();
@@ -569,7 +578,7 @@ mod tests {
     #[test]
     fn masked_rows_and_columns_at_the_black_level_are_trimmed_without_crop_tags() {
         let (w, h) = (512, 384);
-        let file = pef_with_black_point(256, |x, y| {
+        let file = pef_with_black_point(w, h, 256, |x, y| {
             if x >= w - 8 {
                 0
             } else if y >= h - 14 {
@@ -590,7 +599,7 @@ mod tests {
     #[test]
     fn dark_real_content_next_to_the_masked_border_is_kept() {
         let (w, h) = (512, 384);
-        let file = pef_with_black_point(256, |x, y| {
+        let file = pef_with_black_point(w, h, 256, |x, y| {
             if x >= w - 8 {
                 0
             } else if y >= h - 14 {
@@ -605,5 +614,55 @@ mod tests {
         });
         let img = decode(&file, Mode::Full).unwrap();
         assert_eq!(img.active_area, Rect::new(24, 28, w - 40, h - 42));
+    }
+
+    /// The K-70 (and K-1) layout: masked lines 65 DN over BlackPoint 64, just above the tolerance over black, and
+    /// empty rows at the bottom.
+    #[test]
+    fn masked_lines_a_little_above_the_black_level_are_trimmed() {
+        let (w, h) = (320, 288);
+        let file = pef_with_black_point(w, h, 64, |x, y| {
+            if y >= h - 12 {
+                0
+            } else if x < 56 || y < 28 {
+                128 + ((x + y) % 3) as u16
+            } else {
+                2064 + ((x * 7 + y * 13) % 64) as u16
+            }
+        });
+        assert_eq!(decode(&file, Mode::Full).unwrap().active_area, Rect::new(56, 28, 264, 248));
+    }
+
+    /// The 645Z layout: 12 saturated columns outside 46 masked ones on the right; they hold no picture either.
+    #[test]
+    fn saturated_lines_outside_masked_ones_are_trimmed() {
+        let (w, h) = (400, 288);
+        let file = pef_with_black_point(w, h, 64, |x, y| {
+            if x >= w - 12 {
+                16316
+            } else if x >= w - 58 {
+                64 + ((x + y) % 3) as u16
+            } else {
+                2064 + ((x * 7 + y * 13) % 64) as u16
+            }
+        });
+        assert_eq!(decode(&file, Mode::Full).unwrap().active_area, Rect::new(0, 0, w - 58, h));
+    }
+
+    /// A blown-out edge with the picture right behind it is picture: nothing is trimmed.
+    #[test]
+    fn a_saturated_edge_followed_by_picture_stays() {
+        let (w, h) = (400, 288);
+        let file = pef_with_black_point(w, h, 64, |x, y| if x >= w - 12 { 16316 } else { 2064 + ((x * 7 + y * 13) % 64) as u16 });
+        assert_eq!(decode(&file, Mode::Full).unwrap().active_area, Rect::new(0, 0, w, h));
+    }
+
+    /// A frame at the black level everywhere (a lens-cap shot) has no picture to tell masked lines from: it keeps
+    /// its whole area.
+    #[test]
+    fn a_frame_at_the_black_level_keeps_its_whole_area() {
+        let (w, h) = (320, 288);
+        let file = pef_with_black_point(w, h, 64, |x, y| 64 + ((x * 7 + y * 13) % 5) as u16);
+        assert_eq!(decode(&file, Mode::Full).unwrap().active_area, Rect::new(0, 0, w, h));
     }
 }
