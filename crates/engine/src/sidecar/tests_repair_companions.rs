@@ -262,8 +262,8 @@ fn queued_stem_retry_preserves_shared_packet_after_batch_rollback() {
     assert!(!second_packet.exists());
     let pending = queues(&s);
     assert_eq!(pending.len(), 1);
-    assert_eq!(pending[0].from, shared);
-    assert_eq!(pending[0].to, second_packet);
+    assert!(RealFs.same_file(&pending[0].from, &shared));
+    assert_eq!(pending[0].to, second_packet.with_extension(pending[0].from.extension().unwrap()));
     let catalog_before = s.catalog.to_snapshot();
     let history_before = (s.undo.len(), s.redo.len(), s.commits());
 

@@ -177,56 +177,81 @@ struct MarkerState {
     startup_active: bool,
 }
 
-static MARKER: Mutex<MarkerState> = Mutex::new(MarkerState { path: None, startup_active: false });
+/// Production uses one tracker; tests exercise independent trackers so unrelated GPU work cannot
+/// recreate their marker between a scope completing and its removal being checked.
+#[derive(Default)]
+struct MarkerTracker {
+    state: Mutex<MarkerState>,
+    active: Mutex<u32>,
+}
 
-fn configured_marker() -> (Option<PathBuf>, bool) {
-    let state = MARKER.lock().unwrap_or_else(|e| e.into_inner());
-    (state.path.clone(), state.startup_active)
+static MARKER: MarkerTracker = MarkerTracker { state: Mutex::new(MarkerState { path: None, startup_active: false }), active: Mutex::new(0) };
+
+impl MarkerTracker {
+    fn set_init_marker(&self, path: Option<PathBuf>) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let old = state.path.clone();
+        let clear_old = path.is_none();
+        let same_path = old == path;
+        state.path = path;
+        if !same_path && state.startup_active {
+            if let Some(old) = old.as_deref() {
+                disarm(old, &self.active);
+            }
+            state.startup_active = false;
+        }
+        drop(state);
+        if clear_old && let Some(old) = old {
+            let _ = std::fs::remove_file(old);
+        }
+    }
+
+    fn begin_startup_marker(&self, backends: Backends) -> bool {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(path) = state.path.as_deref() else { return false };
+        if !state.startup_active {
+            arm(path, &self.active, &format!("startup (backends {backends:?})"));
+            state.startup_active = true;
+        }
+        true
+    }
+
+    fn startup_succeeded(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.startup_active {
+            if let Some(path) = state.path.as_deref() {
+                disarm(path, &self.active);
+            }
+            state.startup_active = false;
+        }
+    }
+
+    fn with_marker<T>(&self, what: &str, f: impl FnOnce() -> T) -> T {
+        let marker = self.state.lock().unwrap_or_else(|e| e.into_inner()).path.clone();
+        if let Some(m) = &marker {
+            arm(m, &self.active, what);
+        }
+        let _armed = Armed { marker, active: &self.active };
+        f()
+    }
 }
 
 /// Configure the marker used around compute device creation and native startup. `None` (the
 /// default) writes nothing.
-static ACTIVE: Mutex<u32> = Mutex::new(0);
 pub fn set_init_marker(path: Option<PathBuf>) {
-    let mut state = MARKER.lock().unwrap_or_else(|e| e.into_inner());
-    let old = state.path.clone();
-    let clear_old = path.is_none();
-    let same_path = old == path;
-    state.path = path;
-    if !same_path && state.startup_active {
-        if let Some(old) = old.as_deref() {
-            disarm(old, &ACTIVE);
-        }
-        state.startup_active = false;
-    }
-    drop(state);
-    if clear_old && let Some(old) = old {
-        let _ = std::fs::remove_file(old);
-    }
+    MARKER.set_init_marker(path);
 }
 
 /// Begin guarding native window startup and its first frame with the same marker used by GPU
 /// device creation. A process terminated by a driver while this is active leaves the marker for
 /// the next launch to recover from. Returns whether a marker path is configured.
 pub fn begin_startup_marker(backends: Backends) -> bool {
-    let mut state = MARKER.lock().unwrap_or_else(|e| e.into_inner());
-    let Some(path) = state.path.as_deref() else { return false };
-    if !state.startup_active {
-        arm(path, &ACTIVE, &format!("startup (backends {backends:?})"));
-        state.startup_active = true;
-    }
-    true
+    MARKER.begin_startup_marker(backends)
 }
 
 /// Finish a successful startup guard without clearing concurrent driver-work scopes.
 pub fn startup_succeeded() {
-    let mut state = MARKER.lock().unwrap_or_else(|e| e.into_inner());
-    if state.startup_active {
-        if let Some(path) = state.path.as_deref() {
-            disarm(path, &ACTIVE);
-        }
-        state.startup_active = false;
-    }
+    MARKER.startup_succeeded();
 }
 
 /// Finish a startup guard after a recoverable window creation error.
@@ -262,12 +287,15 @@ fn disarm(marker: &std::path::Path, active: &Mutex<u32>) {
 }
 
 /// Removes the marker on the way out, a panic included (the process survived).
-struct Armed(Option<PathBuf>);
+struct Armed<'a> {
+    marker: Option<PathBuf>,
+    active: &'a Mutex<u32>,
+}
 
-impl Drop for Armed {
+impl Drop for Armed<'_> {
     fn drop(&mut self) {
-        if let Some(m) = &self.0 {
-            disarm(m, &ACTIVE);
+        if let Some(m) = &self.marker {
+            disarm(m, self.active);
         }
     }
 }
@@ -275,12 +303,7 @@ impl Drop for Armed {
 /// Run driver work `f` (`what`: "device creation", "kernel compilation"…) between writing and
 /// removing the init marker (if one is set).
 pub(crate) fn with_marker<T>(what: &str, f: impl FnOnce() -> T) -> T {
-    let (marker, _) = configured_marker();
-    if let Some(m) = &marker {
-        arm(m, &ACTIVE, what);
-    }
-    let _armed = Armed(marker);
-    f()
+    MARKER.with_marker(what, f)
 }
 
 /// Run device creation (and the kernel build that follows it) `f` under the init marker.
@@ -401,9 +424,6 @@ mod tests {
     }
     use super::*;
 
-    /// The tests that set the process-wide marker take turns.
-    static GLOBAL: Mutex<()> = Mutex::new(());
-
     #[test]
     fn parses_backend_names() {
         assert_eq!(parse_backends("dx12"), Some(BackendChoice::Use(Backends::DX12)));
@@ -470,13 +490,13 @@ mod tests {
 
     #[test]
     fn init_marker_is_written_during_creation_and_removed_after() {
-        let _turn = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+        let tracker = MarkerTracker::default();
         let dir = std::env::temp_dir().join(format!("lc-gpu-marker-{}", std::process::id()));
         let m = dir.join("gpu-init.marker");
         let _ = std::fs::remove_dir_all(&dir);
-        set_init_marker(Some(m.clone()));
-        let seen = with_init_marker(Backends::DX12, || m.exists());
-        set_init_marker(None);
+        tracker.set_init_marker(Some(m.clone()));
+        let seen = tracker.with_marker("device and kernel creation (backends DX12)", || m.exists());
+        tracker.set_init_marker(None);
         assert!(seen, "the marker exists while the device is created");
         assert!(!m.exists(), "and is removed afterwards");
         // a marker left behind by a crashed process is reported once; reading it leaves it in place
@@ -488,24 +508,45 @@ mod tests {
         assert_eq!(read_init_marker(&m), None);
 
         // A startup guard spans window setup and first frame; compute setup must not clear it.
-        set_init_marker(Some(m.clone()));
-        assert!(begin_startup_marker(Backends::DX12));
+        tracker.set_init_marker(Some(m.clone()));
+        assert!(tracker.begin_startup_marker(Backends::DX12));
         assert!(m.exists());
-        let seen = with_init_marker(Backends::DX12, || m.exists());
+        let seen = tracker.with_marker("device and kernel creation (backends DX12)", || m.exists());
         assert!(seen && m.exists(), "device setup cannot clear the first-frame guard");
         // Reconfiguring the same path while startup is armed must preserve that lifecycle state.
-        set_init_marker(Some(m.clone()));
-        startup_succeeded();
+        tracker.set_init_marker(Some(m.clone()));
+        tracker.startup_succeeded();
         assert!(!m.exists(), "a successful second launch clears its marker");
 
         // Once startup has completed, a later compute marker belongs to compute setup and is not
         // removed by a repeated startup completion callback.
-        let seen = with_init_marker(Backends::DX12, || {
-            startup_succeeded();
+        let seen = tracker.with_marker("device and kernel creation (backends DX12)", || {
+            tracker.startup_succeeded();
             m.exists()
         });
         assert!(seen, "startup completion cannot clear a concurrent compute marker");
-        set_init_marker(None);
+        tracker.set_init_marker(None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn independent_trackers_do_not_share_scope_counts() {
+        let dir = std::env::temp_dir().join(format!("lc-gpu-independent-{}", std::process::id()));
+        let first = MarkerTracker::default();
+        let second = MarkerTracker::default();
+        let a = dir.join("first.marker");
+        let b = dir.join("second.marker");
+        first.set_init_marker(Some(a.clone()));
+        second.set_init_marker(Some(b.clone()));
+        first.with_marker("device creation", || {
+            assert!(a.exists());
+            assert!(second.begin_startup_marker(Backends::DX12));
+            assert!(b.exists());
+            second.startup_succeeded();
+            assert!(!b.exists(), "an unrelated tracker cannot retain this startup marker");
+            assert!(a.exists(), "finishing another tracker cannot clear this scope");
+        });
+        assert!(!a.exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -574,13 +615,13 @@ mod tests {
 
     #[test]
     fn a_panic_inside_the_scope_still_removes_the_marker() {
-        let _turn = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+        let tracker = MarkerTracker::default();
         let dir = std::env::temp_dir().join(format!("lc-gpu-panic-{}", std::process::id()));
         let m = dir.join("gpu-init.marker");
         let _ = std::fs::remove_dir_all(&dir);
-        set_init_marker(Some(m.clone()));
-        let r = std::panic::catch_unwind(|| with_marker("kernel compilation", || panic!("compile")));
-        set_init_marker(None);
+        tracker.set_init_marker(Some(m.clone()));
+        let r = std::panic::catch_unwind(|| tracker.with_marker("kernel compilation", || panic!("compile")));
+        tracker.set_init_marker(None);
         assert!(r.is_err());
         assert!(!m.exists(), "the process survived, so nothing is left to report");
         let _ = std::fs::remove_dir_all(&dir);
