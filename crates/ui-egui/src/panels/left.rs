@@ -1577,20 +1577,34 @@ fn folder_menu(app: &mut LightcraftApp, resp: &egui::Response, a: &Album) {
             }
             // File ▸ Import's ways in; the import review opens with this album chosen
             let menu = ui.menu_button(crate::i18n::tr("Import"), |ui| {
-                for (label, command, widget) in [
-                    ("Import Photos…", "file.addPhotos", "button:albumImportPhotos"),
-                    ("Import from Folder…", "file.addFolder", "button:albumImportFolder"),
-                    ("Import from Device", "file.addFromDevice", "button:albumImportDevice"),
-                ] {
-                    let r = ui.button(crate::i18n::tr(label));
+                let mut entry = |ui: &mut egui::Ui, label: String, widget: String, command: &str, params: serde_json::Value| {
+                    let r = ui.button(label);
                     crate::widgets::register(ui.ctx(), widget, r.rect);
                     if r.clicked() {
-                        if let Err(e) = app.run(command, json!({"album": a.id.0})) {
+                        if let Err(e) = app.run(command, params) {
                             app.toast(ui.ctx(), e);
                         }
                         ui.close();
                     }
+                };
+                for (label, command, widget) in [
+                    ("Import Photos…", "file.addPhotos", "button:albumImportPhotos"),
+                    ("Import from Folder…", "file.addFolder", "button:albumImportFolder"),
+                ] {
+                    entry(ui, crate::i18n::tr(label).into(), widget.into(), command, json!({"album": a.id.0}));
                 }
+                // like File ▸ Import from Device: one entry per camera or card found
+                let device = ui.menu_button(crate::i18n::tr("Import from Device"), |ui| {
+                    let devices = lightcraft_engine::devices::devices();
+                    if devices.is_empty() {
+                        ui.add_enabled(false, egui::Button::new(crate::i18n::tr("No Camera or Card Found")));
+                    }
+                    for (i, d) in devices.into_iter().enumerate() {
+                        let params = json!({"path": d.path, "album": a.id.0});
+                        entry(ui, format!("{}…", d.name), format!("button:albumImportDevice:{i}"), "file.addFromDevice", params);
+                    }
+                });
+                crate::widgets::register(ui.ctx(), "button:albumImportDevice", device.response.rect);
             });
             crate::widgets::register(ui.ctx(), "button:albumImport", menu.response.rect);
         }
