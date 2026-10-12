@@ -751,7 +751,7 @@ impl Tasks {
         let task = Task {
             id: task_id.clone(),
             kind: "lightroomImport".into(),
-            label: "Import Lightroom Catalog".into(),
+            label: "Import LRCAT Catalog".into(),
             total,
             completed,
             cancel: cancel.clone(),
@@ -763,12 +763,12 @@ impl Tasks {
         let worker = std::thread::Builder::new()
             .name("lightcraft-lightroom-import".into())
             .spawn(move || {
-                let result = lightcraft_engine::guard::catch("Lightroom import", || job.prepare(&worker_cancel))
+                let result = lightcraft_engine::guard::catch("LRCAT import", || job.prepare(&worker_cancel))
                     .and_then(|result| result.map_err(|error| error.to_string()));
                 let cancelled = worker_cancel.load(Ordering::Relaxed);
                 let _ = tx.send(Event::LightroomPrepared { id: id_for_worker, result, cancelled });
             })
-            .map_err(|error| format!("could not start Lightroom import: {error}"))?;
+            .map_err(|error| format!("could not start LRCAT import: {error}"))?;
         self.insert(Task { worker: Some(worker), ..task })?;
         Ok(json!({"taskId": task_id, "kind": "lightroomImport", "total": 0}))
     }
@@ -785,7 +785,7 @@ impl Tasks {
         let task = Task {
             id: task_id.clone(),
             kind: "lightroomInspect".into(),
-            label: "Inspect Lightroom Catalog".into(),
+            label: "Inspect LRCAT Catalog".into(),
             total: total.clone(),
             completed: completed.clone(),
             cancel: cancel.clone(),
@@ -797,7 +797,7 @@ impl Tasks {
         let worker = std::thread::Builder::new()
             .name("lightcraft-lightroom-inspect".into())
             .spawn(move || {
-                let result = lightcraft_engine::guard::catch("Lightroom inspection", || {
+                let result = lightcraft_engine::guard::catch("LRCAT inspection", || {
                     lightcraft_engine::lightroom_catalog::read_with_progress(&path, &worker_cancel, &total, &completed)
                         .map(|data| lightroom_inspection_report(&data))
                 })
@@ -805,7 +805,7 @@ impl Tasks {
                 let cancelled = worker_cancel.load(Ordering::Relaxed);
                 let _ = tx.send(Event::LightroomInspection { id: id_for_worker, result, cancelled });
             })
-            .map_err(|error| format!("could not start Lightroom inspection: {error}"))?;
+            .map_err(|error| format!("could not start LRCAT inspection: {error}"))?;
         self.insert(Task { worker: Some(worker), ..task })?;
         Ok(json!({"taskId": task_id, "kind": "lightroomInspect", "total": 16}))
     }
@@ -1036,7 +1036,7 @@ impl Tasks {
         let tx = self.tx.clone();
         let id_for_worker = id.clone();
         let worker = std::thread::Builder::new().name("lightcraft-lightroom-index".into()).spawn(move || {
-            let result = lightcraft_engine::guard::catch("Lightroom archive index", || completion.finalization.finish())
+            let result = lightcraft_engine::guard::catch("LRCAT archive index", || completion.finalization.finish())
                 .and_then(|result| result.map_err(|error| error.to_string()));
             let _ = tx.send(Event::LightroomFinalized {
                 id: id_for_worker,
@@ -1060,7 +1060,7 @@ impl Tasks {
                     session,
                     id,
                     report,
-                    Err(format!("could not start Lightroom archive finalization: {error}")),
+                    Err(format!("could not start LRCAT archive finalization: {error}")),
                     index_path,
                     commit_error,
                 );
@@ -1090,8 +1090,8 @@ impl Tasks {
             Ok(()) => None,
             Err(error) => {
                 let warning = match &index_path {
-                    Some(path) => format!("Lightroom import committed, but archive index could not be written at {path}: {error}"),
-                    None => format!("Lightroom import committed, but archive index could not be finalized: {error}"),
+                    Some(path) => format!("LRCAT import committed, but archive index could not be written at {path}: {error}"),
+                    None => format!("LRCAT import committed, but archive index could not be finalized: {error}"),
                 };
                 append_warning(&mut report, warning.clone());
                 append_index_warning(&mut report);
@@ -1099,7 +1099,7 @@ impl Tasks {
             }
         };
         let error =
-            commit_error.map(|error| format!("Lightroom import was applied in memory, but library save failed: {error}; retry saving the library"));
+            commit_error.map(|error| format!("LRCAT import was applied in memory, but library save failed: {error}; retry saving the library"));
         if let Some(commit_error) = &error {
             append_warning(&mut report, commit_error.clone());
         }
@@ -1818,7 +1818,7 @@ mod tests {
             Task {
                 id: "lightroomImport-1".into(),
                 kind: "lightroomImport".into(),
-                label: "Import Lightroom Catalog".into(),
+                label: "Import LRCAT Catalog".into(),
                 total: Arc::new(AtomicUsize::new(1)),
                 completed: Arc::new(AtomicUsize::new(0)),
                 cancel: Arc::new(AtomicBool::new(false)),

@@ -96,7 +96,7 @@ pub fn scene_population(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) ->
         return None;
     }
     let mut img = lightcraft_raster::resample::fit(src, 512, 512, lightcraft_raster::resample::Filter::Box);
-    let mut base = DevelopSettings { wb: s.wb, ..DevelopSettings::default() };
+    let mut base = DevelopSettings { wb: s.wb, process: s.process, ..DevelopSettings::default() };
     base.light.exposure = 0.0;
     crate::local::scene_linear_pre(&mut img, info, &base);
     let (w, h) = (img.width.max(1) as f32, img.height.max(1) as f32);
@@ -495,10 +495,15 @@ pub fn neutral_wb(src: &Rgb32f, info: &SourceInfo) -> (f64, f64) {
     if !avg.iter().all(|v| v.is_finite() && *v > 0.0) {
         return (info.as_shot_temp, info.as_shot_tint);
     }
-    let xyz = REC2020.to_xyz().apply(avg);
-    let shot = lightcraft_color::cct::temp_tint_to_xy(info.as_shot_temp, info.as_shot_tint);
-    let seen = bradford(REC2020.white, shot).apply(xyz);
-    let (t, tint) = xy_to_temp_tint(Xy::from_xyz(seen));
+    let camera = info.camera_color.as_deref().filter(|_| info.raw && !info.relative_wb);
+    let seen = match camera.and_then(|cc| lightcraft_raw::color::neutral_white(&cc.tags, cc.developed_for, avg)) {
+        Some(white) => white,
+        None => {
+            let shot = lightcraft_color::cct::temp_tint_to_xy(info.as_shot_temp, info.as_shot_tint);
+            Xy::from_xyz(bradford(REC2020.white, shot).apply(REC2020.to_xyz().apply(avg)))
+        }
+    };
+    let (t, tint) = xy_to_temp_tint(seen);
     let t = if t.is_finite() { t.clamp(2000.0, 50000.0).round() } else { info.as_shot_temp };
     let tint = if tint.is_finite() { tint.clamp(-150.0, 150.0).round() } else { info.as_shot_tint };
     (t, tint)

@@ -67,6 +67,8 @@ pub mod mediapipe_photo;
 mod neck;
 #[cfg(not(target_arch = "wasm32"))]
 mod nn;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod remote;
 pub mod tokenizer;
 #[cfg(not(target_arch = "wasm32"))]
 mod tracker;

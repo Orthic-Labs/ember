@@ -48,7 +48,7 @@
       "../../LICENSE-APACHE": "LICENSE-APACHE",
       "../../docs/licenses/pytorch-bicubic-LICENSE.txt": "docs/licenses/pytorch-bicubic-LICENSE.txt"
     },
-    "copyright": "LightCraft contributors",
+    "copyright": "Orthic Labs & contributors",
     "category": "Photography",
     "shortDescription": "Photo library & non-destructive RAW developer",
     "windows": {

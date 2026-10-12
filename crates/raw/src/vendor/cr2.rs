@@ -19,7 +19,9 @@
 //! - `ColorBalance` (maker note `0x4001`): as-shot `RGGB` levels at a model-dependent offset; we probe the known
 //!   offsets and accept the first plausible quadruple. The array is 16-bit words; some models store it as UNDEFINED
 //!   bytes (ColorData versions -3 and -4), which are paired up in the maker note's byte order first.
-//! - sRAW / mRAW (YCbCr, subsampled) are not supported yet.
+//! - sRAW / mRAW (raw IFD tag `0xc6c5` = 4) hold subsampled YCbCr instead of a mosaic: see [`sraw`].
+
+mod sraw;
 
 use super::{black_from_columns, white_from_data};
 use crate::{BlackLevel, Cfa, ColorData, Mode, OpcodeLists, RawData, RawError, RawFormat, RawImage, Rect, Result, ljpeg};
@@ -30,6 +32,8 @@ use std::ops::Range;
 
 const CR2_SLICE: u16 = 0xc640;
 const SRAW_TYPE: u16 = 0xc6c5;
+/// `SRAW_TYPE` value of the YCbCr frames of sRAW / mRAW (IFD2's preview image carries 3).
+const SRAW_YCC: u32 = 4;
 const CR2_CFA_PATTERN: u16 = 0xc5e0;
 const SENSOR_INFO: u16 = 0x00e0;
 const COLOR_BALANCE: u16 = 0x4001;
@@ -114,8 +118,10 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
     let tiff = Tiff::parse(bytes)?;
     let ifd0 = &tiff.ifds[0];
     let raw = raw_ifd(&tiff).ok_or_else(|| RawError::Corrupt("CR2 without raw IFD".into()))?;
-    if raw.u32(SRAW_TYPE).is_some_and(|v| v != 1) {
-        return Err(RawError::Unsupported("Canon sRAW/mRAW".into()));
+    match raw.u32(SRAW_TYPE) {
+        Some(SRAW_YCC) => return sraw::decode(bytes, &tiff, raw, mode),
+        Some(v) if v != 1 => return Err(RawError::Unsupported(format!("Canon raw type {v}"))),
+        _ => {}
     }
     let off = raw.u64(t::STRIP_OFFSETS).ok_or(RawError::Tiff(lightcraft_tiff::TiffError::MissingTag(t::STRIP_OFFSETS)))?;
     let len = raw.u64(t::STRIP_BYTE_COUNTS).unwrap_or(bytes.len() as u64 - off.min(bytes.len() as u64));

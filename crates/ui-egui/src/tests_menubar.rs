@@ -84,3 +84,100 @@ fn a_tall_menu_scrolls_instead_of_growing_past_the_window() {
     assert!(!rows.is_empty(), "no submenu rows registered");
     assert!(rows.iter().any(|(_, r)| !level.contains_rect(*r)), "every row fits a 420 pt window: {rows:?}");
 }
+
+// ---- top-level menus switch on hover, like native menu bars
+
+/// The title whose menu is open (the open level hangs from its left edge), or none.
+fn open_menu(h: &Headless) -> Option<String> {
+    let level = widget(h, "menu-level:1")?;
+    widgets_with(h, "menu:").into_iter().filter(|(id, _)| id != "menu:all").find(|(_, r)| (r.left() - level.left()).abs() < 12.0).map(|(id, _)| id)
+}
+
+fn go(h: &mut Headless, method: &str, id: &str) {
+    let r = h.request(method, json!({"id": id}), T);
+    assert_eq!(r["ok"], true, "{method} {id}: {r}");
+    h.settle(SETTLE);
+}
+
+#[test]
+fn hovering_another_title_switches_the_open_menu() {
+    let mut h = app([1280.0, 703.0]);
+    // hovering with no menu open does nothing
+    go(&mut h, "ui.hoverWidget", "menu:Edit");
+    assert_eq!(open_menu(&h), None);
+    go(&mut h, "ui.clickWidget", "menu:File");
+    assert_eq!(open_menu(&h).as_deref(), Some("menu:File"));
+    for title in ["Edit", "View", "Photo", "Window", "Help", "File"] {
+        go(&mut h, "ui.hoverWidget", &format!("menu:{title}"));
+        assert_eq!(open_menu(&h), Some(format!("menu:{title}")), "after hovering {title}");
+    }
+}
+
+#[test]
+fn clicking_another_title_opens_it_in_one_click() {
+    let mut h = app([1280.0, 703.0]);
+    go(&mut h, "ui.clickWidget", "menu:Edit");
+    assert_eq!(open_menu(&h).as_deref(), Some("menu:Edit"));
+    // move away from the titles first so only the click can be what switches
+    let r = h.request("ui.move", json!({"x": 640.0, "y": 400.0}), T);
+    assert_eq!(r["ok"], true);
+    h.settle(SETTLE);
+    go(&mut h, "ui.clickWidget", "menu:View");
+    assert_eq!(open_menu(&h).as_deref(), Some("menu:View"));
+    // clicking the open title closes it
+    go(&mut h, "ui.clickWidget", "menu:View");
+    assert_eq!(open_menu(&h), None);
+}
+
+#[test]
+fn click_outside_and_escape_close_the_open_menu() {
+    let mut h = app([1280.0, 703.0]);
+    go(&mut h, "ui.clickWidget", "menu:File");
+    assert!(open_menu(&h).is_some());
+    let r = h.request("ui.click", json!({"x": 640.0, "y": 600.0}), T);
+    assert_eq!(r["ok"], true);
+    h.settle(SETTLE);
+    assert_eq!(open_menu(&h), None, "click outside");
+    go(&mut h, "ui.clickWidget", "menu:Photo");
+    assert!(open_menu(&h).is_some());
+    let r = h.request("ui.key", json!({"key": "Escape"}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    h.settle(SETTLE);
+    assert_eq!(open_menu(&h), None, "Escape");
+}
+
+// ---- a scrolled menu draws no scrollbar over its rows (issue #691)
+
+/// egui's floating scrollbar sat on the rows' right edge, where the shortcut text ends, and in
+/// its wide (hovered) state its background hid the last character. With the pointer resting on
+/// the menu, no tall narrow rectangle (a bar's handle or track) is painted along the level's
+/// right edge, in a menu that scrolls as in one that fits, and the level is as wide in both.
+#[test]
+fn a_scrolled_menu_draws_no_scrollbar_over_its_shortcuts() {
+    let mut widths = Vec::new();
+    for (size, scrolls) in [([1600.0, 700.0], true), ([1600.0, 1400.0], false)] {
+        let what = format!("{} pt window", size[1]);
+        let mut h = app(size);
+        go(&mut h, "ui.clickWidget", "menu:View");
+        go(&mut h, "ui.hoverWidget", "menu-level:1");
+        let level = widget(&h, "menu-level:1").unwrap_or_else(|| panic!("{what}: no View menu"));
+        let rows = widgets_with(&h, "menusub:");
+        assert!(!rows.is_empty(), "{what}: no submenu rows registered");
+        assert_eq!(rows.iter().any(|(_, r)| !level.contains_rect(*r)), scrolls, "{what}: scrolls = {scrolls}, level {level:?}");
+        widths.push(level.width());
+        // a row's hover highlight spans the level; a separator is one point tall; the ▸ of a
+        // submenu row and the text are not rectangles: only a scrollbar is tall and narrow there
+        let bars: Vec<egui::Rect> = h
+            .view
+            .painted_shapes()
+            .iter()
+            .filter_map(|s| match s {
+                egui::epaint::Shape::Rect(r) => Some(r.rect),
+                _ => None,
+            })
+            .filter(|r| r.width() <= 14.0 && r.height() > 30.0 && r.left() >= level.right() - 16.0 && r.right() <= level.right() + 0.5)
+            .collect();
+        assert!(bars.is_empty(), "{what}: a scrollbar is drawn along the menu's right edge: {bars:?}");
+    }
+    assert!((widths[0] - widths[1]).abs() < 0.5, "a scrolled menu is as wide as one that fits: {widths:?}");
+}

@@ -172,6 +172,12 @@ pub const OPCODE_LIST_2: u16 = 51009;
 pub const OPCODE_LIST_3: u16 = 51022;
 pub const NOISE_PROFILE: u16 = 51041;
 pub const DEFAULT_USER_CROP: u16 = 51125;
+pub const PROFILE_GAIN_TABLE_MAP: u16 = 52525;
+/// DNG 1.7 row interleave: the stored raster holds this many interleaved row groups (each group is
+/// every `n`-th row of the image), so it must be un-interleaved before the data is a mosaic.
+pub const ROW_INTERLEAVE_FACTOR: u16 = 50975;
+/// DNG 1.7 column interleave, the column-wise counterpart of [`ROW_INTERLEAVE_FACTOR`].
+pub const COLUMN_INTERLEAVE_FACTOR: u16 = 52547;
 pub const CALIBRATION_ILLUMINANT_3: u16 = 52529;
 pub const CAMERA_CALIBRATION_3: u16 = 52530;
 pub const COLOR_MATRIX_3: u16 = 52531;
@@ -179,6 +185,13 @@ pub const FORWARD_MATRIX_3: u16 = 52532;
 pub const ILLUMINANT_DATA_1: u16 = 52533;
 pub const ILLUMINANT_DATA_2: u16 = 52534;
 pub const ILLUMINANT_DATA_3: u16 = 52535;
+// DNG 1.6 semantic masks (spec chapter 4, "Semantic Masks")
+pub const SEMANTIC_NAME: u16 = 52526;
+pub const SEMANTIC_INSTANCE_ID: u16 = 52528;
+pub const MASK_SUB_AREA: u16 = 52536;
+/// NewSubFileType of a semantic mask IFD.
+pub const SUBFILE_SEMANTIC_MASK: u32 = 0x10004;
+pub const PROFILE_GAIN_TABLE_MAP_2: u16 = 52544;
 
 // --- Compression codes (TIFF 6.0, DNG, and widely used registrations)
 pub mod compression {
@@ -208,4 +221,6 @@ pub mod photometric {
     pub const YCBCR: u16 = 6;
     pub const CFA: u16 = 32803;
     pub const LINEAR_RAW: u16 = 34892;
+    /// DNG 1.6 semantic mask.
+    pub const MASK: u16 = 52527;
 }

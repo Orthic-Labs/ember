@@ -1,5 +1,6 @@
 //! DNG camera-profile look data carried by the file itself (Adobe DNG Specification 1.6/1.7,
-//! chapter 6 and the `ProfileHueSatMap*`, `ProfileLookTable*` and `ProfileToneCurve` tags).
+//! chapter 6 and the `ProfileHueSatMap*`, `ProfileLookTable*`, `ProfileToneCurve` and
+//! `ProfileGainTableMap*` tags).
 //!
 //! - A hue/saturation/value table holds, for a grid of (value, hue, saturation) inputs, a hue shift
 //!   in degrees, a saturation scale and a value scale (value-major, hue-middle, saturation-minor).
@@ -10,11 +11,18 @@
 //! - `ProfileHueSatMapData1/2` follow the colour matrices (interpolated by the same illuminant
 //!   weight); `ProfileLookTableData` comes after exposure compensation and before any tone curve.
 //! - `ProfileToneCurve`: (input, output) pairs in linear gamma from (0, 0) to (1, 1).
+//! - `ProfileGainTableMap*` ([`crate::gaintable`]) is read and kept (a DNG export writes it back)
+//!   but not rendered by default (the photo's "Camera local tone mapping" option renders it, in the
+//!   pipeline): Lightroom Classic renders Apple ProRAW without it (measured on the iPhone
+//!   12 Pro corpus file against Lightroom Classic 15.6: with the map the default render is far
+//!   brighter than Lightroom's, mean ΔE00 19; without it Lightroom's output is a tight function of
+//!   the hue/saturation map, exposure compensation and tone curve alone).
 //!
 //! The data is read from the user's own file at run time; nothing here ships profile data.
 //! Values above 1.0 (highlight headroom) keep their headroom: the table's value scale only ever
 //! lowers them, so a lookup can't clip what the scene-referred pipeline still needs.
 
+use crate::gaintable::GainTableMap;
 use lightcraft_color::transfer::{linear_to_srgb, srgb_to_linear};
 use lightcraft_color::{D50, D65, Mat3, PROPHOTO, REC2020, bradford};
 use serde::{Deserialize, Serialize};
@@ -68,7 +76,7 @@ impl HsvTable {
 
     /// Tri-linear lookup at hue `h` (degrees), saturation `s` and value `v` (table coordinates).
     pub fn lookup(&self, h: f32, s: f32, v: f32) -> [f32; 3] {
-        let hf = (h.rem_euclid(360.0) / 360.0 * self.hue_divisions as f32).clamp(0.0, self.hue_divisions as f32);
+        let hf = (wrap(h, 360.0) / 360.0 * self.hue_divisions as f32).clamp(0.0, self.hue_divisions as f32);
         let h0 = (hf as usize).min(self.hue_divisions - 1);
         let h1 = (h0 + 1) % self.hue_divisions;
         let th = (hf - h0 as f32).clamp(0.0, 1.0);
@@ -105,7 +113,9 @@ impl HsvTable {
         // already above 1 (out-of-ProPhoto colours, highlight headroom) are only ever lowered.
         let s2 = limited(sat, ss);
         let v2 = if self.srgb_value && max <= 1.0 {
-            srgb_to_linear((linear_to_srgb(max) * vs).min(1.0))
+            // (a value scale of 1 — every hue/saturation-only table — leaves the value as it is:
+            // no round trip through the sRGB curve, two `powf` per pixel)
+            if vs == 1.0 { max } else { srgb_to_linear((v_index * vs).min(1.0)) }
         } else if self.srgb_value {
             max * srgb_to_linear(vs.min(1.0)).min(1.0)
         } else {
@@ -120,12 +130,27 @@ fn limited(x: f32, k: f32) -> f32 {
     if x <= 1.0 { (x * k).min(1.0) } else { x * k.min(1.0) }
 }
 
+/// `x.rem_euclid(p)` (`p > 0`), bit for bit, without the `fmodf` call for the values it nearly always
+/// gets here (within one period of `[0, p)`; both subtractions are exact there).
+#[inline]
+fn wrap(x: f32, p: f32) -> f32 {
+    if (0.0..p).contains(&x) {
+        x
+    } else if x > -p && x < 0.0 {
+        x + p
+    } else if (p..2.0 * p).contains(&x) {
+        x - p
+    } else {
+        x.rem_euclid(p)
+    }
+}
+
 fn hue_of(c: [f32; 3], max: f32, d: f32) -> f32 {
     if d <= 0.0 {
         return 0.0;
     }
     let h = if max == c[0] {
-        ((c[1] - c[2]) / d).rem_euclid(6.0)
+        wrap((c[1] - c[2]) / d, 6.0)
     } else if max == c[1] {
         (c[2] - c[0]) / d + 2.0
     } else {
@@ -137,7 +162,7 @@ fn hue_of(c: [f32; 3], max: f32, d: f32) -> f32 {
 /// HSV → RGB for any saturation ≥ 0 (above 1 yields negative components, the inverse of
 /// [`hue_of`] for out-of-gamut inputs).
 fn hsv_to_rgb(h: f32, s: f32, v: f32) -> [f32; 3] {
-    let hp = h.rem_euclid(360.0) / 60.0;
+    let hp = wrap(h, 360.0) / 60.0;
     let sector = (hp as u32).min(5);
     let f = hp - sector as f32;
     let (p, q, t) = (v * (1.0 - s), v * (1.0 - s * f), v * (1.0 - s * (1.0 - f)));
@@ -207,11 +232,14 @@ pub struct ProfileLook {
     pub look_table: Option<HsvTable>,
     /// `ProfileToneCurve`.
     pub tone_curve: Option<ToneCurve>,
+    /// `ProfileGainTableMap2`, else `ProfileGainTableMap`.
+    #[serde(default)]
+    pub gain_table_map: Option<GainTableMap>,
 }
 
 impl ProfileLook {
     pub fn is_empty(&self) -> bool {
-        self.hue_sat_map.iter().all(Option::is_none) && self.look_table.is_none() && self.tone_curve.is_none()
+        self.hue_sat_map.iter().all(Option::is_none) && self.look_table.is_none() && self.tone_curve.is_none() && self.gain_table_map.is_none()
     }
 
     /// The hue/saturation map for calibration-1 weight `g` (one table: used for any white).
@@ -269,6 +297,37 @@ mod tests {
 
     fn identity(h: usize, s: usize, v: usize) -> HsvTable {
         HsvTable { hue_divisions: h, sat_divisions: s, val_divisions: v, data: vec![[0.0, 1.0, 1.0]; h * s * v], srgb_value: false }
+    }
+
+    #[test]
+    fn wrap_is_rem_euclid_bit_for_bit() {
+        for p in [6.0f32, 360.0] {
+            let mut x = -3.0 * p;
+            while x < 3.0 * p {
+                for v in [x, x.next_up(), x.next_down(), -0.0, 0.0, p, -p, 2.0 * p, p.next_down(), (-p).next_up()] {
+                    assert_eq!(wrap(v, p).to_bits(), v.rem_euclid(p).to_bits(), "{v} mod {p}");
+                }
+                x += p / 97.0;
+            }
+            for v in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 1e30, -1e30] {
+                assert_eq!(wrap(v, p).is_nan(), v.rem_euclid(p).is_nan());
+            }
+        }
+    }
+
+    #[test]
+    fn unit_value_scale_with_srgb_values_keeps_the_value() {
+        let mut t = identity(6, 2, 3);
+        t.srgb_value = true;
+        for (i, e) in t.data.iter_mut().enumerate() {
+            *e = [(i % 7) as f32 - 3.0, 1.1, 1.0];
+        }
+        for c in [[0.2f32, 0.1, 0.05], [0.9, 0.5, 0.7], [0.01, 0.02, 0.015], [1.5, 0.4, 0.2]] {
+            let max = c[0].max(c[1]).max(c[2]);
+            let out = t.apply(c);
+            let got = out[0].max(out[1]).max(out[2]);
+            assert!((got - max).abs() <= 1e-6 * max.max(1.0), "{c:?} -> {out:?}");
+        }
     }
 
     fn close(a: [f32; 3], b: [f32; 3], tol: f32) -> bool {
@@ -360,7 +419,7 @@ mod tests {
         let m = HsvTable::blend(&a, &b, 0.25).unwrap();
         assert_eq!(m.data[1], [7.5, 1.75, 1.0]);
         assert!(HsvTable::blend(&a, &identity(3, 2, 1), 0.5).is_none());
-        let look = ProfileLook { hue_sat_map: [Some(a.clone()), None], look_table: Some(a), tone_curve: None };
+        let look = ProfileLook { hue_sat_map: [Some(a.clone()), None], look_table: Some(a), tone_curve: None, gain_table_map: None };
         let t = ProfileTables::new(&look, 0.5).unwrap();
         let c = [0.3, 0.2, 0.1];
         assert!(close(t.apply(c, 2.0), [0.6, 0.4, 0.2], 1e-4), "{:?}", t.apply(c, 2.0));

@@ -45,7 +45,10 @@ impl MenuNode {
 
 /// User-defined names in parameterized menus are data, not message keys.
 pub fn display_item_label<'a>(id: &str, params: &Value, label: &'a str) -> &'a str {
-    if matches!(id, "metadata.applyPreset" | "album.addPhotos" | "label.applySet") || (id == "app.export" && params.get("preset").is_some()) {
+    if matches!(id, "metadata.applyPreset" | "album.addPhotos" | "label.applySet")
+        || (id == "app.export" && params.get("preset").is_some())
+        || (id == "app.openLibrary" && params.get("path").is_some())
+    {
         label
     } else {
         crate::i18n::tr(label)
@@ -66,7 +69,9 @@ const LAYOUT: &[(&str, &[&str])] = &[
             "file.addFolder",
             "@Import from Device",
             "---",
+            "app.newLibrary",
             "app.openLibrary",
+            "@Open Recent Library",
             "file.backupLibrary",
             "file.restoreLibrary",
             "---",
@@ -77,6 +82,8 @@ const LAYOUT: &[(&str, &[&str])] = &[
             "---",
             "file.importPresets",
             "file.exportPresets",
+            "file.importKeywords",
+            "file.exportKeywords",
             "---",
             "dialog.export",
             "app.exportPrevious",
@@ -122,14 +129,17 @@ const LAYOUT: &[(&str, &[&str])] = &[
             "view.people",
             "---",
             "view.leftPanel",
+            "@Sidebar Sections",
             "view.photoCounts",
             "view.faceBoxes",
             "view.filmstrip",
             "view.histogram",
             "view.navigator",
             "view.infoOverlay",
+            "@Appearance",
             "---",
             "view.fullScreenPreview",
+            "view.lightsOut",
             "view.enterFullScreen",
             "---",
             "view.showOriginal",
@@ -144,6 +154,7 @@ const LAYOUT: &[(&str, &[&str])] = &[
             "view.zoom100",
             "---",
             "view.clipping",
+            "view.visualizeHdr",
             "view.softProof",
             "view.maskOverlay",
             "view.maskOverlayMode",
@@ -185,6 +196,7 @@ const LAYOUT: &[(&str, &[&str])] = &[
             "develop.autoNoise",
             "develop.treatment",
             "develop.reset",
+            "develop.updateProcess",
             "dialog.createPreset",
             "---",
             "photo.saveMetadataToFile",
@@ -306,6 +318,7 @@ pub fn checked(app: &LightcraftApp, id: &str) -> Option<bool> {
         "view.filmstrip" => Some(u.filmstrip),
         "view.histogram" => Some(u.histogram),
         "view.clipping" => Some(u.show_clipping),
+        "view.visualizeHdr" => Some(u.hdr_visualize),
         "view.softProof" => Some(u.soft_proof),
         "view.maskOverlay" => Some(u.mask_overlay),
         "view.maskPins" => Some(u.mask_pins),
@@ -316,6 +329,7 @@ pub fn checked(app: &LightcraftApp, id: &str) -> Option<bool> {
         "view.filterBar" => Some(u.filter_bar),
         "view.navigator" => Some(u.navigator),
         "view.fullScreenPreview" => Some(u.fullscreen),
+        "view.lightsOut" => Some(u.lights_out != crate::state::LightsOut::On),
         "view.enterFullScreen" => Some(app.window_is_fullscreen),
         "panel.edit" => panel(RightPanel::Edit),
         "panel.profiles" => panel(RightPanel::Profiles),
@@ -456,6 +470,42 @@ fn expanded(app: &LightcraftApp, name: &str) -> Option<Vec<MenuNode>> {
             v.push(item("dialog.labelNames", Value::Null, "Edit Label Names…", None, true, None));
             v
         }
+        "Sidebar Sections" => {
+            // one checkable item per section, in the order the sidebar lists them
+            let layout = &app.ui.sidebar;
+            let mut v: Vec<MenuNode> = layout
+                .sections()
+                .iter()
+                .filter(|s| s.id.available())
+                .map(|s| item("view.sidebarSection", json!({"section": s.id.id()}), s.id.title(), None, true, Some(!s.hidden)))
+                .collect();
+            v.push(MenuNode::Separator);
+            v.push(item("view.sidebarReset", Value::Null, "Reset Sidebar Sections", None, !layout.is_default(), None));
+            v
+        }
+        "Appearance" => {
+            use crate::state::AppearanceMode;
+            use crate::theme::ThemeKind;
+            let s = &app.ui.settings;
+            let mut v: Vec<MenuNode> = [
+                ("auto", "Sync with System", AppearanceMode::Auto),
+                ("light", "Light Mode", AppearanceMode::Light),
+                ("dark", "Dark Mode", AppearanceMode::Dark),
+            ]
+            .into_iter()
+            .map(|(mode, label, m)| item("view.appearance", json!({"mode": mode}), label, None, true, Some(s.appearance_mode == m)))
+            .collect();
+            v.push(item("view.appearance", Value::Null, "Next Appearance Mode", None, true, None));
+            // the saved theme of each family is checked
+            for group in [[ThemeKind::Charcoal, ThemeKind::Midnight], [ThemeKind::Silver, ThemeKind::Paper]] {
+                v.push(MenuNode::Separator);
+                for k in group {
+                    let on = if k.is_dark() { s.dark_theme.kind() == k } else { s.light_theme.kind() == k };
+                    v.push(item("view.theme", json!({"theme": k.id()}), k.label(), None, true, Some(on)));
+                }
+            }
+            v
+        }
         "Grid Info" => ["filename", "exposure", "date"]
             .into_iter()
             .zip(["File Name", "Exposure (shutter · aperture · ISO)", "Capture Date"])
@@ -505,6 +555,30 @@ fn expanded(app: &LightcraftApp, name: &str) -> Option<Vec<MenuNode>> {
                 ("No Date Groups", GroupBy::None, "none"),
             ];
             v.extend(groups.into_iter().map(|(label, g, k)| item("library.sort", json!({"group": k}), label, None, true, Some(cur.group == g))));
+            v
+        }
+        "Open Recent Library" => {
+            let can = !crate::lightroom_import::is_running(app);
+            let open = app.session.library.as_ref().filter(|l| l.on_disk).map(|l| l.dir.clone());
+            let mut v: Vec<MenuNode> = app
+                .ui
+                .settings
+                .recent_libraries
+                .iter()
+                .map(|r| {
+                    let d = std::path::Path::new(r);
+                    // a missing library (moved, drive disconnected) is shown greyed out
+                    let label =
+                        format!("{} — {}", crate::panels::settings::library_name(d), d.parent().map(|p| p.display().to_string()).unwrap_or_default());
+                    item("app.openLibrary", json!({"path": r}), label, None, can && d.is_dir(), Some(open.as_deref() == Some(d)))
+                })
+                .collect();
+            if v.is_empty() {
+                v.push(item("app.clearRecentLibraries", Value::Null, "No Recent Libraries", None, false, None));
+            } else {
+                v.push(MenuNode::Separator);
+                v.push(item("app.clearRecentLibraries", Value::Null, "Clear Recent Libraries", None, true, None));
+            }
             v
         }
         "Import from Device" => {
@@ -569,15 +643,23 @@ fn expanded(app: &LightcraftApp, name: &str) -> Option<Vec<MenuNode>> {
             v
         }
         "Add to Album" => {
-            let sel = !app.session.selection.ids.is_empty() || has;
-            let mut albums: Vec<_> = app.session.catalog.albums().filter(|a| !a.folder && !a.is_smart()).map(|a| (a.name.clone(), a.id.0)).collect();
-            albums.sort_by_key(|(n, _)| n.to_lowercase());
-            let mut v: Vec<MenuNode> =
-                albums.into_iter().map(|(name, id)| item("album.addPhotos", json!({"id": id}), name, None, sel, None)).collect();
-            if !v.is_empty() {
+            let targets = app.session.targets(&Value::Null);
+            let sel = !targets.is_empty();
+            // albums hold library photos (issue #684): a Local-only selection is told what to do first
+            let local_only = crate::panels::grid::local_only(app, &targets);
+            let mut v: Vec<MenuNode> = vec![];
+            if local_only {
+                v.push(item("photo.addToLibrary", Value::Null, crate::i18n::tr("Add to My Photos First"), None, false, None));
                 v.push(MenuNode::Separator);
             }
-            v.push(item("dialog.newAlbum", Value::Null, "New Album…", None, true, None));
+            let mut albums: Vec<_> = app.session.catalog.albums().filter(|a| !a.folder && !a.is_smart()).map(|a| (a.name.clone(), a.id.0)).collect();
+            albums.sort_by_key(|(n, _)| n.to_lowercase());
+            let any = !albums.is_empty();
+            v.extend(albums.into_iter().map(|(name, id)| item("album.addPhotos", json!({"id": id}), name, None, sel && !local_only, None)));
+            if any {
+                v.push(MenuNode::Separator);
+            }
+            v.push(item("dialog.newAlbum", Value::Null, "New Album…", None, !local_only, None));
             v
         }
         _ => return None,
@@ -754,10 +836,29 @@ pub fn show_in_window(app: &mut LightcraftApp, ui: &mut egui::Ui, max_width: f32
     if total <= max_width {
         let saved = ui.spacing().item_spacing.x;
         ui.spacing_mut().item_spacing.x = TITLE_GAP;
-        for (title, items) in &bar {
-            let r = ui.add(egui::Button::new(egui::RichText::new(crate::i18n::tr(title)).font(font.clone()).color(t.text_label)).frame(false));
-            crate::widgets::register(ui.ctx(), format!("menu:{title}"), r.rect);
-            egui::Popup::menu(&r).show(|ui| crate::menu_level::level(ui, 1, bar_bottom, |ui| nodes_ui(ui, items, mac, &mut clicked, 1, bar_bottom)));
+        // All titles first, then their popups, so a title the pointer moves onto can take over
+        // from the open menu before either is drawn (no frame with two menus or none).
+        let titles: Vec<egui::Response> = bar
+            .iter()
+            .map(|(title, _)| {
+                let r = ui.add(egui::Button::new(egui::RichText::new(crate::i18n::tr(title)).font(font.clone()).color(t.text_label)).frame(false));
+                crate::widgets::register(ui.ctx(), format!("menu:{title}"), r.rect);
+                r
+            })
+            .collect();
+        let confirmed = switch_open_title(ui.ctx(), &titles);
+        for ((_, items), r) in bar.iter().zip(&titles) {
+            // (opening and closing by click is done in `switch_open_title`)
+            // (the click confirming a menu a hover opened must not close it again)
+            let close = if confirmed == Some(egui::Popup::default_response_id(r)) {
+                egui::PopupCloseBehavior::IgnoreClicks
+            } else {
+                egui::PopupCloseBehavior::CloseOnClick
+            };
+            egui::Popup::menu(r)
+                .close_behavior(close)
+                .open_memory(None)
+                .show(|ui| crate::menu_level::level(ui, 1, bar_bottom, |ui| nodes_ui(ui, items, mac, &mut clicked, 1, bar_bottom)));
         }
         ui.spacing_mut().item_spacing.x = saved;
     } else {
@@ -781,6 +882,47 @@ pub fn show_in_window(app: &mut LightcraftApp, ui: &mut egui::Ui, max_width: f32
         }
     }
     ui.cursor().left() - start
+}
+
+/// Native menu-bar behaviour for the top-level titles: while one menu is open, resting the pointer
+/// on another title closes it and opens that one, and a click on another title opens it in that
+/// same click (instead of only closing the open menu as a click outside). Without an open menu
+/// hovering does nothing; clicking a title toggles its menu. egui keeps one popup open at a time.
+/// Returns the menu whose title was just clicked right after a hover opened it.
+fn switch_open_title(ctx: &egui::Context, titles: &[egui::Response]) -> Option<egui::Id> {
+    let popup = egui::Popup::default_response_id;
+    let key = egui::Id::new("lc-menubar-hover-opened");
+    let open = titles.iter().position(|r| egui::Popup::is_id_open(ctx, popup(r)));
+    // the menu a hover opened, until it closes or is clicked
+    let mut confirmed = None;
+    let mut hover_opened: Option<egui::Id> = ctx.data(|d| d.get_temp(key)).filter(|id| open.is_some_and(|o| popup(&titles[o]) == *id));
+    for (i, r) in titles.iter().enumerate() {
+        if r.clicked() {
+            // the click that follows a hover switch confirms the menu the hover opened
+            if hover_opened == Some(popup(r)) {
+                confirmed = Some(popup(r));
+            } else {
+                egui::Popup::toggle_id(ctx, popup(r));
+            }
+            hover_opened = None;
+        } else if r.hovered() && open.is_some_and(|o| o != i) {
+            egui::Popup::open_id(ctx, popup(r));
+            hover_opened = Some(popup(r));
+            // a pointer move alone doesn't schedule the frame that draws the new menu
+            ctx.request_repaint();
+        }
+    }
+    // (leaving the titles ends it: a later click on the open title closes the menu)
+    let hover_opened = hover_opened.filter(|_| titles.iter().any(|r| r.hovered()));
+    ctx.data_mut(|d| match hover_opened {
+        Some(id) => {
+            d.insert_temp(key, id);
+        }
+        None => {
+            d.remove::<egui::Id>(key);
+        }
+    });
+    confirmed
 }
 
 /// A submenu row showing `text` at `depth`, whose rows `children` draws one level deeper,

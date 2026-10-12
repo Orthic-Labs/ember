@@ -232,12 +232,12 @@ function windowBootstrap(): WindowBootstrap {
 }
 
 const HELP_URLS: Record<string, string> = {
-  'app.help': 'https://lightcraft.photo/help',
-  'app.discord': 'https://discord.gg/artcraft',
-  'app.feedback': 'https://github.com/storytold/lightcraft/issues/new',
-  'app.website': 'https://lightcraft.photo',
-  'app.github': 'https://github.com/storytold/lightcraft',
-  'app.artcraft': 'https://artcraft.ai',
+  'app.help': 'https://github.com/Orthic-Labs/lightcraft/tree/main/docs',
+  'app.discord': 'https://github.com/Orthic-Labs/lightcraft/issues',
+  'app.feedback': 'https://github.com/Orthic-Labs/lightcraft/issues/new',
+  'app.website': 'https://github.com/Orthic-Labs/lightcraft',
+  'app.github': 'https://github.com/Orthic-Labs/lightcraft',
+  'app.artcraft': 'https://github.com/Orthic-Labs',
 };
 
 export function DesktopProvider({ children }: { children: ReactNode }) {
@@ -430,7 +430,7 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
           if (!path) return null;
           const task = await runCommand('library.inspectLightroom', { path }) as JsonObject;
           const taskId = typeof task.taskId === 'string' ? task.taskId : '';
-          if (!taskId) throw new Error('Lightroom inspection did not return a task ID.');
+          if (!taskId) throw new Error('LRCAT inspection did not return a task ID.');
           setDialog({ kind: 'lightroomInspectProgress', params: { taskId, path } });
           return task;
         }

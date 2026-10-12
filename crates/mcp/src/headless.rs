@@ -8,41 +8,48 @@ use lightcraft_engine::catalog::PhotoId;
 use lightcraft_raster::Rgba8;
 use serde_json::{Value, json};
 
-use crate::backend::Backend;
+use crate::backend::{Backend, ProgressHook};
 
 /// File extensions recognised as photos when expanding folders.
 pub const PHOTO_EXTENSIONS: &[&str] = &[
-    "jpg", "jpeg", "png", "tif", "tiff", "webp", "dng", "cr2", "cr3", "nef", "arw", "raf", "orf", "rw2", "rwl", "raw", "pef", "psd", "jxl", "gif",
-    "bmp", "avif", // containers Ember cannot decode but imports as preview only (their embedded JPEG)
-    "iiq", "crw", "mrw", "x3f", "kdc", "mos", "erf",
+    "jpg", "jpeg", "png", "tif", "tiff", "webp", "dng", "cr2", "cr3", "nef", "arw", "raf", "orf", "rw2", "rwl", "raw", "pef", "srw", "psd", "jxl",
+    "gif", "bmp", "avif", // containers Ember cannot decode but imports as preview only (their embedded JPEG)
+    "iiq", "crw", "mrw", "x3f", "kdc", "mos", "erf", "3fr", "fff",
 ];
 
 /// Headless backend: a [`Session`] with filesystem hooks.
 pub struct Headless {
     pub session: Session,
+    progress: Option<ProgressHook>,
 }
 
 impl Drop for Headless {
-    /// Snapshot a persistent library on exit (a no-op for in-memory sessions).
+    /// Snapshot a persistent library on exit (a no-op for in-memory sessions), after any Apple
+    /// Photos import still running (`export.addToPhotos {wait: false}`) has ended: the process
+    /// must not end in the middle of one, abandoning osascript and the import's result.
     fn drop(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.session.wait_for_photos_imports();
         let _ = self.session.close_library();
     }
 }
 
 impl Default for Headless {
     fn default() -> Self {
-        Self::new(Session::new().with_fs())
+        let session = Session::new().with_fs().with_default_denoise_models().with_system_clock().with_default_face_models();
+        Self::new(session.with_default_sam3_model())
     }
 }
 
 impl Headless {
     pub fn new(session: Session) -> Self {
-        Self { session }
+        Self { session, progress: None }
     }
 
     /// A headless session with the procedurally generated demo library.
     pub fn demo() -> Self {
-        Self::new(Session::with_demo().with_fs())
+        let session = Session::with_demo().with_fs().with_default_denoise_models().with_system_clock().with_default_face_models();
+        Self::new(session.with_default_sam3_model())
     }
 
     fn photo_or_active(&self, p: &Value) -> Result<PhotoId, String> {
@@ -60,7 +67,7 @@ impl Headless {
     /// (see `lightcraft_engine::export::ExportOptions::from_json`, plus `ids`, `dir`, `path`).
     /// With `path` and no `format`, the format follows the path's extension.
     fn export(&mut self, p: &Value) -> Result<Value, String> {
-        use lightcraft_engine::export::{Destination, ExportFormat, ExportOptions, Resize, export_batch};
+        use lightcraft_engine::export::{Destination, ExportFormat, ExportOptions, Resize, prepare_batch, run_batch};
         let p = &self.session.export_params(p)?;
         let mut opts = ExportOptions::from_params(p).map_err(|e| e.to_string())?;
         if !ExportOptions::has_size_param(p) {
@@ -82,18 +89,45 @@ impl Headless {
         };
         let dir = p.get("dir").and_then(Value::as_str).unwrap_or("");
         let write = &mut lightcraft_engine::export::write_file;
-        let files =
-            export_batch(&mut self.session, &ids, &opts, &Destination { dir: dir.to_string(), exact: exact.map(str::to_string) }, write, &|path| {
-                Path::new(path).exists()
-            })?;
+        // Add to Apple Photos: refused before anything is written when it can't be done
+        let after = self.session.after_export(&opts)?;
+        let items = prepare_batch(&mut self.session, &ids, &opts)?;
+        let total = items.len();
+        let mut hook = self.progress.take();
+        let mut cancelled = false;
+        let files = run_batch(
+            items,
+            &opts,
+            &Destination { dir: dir.to_string(), exact: exact.map(str::to_string) },
+            write,
+            &|path| Path::new(path).exists(),
+            true,
+            &mut |done, name| {
+                cancelled = hook.as_mut().is_some_and(|h| !h(done, total, name));
+                !cancelled
+            },
+        )?;
+        if !cancelled && let Some(hook) = hook.as_mut() {
+            cancelled = !hook(total, total, "");
+        }
+        if cancelled {
+            return Err("cancelled".into());
+        }
         // Single-photo exports also report path/width/height at the top level (back-compat).
         let mut out = files.first().cloned().unwrap_or_else(|| json!({}));
+        if let Some(photos) = after.run(&files, false) {
+            out["applePhotos"] = photos;
+        }
         out["files"] = json!(files);
         Ok(out)
     }
 }
 
 impl Backend for Headless {
+    fn set_progress(&mut self, hook: Option<ProgressHook>) {
+        self.progress = hook;
+    }
+
     fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
         let p = if params.is_null() { json!({}) } else { params };
         match method {
@@ -108,7 +142,7 @@ impl Backend for Headless {
             "engine.commands" => {
                 let mut v: Vec<Value> = self.session.commands().into_iter().map(|c| serde_json::to_value(c).unwrap_or_default()).collect();
                 v.push(json!({"id": "app.export", "label": "Export Now", "menu": [], "shortcut": null,
-                    "params": "{path?: output file (.jpg/.png/.tif/.webp/.avif/.dng) | dir?, ids?, preset?, format?: jpeg|png|tiff|webp|avif|dng|original, longEdge?|shortEdge?|width?|height?|megapixels?|percent? (default longEdge 3000; longEdge 0 = full size), dontEnlarge?, ppi?, quality?: 1..100, limitKb?, colorSpace?: srgb|displayP3|adobeRgb|proPhoto|rec2020, bitDepth?: 8|10|16|32, sharpen?: none|screen|matte|glossy, sharpenAmount?: low|standard|high, metadata?: all|allExceptCamera|copyright|none, removeLocation?, naming?, startNumber?, subfolder?, conflict?: unique|overwrite|skip, tiffCompression?: none|lzw|zip, dngCompression?: lossless|deflate|uncompressed, watermark?: text | {text?, vertical? (upright columns, right to left), size? (text height, 0.005..0.5 of the short edge; default 0.035), opacity? (0..1; 0.7), anchor?: topLeft|top|topRight|left|center|right|bottomLeft|bottom|bottomRight, inset? (margin, 0..0.4 of the short edge; 0.025), color? [r,g,b] sRGB, shadow?, image? (graphic drawn instead of the text), imageWidth? (0.01..1 of the photo's width; 0.2)}} — an unknown parameter, an out-of-range watermark size or a value of the wrong kind is an error, not a default",
+                    "params": "{path?: output file (.jpg/.png/.tif/.webp/.avif/.jxl/.psd/.dng) | dir?, ids?, preset?, format?: jpeg|png|tiff|webp|avif|jxl|psd|dng|original, longEdge?|shortEdge?|width?|height?|megapixels?|percent? (default longEdge 3000; longEdge 0 = full size), dontEnlarge?, ppi?, quality?: 1..100, jxlLossless?, jxlEffort?: fast|normal, jxlProgressive?, limitKb?, colorSpace?: srgb|displayP3|adobeRgb|proPhoto|rec2020, bitDepth?: 8|10|16|32, hdr? (HDR output for HDR edits: gain map JPEG, PQ AVIF / PNG / JPEG XL, float TIFF), sharpen?: none|screen|matte|glossy, sharpenAmount?: low|standard|high, metadata?: all|allExceptCamera|copyright|none, removeLocation?, naming?, startNumber?, subfolder?, conflict?: unique|overwrite|skip, tiffCompression?: none|lzw|zip, dngCompression?: lossless|deflate|uncompressed, addToPhotos?: bool (macOS: then add the files written to Apple Photos; outcome in `applePhotos`), photosAlbum?: top-level album name (made when missing), watermark?: text | {text?, vertical? (upright columns, right to left), size? (text height, 0.005..0.5 of the short edge; default 0.035), opacity? (0..1; 0.7), anchor?: topLeft|top|topRight|left|center|right|bottomLeft|bottom|bottomRight, insetX? (margin from the left/right edge, 0..0.4 of the short edge; 0.025), insetY? (from the top/bottom edge; 0.025), inset? (sets both), rotation?: 0|90|180|270 (degrees clockwise; 0), color? [r,g,b] sRGB, shadow?, image? (graphic drawn instead of the text), imageWidth? (0.01..1 of the photo's width; 0.2)}} — an unknown parameter, an out-of-range watermark size or a value of the wrong kind is an error, not a default",
                     "enabled": self.session.active().is_some()}));
                 Ok(Value::Array(v))
             }
@@ -160,7 +194,7 @@ pub fn expand_paths(paths: &[String]) -> Vec<String> {
 }
 
 /// Encode by extension: `.png` (default), `.jpg`/`.jpeg` (quality), `.tif`/`.tiff`, `.webp` (lossless),
-/// `.avif` — via the shared export encoder (embeds an sRGB profile).
+/// `.avif`, `.jxl` — via the shared export encoder (embeds an sRGB profile).
 pub fn encode_image(ext: &str, img: &Rgba8, quality: u8) -> Result<Vec<u8>, String> {
     use lightcraft_engine::export::{ExportFormat, ExportOptions};
     let format = ExportFormat::parse(ext).unwrap_or(ExportFormat::Png);
@@ -177,6 +211,28 @@ pub fn write_image(path: &Path, img: &Rgba8, quality: u8) -> Result<(), String> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Headless sessions look for the SAM 3 model where the desktop app does, and `segment.model.status` reports it (issue #619).
+    #[test]
+    fn headless_sessions_get_the_sam3_model_folder() {
+        let dir = lightcraft_engine::config::default_sam3_dir();
+        assert_eq!(Headless::default().session.segmenter.dir, dir);
+        assert_eq!(Headless::demo().session.segmenter.dir, dir);
+        let dir = std::env::temp_dir().join("lc-mcp-sam3-dir");
+        let mut session = Session::new();
+        session.segmenter.dir = Some(dir.clone());
+        let mut h = Headless::new(session);
+        let r = h.call("engine.execute", json!({"command": "segment.model.status", "params": {}})).unwrap();
+        assert_eq!(r["dir"], json!(dir.display().to_string()), "{r}");
+    }
+
+    /// A headless session stamps imports and edits with the system clock, not the engine's fixed test clock.
+    #[test]
+    fn headless_uses_the_system_clock() {
+        const FIXED: &str = "2026-09-30T12:00:00";
+        assert_ne!((Headless::default().session.clock)(), FIXED);
+        assert_ne!((Headless::demo().session.clock)(), FIXED);
+    }
 
     /// `app.export` without `ids` exports the selection (as the desktop app does), else the active photo.
     #[test]

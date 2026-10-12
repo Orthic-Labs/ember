@@ -2,10 +2,10 @@
 
 /// Historical repository slug, retained for source compatibility.
 pub const APP: &str = "lightcraft";
-/// The ArtCraft community Discord.
-pub const DISCORD: &str = "https://discord.gg/artcraft";
-/// Upstream project attribution.
-pub const WEBSITE: &str = "https://github.com/storytold/lightcraft";
+/// Ember community destination; legacy constant retained for callers.
+pub const DISCORD: &str = "https://github.com/Orthic-Labs/lightcraft/issues";
+/// Maintainer organization.
+pub const WEBSITE: &str = "https://github.com/Orthic-Labs";
 /// Fork project page.
 pub const APP_PAGE: &str = "https://github.com/Orthic-Labs/lightcraft";
 /// This app's source repository.
@@ -17,10 +17,10 @@ pub const HELP: &str = "https://github.com/Orthic-Labs/lightcraft";
 
 pub const LINKS: &[(&str, &str, &str)] = &[
     ("app.help", "Ember Help", HELP),
-    ("app.discord", "Upstream Community…", DISCORD),
+    ("app.discord", "Ember Community…", DISCORD),
     ("app.website", "Ember Project", APP_PAGE),
     ("app.github", "Ember on GitHub", GITHUB),
-    ("app.artcraft", "Upstream LightCraft", WEBSITE),
+    ("app.artcraft", "Orthic Labs", WEBSITE),
     ("app.feedback", "Send Feedback…", FEEDBACK),
 ];
 

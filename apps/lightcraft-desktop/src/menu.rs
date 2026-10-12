@@ -49,7 +49,7 @@ pub fn spec() -> MenuSpec {
                 &[
                     ("file.addPhotos", "Import Photos…", Some("Cmd+Shift+I")),
                     ("file.addFolder", "Import from Folder…", None),
-                    ("file.importLightroom", "Import Lightroom Catalog…", None),
+                    ("file.importLightroom", "Import LRCAT Catalog…", None),
                     ("file.addFromDevice", "Import from Device", None),
                     ("file.findMissing", "Find Missing Photos…", None),
                     ("file.backupLibrary", "Back Up Library…", None),

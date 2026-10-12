@@ -102,11 +102,7 @@ pub fn run(action: &str, params: &Value) -> Result<Value, String> {
         "pickFolder" | "chooseFolder" | "importFolder" | "openLibrary" => Ok(provided_path(params)?
             .map_or_else(|| path_value(rfd::FileDialog::new().set_title("Open Folder").pick_folder()), |path| path_value(Some(path)))),
         "pickLightroomCatalog" | "importLightroom" => Ok(provided_path(params)?.map_or_else(
-            || {
-                path_value(
-                    rfd::FileDialog::new().set_title("Import Lightroom Catalog").add_filter("Lightroom Classic Catalog", &["lrcat"]).pick_file(),
-                )
-            },
+            || path_value(rfd::FileDialog::new().set_title("Import LRCAT Catalog").add_filter("LRCAT Catalog", &["lrcat"]).pick_file()),
             |path| path_value(Some(path)),
         )),
         "pickDevice" | "chooseDevice" | "importDevice" => Ok(provided_path(params)?
@@ -231,8 +227,7 @@ pub(crate) async fn run_import_picker(action: &str, params: &Value, parent: &Web
             if let Some(path) = provided_path(params)? {
                 return Ok(path_value(Some(path)));
             }
-            let dialog =
-                AsyncFileDialog::new().set_parent(parent).set_title("Import Lightroom Catalog").add_filter("Lightroom Classic Catalog", &["lrcat"]);
+            let dialog = AsyncFileDialog::new().set_parent(parent).set_title("Import LRCAT Catalog").add_filter("LRCAT Catalog", &["lrcat"]);
             Ok(path_value(dialog.pick_file().await.map(|file| file.path().to_path_buf())))
         }
         _ => Err(format!("unknown import picker {action}")),

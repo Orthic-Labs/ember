@@ -169,6 +169,8 @@ fn services(originals: Originals, backend: Option<Backend>, files: Files, frozen
     let restore_backend = backend.clone();
     Services {
         picker: None,
+        pick_display_profile: None,
+        screen_profile: None,
         backup_library: Some(Box::new(move |session: &mut Session| {
             let Some(b) = backup_backend.clone() else { return Err("nothing is stored in this browser session (?store=memory)".into()) };
             // the photos' own names for the originals in the zip
@@ -205,11 +207,16 @@ fn services(originals: Originals, backend: Option<Backend>, files: Files, frozen
             open_picker(originals.clone(), backend.clone(), ctx.clone());
             Vec::new() // files arrive asynchronously and are imported on a later frame
         })),
+        pick_denoise_model: None,
         // Preset files: browser pickers are asynchronous; not wired on the web yet.
         pick_preset_files: None,
         pick_tracklog: None,
         pick_lightroom_catalog: None,
+        // Face models need a folder to live in; the web has none.
+        pick_model_file: None,
         save_preset_file: None,
+        pick_keyword_list: None,
+        save_keyword_list: None,
         pick_curve_preset_files: None,
         save_curve_preset_file: None,
         write: Some(Box::new(download)),
@@ -221,11 +228,14 @@ fn services(originals: Originals, backend: Option<Backend>, files: Files, frozen
         reveal: None,
         log_file: None,
         open_with: None,
+        check_editor: None,
         open_url: Some(Box::new(|url: &str| {
             let w = web_sys::window().ok_or("no window")?;
             w.open_with_url_and_target(url, "_blank").map(|_| ()).map_err(|_| "the browser blocked the new tab".to_string())
         })),
         pick_folder: None,
+        // the browser reports prefers-color-scheme to egui
+        system_theme: None,
     }
 }
 
@@ -375,7 +385,7 @@ struct WebApp {
 }
 
 impl WebApp {
-    fn new(cc: &eframe::CreationContext<'_>, boot: Boot) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>, boot: Boot, chinese_font: Vec<u8>) -> Self {
         let Boot { opts, backend, files, index, lib_dir } = boot;
         let originals = Originals::default();
         let t = perf_now();
@@ -420,7 +430,8 @@ impl WebApp {
         // previews are large (≤ 2560 px, f32): keep few in a 32-bit address space
         session.media.preview_capacity = 3;
         let frozen = Rc::new(Cell::new(false));
-        let mut app = LightcraftApp::new(session, services(originals.clone(), backend.clone(), files.clone(), frozen.clone(), cc.egui_ctx.clone()));
+        let mut app = LightcraftApp::new(session, services(originals.clone(), backend.clone(), files.clone(), frozen.clone(), cc.egui_ctx.clone()))
+            .with_chinese_font(chinese_font);
         let ui_written = files.get("ui.json").unwrap_or_default();
         if let Ok(ui) = serde_json::from_slice::<UiState>(&ui_written) {
             app.ui = ui;
@@ -653,12 +664,15 @@ impl eframe::App for WebApp {
     }
 }
 
-/// Start the app (called by `index.html` after instantiating the module).
+/// Start the app with the separately fetched Simplified Chinese font (empty in font-free builds).
 #[wasm_bindgen]
-pub fn start() {
+pub fn start(chinese_font: Vec<u8>) {
     eframe::WebLogger::init(log::LevelFilter::Info).ok();
     safety::install_panic_hook();
     log::info!("lightcraft: wasm instantiated at {:.0} ms", perf_now());
+    if chinese_font.is_empty() {
+        log::warn!("lightcraft: no Simplified Chinese font supplied; Chinese-only glyphs will show as boxes");
+    }
     let opts = Options::from_url();
     wasm_bindgen_futures::spawn_local(async move {
         // one tab per library: two would each keep their own copy and overwrite each other's saves
@@ -679,7 +693,7 @@ pub fn start() {
         };
         let boot = boot(opts).await;
         let runner = eframe::WebRunner::new();
-        let r = runner.start(canvas, eframe::WebOptions::default(), Box::new(move |cc| Ok(Box::new(WebApp::new(cc, boot))))).await;
+        let r = runner.start(canvas, eframe::WebOptions::default(), Box::new(move |cc| Ok(Box::new(WebApp::new(cc, boot, chinese_font))))).await;
         match r {
             Ok(()) => {
                 if let Some(el) = window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id("lightcraft_loading")) {

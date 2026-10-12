@@ -140,6 +140,13 @@ controls! {
     "light.shadows" => light.shadows, "Shadows", Light, -100, 100, 0, 1, 0, Centered;
     "light.whites" => light.whites, "Whites", Light, -100, 100, 0, 1, 0, Centered;
     "light.blacks" => light.blacks, "Blacks", Light, -100, 100, 0, 1, 0, Centered;
+    "hdr.maxEv" => hdr.max_ev, "HDR Headroom", Light, 0, 5, 3, 0.1, 1, Plain;
+    "hdr.sdrBrightness" => hdr.sdr_brightness, "SDR Brightness", Light, -100, 100, 0, 1, 0, Centered;
+    "hdr.sdrContrast" => hdr.sdr_contrast, "SDR Contrast", Light, -100, 100, 0, 1, 0, Centered;
+    "hdr.sdrHighlights" => hdr.sdr_highlights, "SDR Highlights", Light, -100, 100, 0, 1, 0, Centered;
+    "hdr.sdrShadows" => hdr.sdr_shadows, "SDR Shadows", Light, -100, 100, 0, 1, 0, Centered;
+    "hdr.sdrWhites" => hdr.sdr_whites, "SDR Whites", Light, -100, 100, 0, 1, 0, Centered;
+    "hdr.sdrClarity" => hdr.sdr_clarity, "SDR Clarity", Light, -100, 100, 0, 1, 0, Centered;
     "curve.highlights" => curve.highlights, "Highlights", Curve, -100, 100, 0, 1, 0, Centered;
     "curve.lights" => curve.lights, "Lights", Curve, -100, 100, 0, 1, 0, Centered;
     "curve.darks" => curve.darks, "Darks", Curve, -100, 100, 0, 1, 0, Centered;
@@ -207,6 +214,7 @@ controls! {
     "grain.amount" => grain.amount, "Grain", Grain, 0, 100, 0, 1, 0, Plain;
     "grain.size" => grain.size, "Size", Grain, 0, 100, 25, 1, 0, Plain;
     "grain.roughness" => grain.roughness, "Roughness", Grain, 0, 100, 50, 1, 0, Plain;
+    "enhance.denoise" => enhance.denoise, "Amount", Detail, 0, 100, 0, 1, 0, Plain;
     "detail.sharpenAmount" => detail.sharpen_amount, "Sharpening", Detail, 0, 150, 0, 1, 0, Plain;
     "detail.sharpenRadius" => detail.sharpen_radius, "Radius", Detail, 0.5, 3, 1, 0.1, 1, Plain;
     "detail.sharpenDetail" => detail.sharpen_detail, "Detail", Detail, 0, 100, 25, 1, 0, Plain;

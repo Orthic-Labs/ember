@@ -3,6 +3,10 @@
 //! A preset is a *partial* settings object (JSON) — only the groups it includes. Applying merges it
 //! into the photo's settings; `amount` (0..200 %) interpolates numeric values between the current
 //! settings and the preset's. Copy/paste/sync use the same group selection ([`SettingsGroup`]).
+//!
+//! The rendering process ([`crate::ProcessVersion`]) is in no group: copy, paste, sync and presets
+//! made from a photo never carry it, so the photos they change keep their own. A partial that names
+//! `process` itself (Apply Settings JSON) sets it like any other field.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -98,7 +102,7 @@ impl SettingsGroup {
             SettingsGroup::Profile => &["profile"],
             SettingsGroup::Treatment => &["treatment"],
             SettingsGroup::WhiteBalance => &["wb"],
-            SettingsGroup::Light => &["light"],
+            SettingsGroup::Light => &["light", "hdr"],
             SettingsGroup::ToneCurve => &["curve"],
             SettingsGroup::Color => &["color"],
             SettingsGroup::ColorMixer => &["mixer", "bw_mix", "point_colors"],
@@ -183,6 +187,7 @@ fn scale_patch(base: &Value, patch: &Value, t: f64) -> Value {
 pub fn apply_partial(s: &DevelopSettings, partial: &Value, amount: f64) -> DevelopSettings {
     let base = s.to_json();
     let patch = if (amount - 1.0).abs() < 1e-9 { partial.clone() } else { scale_patch(&base, partial, amount) };
+    // (a white balance without a scale keeps its old meaning: `DevelopSettings::merged`)
     let mut out = s.merged(&patch).unwrap_or_else(|_| s.clone());
     for c in crate::controls::CONTROLS {
         if let Some(v) = crate::controls::get(&out, c.id) {

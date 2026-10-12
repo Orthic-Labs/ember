@@ -1,16 +1,22 @@
 # Ember — instructions for agents
 
-Ember is a clean-room, open-source, pure-Rust photo library + non-destructive raw developer. Native on macOS, Windows, Linux; web via WASM. Orthic Labs fork of `storytold/lightcraft`; Rust engine conventions are inherited from upstream.
+Ember is Orthic Labs' independently maintained, open-source, pure-Rust photo library + non-destructive raw developer. Native on macOS, Windows, Linux; web via WASM. Upstream source provenance is retained in NOTICE.
 
 ## Start every session here
 1. Read `plan/STATUS.md` (current milestone, next unchecked task, blockers).
-2. Read the task in `plan/execution-plan.md` §3, the relevant section of `plan/architecture.md`, and the README/docs of the crate you touch. Behaviour/visual reference: `plan/lightroom/` (incl. `10-observed-ui.md` + screenshots).
-3. **Know where we stand:** read [`ROADMAP.md`](ROADMAP.md) → *Where we stand* (honest assessment by dimension and
-   by kind of user) and *Where we're going* (ordered priorities). The checklist counts features that *exist*; the real
-   gaps are quality and coverage: camera colour calibration, CR3 / compressed raws, per-model verification, render
-   fidelity against Lightroom, AI models, HDR / video / Classic modules. A ✅ row is not proof of parity — if you find a
-   ✅ feature that is wrong or incomplete, downgrade it to 🟡 with a note.
-4. **Pick work** from [`docs/parity.md`](docs/parity.md) → *Top gaps* (ordered by user impact; the tracker has one row per feature, menu item and shortcut). When you land a feature, update its row(s) and the gap list in the same commit, and the *Where we stand* / *Where we're going* sections of `ROADMAP.md` when a listed gap closes; `cargo xtask parity` (part of `ci`) checks that every `cmd:`/`ctl:` id and path the tracker cites still exists, and `cargo xtask parity --write` refreshes its summary.
+2. Read the task in `plan/execution-plan.md` §3, the relevant section of `plan/architecture.md`, and the README/docs of the crate you touch. Behaviour/visual reference: `plan/reference-editor/` (incl. `10-observed-ui.md` + screenshots).
+3. **Know where we stand:** read [`ROADMAP.md`](ROADMAP.md) (stage, headline numbers, every dimension) and, for
+   method and evidence, [`docs/target-app-parity.md`](docs/target-app-parity.md). The checklist counts features that
+   *exist*; the real gaps are quality and coverage: camera colour calibration, CR3 / compressed raws, per-model
+   verification, render fidelity against reference editor, AI models, HDR / video / Classic modules (raw detail:
+   [`docs/raw-parity.md`](docs/raw-parity.md)). A ✅ row is not proof of parity — if you find a ✅ feature that is
+   wrong or incomplete, downgrade it to 🟡 with a note.
+4. **Pick work** from [`docs/gaps.md`](docs/gaps.md) (ranked by user impact; `B` marks beta blockers). The row-by-row
+   tracker is [`docs/parity-checklist.md`](docs/parity-checklist.md) (one row per feature, menu item and shortcut).
+   When you land a feature, update its row(s) and the gap entry in the same commit, and the numbers in `ROADMAP.md` /
+   `docs/target-app-parity.md` when a listed gap closes (bump each doc's *Last updated* line and revision history, per
+   craftrules `standards/progress-docs.md`); `cargo xtask parity` (part of `ci`) checks that every `cmd:`/`ctl:` id and
+   path the tracker cites still exists, and `cargo xtask parity --write` refreshes its summary.
 5. Follow the autonomous operation protocol (`plan/execution-plan.md` §7). Don't stop to ask unless §7 lists the decision as the user's.
 
 `plan/` is gitignored (local-only).
@@ -51,8 +57,8 @@ of it. Full standard: `../craftrules/standards/never-crash.md`
   integration tests, examples and benches. New crates start with the attribute.
 
 ## Non-negotiables
-- **Clean-room.** Never read/disassemble anything inside Lightroom or Creative Cloud app bundles (names/listings only). Never copy their icons, presets, profiles (DCP), lens profiles (LCP), camera matrices or fonts. Observation of the installed Lightroom is read-only (it syncs the user's personal library: never import/edit/rate/delete there). Never copy GPL/LGPL/AGPL code (darktable, RawTherapee, ART, LibRaw, rawspeed, rawloader, rawler, lensfun, dcraw-derived GPL code…).
-- **Processing stays Rust.** React/TypeScript presentation & Tauri/RightKit system-webview hosting are permitted for macOS/Windows desktop migration. Existing clean-room Rust RAW, develop, catalog, preview & export engine remains authoritative. Linux/web/CLI hosts retain their current architecture.
+- **Research & original implementation.** Read-only internal analysis of installed reference applications is permitted for maintainer-authorized research. Keep research outside this repository & preserve personal libraries without imports, edits, ratings or deletions. Do not copy proprietary code, icons, presets, profiles, camera matrices, fonts or model weights into Ember. Never copy GPL/LGPL/AGPL code (darktable, RawTherapee, ART, LibRaw, rawspeed, rawloader, rawler, lensfun, dcraw-derived GPL code…).
+- **Processing stays Rust.** React/TypeScript presentation & Tauri/RightKit system-webview hosting are permitted for macOS/Windows desktop migration. Existing Rust RAW, develop, catalog, preview & export engine remains authoritative. Linux/web/CLI hosts retain their current architecture.
 - **Layering** (`plan/architecture.md` §3, enforced by `cargo xtask layers`): nothing below L5 depends on egui/eframe/winit/rfd.
 - **Everything is a command** (`crates/engine`): id, label, menu path, shortcut, params, enabled(), run(). UI, CLI, control channel and MCP all dispatch by id. Every slider is a `develop` control spec.
 - **Resolution independence:** settings use normalized image coordinates and relative radii; previews and exports must match.
@@ -60,7 +66,7 @@ of it. Full standard: `../craftrules/standards/never-crash.md`
 - **Commits:** one task id per commit (`M2.3: local Laplacian highlights/shadows`). Only green states. End messages with the attribution line required by the environment.
 
 ## Assets: icons, images, fonts (ABSOLUTE RULE — never violate)
-- **Never use any iconography, image, artwork, font, sound or other asset from Lightroom or Creative Cloud products** (no product icons, screenshots, presets/profiles/LUTs or UI bitmaps — not even as a temporary placeholder or "reference copy"). Observing their UI to understand *layout and behaviour* is allowed; copying or tracing assets is not.
+- **Never ship proprietary reference-product assets** (icons, images, artwork, fonts, sounds, screenshots, presets/profiles/LUTs or UI bitmaps) in Ember, including temporary placeholders. Research may inspect application behavior & internals; product assets must be original or separately licensed under rules below.
 - **This includes open-licensed assets from the same publisher**: no Source Sans/Serif/Code or Source Han fonts, no hosted fonts, no
   publisher-supplied icon sets, sample photos, colour profiles or LUTs — even when OFL/MIT. The UI font is Inter (OFL);
   Japanese and Chinese fonts come from craft-fonts (below). **One exception (maintainer decision, 2026-10-07): Noto
@@ -74,9 +80,10 @@ of it. Full standard: `../craftrules/standards/never-crash.md`
   font files here (Inter, already in `assets/fonts/`, is the one exception); add new fonts to craft-fonts. Ember
   uses it as the optional build input `CRAFT_FONTS_DIR`: `git clone https://github.com/storytold/craft-fonts ../craft-fonts`
   then `CRAFT_FONTS_DIR=../craft-fonts cargo run -p lightcraft` (or any cargo/xtask command). `crates/engine/build.rs`
-  embeds the manifest's fonts as `lightcraft_engine::CRAFT_FONTS` (wasm32: BIZ UDPGothic Regular only); the UI
-  (`theme::font_definitions`) and the export watermark renderer use its CJK faces (picked by script) as fallbacks after Inter. Unset,
-  `CRAFT_FONTS` is empty: everything builds, tests and runs, but Japanese text has no glyphs. Releases always build
+  embeds the manifest's fonts as `lightcraft_engine::CRAFT_FONTS` (wasm32: BIZ UDPGothic Regular only); `cargo xtask web`
+  ships Noto Sans CJK SC Regular as a separate asset loaded by the UI before startup. The UI
+  (`theme::font_definitions`) and the export watermark renderer use CJK faces (picked by script) as fallbacks after Inter. Unset,
+  `CRAFT_FONTS` is empty: everything builds, tests and runs, but Chinese and Japanese text lack glyphs. Releases always build
   with it (`release.yml`, `CRAFT_FONTS_REQUIRED=1`) and ship the fonts' OFL licences. Tests that need these fonts skip
   without it; the FreeBSD CI job runs them with it. Rules: craftrules
   [`standards/fonts.md`](https://github.com/storytold/craftrules/blob/main/standards/fonts.md).
@@ -93,7 +100,7 @@ of it. Full standard: `../craftrules/standards/never-crash.md`
 - **Never send OS-level synthetic input** (osascript/System Events keystrokes or clicks, `cliclick`, accessibility
   automation): it goes to whatever window is frontmost — the user's terminal or other apps. Drive Ember only
   through its control channel (`ui.key`, `ui.pointer`, `ui.clickWidget`, `ui.menu.invoke`) or headless snapshots.
-- For UI work, **look at the result**: drive via the control channel and take `ui.screenshot`, compare with `plan/lightroom/screenshots/`.
+- For UI work, **look at the result**: drive via the control channel and take `ui.screenshot`, compare with `plan/reference-editor/screenshots/`.
 - **Unattended (display asleep/locked, CI, nightly runs): prefer headless snapshots** — no window needed:
   `lightcraft-cli snapshot --demo --script tour.jsonl -o out.png --size 1600x1000` (control-protocol requests,
   one per line; see `docs/control-protocol.md` → Headless rendering). In a running app use

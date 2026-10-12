@@ -9,6 +9,7 @@ description = "Ember GPU develop pipeline: wgpu compute (WGSL) twin of the CPU p
 workspace = true
 
 [dependencies]
+lightcraft-denoise = { workspace = true, optional = true }
 lightcraft-geom = { workspace = true }
 lightcraft-color = { workspace = true }
 lightcraft-raster = { workspace = true }
@@ -23,5 +24,10 @@ wgpu = { workspace = true }
 pollster = { workspace = true }
 bytemuck = { workspace = true }
 
+[features]
+default = []
+denoise = ["dep:lightcraft-denoise", "lightcraft-denoise/runtime"]
+
 [dev-dependencies]
 lightcraft-scenes = { workspace = true }
+lightcraft-raw = { workspace = true }

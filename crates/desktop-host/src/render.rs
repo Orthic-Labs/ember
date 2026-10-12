@@ -842,6 +842,8 @@ mod tests {
                         rendered: Err("gate".into()),
                         loaded: None,
                         quick: None,
+                        gpu_fallback: None,
+                        display: None,
                     },
                     payload: Err("gate".into()),
                 }

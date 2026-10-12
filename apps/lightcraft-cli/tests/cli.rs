@@ -82,6 +82,46 @@ fn look_extract_then_apply_lands_a_photo_on_the_samples_statistics() {
     assert_eq!(lines[0]["result"]["look"]["samples"], 2);
 }
 
+#[test]
+fn contact_sheet_exports_pdf_and_protects_originals() {
+    let input = tmp("contact-sheet-input.png");
+    gradient_png(&input);
+    let out = tmp("contact-sheet.pdf");
+    let (ok, lines, err) = run_cli(
+        &[
+            "--import",
+            input.to_str().unwrap(),
+            "export.contactSheet",
+            &format!("path={}", out.display()),
+            "paper=letter",
+            "landscape=true",
+            "columns=2",
+            "rows=3",
+        ],
+        None,
+    );
+    assert!(ok, "{err}: {lines:?}");
+    assert_eq!(lines[0]["result"]["pages"], 1);
+    assert_eq!(lines[0]["result"]["photos"], 1);
+    let bytes = std::fs::read(&out).unwrap();
+    assert!(bytes.starts_with(b"%PDF-1.4"));
+    assert!(String::from_utf8_lossy(&bytes).contains("/MediaBox [0 0 792.00 612.00]"));
+    let before = std::fs::read(&input).unwrap();
+    for target in [input.clone(), input.with_extension("xmp")] {
+        if target != input {
+            std::fs::write(&target, b"existing sidecar").unwrap();
+        }
+        let (ok, _, _) = run_cli(&["--import", input.to_str().unwrap(), "export.contactSheet", &format!("path={}", target.display())], None);
+        assert!(!ok, "overwrote protected file");
+    }
+    assert_eq!(std::fs::read(&input).unwrap(), before);
+    assert_eq!(std::fs::read(input.with_extension("xmp")).unwrap(), b"existing sidecar");
+    let prior = std::fs::read(&out).unwrap();
+    let (ok, _, _) = run_cli(&["--import", input.to_str().unwrap(), "export.contactSheet", &format!("path={}", out.display()), "columns=0"], None);
+    assert!(!ok);
+    assert_eq!(std::fs::read(&out).unwrap(), prior, "failed export changed prior output");
+}
+
 fn tmp(name: &str) -> std::path::PathBuf {
     let d = std::env::temp_dir().join(format!("lightcraft-cli-test-{}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();
@@ -308,6 +348,55 @@ fn snapshot_script_failure_exits_non_zero() {
     assert_eq!((d.width, d.height), (320, 200));
 }
 
+#[test]
+fn snapshot_ui_zoom_keeps_requested_pixel_dimensions() {
+    let script = tmp("snap-ui-zoom.jsonl");
+    std::fs::write(&script, format!("{}\n{}\n", json!({"method": "ui.zoomFactor", "params": {"factor": 1.1}}), json!({"method": "ui.inspect"})))
+        .unwrap();
+    for (size, scale, expected) in [("400x240", "1", (400, 240)), ("345x200", "0.9", (311, 180))] {
+        let out = tmp(&format!("snap-ui-zoom-{scale}.png"));
+        let o = Command::new(BIN)
+            .args(["snapshot", "--script", script.to_str().unwrap(), "-o", out.to_str().unwrap(), "--size", size, "--scale", scale])
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        let replies: Vec<Value> = String::from_utf8_lossy(&o.stdout).lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+        assert!(replies.iter().all(|reply| reply["ok"] == true), "{replies:?}");
+        assert!(replies[1]["result"]["pixelsPerPoint"].as_f64().unwrap() > scale.parse::<f64>().unwrap());
+        let decoded = lightcraft_codecs::decode(&std::fs::read(out).unwrap(), Default::default()).unwrap();
+        assert_eq!((decoded.width, decoded.height), expected);
+    }
+}
+
+/// Headless snapshots default to CPU photo rendering as well as CPU UI rasterization.
+#[test]
+fn snapshot_defaults_to_cpu_without_gpu_environment_overrides() {
+    let script = tmp("default-cpu.jsonl");
+    std::fs::write(
+        &script,
+        format!("{}\n{}\n", json!({"method": "engine.execute", "params": {"command": "app.gpu"}}), json!({"method": "ui.screenshot"})),
+    )
+    .unwrap();
+    let image = tmp("default-cpu.png");
+    let output = Command::new(BIN)
+        .env_remove("LIGHTCRAFT_GPU")
+        .env_remove("LIGHTCRAFT_GPU_BACKEND")
+        .env_remove("WGPU_BACKEND")
+        .args(["snapshot", "--demo", "--script", script.to_str().unwrap(), "-o", image.to_str().unwrap(), "--size", "480x320"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "status {}: {}", output.status, String::from_utf8_lossy(&output.stderr));
+    let replies: Vec<Value> = String::from_utf8_lossy(&output.stdout).lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+    assert!(replies.iter().all(|reply| reply["ok"] == true), "{replies:?}");
+    let gpu = &replies[0]["result"];
+    assert_eq!(gpu["enabled"], false, "{gpu}");
+    assert_eq!(gpu["available"], false, "{gpu}");
+    assert_eq!(gpu["adapter"], Value::Null, "no device is created: {gpu}");
+    assert!(gpu["reason"].as_str().is_some_and(|reason| reason.contains("preference")), "{gpu}");
+    let decoded = lightcraft_codecs::decode(&std::fs::read(image).unwrap(), Default::default()).unwrap();
+    assert_eq!((decoded.width, decoded.height), (480, 320));
+}
+
 /// Issue #136: with the GPU switched off from the environment the UI starts and renders on the CPU,
 /// without creating a GPU device (no driver is loaded), and says why.
 #[test]
@@ -486,4 +575,146 @@ fn warnings_are_logged_on_stderr() {
     assert!(warn.contains("LIGHTCRAFT_GPU_BACKEND=bogus names no known backend"), "{warn}");
     let off = run("off");
     assert!(!off.contains("names no known backend"), "{off}");
+}
+
+#[test]
+fn snapshot_rejects_invalid_dimensions_before_creating_an_image() {
+    for (index, (size, scale)) in
+        [("NaNx100", "1"), ("100x100", "inf"), ("9000x9000", "1"), ("9000x100", "2"), ("100x100", "0.001")].into_iter().enumerate()
+    {
+        let image = tmp(&format!("invalid-viewport-{index}.png"));
+        let output = Command::new(BIN).args(["snapshot", "--size", size, "--scale", scale, "-o"]).arg(&image).output().unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("snapshot: bad --size/--scale"), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(!image.exists());
+    }
+}
+
+#[test]
+fn snapshot_preserves_fractional_scale_rounding() {
+    let image = tmp("fractional-scale-rounding.png");
+    let output =
+        Command::new(BIN).env("LIGHTCRAFT_GPU", "0").args(["snapshot", "--size", "345x200", "--scale", "0.9", "-o"]).arg(&image).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let decoded = lightcraft_codecs::decode(&std::fs::read(image).unwrap(), Default::default()).unwrap();
+    assert_eq!((decoded.width, decoded.height), (311, 180));
+}
+
+/// Snapshot's CPU setting must never replace the desktop preference, including with --library.
+#[cfg(target_os = "linux")]
+#[test]
+fn snapshot_leaves_desktop_gpu_preferences_untouched() {
+    let dir = tmp("snapshot-desktop-preferences");
+    let library = dir.join("library");
+    let mut session = lightcraft_engine::Session::new().with_fs();
+    session.open_library(&library, true).unwrap();
+    drop(session);
+    let config = dir.join("config");
+    let app_config = config.join("lightcraft");
+    std::fs::create_dir_all(&app_config).unwrap();
+    let ui_path = app_config.join("ui.json");
+    let mut ui = lightcraft_ui_egui::UiState::default();
+    ui.settings.gpu = true;
+    let saved = serde_json::to_vec_pretty(&ui).unwrap();
+    std::fs::write(&ui_path, &saved).unwrap();
+    let script = dir.join("preferences.jsonl");
+    std::fs::write(
+        &script,
+        format!("{}\n{}\n", json!({"method": "engine.execute", "params": {"command": "app.gpu"}}), json!({"method": "ui.inspect"})),
+    )
+    .unwrap();
+    for gpu_environment in [None, Some("1")] {
+        let image = dir.join(format!("{}.png", gpu_environment.unwrap_or("default")));
+        let mut cmd = Command::new(BIN);
+        cmd.env("XDG_CONFIG_HOME", &config).env_remove("LIGHTCRAFT_GPU").env_remove("LIGHTCRAFT_GPU_BACKEND").env_remove("WGPU_BACKEND");
+        if let Some(value) = gpu_environment {
+            cmd.env("LIGHTCRAFT_GPU", value);
+        }
+        let output = cmd
+            .args(["snapshot", "--library"])
+            .arg(&library)
+            .args(["--script"])
+            .arg(&script)
+            .args(["-o"])
+            .arg(&image)
+            .args(["--size", "480x320"])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let replies: Vec<Value> = String::from_utf8_lossy(&output.stdout).lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+        assert!(replies.iter().all(|reply| reply["ok"] == true), "{replies:?}");
+        assert_eq!(replies[0]["result"]["enabled"], false);
+        assert_eq!(replies[0]["result"]["available"], false);
+        assert_eq!(replies[0]["result"]["adapter"], Value::Null);
+        assert_eq!(replies[1]["result"]["ui"]["settings"]["gpu"], false);
+        assert_eq!(std::fs::read(&ui_path).unwrap(), saved, "snapshot changed the desktop preferences");
+        assert!(!app_config.join("ui.json.tmp").exists());
+        assert!(image.exists());
+    }
+}
+
+/// `denoise-serve` serves the selected installed model; a client greets it and gets the CPU's answer for a tile
+/// (within half-float rounding on the wire), and a wrong token or a missing token variable is refused.
+#[cfg(feature = "denoise")]
+#[test]
+fn denoise_serve_runs_tiles_for_another_computer() {
+    use lightcraft_denoise::manifest::{DenoiserManifest, Domain, Gain};
+    use lightcraft_denoise::remote::Remote;
+    use lightcraft_denoise::run::TileRunner;
+    let models = tmp("denoise-models");
+    let _ = std::fs::remove_dir_all(&models);
+    let dir = models.join("synthetic");
+    std::fs::create_dir_all(&dir).unwrap();
+    let manifest = DenoiserManifest {
+        id: "synthetic".into(),
+        name: "Synthetic".into(),
+        version: "1".into(),
+        licence: Default::default(),
+        source: None,
+        sha256: None,
+        size_bytes: None,
+        provenance: "made for a test".into(),
+        domain: Domain::BayerToRgb,
+        tile: 64,
+        overlap: 16,
+        gain: Gain::None,
+    };
+    let onnx = dir.join("model.onnx");
+    std::fs::write(&onnx, lightcraft_denoise::synthetic::unet_onnx(64, 8, 2, 7)).unwrap();
+    std::fs::write(dir.join("denoise-model.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
+    std::fs::write(models.join("settings.json"), r#"{"model": "synthetic"}"#).unwrap();
+    let sha = lightcraft_denoise::hash::sha256_file(&onnx).unwrap();
+
+    // without its token the server doesn't start
+    let o = Command::new(BIN).args(["denoise-serve", "--models", models.to_str().unwrap(), "--token-env", "LC_TEST_NO_SUCH_VAR"]).output().unwrap();
+    assert!(!o.status.success() && String::from_utf8_lossy(&o.stderr).contains("LC_TEST_NO_SUCH_VAR"));
+
+    let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let addr = format!("127.0.0.1:{port}");
+    let token = "cli-test-token-0123456789";
+    let mut child = Command::new(BIN)
+        .args(["denoise-serve", "--models", models.to_str().unwrap(), "--listen", &addr, "--run-on", "cpu"])
+        .env("LIGHTCRAFT_DENOISE_TOKEN", token)
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // wait for the banner
+    let mut err = BufReader::new(child.stderr.take().unwrap());
+    let mut banner = String::new();
+    err.read_line(&mut banner).unwrap();
+    assert!(banner.contains("synthetic 1") && banner.contains(&addr), "{banner}");
+
+    let remote = Remote::new(&addr, token, &sha, 64);
+    let info = remote.hello().unwrap();
+    assert!(info.device.starts_with("CPU"), "{info:?}");
+    let (input, _) = lightcraft_denoise::runtime::test_tile(64);
+    let got = remote.try_run(&input).unwrap().unwrap();
+    let want = lightcraft_denoise::runtime::CpuRunner::load(&onnx, &manifest).unwrap().run(&input).unwrap();
+    let scale = want.iter().fold(1e-9f32, |m, v| m.max(v.abs()));
+    let worst = want.iter().zip(&got).fold(0f32, |m, (a, b)| m.max((a - b).abs())) / scale;
+    assert!(worst < 5e-3, "remote vs local: {worst}");
+    assert!(Remote::new(&addr, "a-wrong-token-000000", &sha, 64).hello().is_err());
+    let _ = child.kill();
+    let _ = child.wait();
+    let _ = std::fs::remove_dir_all(&models);
 }

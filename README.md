@@ -8,10 +8,10 @@ Photo library & non-destructive RAW editor, maintained by **Orthic Labs**. Ember
 
 - **Library:** grid, bottom filmstrip, folders/collections, search, ratings, flags & metadata.
 - **Develop:** left navigation & right editing panels, history, presets, crop, tone/color controls & masks. Rust processing stays authoritative; UI commands use shared engine contracts.
-- **Import/export:** supported RAW & raster formats, XMP interoperability & Lightroom catalog import into an Ember library. Originals remain separate from non-destructive edits.
+- **Import/export:** supported RAW & raster formats, XMP interoperability & LRCAT catalog import into an Ember library. Originals remain separate from non-destructive edits.
 - **Automation:** engine commands, CLI/MCP & native control/hidden QA. [Control protocol](docs/control-protocol.md) documents interfaces.
 
-React/Tauri targets **macOS & Windows**. Existing egui, Linux, web/WASM & CLI hosts remain in source. Format support & implementation gaps are tracked in [ROADMAP](ROADMAP.md) & [parity tracker](docs/parity.md); feature availability is not proof of Lightroom parity.
+React/Tauri targets **macOS & Windows**. Existing egui, Linux, web/WASM & CLI hosts remain in source. Format support & implementation gaps are tracked in [ROADMAP](ROADMAP.md) & [parity tracker](docs/parity.md); feature availability is not proof of reference editor parity.
 
 ## Auto, masks & AI
 
@@ -25,7 +25,7 @@ Local Auto is deterministic & closed-loop ([docs/auto-tone.md](docs/auto-tone.md
 
 This fork is under active development. Fork `main` includes merged [React/Tauri PR #1](https://github.com/Orthic-Labs/lightcraft/pull/1), [OpenRouter PR #2](https://github.com/Orthic-Labs/lightcraft/pull/2) & [Ember branding PR #3](https://github.com/Orthic-Labs/lightcraft/pull/3). No React/Tauri PR has been submitted to upstream LightCraft.
 
-Public builds, Rust tests & native qualification run through generated **RightKit GitHub Actions** (`.rightgit.json`). Local work is source/static-only. Only qualified green artifacts are promoted to desktop default. GitHub suspended this fork’s workflows for usage scale; [CI restoration](docs/ci-restoration.md) records API attempts & required maintainer re-enable control. Current source awaits native qualification. Source merges do not promote installed artifacts.
+Source integration now targets upstream `76b5377868d912db69a777bda253a5b1b96b22bd` (0.6.0); see [integration record](docs/upstream-integration-2026-10-12.md). Public builds, Rust tests & native qualification run through generated **RightKit GitHub Actions** (`.rightgit.json`). Local work is source/static-only. Only qualified green artifacts are promoted to desktop default. [CI restoration](docs/ci-restoration.md) records restored workflow execution & previous native evidence. Source integration does not promote installed artifacts.
 
 ## Development
 
@@ -45,7 +45,7 @@ Use generated `ci` & `release-candidate` Actions lanes for compilation, seven Ru
 
 - [Branding & existing library/preferences compatibility](docs/branding.md)
 - [Fork strategy & selective upstream absorption](docs/fork-strategy.md)
-- [Lightroom catalog import](docs/lightroom-catalog-import.md)
+- [LRCAT catalog import](docs/lightroom-catalog-import.md)
 - [XMP interoperability](docs/xmp-interop.md)
 - [Library shortcuts](docs/library-shortcuts.md)
 - [MCP](docs/mcp.md) & [native control protocol](docs/control-protocol.md)

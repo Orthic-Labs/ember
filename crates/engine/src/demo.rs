@@ -62,7 +62,17 @@ pub fn load(s: &mut Session) {
     }
     let folder = s.catalog.alloc_album_id();
     ops.push(Op::AddAlbum {
-        album: Album { id: folder, name: "Travel 2026".into(), parent: None, folder: true, photos: vec![], cover: None, smart: None, quick: false },
+        album: Album {
+            id: folder,
+            name: "Travel 2026".into(),
+            parent: None,
+            folder: true,
+            photos: vec![],
+            cover: None,
+            smart: None,
+            quick: false,
+            order: None,
+        },
     });
     let by_kw = |kw: &str| -> Vec<_> { scenes.iter().zip(&ids).filter(|(sc, _)| sc.meta.keywords.contains(&kw)).map(|(_, id)| *id).collect() };
     for (name, parent, photos) in [
@@ -75,7 +85,9 @@ pub fn load(s: &mut Session) {
     ] {
         let id = s.catalog.alloc_album_id();
         let cover = photos.first().copied();
-        ops.push(Op::AddAlbum { album: Album { id, name: name.into(), parent, folder: false, photos, cover, smart: None, quick: false } });
+        ops.push(Op::AddAlbum {
+            album: Album { id, name: name.into(), parent, folder: false, photos, cover, smart: None, quick: false, order: None },
+        });
     }
     for op in ops {
         let _ = s.catalog.apply(op);

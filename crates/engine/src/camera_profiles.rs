@@ -25,6 +25,7 @@ const MAX_FILE: u64 = 4 << 20;
 /// Profiles built into Ember (`assets/camera-profiles/`, see `assets/ATTRIBUTION.md`):
 /// `(model, JSON)`.
 pub const BUNDLED: &[(&str, &str)] = &[
+    ("ILCE-7CR", include_str!("../../../assets/camera-profiles/ILCE-7CR.json")),
     ("ILCE-7M4", include_str!("../../../assets/camera-profiles/ILCE-7M4.json")),
     ("X-H2S", include_str!("../../../assets/camera-profiles/X-H2S.json")),
     ("X-T4", include_str!("../../../assets/camera-profiles/X-T4.json")),
@@ -65,19 +66,8 @@ impl CameraProfile {
     }
 }
 
-/// Ember's configuration folder (settings, GPU marker, camera profiles).
-pub fn config_dir() -> Option<PathBuf> {
-    if cfg!(target_os = "macos") {
-        std::env::var_os("HOME").map(|h| crate::branding::data_dir(&PathBuf::from(h).join("Library/Application Support"), "Ember", "LightCraft"))
-    } else if cfg!(windows) {
-        std::env::var_os("APPDATA").map(|a| crate::branding::data_dir(&PathBuf::from(a), "Ember", "LightCraft"))
-    } else {
-        std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
-            .map(|c| crate::branding::data_dir(&c, "ember", "lightcraft"))
-    }
-}
+/// LightCraft's configuration folder (settings, GPU marker, camera profiles); one helper for the app.
+pub use crate::config::config_dir;
 
 /// Where camera profiles are read from and written to.
 pub fn dir() -> Option<PathBuf> {

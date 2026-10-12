@@ -1241,7 +1241,7 @@ mod tests {
         let id = session.visible_cloned()[0];
         let mut job = session.plan_cull_job(&[id], None, false).unwrap();
         job.photos[0].source_ref =
-            crate::media::SourceRef::File { path: "synthetic-missing-source".into(), max_edge: 512, loader: None, fallback: None };
+            crate::media::SourceRef::File { path: "synthetic-missing-source".into(), max_edge: 512, loader: None, fallback: None, denoise: None };
         let result = job.run(&|_, _| true).unwrap();
         let photo = &result.value["measurementTiming"]["perPhoto"][0];
         assert_eq!(photo["id"], id.0);

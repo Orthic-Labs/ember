@@ -2,7 +2,7 @@
 //! Lightroom, Python and a C SQLite runtime are not needed. Original paths stay in place.
 //! Raw settings are archived before mutation; mapped edits approximate reference rendering.
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -336,6 +336,29 @@ fn committed_wal_len(main: &[u8], wal: &[u8]) -> Result<usize, String> {
     Ok(committed)
 }
 
+/// Where a root folder is when its `absolutePath` isn't a folder here (the catalog came from
+/// another computer): `relativePathFromCatalog`, which Lightroom records for roots on the
+/// catalog's volume, resolved against the catalog's folder, if that is a folder.
+fn relocated_root(absolute: &str, relative: &str, catalog: &Path) -> Option<PathBuf> {
+    if relative.is_empty() || !Path::new(relative).is_relative() || Path::new(absolute).is_dir() {
+        return None;
+    }
+    let dir = std::path::absolute(catalog).ok()?.parent()?.join(relative);
+    let mut out = PathBuf::new();
+    for part in dir.components() {
+        match part {
+            Component::ParentDir => {
+                if !out.pop() {
+                    return None;
+                }
+            }
+            Component::CurDir => {}
+            part => out.push(part),
+        }
+    }
+    out.is_dir().then_some(out)
+}
+
 /// Inspect `.lrcat` plus committed WAL pages without modifying either source file.
 pub fn read(path: &Path) -> Result<CatalogImport, String> {
     let cancel = AtomicBool::new(false);
@@ -428,6 +451,21 @@ pub fn read_with_progress(path: &Path, cancel: &AtomicBool, total: &AtomicUsize,
         }
         out
     };
+    let mut root_paths = HashMap::new();
+    let mut root_ids: Vec<_> = roots.keys().copied().collect();
+    root_ids.sort_unstable();
+    for (id, root) in root_ids.iter().filter_map(|id| Some((*id, roots.get(id)?))) {
+        let absolute = text(root, "absolutePath");
+        let resolved = match relocated_root(absolute, text(root, "relativePathFromCatalog"), path) {
+            Some(found) => {
+                let found = found.to_string_lossy().to_string();
+                warnings.push(format!("root folder {}: {absolute} not found; using {found} (relative to the catalog)", text(root, "name")));
+                found
+            }
+            None => absolute.to_string(),
+        };
+        root_paths.insert(id, resolved);
+    }
     let mut history = group(optional_table("Adobe_libraryImageDevelopHistoryStep", &mut warnings)?);
     let mut snapshots = group(optional_table("Adobe_libraryImageDevelopSnapshot", &mut warnings)?);
     let mut out = CatalogImport {
@@ -444,7 +482,7 @@ pub fn read_with_progress(path: &Path, cancel: &AtomicBool, total: &AtomicUsize,
         let file = files.get(&number(&image, "rootFile")).ok_or_else(|| format!("image {id}: missing file record"))?;
         let folder = folders.get(&number(file, "folder")).ok_or_else(|| format!("image {id}: missing folder record"))?;
         let root = roots.get(&number(folder, "rootFolder")).ok_or_else(|| format!("image {id}: missing root record"))?;
-        let root_path = text(root, "absolutePath");
+        let root_path = root_paths.get(&number(root, "id_local")).map_or("", String::as_str);
         let folder_path = text(folder, "pathFromRoot");
         let name = text(file, "idx_filename");
         if root_path.is_empty() || name.is_empty() {
@@ -937,6 +975,7 @@ pub(crate) fn apply_prepared(s: &mut crate::Session, data: CatalogImport, contex
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lightcraft_geom::CropGeometry;
     fn row(v: Value) -> Row {
         serde_json::from_value(v).unwrap()
     }
@@ -1302,19 +1341,9 @@ mod tests {
         }
         page[offset + 5..offset + 7].copy_from_slice(&(end as u16).to_be_bytes());
     }
-    #[test]
-    fn reads_native_sqlite_tables_without_lightroom_or_external_processes() {
-        use SqlValue::{Integer as I, Null as N, Text as T};
-        let tables = [
-            ("AgLibraryRootFolder", "id_local INTEGER PRIMARY KEY, absolutePath", vec![N, T("/catalog/".into())]),
-            ("AgLibraryFolder", "id_local INTEGER PRIMARY KEY, rootFolder, pathFromRoot", vec![N, I(1), T("Photos/".into())]),
-            ("AgLibraryFile", "id_local INTEGER PRIMARY KEY, folder, idx_filename", vec![N, I(1), T("test.ARW".into())]),
-            (
-                "Adobe_images",
-                "id_local INTEGER PRIMARY KEY, id_global, rootFile, fileFormat, fileWidth, fileHeight, rating, pick",
-                vec![N, T("fixture-image".into()), I(1), T("ARW".into()), I(20), I(10), I(5), I(1)],
-            ),
-        ];
+    /// A one-row-per-table SQLite file: `(name, columns, row)` each.
+    fn native_catalog(tables: &[(&str, &str, Vec<SqlValue>)]) -> Vec<u8> {
+        use SqlValue::{Integer as I, Text as T};
         let mut bytes = vec![0u8; 5 * 2048];
         bytes[..16].copy_from_slice(b"SQLite format 3\0");
         bytes[16..18].copy_from_slice(&2048u16.to_be_bytes());
@@ -1338,6 +1367,30 @@ mod tests {
             leaf(&mut bytes[(i + 1) * 2048..(i + 2) * 2048], 0, std::slice::from_ref(row));
         }
         leaf(&mut bytes[..2048], 100, &schema);
+        bytes
+    }
+
+    fn photo_tables(root: (&str, &str)) -> Vec<(&'static str, &'static str, Vec<SqlValue>)> {
+        use SqlValue::{Integer as I, Null as N, Text as T};
+        vec![
+            (
+                "AgLibraryRootFolder",
+                "id_local INTEGER PRIMARY KEY, absolutePath, name, relativePathFromCatalog",
+                vec![N, T(root.0.into()), T("Photos".into()), T(root.1.into())],
+            ),
+            ("AgLibraryFolder", "id_local INTEGER PRIMARY KEY, rootFolder, pathFromRoot", vec![N, I(1), T("Photos/".into())]),
+            ("AgLibraryFile", "id_local INTEGER PRIMARY KEY, folder, idx_filename", vec![N, I(1), T("test.ARW".into())]),
+            (
+                "Adobe_images",
+                "id_local INTEGER PRIMARY KEY, id_global, rootFile, fileFormat, fileWidth, fileHeight, rating, pick",
+                vec![N, T("fixture-image".into()), I(1), T("ARW".into()), I(20), I(10), I(5), I(1)],
+            ),
+        ]
+    }
+
+    #[test]
+    fn reads_native_sqlite_tables_without_lightroom_or_external_processes() {
+        let bytes = native_catalog(&photo_tables(("/catalog/", "")));
         let path = std::env::temp_dir().join(format!("lightcraft-native-catalog-{}.lrcat", std::process::id()));
         std::fs::write(&path, &bytes).unwrap();
         let catalog = read(&path).unwrap();
@@ -1348,6 +1401,25 @@ mod tests {
         std::fs::write(&path, b"bad catalog").unwrap();
         assert!(read(&path).is_err());
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn a_root_missing_here_is_found_relative_to_the_catalog() {
+        let dir = std::env::temp_dir().join(format!("lightcraft-relocated-catalog-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("Lightroom")).unwrap();
+        std::fs::create_dir_all(dir.join("RAW")).unwrap();
+        let path = dir.join("Lightroom").join("Lightroom.lrcat");
+        std::fs::write(&path, native_catalog(&photo_tables(("C:/Users/me/Project/RAW/", "../RAW/")))).unwrap();
+        let catalog = read(&path).unwrap();
+        assert_eq!(Path::new(&catalog.photos[0].path), dir.join("RAW").join("Photos").join("test.ARW"));
+        assert!(catalog.warnings.iter().any(|w| w.contains("relative to the catalog")), "{:?}", catalog.warnings);
+        // a relative path that leads nowhere keeps the recorded one
+        std::fs::write(&path, native_catalog(&photo_tables(("C:/Users/me/Project/RAW/", "../Elsewhere/")))).unwrap();
+        let catalog = read(&path).unwrap();
+        assert!(catalog.photos[0].path.starts_with("C:/Users/me/Project/RAW/"), "{}", catalog.photos[0].path);
+        assert!(catalog.warnings.is_empty(), "{:?}", catalog.warnings);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
@@ -1380,5 +1452,137 @@ mod tests {
         let rows = reader.optional_table("optional_history", &mut warnings).unwrap();
         assert!(rows.is_empty());
         assert!(warnings.iter().any(|warning| warning.contains("optional_history")));
+    }
+    #[test]
+    fn catalog_crops_without_has_crop_are_imported() {
+        // Lightroom Classic catalogs store crop edges and angle but never `HasCrop`
+        let (partial, unknown) = mapped_settings(
+            "s = { CropConstrainAspectRatio = true, CropLeft = 0.042702, CropRight = 0.957298, CropTop = 0.1 }",
+            crate::crs::Target::RawAbsolute,
+            1.5,
+            Orientation::Normal,
+            Some(1.5),
+        )
+        .unwrap();
+        let crop = &partial["crop"]["geometry"];
+        assert_eq!(crop["rect"]["x0"], 0.042702);
+        assert_eq!(crop["rect"]["y0"], 0.1);
+        assert_eq!(crop["rect"]["x1"], 0.957298);
+        assert_eq!(crop["rect"]["y1"], 1.0);
+        assert_eq!(crop["angle"], 0.0);
+        assert!(!unknown.iter().any(|k| k.starts_with("CropLeft")), "{unknown:?}");
+        // an angle alone still means a crop (Lightroom's angle turns the other way to LightCraft's)
+        let (partial, unknown) =
+            mapped_settings("s = { CropAngle = -1.5 }", crate::crs::Target::RawAbsolute, 1.5, Orientation::Normal, Some(1.5)).unwrap();
+        assert_eq!(partial["crop"]["geometry"]["angle"], 1.5);
+        assert!(!unknown.iter().any(|k| k.starts_with("CropAngle")), "{unknown:?}");
+        // no crop fields: the crop stays untouched
+        let (partial, _) =
+            mapped_settings("s = { Exposure2012 = 0.5 }", crate::crs::Target::RawAbsolute, 1.5, Orientation::Normal, Some(1.5)).unwrap();
+        assert!(partial.get("crop").is_none());
+    }
+
+    #[test]
+    fn lightroom_orientation_codes() {
+        // the three seen in a real catalog, checked against each file's EXIF orientation (1, 6, 8)
+        assert_eq!(lightroom_orientation("AB"), Some(Orientation::Normal));
+        assert_eq!(lightroom_orientation("BC"), Some(Orientation::Rotate90));
+        assert_eq!(lightroom_orientation("DA"), Some(Orientation::Rotate270));
+        assert_eq!(lightroom_orientation("CD"), Some(Orientation::Rotate180));
+        assert_eq!(lightroom_orientation("BA"), Some(Orientation::FlipH));
+        assert_eq!(lightroom_orientation("DC"), Some(Orientation::FlipV));
+        assert_eq!(lightroom_orientation("AD"), Some(Orientation::Transpose));
+        assert_eq!(lightroom_orientation("CB"), Some(Orientation::Transverse));
+        for code in ["", "A", "ABC", "AC", "ab", "XY"] {
+            assert_eq!(lightroom_orientation(code), None, "{code:?}");
+        }
+    }
+
+    #[test]
+    fn catalog_crops_follow_the_photo_orientation() {
+        let crop = |o: Orientation| {
+            let settings = "s = { CropLeft = 0.1, CropRight = 0.6, CropTop = 0.2, CropBottom = 0.9 }";
+            let (partial, _) = mapped_settings(settings, crate::crs::Target::RawAbsolute, 1.5, o, Some(1.5)).unwrap();
+            let g = &partial["crop"]["geometry"];
+            let r = &g["rect"];
+            [r["x0"].as_f64(), r["y0"].as_f64(), r["x1"].as_f64(), r["y1"].as_f64(), g["angle"].as_f64()].map(|v| (v.unwrap() * 1e9).round() / 1e9)
+        };
+        // (x, y) of the stored image → (1 − y, x) a quarter turn clockwise, (y, 1 − x) counter-clockwise
+        assert_eq!(crop(Orientation::Normal), [0.1, 0.2, 0.6, 0.9, 0.0]);
+        assert_eq!(crop(Orientation::Rotate90), [0.1, 0.1, 0.8, 0.6, 0.0]);
+        assert_eq!(crop(Orientation::Rotate270), [0.2, 0.4, 0.9, 0.9, 0.0]);
+        assert_eq!(crop(Orientation::Rotate180), [0.4, 0.1, 0.9, 0.8, 0.0]);
+        assert_eq!(crop(Orientation::FlipH), [0.4, 0.2, 0.9, 0.9, 0.0]);
+        // a mirror turns the straighten the other way
+        let angle = |o: Orientation| {
+            let (partial, _) = mapped_settings("s = { CropAngle = 2 }", crate::crs::Target::RawAbsolute, 1.5, o, Some(1.5)).unwrap();
+            partial["crop"]["geometry"]["angle"].as_f64().unwrap()
+        };
+        assert_eq!(angle(Orientation::Rotate90), -2.0);
+        assert_eq!(angle(Orientation::FlipH), 2.0);
+        // no crop: nothing to orient
+        let (partial, _) =
+            mapped_settings("s = { Exposure2012 = 0.5 }", crate::crs::Target::RawAbsolute, 1.5, Orientation::Rotate90, Some(1.5)).unwrap();
+        assert!(partial.get("crop").is_none());
+    }
+
+    /// The `crs` corners and angle Lightroom would store for LightCraft crop `g` on a stored image
+    /// of aspect `w` (height 1) shown with orientation `o`.
+    fn lightroom_crop(g: CropGeometry, o: Orientation, w: f64) -> String {
+        let (ow, oh) = if o.swaps_axes() { (1.0, w) } else { (w, 1.0) };
+        let to_source = Affine::rotate_about(-g.angle.to_radians(), Point::new(ow / 2.0, oh / 2.0));
+        let stored = |x: f64, y: f64| {
+            let p = to_source.apply(Point::new(x * ow, y * oh));
+            o.inverse().map(p.x, p.y, ow, oh)
+        };
+        // the rectangle's corners that land top-left and bottom-right on the stored image
+        let corners = [stored(g.rect.x0, g.rect.y0), stored(g.rect.x1, g.rect.y0), stored(g.rect.x1, g.rect.y1), stored(g.rect.x0, g.rect.y1)];
+        let (tl, br) = (0..4).map(|i| (corners[i], corners[(i + 2) % 4])).find(|(a, b)| a.0 < b.0 && a.1 < b.1).unwrap();
+        let angle = if o.to_parts().0 { g.angle } else { -g.angle };
+        format!("s = {{ CropLeft = {}, CropTop = {}, CropRight = {}, CropBottom = {}, CropAngle = {angle} }}", tl.0 / w, tl.1, br.0 / w, br.1)
+    }
+
+    #[test]
+    fn straightened_catalog_crops_round_trip() {
+        let g = CropGeometry { rect: Rect::new(0.2, 0.15, 0.7, 0.8), angle: 6.5 };
+        for o in [Orientation::Normal, Orientation::Rotate90, Orientation::Rotate270, Orientation::Rotate180, Orientation::FlipH] {
+            for angle in [6.5, -6.5] {
+                let g = CropGeometry { angle, ..g };
+                let (partial, _) = mapped_settings(&lightroom_crop(g, o, Some(1.5)), crate::crs::Target::RawAbsolute, 1.5, o, Some(1.5)).unwrap();
+                let got: CropGeometry = serde_json::from_value(partial["crop"]["geometry"].clone()).unwrap();
+                let close = |a: f64, b: f64| (a - b).abs() < 1e-9;
+                assert!(
+                    close(got.angle, g.angle)
+                        && [(got.rect.x0, g.rect.x0), (got.rect.y0, g.rect.y0), (got.rect.x1, g.rect.x1), (got.rect.y1, g.rect.y1)]
+                            .iter()
+                            .all(|&(a, b)| close(a, b)),
+                    "{o:?} {angle}: {got:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn straightened_catalog_crops_match_lightroom_exports() {
+        // Settings and pixel sizes from a real Lightroom Classic catalog (9504 × 6336 stored) and the
+        // JPEGs Lightroom exported from it at full size.
+        for (settings, o, export) in [
+            (
+                "s = { CropAngle = -9.34444, CropBottom = 0.802034, CropLeft = 0.05499, CropRight = 0.94501, CropTop = 0.197966 }",
+                Orientation::Normal,
+                (7725.0, 5150.0),
+            ),
+            (
+                "s = { CropAngle = -1.48964, CropBottom = 0.962457, CropLeft = 0.010429, CropRight = 0.989571, CropTop = 0.037543 }",
+                Orientation::Rotate90,
+                (6100.0, 9150.0),
+            ),
+        ] {
+            let (partial, _) = mapped_settings(settings, crate::crs::Target::RawAbsolute, 1.5, o, Some(9504.0 / 6336.0)).unwrap();
+            let r: Rect = serde_json::from_value(partial["crop"]["geometry"]["rect"].clone()).unwrap();
+            let (ow, oh) = if o.swaps_axes() { (6336.0, 9504.0) } else { (9504.0, 6336.0) };
+            let (w, h) = (r.width() * ow, r.height() * oh);
+            assert!((w - export.0).abs() <= 3.0 && (h - export.1).abs() <= 3.0, "{o:?}: {w:.1} × {h:.1}, Lightroom exported {export:?}");
+        }
     }
 }
