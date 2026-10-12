@@ -171,25 +171,32 @@ pub(crate) fn decode_huffman(src: &[u8], h: &Huffman, w: usize, hgt: usize, bits
     Ok(out)
 }
 
-/// The image area without all-dark leading/trailing columns (masked or empty), kept at even offsets.
-fn dark_trimmed(d: &[u16], w: usize, h: usize) -> Rect {
-    if w < 256 || h == 0 {
+/// The image area without all-dark leading/trailing columns and rows (masked or empty), kept at even offsets. A
+/// line is dark when its mean is less than 5% of the interior's above `black`: masked lines sit at the black level.
+fn dark_trimmed(d: &[u16], w: usize, h: usize, black: f64) -> Rect {
+    if w < 256 || h < 256 {
         return Rect::new(0, 0, w, h);
     }
-    let step = (h / 256).max(1);
-    let col_mean = |x: usize| (0..h).step_by(step).map(|y| d[y * w + x] as f64).sum::<f64>() / h.div_ceil(step) as f64;
+    let (xstep, ystep) = (w / 256, h / 256);
+    let col_mean = |x: usize| (0..h).step_by(ystep).map(|y| d[y * w + x] as f64).sum::<f64>() / h.div_ceil(ystep) as f64;
+    let row_mean = |y: usize| (0..w).step_by(xstep).map(|x| d[y * w + x] as f64).sum::<f64>() / w.div_ceil(xstep) as f64;
     let interior = (w / 4..w * 3 / 4).step_by(w / 64).map(col_mean).sum::<f64>() / 32.0;
-    let dark = interior * 0.05;
-    let mut left = 0;
-    while left < 64 && col_mean(left) < dark {
-        left += 1;
-    }
-    let mut right = w;
-    while right > w - 64 && col_mean(right - 1) < dark {
-        right -= 1;
-    }
-    let left = left.next_multiple_of(2);
-    Rect::new(left, 0, (right - left) & !1, h)
+    let dark = black + (interior - black) * 0.05;
+    let edges = |n: usize, mean: &dyn Fn(usize) -> f64| {
+        let mut lo = 0;
+        while lo < 64 && mean(lo) < dark {
+            lo += 1;
+        }
+        let mut hi = n;
+        while hi > n - 64 && mean(hi - 1) < dark {
+            hi -= 1;
+        }
+        let lo = lo.next_multiple_of(2);
+        (lo, (hi - lo) & !1)
+    };
+    let (left, width) = edges(w, &col_mean);
+    let (top, height) = edges(h, &row_mean);
+    Rect::new(left, top, width, height)
 }
 
 /// Whether every strip or tile of a one-sample-per-pixel image holds exactly the bytes that its rows need when
@@ -253,9 +260,10 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
     };
     let RawData::U16(ref samples) = data else { return Err(RawError::Unsupported("float PEF".into())) };
 
+    let black_point = mn.as_ref().and_then(|m| m.ifd.f64s(BLACK_POINT)).filter(|v| v.len() == 4);
     let active = match tagged {
         Some(r) => r,
-        None => dark_trimmed(samples, w, hgt),
+        None => dark_trimmed(samples, w, hgt, black_point.as_deref().map_or(0.0, |v| v.iter().sum::<f64>() / 4.0)),
     };
     let cfa = match (ifd0.u64s(t::CFA_REPEAT_PATTERN_DIM).as_deref(), ifd0.bytes(t::CFA_PATTERN_EP)) {
         (Some([2, 2]), Some(p)) if p.len() == 4 && p.iter().all(|&c| c <= 2) => Cfa { width: 2, height: 2, pattern: p.to_vec() },
@@ -265,7 +273,7 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         // tag keep BGGR.
         _ => cfa_from_exif(&tiff).unwrap_or_else(|| Cfa::bayer_static("BGGR")),
     };
-    let black = match mn.as_ref().and_then(|m| m.ifd.f64s(BLACK_POINT)).as_deref() {
+    let black = match black_point.as_deref() {
         Some(v @ [_, _, _, _]) => {
             // RGGB-ordered levels → per CFA position at the active area origin
             let a = cfa.shifted(active.x, active.y);
@@ -519,5 +527,56 @@ mod tests {
         // no tag: the assumed layout stays
         let img = decode(&tiny_pef(4, 2, 1, 16, &[0; 16]), Mode::Full).unwrap();
         assert_eq!(img.cfa, Some(Cfa::bayer_static("BGGR")));
+    }
+
+    /// A 512 x 384 big-endian PEF of plain 16-bit words without area tags, whose maker note has only a BlackPoint
+    /// of `black`, with `px(x, y)` as the samples.
+    fn pef_with_black_point(black: u16, px: impl Fn(usize, usize) -> u16) -> Vec<u8> {
+        use lightcraft_tiff::{IfdBuilder, ImageData, TiffWriter, Value};
+        let (w, h) = (512usize, 384usize);
+        let strip: Vec<u8> = (0..w * h).flat_map(|i| px(i % w, i / w).to_be_bytes()).collect();
+        let build = |levels_at: u32| {
+            let mut ifd = IfdBuilder::new();
+            ifd.set(0x0100, Value::Long(vec![w as u32]));
+            ifd.set(0x0101, Value::Long(vec![h as u32]));
+            ifd.set(0x0102, Value::Short(vec![14]));
+            ifd.set(0x0103, Value::Short(vec![1]));
+            ifd.set(0x0106, Value::Short(vec![32803]));
+            ifd.set(0x010f, Value::Ascii("PENTAX Corporation".into()));
+            ifd.set_image(ImageData::Strips { rows_per_strip: h as u32, strips: vec![strip.clone()] });
+            // AOC\0 + "MM", one entry (BlackPoint, four shorts stored after the IFD), next-IFD 0, the four levels
+            let mut note = b"AOC\0MM\0\x01".to_vec();
+            note.extend_from_slice(&[0x02, 0x00, 0, 3, 0, 0, 0, 4]);
+            note.extend_from_slice(&levels_at.to_be_bytes());
+            note.extend_from_slice(&0u32.to_be_bytes());
+            (0..4).for_each(|_| note.extend_from_slice(&black.to_be_bytes()));
+            let mut exif = IfdBuilder::new();
+            exif.set(0x927c, Value::Undefined(note));
+            ifd.set_child(0x8769, exif);
+            TiffWriter::new(ByteOrder::Big, false).write(&[ifd]).unwrap()
+        };
+        let at = Tiff::parse(&build(0)).unwrap().exif().unwrap().get(0x927c).unwrap().offset;
+        build((at + 6 + 2 + 12 + 4) as u32)
+    }
+
+    /// The K-3 Mark III / KP / KF layout (issue #1271): masked columns and rows at the black level, an empty band
+    /// at zero, around an interior less than 20 times as bright as the black level.
+    #[test]
+    fn masked_rows_and_columns_at_the_black_level_are_trimmed_without_crop_tags() {
+        let (w, h) = (512, 384);
+        let file = pef_with_black_point(256, |x, y| {
+            if x >= w - 8 {
+                0
+            } else if y >= h - 14 {
+                15
+            } else if x < 24 || x >= w - 16 || y < 28 {
+                256
+            } else {
+                1256 + ((x * 7 + y * 13) % 64) as u16
+            }
+        });
+        let img = decode(&file, Mode::Full).unwrap();
+        assert_eq!(img.black.values, vec![256.0; 4]);
+        assert_eq!(img.active_area, Rect::new(24, 28, w - 40, h - 42));
     }
 }
