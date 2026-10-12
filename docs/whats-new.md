@@ -1,5 +1,13 @@
 # What's new in Ember
 
+## 2026-10-12
+
+### Camera-look deep shadows
+
+- The starting look fitted from a raw's camera JPEG now uses its darkest tones too (issue #1307).
+  Photos with deep shadows no longer have to extend the first measured tone in a straight line to black.
+  Existing smart previews are refreshed when their originals are online, and cached renders are redrawn.
+
 ## 2026-10-11
 
 ### HDR and panorama merges of CR2 keep their colour

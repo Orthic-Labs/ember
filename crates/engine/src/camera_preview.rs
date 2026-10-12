@@ -29,7 +29,8 @@ use lightcraft_raw::{
 /// and the ILCE-7CR profile (#528, #583, #568, #616); 3: the camera JPEG read in the colour space the raw's EXIF
 /// states, for every make (#778).
 /// 4: a tone curve from black-and-white camera JPEGs (#577).
-pub const LOOK_VERSION: u32 = 4;
+/// 5: dark JPEG luminance pairs for the camera toe (#1307).
+pub const LOOK_VERSION: u32 = 5;
 
 #[derive(Clone, Debug)]
 pub(crate) struct CameraLook {
@@ -635,7 +636,7 @@ fn collect_pairs(sensor: &Rgb32f, reference: &Rgb32f, min_chroma: f32, edge_limi
         if (0.015..=1.0).contains(&y) {
             bright.push((input.map(f64::from), output.map(f64::from)));
         }
-        if !output.iter().all(|v| *v > 0.004 && *v < 0.98) || !(0.015..0.85).contains(&y) {
+        if !colour_pair(*input, *output) {
             continue;
         }
         let min = output.iter().copied().fold(f32::INFINITY, f32::min);
@@ -644,6 +645,77 @@ fn collect_pairs(sensor: &Rgb32f, reference: &Rgb32f, min_chroma: f32, edge_limi
         pairs.push((input.map(f64::from), output.map(f64::from)));
     }
     (pairs.len() >= 256 && colour >= pairs.len() / 20).then_some((pairs, bright))
+}
+
+/// The original colour-pair eligibility, also used to preserve its held-out split in tone fitting.
+fn colour_pair(input: [f32; 3], output: [f32; 3]) -> bool {
+    input.iter().all(|v| v.is_finite() && *v > 0.001 && *v < 1.5)
+        && output.iter().all(|v| *v > 0.004 && *v < 0.98)
+        && (0.015..0.85).contains(&luminance_2020(output))
+}
+
+/// Fit tone independently of colour eligibility when enough dark JPEG signal is available.
+/// The original pairs and their split still own the colour fit and its acceptance gates.
+/// Luminance needs no channel ratios, so the binned proxy can use a lower sensor floor and
+/// keep JPEG pixels with a channel near black. Quantile medians limit the effect of noise.
+fn fit_tone_with_shadows(
+    fit: ToneFit,
+    pairs: &[([f64; 3], [f64; 3])],
+    sensor: &Rgb32f,
+    reference: &Rgb32f,
+    edge_limit: Option<f32>,
+    colour: impl Fn([f64; 3]) -> [f64; 3],
+) -> Option<CameraTone> {
+    let luminances = |x: [f64; 3], y: [f64; 3]| (luma(colour(x).map(|v| v.max(0.0))), luma(y));
+    let original = fit.fit(pairs.iter().enumerate().filter(|(i, _)| i % 3 != 0).map(|(_, (x, y))| luminances(*x, *y)).collect());
+    let mut eligible = Vec::new();
+    let (mut colour_index, mut extra_index) = (0, 0);
+    for (i, (input, output)) in sensor.data.iter().zip(&reference.data).enumerate() {
+        if edge_limit.is_some_and(|limit| local_contrast(sensor, i) > limit || local_contrast(reference, i) > limit) {
+            continue;
+        }
+        // About one 8-bit sRGB code above black: don't learn a flat black segment from
+        // JPEG compression. The sensor proxy averages many samples before this test.
+        if !input.iter().all(|v| v.is_finite() && *v > 0.0001 && *v < 1.5)
+            || !output.iter().all(|v| v.is_finite() && *v >= 0.0)
+            || !(0.0003..0.85).contains(&luminance_2020(*output))
+        {
+            continue;
+        }
+        // A colour holdout must never enter tone training just because the wider sample set
+        // changes its index. Split the extra samples separately, keeping every colour index.
+        let index = if colour_pair(*input, *output) { &mut colour_index } else { &mut extra_index };
+        let held = *index % 3 == 0;
+        *index += 1;
+        let (x, y) = luminances(input.map(f64::from), output.map(f64::from));
+        if x.is_finite() && x > 0.0 {
+            eligible.push((x, y, held));
+        }
+    }
+    let dark = eligible.iter().filter(|(_, y, _)| *y < 0.015).count();
+    let held: Pairs = eligible.iter().filter(|(_, y, held)| *held && *y < 0.015).map(|(x, y, _)| ([*x; 3], [*y; 3])).collect();
+    // Sparse or uncorrelated shadow noise cannot teach a toe. Tied JPEG levels share a rank,
+    // so a single quantized grey also keeps the original curve.
+    if dark < 96 || held.len() < 32 || rank_correlation_ties(&held) < PARTIAL_MIN_RANK_CORRELATION {
+        return original;
+    }
+    let training = eligible.iter().filter(|(_, _, held)| !held).map(|(x, y, _)| (*x, *y)).collect();
+    let Some(candidate) = fit.fit(training) else { return original };
+    let error = |tone: &CameraTone| -> f64 {
+        held.iter().map(|(x, y)| (f64::from(tone.apply(x[0] as f32)).powf(1.0 / 2.2) - y[0].powf(1.0 / 2.2)).powi(2)).sum()
+    };
+    // A wider histogram must also help independent dark pixels, not just redistribute the
+    // knots. The usual held-out gates still check the completed look on the colour pairs.
+    if let Some(old) = original {
+        let (before, after) = (error(&old), error(&candidate));
+        if lightcraft_pipeline::profiling() {
+            eprintln!("[profile] camera toe: {dark} dark pairs, held-out error {before:.5} -> {after:.5}");
+        }
+        if !after.is_finite() || after >= before * 0.99 {
+            return original;
+        }
+    }
+    Some(candidate)
 }
 
 /// Ridge-regularised 3×3 chromaticity matrix (luminance-normalised RGB) on the training pairs.
@@ -771,9 +843,7 @@ fn fit_pairs_on(
             let p = matrix.apply(x);
             correction.as_ref().map_or(p, |c| c.apply(p.map(|v| v as f32)).map(f64::from))
         };
-        let tone_pairs: Vec<_> =
-            pairs.iter().enumerate().filter(|(i, _)| i % 3 != 0).map(|(_, (x, y))| (luma(colour(*x).map(|v| v.max(0.0))), luma(*y))).collect();
-        let Some(curve) = tone_fit.fit(tone_pairs) else { continue };
+        let Some(curve) = fit_tone_with_shadows(tone_fit, &pairs, sensor, reference, edge_limit, colour) else { continue };
         let mut look = CameraLook { matrix, tone: curve, hue_sat: hue_sat.clone() };
         if let Some(tone) = fit_chroma(&bright, &look) {
             look.tone = tone;
@@ -915,9 +985,8 @@ fn fit_partial_on(sensor: &Rgb32f, reference: &Rgb32f, edge_limit: Option<f32>) 
         })),
         None => Mat3::IDENTITY,
     };
-    let tone_pairs: Vec<_> =
-        pairs.iter().enumerate().filter(|(i, _)| i % 3 != 0).map(|(_, (x, y))| (luma(matrix.apply(*x).map(|v| v.max(0.0))), luma(*y))).collect();
-    let mut look = CameraLook { matrix, tone: fit_tone(tone_pairs)?, hue_sat: None };
+    let tone = fit_tone_with_shadows(ToneFit::Quantile, &pairs, sensor, reference, edge_limit, |x| matrix.apply(x))?;
+    let mut look = CameraLook { matrix, tone, hue_sat: None };
     if let Some(tone) = fit_chroma(&bright, &look) {
         look.tone = tone;
     }
@@ -1023,9 +1092,8 @@ fn fit_tone_only_on(sensor: &Rgb32f, reference: &Rgb32f, colour: &Option<(Mat3, 
         let p = matrix.apply(x);
         correction.as_ref().map_or(p, |c| c.apply(p.map(|v| v as f32)).map(f64::from))
     };
-    let tone_pairs: Vec<_> =
-        pairs.iter().enumerate().filter(|(i, _)| i % 3 != 0).map(|(_, (x, y))| (luma(coloured(*x).map(|v| v.max(0.0))), luma(*y))).collect();
-    let look = CameraLook { matrix, tone: fit_tone(tone_pairs)?, hue_sat: hue_sat.clone() };
+    let tone = fit_tone_with_shadows(ToneFit::Quantile, &pairs, sensor, reference, edge_limit, coloured)?;
+    let look = CameraLook { matrix, tone, hue_sat: hue_sat.clone() };
     let (tone, neutral) = (ToneMap::camera(&look.tone, 0.0, 0.0, 0.0), ToneMap::new(0.0, 0.0, 0.0));
     let encoded = |v: f64| v.max(0.0).powf(1.0 / 2.2);
     let (mut before, mut after, mut before_encoded, mut after_encoded, mut samples) = (0.0, 0.0, 0.0, 0.0, 0);
@@ -1382,6 +1450,109 @@ fn fit_tone_conditional(mut pairs: Vec<(f64, f64)>) -> Option<CameraTone> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn steep_toe_scene() -> (Rgb32f, Rgb32f) {
+        let mut sensor = Rgb32f::new(96, 64);
+        let mut reference = sensor.clone();
+        for (i, (src, dst)) in sensor.data.iter_mut().zip(&mut reference.data).enumerate() {
+            // A broad scene with a steep camera toe below the old JPEG floor of 0.015.
+            // Permute brightness so the held-out pixels span the same range independently.
+            let y = 0.002 + ((i * 7919) % 6144) as f32 / 6144.0 * 0.25;
+            let rgb = [0.8 + (i % 11) as f32 * 0.04, 1.0, 0.8 + (i % 17) as f32 * 0.025];
+            *src = rgb.map(|v| v * y / luminance_2020(rgb));
+            let display = 3.0 * y * (y / (y + 0.02)).powi(2);
+            *dst = src.map(|v| v * display / y);
+        }
+        (sensor, reference)
+    }
+
+    #[test]
+    fn camera_tone_follows_the_jpegs_deep_shadows() {
+        let (sensor, reference) = steep_toe_scene();
+        let look = fit_pairs_with(&sensor, &reference, Some((Mat3::IDENTITY, None))).unwrap();
+        let dark: Vec<_> = sensor.data.iter().zip(&reference.data).filter(|(_, p)| luminance_2020(**p) < 0.015).collect();
+        assert!(dark.len() > 256);
+        let error = dark.iter().map(|(x, y)| (look.tone.apply(luminance_2020(**x)) - luminance_2020(**y)).abs()).sum::<f32>() / dark.len() as f32;
+        assert!(error < 0.001, "deep-shadow luminance error {error}");
+        assert_eq!(look.matrix, Mat3::IDENTITY);
+    }
+
+    #[test]
+    fn colour_holdouts_stay_out_of_the_wider_tone_training() {
+        let (sensor, reference) = steep_toe_scene();
+        let fit = |reference: &Rgb32f| {
+            let (pairs, _) = collect_pairs(&sensor, reference, 0.005, None).unwrap();
+            fit_tone_with_shadows(ToneFit::Quantile, &pairs, &sensor, reference, None, |x| x).unwrap()
+        };
+        let expected = fit(&reference);
+        let mut changed = reference.clone();
+        let mut index = 0;
+        for (x, y) in sensor.data.iter().zip(&mut changed.data) {
+            if colour_pair(*x, *y) {
+                if index % 3 == 0 {
+                    *y = y.map(|v| v * 1.1);
+                    assert!(colour_pair(*x, *y));
+                }
+                index += 1;
+            }
+        }
+        assert_eq!(fit(&changed), expected);
+    }
+
+    #[test]
+    fn camera_toe_is_robust_to_shadow_noise() {
+        let (sensor, clean) = steep_toe_scene();
+        let mut noisy = clean.clone();
+        for (i, p) in noisy.data.iter_mut().enumerate() {
+            if luminance_2020(*p) < 0.015 {
+                // Quantized JPEG levels with bounded noise and occasional compression outliers.
+                let noise = ((i * 17 % 11) as f32 - 5.0) * 0.00004;
+                *p = p.map(|v| ((v + noise).max(0.0) / 0.0003).round() * 0.0003);
+                if i % 23 == 0 {
+                    *p = [0.014; 3];
+                }
+            }
+        }
+        let look = fit_pairs_with(&sensor, &noisy, Some((Mat3::IDENTITY, None))).unwrap();
+        let dark: Vec<_> = sensor.data.iter().zip(&clean.data).filter(|(_, p)| luminance_2020(**p) < 0.015).collect();
+        let error = dark.iter().map(|(x, y)| (look.tone.apply(luminance_2020(**x)) - luminance_2020(**y)).abs()).sum::<f32>() / dark.len() as f32;
+        assert!(error < 0.001, "noisy shadow luminance error {error}");
+        assert_eq!(look.tone.apply(0.0), 0.0);
+        assert_eq!(look.matrix, Mat3::IDENTITY);
+        for i in 1..1000 {
+            assert!(look.tone.apply(i as f32 / 1000.0) >= look.tone.apply((i - 1) as f32 / 1000.0));
+        }
+    }
+
+    #[test]
+    fn unreliable_dark_pairs_keep_the_original_tone_and_colour() {
+        let (sensor, reference) = steep_toe_scene();
+        let dark: Vec<_> = reference.data.iter().enumerate().filter(|(_, p)| luminance_2020(**p) < 0.015).map(|(i, _)| i).collect();
+        let mut excluded = sensor.clone();
+        for &i in &dark {
+            excluded.data[i] = [f32::NAN; 3];
+        }
+        let colour = Some((Mat3::IDENTITY, None));
+        let original = fit_pairs_with(&excluded, &reference, colour.clone()).unwrap();
+        for case in 0..6 {
+            let (mut x, mut y) = (sensor.clone(), reference.clone());
+            for (j, &i) in dark.iter().enumerate() {
+                match case {
+                    0 => y.data[i] = [0.0; 3],                                            // JPEG black gives no measured shadow signal
+                    1 => x.data[i] = [0.00001; 3],                                        // below the sensor noise floor
+                    2 if j >= 95 => y.data[i] = [0.0; 3],                                 // too few dark pairs
+                    3 => x.data[i] = [0.003; 3],                                          // no scene luminance spread
+                    4 => y.data[i] = [0.003; 3],                                          // one quantized grey, not a toe
+                    5 => y.data[i] = [0.0004 + ((j * 7919) % 1000) as f32 * 0.000014; 3], // unrelated noise
+                    _ => {}
+                }
+            }
+            let look = fit_pairs_with(&x, &y, colour.clone()).unwrap();
+            assert_eq!(look.tone, original.tone, "case {case}");
+            assert_eq!(look.matrix, original.matrix, "case {case}");
+            assert!(look.hue_sat.is_none());
+        }
+    }
 
     #[test]
     fn camera_jpeg_matches_the_sensor_proxy_size_exactly() {
