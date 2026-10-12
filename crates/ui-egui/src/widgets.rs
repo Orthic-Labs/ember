@@ -222,7 +222,10 @@ pub fn slider(ui: &mut Ui, spec: &ControlSpec, value: f64, enabled: bool, label_
     let mut v = value;
     if let Some((mut text, frames, pressed)) = typing.take() {
         // Keep the owned opening release focused without restarting its draft or selection.
-        if pressed && value_released {
+        // egui gives that release's click to the readout, so the field under it gives up the focus
+        // whatever frame it lands on (issue #1362): the field takes it back after drawing too.
+        let opening_release = pressed && value_released;
+        if opening_release {
             ui.memory_mut(|m| m.request_focus(crate::text_field::id(&format!("sliderField:{}", spec.id))));
         }
         let pressed = pressed && !value_released;
@@ -237,10 +240,11 @@ pub fn slider(ui: &mut Ui, spec: &ControlSpec, value: f64, enabled: bool, label_
             .select_on_focus(true)
             .begin_edit(frames == 0)
             .show(&mut child);
-        if frames < 2 && !matches!(field.ending, Some(crate::text_field::Ending::Return | crate::text_field::Ending::Escape)) {
+        if (frames < 2 || opening_release) && !matches!(field.ending, Some(crate::text_field::Ending::Return | crate::text_field::Ending::Escape)) {
             field.response.request_focus();
-            typing = Some((text.clone(), frames + 1, pressed));
-            ui.data_mut(|m| m.insert_temp(typing_id, (text, frames + 1, pressed)));
+            let frames = frames.saturating_add(1);
+            typing = Some((text.clone(), frames, pressed));
+            ui.data_mut(|m| m.insert_temp(typing_id, (text, frames, pressed)));
         } else if field.ending.is_some() || !field.editing || !enabled {
             // Esc (or the slider turning off) keeps the old value; Return or clicking away applies
             let cancelled = !enabled || field.cancelled();
