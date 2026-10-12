@@ -4434,6 +4434,7 @@ version = "0.7.0"
 dependencies = [
  "dhat",
  "lightcraft-codecs",
+ "lightcraft-color",
  "lightcraft-denoise",
  "lightcraft-develop",
  "lightcraft-engine",

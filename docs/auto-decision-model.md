@@ -5,6 +5,13 @@ are implemented in source; training, evaluation & model integration remain separ
 finished renders. It does not change deterministic Auto or authorize a default change. If enabled
 later, an absent, invalid or incompatible model must preserve deterministic Auto's current result.
 
+**Corpus scope correction, 2026-10-12:** the owner's full before/after corpus is broader than this
+two-target experiment. This document's ridge/model sequence is an experiment proposal, not an
+approved limit on corpus preparation. Preserve image intermediates, complete available edit
+provenance & explicit unavailable-label states so future colour, region or image-model work can
+reuse preparation. Numeric-only extraction must not be labelled "full corpus training ready".
+See [reusable corpus format](reusable-auto-corpus.md).
+
 ## Decision boundary
 
 `auto::fit::fit_with` in `crates/pipeline/src/auto.rs` optimizes the existing
@@ -72,7 +79,7 @@ or export-version history remains quarantined with an explicit reason.
 
 ### Rendered-pair extractor
 
-`lightcraft-cli ai decision extract --manifest PRIVATE_JSON --out NEW_NUMERIC_JSON` reads
+`lightcraft-cli ai decision extract --manifest PRIVATE_JSON --out NEW_NUMERIC_JSON --proxy-dir PRIVATE_CACHE` reads
 `ember.ai-decision-extract-input.v1`: `user_consented:true` & 1–64 `records`. Each record requires
 opaque `photo_id`, `source_path`, `export_path`, lowercase SHA256 `source_sha256`, `export_sha256`,
 `provenance_sha256`, `metadata_identity_bound:true`, `source_is_raw`, `unsupported_geometry`, &
@@ -81,7 +88,7 @@ verified private identity/history evidence; it is not inferred by pixel extracti
 
 Extractor verifies media content, rejects RAW embedded-preview fallback, decodes verified bytes through
 engine's offline loader without catalog or sidecar writes, & emits path-free `ember.ai-decision-numeric.v1`
-records (`rendered-pair.v3`). For Sony files with explicit full default crop tags, alignment recovers that
+records (`rendered-pair.v4`). For Sony files with explicit full default crop tags, alignment recovers that
 per-file frame after starting colour is fitted against unchanged camera crop. Normal product loading
 still honors in-camera aspect crops. Numeric receipts retain camera crop & applied full default crop;
 orientation is applied once. This permits existing exports that recover wider sensor framing.
@@ -99,7 +106,11 @@ extractor & full deterministic Auto run on that frame. Finished image is decoded
 Labels are gamma-2.2 luminance median & p95−p05 spread, minus deterministic objective targets.
 Top, bottom, clip & weights remain unchanged. Before/Auto/finished pixel hashes & statistics,
 geometry, fingerprints, runtime, camera-profile cache key & Auto revision accompany numeric rows.
-Pixels are not saved in numeric output. Rows remain split-unassigned & ineligible until complete
+With `--proxy-dir`, source, unregistered before/finished, aligned source/before/global Auto &
+region-aware Auto pixels are retained as hash-verified private f32 objects. Numeric output references
+objects by relative content-addressed names. Colour diagnostics, heuristic region planes &
+per-region before/baseline/finished statistics are retained; heuristic masks are not ground truth.
+Rows remain split-unassigned & ineligible until complete
 corpus grouping joins exact/near duplicates, source families & shoot/session relationships.
 
 Raw/export pairing must bind source identity, virtual-copy identity, export recipe, dimensions,

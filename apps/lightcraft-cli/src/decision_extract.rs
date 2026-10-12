@@ -2,6 +2,7 @@
 //! Matching measures geometry on a 512-pixel comparison grid, not at original sensor resolution.
 
 mod geometry;
+mod reusable;
 
 use std::collections::BTreeSet;
 use std::fs::{File, OpenOptions};
@@ -29,12 +30,19 @@ const EDGE: usize = 512;
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut input = None;
     let mut output = None;
+    let mut proxy_root = None;
+    let mut source_only = false;
     let mut index = 0usize;
     while let Some(option) = args.get(index) {
         let slot = match option.as_str() {
             "--manifest" => &mut input,
+            "--source-manifest" => {
+                source_only = true;
+                &mut input
+            }
             "--out" => &mut output,
-            _ => return Err("ai decision extract --manifest PRIVATE_JSON --out NEW_NUMERIC_JSON".into()),
+            "--proxy-dir" => &mut proxy_root,
+            _ => return Err("ai decision extract --manifest PRIVATE_JSON --out NEW_NUMERIC_JSON [--proxy-dir PRIVATE_CACHE]".into()),
         };
         if slot.is_some() {
             return Err("duplicate extractor option".into());
@@ -47,7 +55,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let output = output.ok_or("extract requires --out")?;
     let input_bytes = read_bounded(Path::new(&input), 4 * 1024 * 1024)?;
     let manifest: Value = serde_json::from_slice(&input_bytes).map_err(|_| "invalid extractor JSON")?;
-    validate_manifest(&manifest)?;
+    if source_only {
+        validate_sources(&manifest)?;
+    } else {
+        validate_manifest(&manifest)?;
+    }
     // Reserve create-new output before decoding; an existing output is never overwritten.
     let mut file = OpenOptions::new().write(true).create_new(true).open(&output).map_err(|_| "cannot create new numeric output")?;
     let records = manifest.get("records").and_then(Value::as_array).ok_or("records missing")?;
@@ -55,7 +67,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
     for row in records {
         let id = text(row, "photo_id")?;
         eprintln!("decision extract: {id}");
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| extract_pair(row)));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let root = proxy_root.as_deref().map(Path::new);
+            if source_only { extract_source(row, root) } else { extract_pair(row, root) }
+        }));
         let result = match result {
             Ok(Ok(value)) => value,
             Ok(Err(reason)) => json!({"photo_id": id, "status": "quarantined", "reason": reason}),
@@ -64,7 +79,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
         results.push(result);
     }
     let report = json!({
-        "schema": SCHEMA, "extractor_revision": "rendered-pair.v3", "input_sha256": digest(&input_bytes),
+        "schema": SCHEMA, "extractor_revision": "rendered-pair.v4", "input_sha256": digest(&input_bytes),
+        "proxy_cache_requested": proxy_root.is_some(), "reusable_schema": "ember.reusable-pair.v1",
+        "source_only": source_only,
         "auto_revision": auto::REVISION, "feature_schema": FEATURE_SCHEMA, "feature_names": FEATURE_NAMES,
         "feature_frame": "source resampled into verified export frame; deterministic Auto is recomputed on that frame",
         "statistics": "linear Rec.2020 D65 luminance; gamma 2.2 encoded quantiles p01,p05,p50,p95,p995; floor((n-1)*q); clip Y>=0.985",
@@ -154,6 +171,64 @@ fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+fn validate_sources(value: &Value) -> Result<(), String> {
+    let object = value.as_object().ok_or("manifest must be object")?;
+    if object.keys().any(|key| !["schema", "user_consented", "records"].contains(&key.as_str()))
+        || value.get("schema").and_then(Value::as_str) != Some("ember.ai-source-extract-input.v1")
+        || value.get("user_consented").and_then(Value::as_bool) != Some(true)
+    {
+        return Err("source extraction requires strict schema and consent".into());
+    }
+    let rows = value.get("records").and_then(Value::as_array).ok_or("records must be array")?;
+    if rows.is_empty() || rows.len() > 64 {
+        return Err("extract batch must contain 1..64 records".into());
+    }
+    let mut ids = BTreeSet::new();
+    for row in rows {
+        let fields = row.as_object().ok_or("source record must be object")?;
+        if fields.keys().any(|key| !["photo_id", "source_path", "source_sha256", "source_is_raw"].contains(&key.as_str())) {
+            return Err("unknown source field".into());
+        }
+        let id = text(row, "photo_id")?;
+        if id.len() > 128 || !id.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_')) || !ids.insert(id) {
+            return Err("invalid or duplicate opaque photo_id".into());
+        }
+        let hash = text(row, "source_sha256")?;
+        if hash.len() != 64
+            || !hash.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+            || row.get("source_is_raw").and_then(Value::as_bool).is_none()
+        {
+            return Err("invalid source hash or kind".into());
+        }
+        text(row, "source_path")?;
+    }
+    Ok(())
+}
+
+fn extract_source(row: &Value, root: Option<&Path>) -> Result<Value, String> {
+    let path = text(row, "source_path")?;
+    let sha = text(row, "source_sha256")?;
+    let bytes = checked_media(path, sha)?;
+    let (source, info, crop) = files::load_vec_for_alignment(bytes, EDGE).map_err(|_| "source_decode_failed")?;
+    if row.get("source_is_raw").and_then(Value::as_bool) != Some(info.raw) {
+        return Err("source_decode_kind_mismatch_or_embedded_preview_fallback".into());
+    }
+    finite_image(&source)?;
+    let base = DevelopSettings::default();
+    let before = render_linear(&source, &info, &base)?;
+    let settings = look::settings_with(&base, auto::auto_tone(&source, &info, &base));
+    let baseline = render_linear(&source, &info, &settings)?;
+    drop(checked_media(path, sha)?);
+    Ok(json!({"photo_id": text(row, "photo_id")?, "source_sha256": sha, "status": "source_cached_without_finished_label",
+        "source_frame_crops": crop, "source_fingerprint": geometry::fingerprint(&before), "baseline_settings": settings,
+        "proxies": {"source": reusable::image(root, &source, "engine source-linear Rec.2020; before develop")?,
+            "before": reusable::image(root, &before, "display-linear Rec.2020 D65; default develop")?,
+            "baseline": reusable::image(root, &baseline, "display-linear Rec.2020 D65; global Auto")?},
+        "colour_diagnostics": {"before": reusable::colour(&before), "baseline": reusable::colour(&baseline)},
+        "finished_target": null, "label_unavailable_reason": "source_only_extraction_does_not_establish_finished_target",
+        "training_eligible": false, "split": "unassigned"}))
+}
+
 fn checked_media(path: &str, expected: &str) -> Result<Vec<u8>, String> {
     let bytes = read_bounded(Path::new(path), MAX_MEDIA_BYTES)?;
     if digest(&bytes) != expected {
@@ -197,15 +272,7 @@ fn render_linear(source: &Rgb32f, info: &SourceInfo, settings: &DevelopSettings)
 }
 
 fn pixels_digest(image: &Rgb32f) -> String {
-    let mut bytes = Vec::with_capacity(image.data.len().saturating_mul(12).saturating_add(16));
-    bytes.extend_from_slice(&(image.width as u64).to_le_bytes());
-    bytes.extend_from_slice(&(image.height as u64).to_le_bytes());
-    for pixel in &image.data {
-        for value in pixel {
-            bytes.extend_from_slice(&value.to_le_bytes());
-        }
-    }
-    digest(&bytes)
+    digest(&reusable::pixel_bytes(image))
 }
 
 fn measured(image: &Rgb32f) -> Result<LookTarget, String> {
@@ -215,10 +282,7 @@ fn measured(image: &Rgb32f) -> Result<LookTarget, String> {
     Ok(stats)
 }
 
-fn extract_pair(row: &Value) -> Result<Value, String> {
-    if row.get("unsupported_geometry").and_then(Value::as_bool) == Some(true) {
-        return Err("unsupported_perspective_or_content_aware_edit".into());
-    }
+fn extract_pair(row: &Value, proxy_root: Option<&Path>) -> Result<Value, String> {
     let source_path = text(row, "source_path")?;
     let export_path = text(row, "export_path")?;
     let source_sha = text(row, "source_sha256")?;
@@ -259,12 +323,27 @@ fn extract_pair(row: &Value) -> Result<Value, String> {
         return Err("source_changed_during_extraction".into());
     }
     drop(checked_media(source_path, source_sha)?);
+    // Keep unregistered views even when precise pixel pairing is unavailable. A geometry
+    // rejection excludes the numeric view, not the user's image from the reusable corpus.
+    let unaligned_proxies = json!({
+        "source": reusable::image(proxy_root, &source, "engine source-linear Rec.2020; as loaded, before develop")?,
+        "before": reusable::image(proxy_root, &before, "display-linear Rec.2020 D65; default develop, source frame")?,
+        "finished": reusable::image(proxy_root, &finished, "display-linear Rec.2020 D65; original finished frame")?
+    });
+    if row.get("unsupported_geometry").and_then(Value::as_bool) == Some(true) {
+        return Ok(json!({"photo_id": text(row, "photo_id")?, "status": "quarantined", "reason": "unsupported_perspective_or_content_aware_edit",
+            "source_sha256": source_sha, "export_sha256": export_sha, "provenance_sha256": text(row, "provenance_sha256")?,
+            "unaligned_proxies": unaligned_proxies, "source_frame_crops": full_crop,
+            "source_fingerprint": source_fingerprint, "finished_fingerprint": finished_fingerprint,
+            "training_eligible": false, "split": "unassigned"}));
+    }
     let (aligned_source, geometry) = match geometry::align(&source, &before, &finished) {
         Ok(aligned) => aligned,
         Err(reason) => {
             return Ok(json!({"photo_id": text(row, "photo_id")?, "status": "quarantined", "reason": reason.reason, "geometry": reason.evidence,
                 "source_sha256": source_sha, "export_sha256": export_sha, "provenance_sha256": text(row, "provenance_sha256")?,
                 "source_fingerprint": source_fingerprint, "finished_fingerprint": finished_fingerprint,
+                "unaligned_proxies": unaligned_proxies,
                 "source_frame_crops": full_crop, "source_proxy_dimensions": [source.width, source.height], "finished_proxy_dimensions": [finished.width, finished.height],
                 "training_eligible": false, "split": "unassigned"}));
         }
@@ -287,6 +366,13 @@ fn extract_pair(row: &Value) -> Result<Value, String> {
     let source_info = json!({"raw": info.raw, "as_shot_temp": info.as_shot_temp, "as_shot_tint": info.as_shot_tint,
         "relative_wb": info.relative_wb, "camera_tone": info.camera_tone, "lens": info.lens});
     let source_info_bytes = serde_json::to_vec(&source_info).map_err(|_| "source_info_serialization_failed")?;
+    let proxies = json!({
+        "aligned_source": reusable::image(proxy_root, &aligned_source, "engine source-linear Rec.2020; resampled into finished frame")?,
+        "before": reusable::image(proxy_root, &before_aligned, "display-linear Rec.2020 D65; default develop, aligned frame")?,
+        "baseline": reusable::image(proxy_root, &baseline, "display-linear Rec.2020 D65; global deterministic Auto, aligned frame")?,
+        "finished": unaligned_proxies.get("finished")
+    });
+    let region_diagnostics = reusable::regions(proxy_root, &aligned_source, &info, &before_aligned, &baseline, &finished)?;
     Ok(json!({
         "photo_id": text(row, "photo_id")?, "status": "extracted_pending_grouped_split",
         "source_sha256": source_sha, "export_sha256": export_sha, "provenance_sha256": text(row, "provenance_sha256")?,
@@ -297,6 +383,10 @@ fn extract_pair(row: &Value) -> Result<Value, String> {
         "target_residuals": [median - objectives.median, spread - objectives.spread],
         "before_statistics": before_stats, "baseline_statistics": baseline_stats, "finished_statistics": final_stats,
         "baseline_auto": auto, "baseline_settings_sha256": digest(&settings_bytes),
+        "baseline_settings": settings, "source_info_summary": source_info,
+        "unaligned_proxies": unaligned_proxies, "proxies": proxies,
+        "colour_diagnostics": {"before": reusable::colour(&before_aligned), "baseline": reusable::colour(&baseline), "finished": reusable::colour(&finished)},
+        "region_diagnostics": region_diagnostics,
         "source_pixels_sha256": pixels_digest(&source), "aligned_source_pixels_sha256": pixels_digest(&aligned_source),
         "before_pixels_sha256": pixels_digest(&before_aligned), "baseline_pixels_sha256": pixels_digest(&baseline),
         "finished_pixels_sha256": pixels_digest(&finished), "geometry": geometry,
@@ -348,6 +438,18 @@ mod tests {
     }
 
     #[test]
+    fn source_manifest_has_explicit_kind_identity_and_no_finished_label() {
+        let mut value = json!({"schema":"ember.ai-source-extract-input.v1", "user_consented":true,
+            "records":[{"photo_id":"source1", "source_path":"original.arw", "source_sha256":"a".repeat(64), "source_is_raw":true}]});
+        assert!(validate_sources(&value).is_ok());
+        value["records"][0]["finished_target"] = json!(0.5);
+        assert!(validate_sources(&value).is_err());
+        value["records"][0].as_object_mut().unwrap().remove("finished_target");
+        value["user_consented"] = json!(false);
+        assert!(validate_sources(&value).is_err());
+    }
+
+    #[test]
     fn paired_pixels_extract_repeatably_without_mutating_inputs() {
         use lightcraft_codecs::{EncodeImage, EncodeMeta, Samples};
         let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
@@ -374,8 +476,8 @@ mod tests {
         let mut row = json!({"photo_id":"synthetic","source_path":source,"export_path":export,
             "source_sha256":digest(&source_bytes),"export_sha256":digest(&export_bytes),"provenance_sha256":"c".repeat(64),
             "metadata_identity_bound":true,"target_intent":"user_selected_finished_export","unsupported_geometry":false,"source_is_raw":false});
-        let first = extract_pair(&row).expect("procedural pair must align and extract");
-        let second = extract_pair(&row).expect("repeat must extract");
+        let first = extract_pair(&row, None).expect("procedural pair must align and extract");
+        let second = extract_pair(&row, None).expect("repeat must extract");
         assert_eq!(first, second);
         assert_eq!(first["features"].as_array().unwrap().len(), 28);
         assert_eq!(first["training_eligible"], false);
@@ -383,15 +485,32 @@ mod tests {
         assert_eq!(std::fs::read(&source).unwrap(), source_bytes);
         assert_eq!(std::fs::read(&export).unwrap(), export_bytes);
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2, "no catalog or sidecar writes");
+        let cache = dir.join("private-cache");
+        let retained = extract_pair(&row, Some(&cache)).expect("reusable pair");
+        assert_eq!(retained["before_pixels_sha256"], retained["proxies"]["before"]["sha256"]);
+        assert_eq!(retained["region_diagnostics"]["status"], "measured");
+        for name in ["before", "baseline", "finished", "aligned_source"] {
+            let object = &retained["proxies"][name];
+            let bytes = std::fs::read(cache.join(object["object"].as_str().unwrap())).unwrap();
+            assert_eq!(digest(&bytes), object["sha256"].as_str().unwrap());
+        }
+        row["unsupported_geometry"] = json!(true);
+        let unaligned = extract_pair(&row, Some(&cache)).expect("unaligned images retained");
+        assert_eq!(unaligned["status"], "quarantined");
+        assert_eq!(unaligned["unaligned_proxies"]["finished"]["retained"], true);
+        row["unsupported_geometry"] = json!(false);
+        let unlabelled = extract_source(&row, Some(&cache)).expect("source without fabricated target");
+        assert_eq!(unlabelled["finished_target"], Value::Null);
+        assert_eq!(unlabelled["status"], "source_cached_without_finished_label");
         row["source_sha256"] = json!("0".repeat(64));
-        assert_eq!(extract_pair(&row).unwrap_err(), "media_sha256_mismatch");
+        assert_eq!(extract_pair(&row, None).unwrap_err(), "media_sha256_mismatch");
         row["source_sha256"] = json!(digest(&source_bytes));
         row["source_is_raw"] = json!(true);
-        assert_eq!(extract_pair(&row).unwrap_err(), "source_decode_kind_mismatch_or_embedded_preview_fallback");
+        assert_eq!(extract_pair(&row, None).unwrap_err(), "source_decode_kind_mismatch_or_embedded_preview_fallback");
         let bad_profile = lightcraft_codecs::encode_png(&final_image, &EncodeMeta { icc: Some(b"bad ICC"), ..Default::default() }).unwrap();
         std::fs::write(&export, &bad_profile).unwrap();
         row["export_sha256"] = json!(digest(&bad_profile));
-        assert_eq!(extract_pair(&row).unwrap_err(), "unsupported_export_color_interpretation");
+        assert_eq!(extract_pair(&row, None).unwrap_err(), "unsupported_export_color_interpretation");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

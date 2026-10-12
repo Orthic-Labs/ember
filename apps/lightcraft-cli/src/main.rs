@@ -16,7 +16,7 @@
 //! lightcraft-cli ai personal extract --manifest FILE --out NEW_MANIFEST
 //! lightcraft-cli ai personal evaluate --manifest FILE --model FILE [--out NEW_REPORT]
 //! lightcraft-cli ai decision manifest --lrcat FILE --raw-root DIR --export-root DIR --out NEW_FILE [--pairs PRIVATE_JSON]
-//! lightcraft-cli ai decision extract --manifest PRIVATE_JSON --out NEW_NUMERIC_JSON
+//! lightcraft-cli ai decision extract --manifest PRIVATE_JSON --out NEW_NUMERIC_JSON [--proxy-dir PRIVATE_CACHE]
 //! lightcraft-cli ai denoise baseline --hardware LABEL --out NEW_REPORT
 //! lightcraft-cli calibrate [--max N] [--out DIR] FOLDERS/FILES…
 //! ```
@@ -139,9 +139,9 @@ USAGE:
       ember.ai-decision-pairs.v1 with source_uuid, virtual_copy_identity, source_path, export_path,
         edit_version_timestamp (RFC 3339), and export_recipe {color_space:sRGB,width,height,
       geometry:{kind:identity|crop_orientation,evidence,residual_px}}. Unknown history is dropped.
-  lightcraft-cli ai decision extract --manifest PRIVATE_JSON --out NEW_NUMERIC_JSON
-      Extract aligned rendered-pair features & global median/spread targets; private inputs stay read-only.
-      Bounded batches require verified content hashes & explicit identity/target intent. See docs/auto-decision-model.md.
+  lightcraft-cli ai decision extract --manifest PRIVATE_JSON --out NEW_NUMERIC_JSON [--proxy-dir PRIVATE_CACHE]
+      Extract reusable pixels, colour/region diagnostics & numeric tone view; private inputs stay read-only.
+      Use --source-manifest for unpaired inputs. See docs/reusable-auto-corpus.md for schemas & label meaning.
   lightcraft-cli ai denoise baseline --hardware LABEL --out NEW_REPORT [--size 64..512] [--repeats 2..10] [--source-revision LABEL]
       Record original procedural RGB guided-NR baseline harness results without model inference.
   lightcraft-cli ai compare --demo|FILES… --out NEW_DIR [--model ID]… [--repeat 1..3] [--budget-usd N] [--prepare-only]

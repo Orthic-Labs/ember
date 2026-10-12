@@ -11,6 +11,11 @@ camera/render quality & full-corpus Personal Auto preparation.
 
 ## Where we stand
 
+**Auto corpus correction, 2026-10-12:** reusable extraction source preserves image intermediates,
+colour & heuristic region diagnostics alongside numeric tone labels. Full corpus preparation,
+training recipes & learned quality remain unqualified; [completion evidence](docs/reusable-auto-corpus.md)
+must cover reusable data, not only one scalar regression view.
+
 *Honest assessment, 2026-10-08. Agents: read this before picking work. The checklist in
 [`docs/parity.md`](docs/parity.md) counts features that **exist**; this section is about whether a photographer can
 **switch** from reference editor. Update it when a gap below closes.*

@@ -24,6 +24,7 @@ lightcraft-photo-ai = { workspace = true, features = ["network"] }
 lightcraft-develop = { workspace = true }
 lightcraft-pipeline = { workspace = true }
 lightcraft-codecs = { workspace = true }
+lightcraft-color = { workspace = true }
 lightcraft-raster = { workspace = true }
 lightcraft-merge = { workspace = true }
 serde_json = { workspace = true }

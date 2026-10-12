@@ -13,6 +13,10 @@ Hours are Opus 5.5 agent wall-clock hours (see [target-app-parity.md](target-app
 
 ## Ranked
 
+**Auto corpus, 2026-10-12:** full-corpus qualification remains open. Reusable extraction now has
+source support for retained before/Auto/finished pixels, colour & heuristic region diagnostics;
+numeric tone labels alone do not complete corpus preparation. See [format & completion evidence](reusable-auto-corpus.md).
+
 | # | Gap | Evidence | User impact | Hours | Doc |
 |---:|---|---|---|---:|---|
 | 1 B | **Camera colour is estimated, not measured** (LR-PROF-CAMERACOLOR). Raws start from a per-file fit to the camera JPEG, 4 bundled profiles or 52 spectral matrices; others use a neutral matrix (a black-and-white camera JPEG gives its tone curve only, #577) | ΔE vs camera JPEG 2.9–10 after fitting (raw-parity.md); 0 chart-calibrated models vs 1,500 reference publisher Standard profiles | every raw shooter sees colour that is close but not reference editor's; some get neutral-matrix colour | 50–90 | [raw-parity](raw-parity.md#colour) |
