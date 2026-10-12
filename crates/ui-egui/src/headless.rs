@@ -3861,7 +3861,10 @@ mod tests {
             assert_eq!(r["ok"], true, "{tab}: {r}");
             assert_eq!(h.app.ui.dialog, Some(crate::state::Dialog::Settings { tab: tab.into() }));
         }
-        // General: confirm before delete, startup view
+        // General: confirm before delete (on by default), startup view
+        assert!(h.app.ui.settings.confirm_delete);
+        h.request("ui.clickWidget", json!({"id": "check:settings.confirmDelete"}), t);
+        assert!(!h.app.ui.settings.confirm_delete);
         h.request("ui.clickWidget", json!({"id": "check:settings.confirmDelete"}), t);
         assert!(h.app.ui.settings.confirm_delete);
         h.request("ui.clickWidget", json!({"id": "button:settingsStartup-2"}), t);
