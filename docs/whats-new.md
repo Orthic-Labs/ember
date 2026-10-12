@@ -44,6 +44,15 @@
   identity subissue in #840). The separate Make and Model tags keep their original values.
   This does not change colour matrices, camera calibration or RAW noise rendering.
 
+## 2026-10-13
+
+### Slider drags on large raws
+- Dragging a slider no longer re-renders the edited photo's filmstrip thumbnail on every frame; it follows once you
+  let go. On a 64 MP raw the first of those renders decoded the whole file again, which held up the loupe's
+  previews for up to a second.
+- A thumbnail of the photo open in Detail is made from its already decoded preview instead of decoding the file
+  again.
+
 ## 2026-10-11
 
 ### HDR and panorama merges of CR2 keep their colour

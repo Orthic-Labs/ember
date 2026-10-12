@@ -1060,6 +1060,26 @@ mod thumbnail_tests {
     }
 
     #[test]
+    fn a_slider_drag_leaves_the_edited_photos_thumbnail_until_it_ends() {
+        let (mut app, work, ctx) = fixture();
+        request(&mut app);
+        let (slot, job) = take_job(&work);
+        finish(&mut app, &work, &ctx, slot, job.run());
+        app.session.execute("library.select", &serde_json::json!({"ids": [1], "active": 1})).unwrap();
+        app.session.execute("develop.beginInteraction", &serde_json::json!({"label": "Exposure"})).unwrap();
+        for v in [0.1, 0.2, 0.3] {
+            app.session.execute("develop.set", &serde_json::json!({"control": "light.exposure", "value": v})).unwrap();
+            app.renderer.poll(&ctx, &mut app.session);
+            request(&mut app);
+        }
+        assert_eq!(app.renderer.thumb_jobs_built, 1, "the drag's frames render no thumbnail of the photo");
+        assert!(work.borrow().jobs.is_empty());
+        app.session.execute("develop.endInteraction", &serde_json::json!({})).unwrap();
+        request(&mut app);
+        assert_eq!(app.renderer.thumb_jobs_built, 2, "the thumbnail follows once the drag ends");
+    }
+
+    #[test]
     fn unchanged_queued_frames_build_no_jobs() {
         let (mut app, _, _) = fixture();
         app.renderer.set_offload(Box::new(Blocked));

@@ -223,6 +223,13 @@ impl DecodedSource {
 #[derive(Clone)]
 pub enum SourceRef {
     Loaded(Box<DecodedSource>),
+    /// A larger decoded source of the photo, fitted to `max_edge` by the worker: the thumbnail of
+    /// the photo open in the loupe is cut from its preview-level source instead of decoding the
+    /// file again (a second or more for a 64 MP raw).
+    Fit {
+        from: Box<DecodedSource>,
+        max_edge: usize,
+    },
     Demo {
         scene: Box<lightcraft_scenes::Scene>,
         max_edge: usize,
@@ -251,6 +258,13 @@ impl SourceRef {
     pub fn load_source(&self) -> Result<DecodedSource, String> {
         let image = match self {
             SourceRef::Loaded(a) => return Ok((**a).clone()),
+            SourceRef::Fit { from, max_edge } => {
+                if from.image.width.max(from.image.height) <= *max_edge {
+                    return Ok((**from).clone());
+                }
+                let image = lightcraft_raster::resample::fit(&from.image, *max_edge, *max_edge, lightcraft_raster::resample::Filter::Box);
+                return Ok(DecodedSource { image: Arc::new(image), denoised: None, ..(**from).clone() });
+            }
             SourceRef::Demo { scene, max_edge } => crate::demo::scene_pixels(scene, *max_edge)?,
             SourceRef::File { path, max_edge, loader, fallback, denoise } => {
                 let plain = || match loader {
@@ -624,6 +638,15 @@ impl MediaCache {
     fn source_ref_plain(&mut self, p: &Photo, level: SourceLevel, cached: bool) -> SourceRef {
         if cached && let Some(a) = self.get_source(p.id, level) {
             return SourceRef::Loaded(Box::new(a));
+        }
+        // a thumbnail of a photo whose preview is decoded (the one in the loupe) is cut from it; not
+        // with a denoised picture, which the thumbnail would lose
+        if cached
+            && level == SourceLevel::Thumb
+            && self.denoise.spec(p.id).is_none()
+            && let Some(big) = self.get_source(p.id, SourceLevel::Preview)
+        {
+            return SourceRef::Fit { from: Box::new(big), max_edge: level.max_edge() };
         }
         // Procedural scenes have a nominal size: "full" is that size, not unbounded.
         let max_edge = level.max_edge().min(match (&p.source, level) {
@@ -2022,6 +2045,24 @@ mod tests {
         assert_eq!((a.width, a.height), (b.width, b.height));
         let mean = |i: &Rgba8| i.data.iter().map(|p| p[1] as f64).sum::<f64>() / i.data.len() as f64;
         assert!(mean(&a) > mean(&b) + 10.0, "two stops brighter after: {} vs {}", mean(&a), mean(&b));
+    }
+
+    /// The thumbnail of a photo whose preview-level source is decoded is cut from it: the file (here
+    /// one nothing can decode) is not read again.
+    #[test]
+    fn a_thumbnail_is_cut_from_the_decoded_preview() {
+        let mut s = crate::Session::new();
+        let p = Photo::new(PhotoId(1), Source::File { path: "/nowhere/a.ARW".into() }, "a.ARW", "ARW", 2400, 1600, "");
+        s.catalog.apply(lightcraft_catalog::Op::AddPhoto { photo: Box::new(p.clone()) }).unwrap();
+        s.media.insert(p.id, SourceLevel::Preview, Arc::new(Rgb32f::from_fn(2400, 1600, |x, _| [x as f32 / 2400.0, 0.5, 0.25])));
+        let job = s.thumb_job(p.id, 512).unwrap();
+        assert!(matches!(job.source, SourceRef::Fit { .. }));
+        let r = job.run();
+        let thumb = r.rendered.as_ref().unwrap();
+        assert_eq!((thumb.image.width, thumb.image.height), (512, 341));
+        s.accept(&r);
+        let cached = s.media.get(p.id, SourceLevel::Thumb).unwrap();
+        assert_eq!((cached.width, cached.height), (512, 341), "a thumbnail-sized source is kept, not the preview");
     }
 
     #[test]
