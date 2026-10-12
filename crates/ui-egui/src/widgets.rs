@@ -45,6 +45,11 @@ pub fn preview_only_variant(reason: &str) -> &str {
 
 /// What a preview-only raw means for the user (see `Photo::preview_only`).
 pub fn preview_only_explanation(reason: &str) -> String {
+    if reason.starts_with("Nikon High Efficiency NEF (") {
+        return crate::i18n::tr(
+            "Nikon High Efficiency NEF uses licensed TicoRAW compression, which LightCraft cannot decode. Only the camera's embedded JPEG preview is available. For editable raw data, shoot Lossless compressed NEF or convert existing HE files to DNG using a licensed converter.",
+        );
+    }
     crate::i18n::tr_format!(
         "Ember can't decode this raw variant yet ({}). You're editing the camera's embedded JPEG preview, which already includes the camera's picture style (e.g. Monochrome) and white balance.",
         preview_only_variant(reason)
@@ -604,6 +609,17 @@ pub fn dropdown(ui: &mut Ui, id: &str, text: &str, font: egui::FontId, color: Co
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn high_efficiency_nef_explains_the_codec_limit_and_workarounds() {
+        let reason = "Nikon High Efficiency NEF (HE / HE★, a JPEG XS-based codec with no public specification; shoot RAW Lossless compressed to edit the raw data)";
+        let explanation = preview_only_explanation(reason);
+        assert!(explanation.contains("TicoRAW"), "{explanation}");
+        assert!(explanation.contains("Lossless compressed NEF"), "{explanation}");
+        assert!(explanation.contains("DNG"), "{explanation}");
+        assert!(!explanation.contains("yet"), "{explanation}");
+        assert!(preview_only_explanation("unsupported CR3").contains("unsupported CR3"));
+    }
 
     /// Issue #647: hovering a star previews the rating a click would set.
     #[test]
