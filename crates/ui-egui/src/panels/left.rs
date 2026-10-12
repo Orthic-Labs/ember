@@ -1794,6 +1794,7 @@ fn row_menu(app: &mut LightcraftApp, resp: &egui::Response, n: &FolderNode) {
     } else if n.path != "/" {
         resp.context_menu(|ui| {
             folder_label_menu(app, ui, n);
+            locate_missing_item(app, ui, n);
             synchronize_item(app, ui, n, &n.name);
             ui.separator();
             if ui
@@ -1805,6 +1806,19 @@ fn row_menu(app: &mut LightcraftApp, resp: &egui::Response, n: &FolderNode) {
                 ui.close();
             }
         });
+    }
+}
+
+/// Locate Missing Files… of a Folders row: choose where this folder moved, then let the existing
+/// background finder relink only this folder's photos (including the folders inside it).
+fn locate_missing_item(app: &mut LightcraftApp, ui: &mut egui::Ui, n: &FolderNode) {
+    let r = ui.button(crate::i18n::tr("Locate Missing Files…"));
+    register(ui.ctx(), "folderLocateMissing", r.rect);
+    if r.clicked() {
+        if let Err(e) = app.run("file.findMissing", json!({"within": n.path})) {
+            app.toast(ui.ctx(), e);
+        }
+        ui.close();
     }
 }
 
@@ -1899,6 +1913,7 @@ fn folder_menu_for_library(app: &mut LightcraftApp, resp: &egui::Response, n: &F
             ui.close();
         }
         folder_label_menu(app, ui, n);
+        locate_missing_item(app, ui, n);
         synchronize_item(app, ui, n, &label);
         ui.separator();
         if ui

@@ -1352,9 +1352,16 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             Ok(Value::Null)
         }
         "file.findMissing" => {
+            let within = match p.get("within") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(path)) if !path.is_empty() => Some(path.clone()),
+                Some(Value::String(_)) => return Some(Err("file.findMissing: `within` must not be empty".into())),
+                Some(value) => return Some(Err(format!("file.findMissing: `within` must be a folder path, not {value}"))),
+            };
+            let title = if within.is_some() { "Locate Missing Files…" } else { "Find Missing Photos…" };
             let folder = match p.get("folder").and_then(Value::as_str) {
                 Some(f) => Some(f.to_string()),
-                None => match crate::pick::ask(app, id, p, "folder", PickRequest::folder(crate::i18n::tr("Find Missing Photos…")), |s| {
+                None => match crate::pick::ask(app, id, p, "folder", PickRequest::folder(crate::i18n::tr(title)), |s| {
                     s.pick_folder.as_mut().and_then(|f| f()).map(|x| vec![x])
                 }) {
                     Picked::Now(v) => v.into_iter().next(),
@@ -1368,7 +1375,10 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             if app.tasks.is_running(LABEL) {
                 return Some(Err("Find Missing Photos is already searching".into()));
             }
-            let candidates = lightcraft_engine::cmd::missing::find_candidates(&app.session.catalog);
+            let mut candidates = lightcraft_engine::cmd::missing::find_candidates(&app.session.catalog);
+            if let Some(within) = within {
+                candidates.retain(|candidate| lightcraft_catalog::query::folder_within(&candidate.path, &within));
+            }
             let work = move || lightcraft_engine::cmd::missing::plan_find_missing(&candidates, &folder);
             let done = |app: &mut LightcraftApp, ctx: &egui::Context, plan: Result<lightcraft_engine::cmd::missing::FindPlan, String>| {
                 // relinked under the session as it is now: photos relinked meanwhile and files

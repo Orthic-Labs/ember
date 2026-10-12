@@ -1491,6 +1491,10 @@ fn folders_app(paths: &[&str]) -> Headless {
 }
 
 fn folders_app_sized(paths: &[&str], size: [f32; 2]) -> Headless {
+    folders_app_with_services(paths, size, Services { png: None, ..Default::default() })
+}
+
+fn folders_app_with_services(paths: &[&str], size: [f32; 2], services: Services) -> Headless {
     use lightcraft_catalog::{Op, Photo, Source};
     let mut session = lightcraft_engine::Session::new();
     for path in paths {
@@ -1498,7 +1502,7 @@ fn folders_app_sized(paths: &[&str], size: [f32; 2]) -> Headless {
         let p = Photo::new(id, Source::File { path: (*path).into() }, "x.jpg", "JPEG", 60, 40, "2026-01-01T10:00:00");
         session.catalog.apply(Op::AddPhoto { photo: Box::new(p) }).unwrap();
     }
-    let app = LightcraftApp::new(session, Services { png: None, ..Default::default() });
+    let app = LightcraftApp::new(session, services);
     let mut h = Headless::new(app, size, 1.0);
     let r = h.request("ui.set", json!({"view": "photoGrid", "leftPanel": true}), T);
     assert_eq!(r["ok"], true, "{r}");
@@ -1711,6 +1715,59 @@ fn right_click_opens_a_folders_menu_from_the_triangle_too() {
     h.step();
     right_click(&mut h, "source:libfolder:/");
     assert!(!popup_open(&h), "the startup disk offers nothing");
+}
+
+/// Issue #1194: a folder's menu chooses the folder's new location, then the bulk finder relinks
+/// only the missing photos from that folder and the folders inside it.
+#[test]
+fn a_folder_menu_locates_its_missing_tree_only() {
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    let base = std::env::temp_dir().join(format!("lc-ui-locate-folder-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let _cleanup = Cleanup(base.clone());
+    let new_trip = base.join("new/trip");
+    std::fs::create_dir_all(new_trip.join("day2")).unwrap();
+    for path in [new_trip.join("a.jpg"), new_trip.join("day2/b.jpg"), new_trip.join("c.jpg")] {
+        std::fs::write(path, b"photo").unwrap();
+    }
+
+    let root = base.to_string_lossy().replace('\\', "/");
+    let old = format!("{root}/old");
+    let old_trip = format!("{old}/trip");
+    let paths = [format!("{old_trip}/a.jpg"), format!("{old_trip}/day2/b.jpg"), format!("{old}/other/c.jpg")];
+    let picked = new_trip.to_string_lossy().to_string();
+    let services = Services { pick_folder: Some(Box::new(move || Some(picked.clone()))), png: None, ..Default::default() };
+    let refs: Vec<&str> = paths.iter().map(String::as_str).collect();
+    let mut h = folders_app_with_services(&refs, [1400.0, 900.0], services);
+
+    click(&mut h, &format!("libraryFolderToggle:{old}"));
+    right_click(&mut h, &format!("source:libfolder:{old_trip}"));
+    assert!(has(&h, "folderLocateMissing"), "the folder menu offers the action");
+    click(&mut h, "folderLocateMissing");
+    assert!(h.step_until(T, |h| h.app.ui.last_find_missing.is_some()), "the background search finished");
+    let result = h.app.ui.last_find_missing.as_ref().unwrap();
+    assert_eq!(result["found"].as_array().map(Vec::len), Some(2), "{result}");
+    assert_eq!(result["missing"], 0, "{result}");
+
+    let sources: Vec<String> = h
+        .app
+        .session
+        .catalog
+        .photos()
+        .filter_map(|photo| match &photo.source {
+            lightcraft_catalog::Source::File { path } => Some(path.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(sources.contains(&new_trip.join("a.jpg").to_string_lossy().to_string()), "{sources:?}");
+    assert!(sources.contains(&new_trip.join("day2/b.jpg").to_string_lossy().to_string()), "{sources:?}");
+    assert!(sources.contains(&format!("{old}/other/c.jpg")), "another missing folder stays untouched: {sources:?}");
 }
 
 /// Right-click a folder ▸ Set Color Label ▸ a colour: the folder's row shows the label's dot (a
