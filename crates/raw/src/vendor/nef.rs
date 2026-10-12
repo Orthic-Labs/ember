@@ -82,10 +82,16 @@ struct MeasuredBody {
 ///   Lightroom's frame, the camera JPEG's size, at (18, 10) and (6, 6): within 0.5 px mean on DSC_1316, DSC_2763
 ///   and DSC_1486. Without it, renders are larger than Lightroom's and its crops land up to 6 px off (18 px in
 ///   full frame).
+/// * **NIKON D90** (550 compressed 12-bit NEFs from one body, 10 measured): the data is 4352 × 2868 and its last 42
+///   columns (from 4310) are filler at a flat ~254 whatever the exposure, above the dark image samples (black 0), so
+///   the masked-column test keeps them and they develop as a pink band on the right. The camera's 4288 × 2848 JPEG
+///   sits at (10, 10). Green saturates at 3840–3851 while red and blue run on to 4095; one level of 3830 keeps
+///   clipped highlights white.
 const MEASURED_BODIES: &[MeasuredBody] = &[
     MeasuredBody { model: "NIKON D4", size: (4992, 3292), bits: 14, crop: (8, 6, 4928, 3280), white: Some(15520.0) },
     MeasuredBody { model: "NIKON D7100", size: (6036, 4020), bits: 14, crop: (18, 10, 6000, 4000), white: None },
     MeasuredBody { model: "NIKON D7100", size: (4812, 3212), bits: 14, crop: (6, 6, 4800, 3200), white: None },
+    MeasuredBody { model: "NIKON D90", size: (4352, 2868), bits: 12, crop: (10, 10, 4288, 2848), white: Some(3830.0) },
 ];
 
 fn measured_body(model: &str, w: usize, h: usize, bits: u32) -> Option<&'static MeasuredBody> {
@@ -430,6 +436,25 @@ mod tests {
             assert_eq!((developed.width, developed.height), (crop.width, crop.height));
             assert_eq!(decode_as("NIKON D7200", size).crop, Rect::new(0, 0, size.0, size.1));
         }
+    }
+
+    /// The D90's last 42 columns are filler at a flat ~254, above its dark image samples: without the measured
+    /// area they stay in the image and develop as a pink band on the right.
+    #[test]
+    fn measured_d90_drops_the_filler_columns() {
+        let (w, h) = (4352usize, 2868usize);
+        let mut px = vec![40u16; w * h];
+        for row in px.chunks_mut(w) {
+            row[4310..].fill(254);
+        }
+        let mut nef = nef(1, 12, vec![px.iter().flat_map(|v| v.to_le_bytes()).collect()], w as u32, h as u32, h as u32);
+        let at = nef.windows(10).position(|b| b == b"NIKON TEST").unwrap();
+        nef[at..at + 10].copy_from_slice(b"NIKON D90 ");
+        let d90 = crate::decode(&nef).unwrap();
+        assert_eq!(d90.crop, Rect::new(10, 10, 4288, 2848));
+        assert!(d90.crop.x + d90.crop.width <= 4310, "the filler columns are outside the image");
+        assert_eq!(d90.white, vec![3830.0]);
+        assert_eq!((d90.metadata.width, d90.metadata.height), (Some(4288), Some(2848)));
     }
 
     /// Issue #708: the active width is judged from the first [`MASK_ROWS`] rows in both modes, so the header probe
