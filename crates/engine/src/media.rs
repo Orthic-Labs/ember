@@ -328,6 +328,8 @@ pub struct MediaCache {
     full: Vec<(PhotoId, DecodedSource, u64)>,
     /// How many full-resolution originals to keep (LRU, at least one).
     full_capacity: usize,
+    /// The photo the loupe shows ([`Self::set_on_screen`]): its original is not evicted for the budget.
+    on_screen: Option<PhotoId>,
     /// How many previews to keep (LRU).
     pub preview_capacity: usize,
     /// Bytes all decoded sources and rendered previews in memory may take together (the cache
@@ -405,6 +407,7 @@ impl Default for MediaCache {
             previews: Vec::new(),
             full: Vec::new(),
             full_capacity: 1,
+            on_screen: None,
             preview_capacity: 0,
             budget,
             file_loader: None,
@@ -461,6 +464,16 @@ impl MediaCache {
         self.trim_full();
     }
 
+    /// The photo the loupe shows (the frontend sets it every frame; `None` in other views). Its original stays
+    /// even over budget: a 64 MP original (797 MB as linear float) alone exceeds the default share, and evicting it
+    /// made every pan of a zoomed view decode the raw again. Showing another photo lets it go at once.
+    pub fn set_on_screen(&mut self, id: Option<PhotoId>) {
+        if self.on_screen != id {
+            self.on_screen = id;
+            self.enforce_budget();
+        }
+    }
+
     fn trim_full(&mut self) {
         while self.full.len() > self.full_capacity {
             let oldest = self.full.iter().enumerate().min_by_key(|(_, e)| e.2).map(|(i, _)| i).unwrap_or(0);
@@ -489,7 +502,8 @@ impl MediaCache {
 
     /// Evict least recently used entries across the source caches and the rendered previews
     /// until they fit the budget. The newest preview-level source (the photo on screen, or the
-    /// one just decoded) is never evicted here.
+    /// one just decoded) is never evicted here, nor is the original of the photo on screen
+    /// ([`Self::set_on_screen`]).
     pub fn enforce_budget(&mut self) {
         let mut held = self.held();
         while held > self.budget {
@@ -497,7 +511,7 @@ impl MediaCache {
             let candidates = [
                 self.thumbs.oldest_tick().map(|t| (t, 0)),
                 self.previews.iter().filter(|e| Some(e.2) != newest_preview).map(|e| e.2).min().map(|t| (t, 1)),
-                self.full.iter().map(|e| e.2).min().map(|t| (t, 2)),
+                self.full.iter().filter(|e| Some(e.0) != self.on_screen).map(|e| e.2).min().map(|t| (t, 2)),
                 self.rendered.oldest_tick().map(|t| (t, 3)),
             ];
             let Some((tick, which)) = candidates.into_iter().flatten().min() else { break };
@@ -1913,6 +1927,27 @@ mod tests {
         m.set_budget(15 * mb);
         assert_eq!(m.usage().2.count, 1, "the budget evicts the older original");
         assert!(m.has_source(PhotoId(3), SourceLevel::Full));
+    }
+
+    // A 64 MP original (797 MB as linear float) is bigger than the default cache share (768 MiB):
+    // evicted on insert, every pan of a zoomed view decoded the raw again. The original of the photo
+    // on screen stays, whatever is decoded after it (prefetched neighbours), until another is shown.
+    #[test]
+    fn the_original_on_screen_stays_even_over_budget() {
+        let img = |w: usize| Arc::new(Rgb32f::new(w, w));
+        let mut m = MediaCache::default();
+        let mb = 1 << 20;
+        m.set_budget(20 * mb);
+        m.set_on_screen(Some(PhotoId(1)));
+        m.insert(PhotoId(1), SourceLevel::Preview, img(500));
+        m.insert(PhotoId(1), SourceLevel::Full, img(1500)); // 27 MB
+        assert!(m.has_source(PhotoId(1), SourceLevel::Full));
+        m.insert(PhotoId(2), SourceLevel::Preview, img(500)); // a prefetched neighbour
+        m.insert(PhotoId(3), SourceLevel::Thumb, img(100));
+        assert!(m.has_source(PhotoId(1), SourceLevel::Full));
+        m.set_on_screen(Some(PhotoId(2)));
+        assert!(!m.has_source(PhotoId(1), SourceLevel::Full));
+        assert!(m.held() <= 20 * mb, "{}", m.held());
     }
 
     #[test]

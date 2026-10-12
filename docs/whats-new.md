@@ -53,6 +53,14 @@
 - A thumbnail of the photo open in Detail is made from its already decoded preview instead of decoding the file
   again.
 
+## 2026-10-12
+
+### Zoomed 64 MP raws stay decoded
+- Panning a photo zoomed to 1:1, or moving a slider while zoomed, no longer decodes the whole raw again each time on
+  high-resolution cameras such as the Sony A7R VI (64 MP). Their decoded original (~800 MB) is bigger than the
+  default cache share (768 MB), so it was evicted as soon as it was stored. The original of the photo shown in Detail
+  now stays, like its preview, until another photo or view is shown.
+
 ## 2026-10-11
 
 ### HDR and panorama merges of CR2 keep their colour

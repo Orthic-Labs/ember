@@ -377,7 +377,10 @@ fn draw_window(p: &egui::Painter, app: &LightcraftApp, pane: u8, id: PhotoId, lo
 
 /// Per frame, before the central view is shown: Compare and Reference keep two photos' originals
 /// decoded (their windows are cut from both); other views keep one and free the panes' windows.
+/// The Detail view's photo keeps its original even over the memory budget (a zoomed 64 MP raw).
 pub fn prepare(app: &mut LightcraftApp) {
+    let shown = if app.ui.view == ViewMode::Detail { app.session.active() } else { None };
+    app.session.media.set_on_screen(shown);
     if matches!(app.ui.view, ViewMode::Compare | ViewMode::Reference) {
         app.session.media.set_full_capacity(WINDOW_PANES as usize);
         return;

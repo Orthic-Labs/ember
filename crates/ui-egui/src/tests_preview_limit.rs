@@ -601,6 +601,21 @@ mod in_the_loupe {
         assert!(h.app.session.memory_report().full_source.bytes > 0, "the original stayed in the cache while the drag went on");
     }
 
+    // Given an original bigger than the cache budget (a 64 MP raw's 797 MB exceeds the default
+    // share), zoomed to 1:1 it stays decoded, so a pan does not decode the raw again; back in the
+    // grid it is let go
+    #[test]
+    fn a_zoomed_original_over_the_budget_stays_until_the_view_changes() {
+        let (mut h, _) = detail();
+        h.app.session.media.set_budget(16 << 20);
+        h.request("engine.execute", json!({"command": "view.zoom100"}), T);
+        h.settle(SETTLE);
+        assert!(h.app.session.memory_report().full_source.bytes > 16 << 20, "the original stayed over budget");
+        h.request("ui.set", json!({"view": "photoGrid"}), T);
+        h.step();
+        assert_eq!(h.app.session.memory_report().full_source.bytes, 0, "the grid needs no original");
+    }
+
     /// The meshes the last frame drew with `slot`'s texture: (paint order, clip rect, bounds).
     fn drawn(h: &Headless, slot: Slot) -> Vec<(usize, egui::Rect, egui::Rect)> {
         let Some(tex) = h.app.renderer.textures.get(&slot) else { return vec![] };
