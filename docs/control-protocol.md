@@ -141,6 +141,78 @@ opens as one. With no library open (the library problem window) it is an error i
 places (`EngineError::LightroomCatalog`, so `lightcraft-cli --library` and `mcp --library` too). `library.importLightroom
 {status: true}` reports the catalog's `path` after the task ends as well as while it runs.
 
+## External controllers
+
+External apps can use this channel to send commands and poll the running desktop app for feedback
+(e.g. knob values or LEDs). Start the app with `--control PORT`, then keep a JSON-lines connection to
+`127.0.0.1:PORT`. Discover command ids, parameters and current enablement with `engine.commands`;
+use control ids and ranges from `develop.controls` rather than translated labels or widget positions.
+
+| Task | Command through `engine.execute` | Result / effect |
+|---|---|---|
+| Read selection and active photo | `library.state {}` | `selection: {ids, active}`; `active` is `null` when no photo is active |
+| Read photo identity and settings together | `photo.inspect {}` | Active photo's `id`, `develop`, rating, flag and history in one reply |
+| Read a specific photo without selecting it | `photo.inspect {id}` / `develop.get {id}` | Photo details / full develop JSON; omitting `id` reads the active photo |
+| Read global slider metadata and values | `develop.controls {section?}` | Array of `{id, label, section, min, max, default, step, decimals, track, value}` for the active photo |
+| Set absolute slider values | `develop.set {values: {"light.exposure": 0.7}}` | Undoable edit of the active photo; also accepts `{control, value}` |
+| Move a relative control | `develop.adjust {control: "light.exposure", delta: 0.1}` | Adds to the current value, clamped to the control's range |
+| Change photo | `library.select {ids: [photoId]}` / `library.next {}` / `library.previous {}` | Changes the active photo; next/previous follow the current view's order |
+| Undo / redo | `edit.undo {}` / `edit.redo {}` | Restore settings; poll again for feedback |
+
+With Auto Sync enabled, `develop.set` and `develop.adjust` can also change the other selected photos.
+Only changed settings propagate; spot removal, red eye and the rendering process stay per photo.
+During an interaction, propagation occurs when it ends. Re-read affected photos after the edit.
+`develop.autoSync {}` toggles the mode; it is not a state query.
+
+For example, send these requests one at a time and read each reply before sending the next:
+
+```json
+{"id":1,"method":"engine.commands"}
+{"id":2,"method":"engine.execute","params":{"command":"photo.inspect"}}
+{"id":3,"method":"engine.execute","params":{"command":"develop.controls","params":{"section":"light"}}}
+{"id":4,"method":"engine.execute","params":{"command":"develop.set","params":{"values":{"light.exposure":0.7}}}}
+{"id":5,"method":"engine.execute","params":{"command":"photo.inspect"}}
+```
+
+Replies use `{id, ok, result}` or `{id, ok: false, error}`. In the photo snapshot, exposure is
+`result.develop.light.exposure`; the controls array's matching `light.exposure` entry has `value`,
+`min: -5`, `max: 5` and `step: 0.01`. `wb.temp` is Kelvin on raws with colour matrices and relative
+(6500 = as shot) elsewhere, as described above. Re-read values after edits to reflect the stored result.
+Local mask adjustments are in the photo snapshot's `develop.masks`; use the mask commands from the
+registry (e.g. `mask.adjust`) for those, rather than treating global control values as mask values.
+
+Feedback uses polling: the channel sends replies to requests, with no unsolicited change events.
+Compare successive `photo.inspect` snapshots for photo-id or develop-setting changes, including GUI
+edits, photo navigation, presets and undo/redo. GUI slider updates are visible while a drag is in
+progress; ending a changed interaction commits it as one undo step (unchanged drags add none).
+A controller can group `develop.set` / `develop.adjust` updates between
+`develop.beginInteraction {label}` and `develop.endInteraction {}`. The GUI and controllers share
+one interaction: another `develop.beginInteraction` or `library.select` ends the current one.
+Update controller feedback from reads without sending the same values back as new edits.
+
+Each request is a separate snapshot. `photo.inspect` keeps identity and settings together; a
+`develop.controls` reply has no photo id, so do not associate it with an earlier cached selection
+when the user is changing photos. Refresh the selection and retry those reads after navigation.
+With no active photo, `develop.controls` returns default values and `photo.inspect` / `develop.get`
+without `id` return an error; check `library.state` before treating defaults as photo feedback.
+Photo ids are local to the current library/session. After reconnecting or opening another library,
+discard cached photo mappings and re-read state; matching photo ids alone do not identify the library.
+For persistent libraries, poll `library.info` for the current `path` as well. Polling observes the state
+at each read, not every intermediate change.
+
+The same queries and edits are available through the connected CLI:
+
+```sh
+lightcraft-cli run --connect 127.0.0.1:7980 library.state photo.inspect develop.controls section=light
+lightcraft-cli run --connect 127.0.0.1:7980 develop.adjust control=light.exposure delta=0.1 photo.inspect
+```
+
+For MCP, use `lightcraft-cli mcp --connect 127.0.0.1:7980`: `run_command` reaches the commands above,
+`list_controls` / `set_develop` provide slider helpers, and `resources/read` polls
+`lightcraft://library`, `lightcraft://photo/active`, `lightcraft://develop/active` and
+`lightcraft://controls` ([mcp.md](mcp.md#resources)). Headless CLI/MCP mode owns a separate engine
+session; use connect mode for feedback from edits in the desktop app.
+
 ## Headless rendering (no window, no GPU)
 
 The egui UI can be rasterized on the CPU (`crates/ui-egui/src/softpaint.rs`, driven by

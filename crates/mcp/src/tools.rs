@@ -182,7 +182,7 @@ pub fn helper_tools(has_ui: bool) -> Vec<Value> {
             "get_develop",
             "Get develop settings",
             "The full develop settings JSON of a photo (white balance, light, color, curves, mixer, grading, effects, crop, masks, spots…).",
-            json!({"id": photo_id}),
+            json!({"id": {"type": "integer", "description": "Photo id (default: the active photo). Reads without changing the selection."}}),
             &[],
         ),
         tool(
@@ -216,7 +216,7 @@ pub fn helper_tools(has_ui: bool) -> Vec<Value> {
             "Render photo",
             "Render a photo with its current develop settings (cropped) and return it as an image so you can look at the result.",
             json!({
-                "id": photo_id,
+                "id": {"type": "integer", "description": "Photo id (default: the active photo); selection is unchanged"},
                 "size": {"type": "integer", "description": "Long edge in pixels (default 1024, max 4096)"},
                 "format": {"type": "string", "enum": ["png", "jpeg"], "description": "Image encoding (default png; jpeg is smaller)"},
                 "path": {"type": "string", "description": "Also save the rendered file here"}
