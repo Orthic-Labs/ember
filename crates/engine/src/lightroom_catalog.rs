@@ -1548,7 +1548,7 @@ mod tests {
         for o in [Orientation::Normal, Orientation::Rotate90, Orientation::Rotate270, Orientation::Rotate180, Orientation::FlipH] {
             for angle in [6.5, -6.5] {
                 let g = CropGeometry { angle, ..g };
-                let (partial, _) = mapped_settings(&lightroom_crop(g, o, Some(1.5)), crate::crs::Target::RawAbsolute, 1.5, o, Some(1.5)).unwrap();
+                let (partial, _) = mapped_settings(&lightroom_crop(g, o, 1.5), crate::crs::Target::RawAbsolute, 1.5, o, Some(1.5)).unwrap();
                 let got: CropGeometry = serde_json::from_value(partial["crop"]["geometry"].clone()).unwrap();
                 let close = |a: f64, b: f64| (a - b).abs() < 1e-9;
                 assert!(

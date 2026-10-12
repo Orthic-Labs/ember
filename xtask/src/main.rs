@@ -259,8 +259,9 @@ fn cmd_ci() -> Result<(), String> {
             "clippy",
             Box::new(|| {
                 let mut c = cargo();
-                c.args(["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]);
-                run(c, "cargo clippy --workspace --all-targets -- -D warnings")
+                // Collect independent crate diagnostics in one CI pass; every error still fails the gate.
+                c.args(["clippy", "--workspace", "--all-targets", "--keep-going", "--", "-D", "warnings"]);
+                run(c, "cargo clippy --workspace --all-targets --keep-going -- -D warnings")
             }),
         ),
         (

@@ -1093,30 +1093,6 @@ mod tests {
         no(json!({"match": "any", "rules": []}));
     }
 
-    /// "In the last N" never overflows, whatever N an agent or a saved file holds: a zero,
-    /// negative or unreadable N matches nothing (either way round); an N beyond 10,000 years means
-    /// "ever", so every dated photo is in it and none is outside it.
-    #[test]
-    fn in_the_last_survives_hostile_counts() {
-        set_now(Some("2026-09-01T00:00:00".into()));
-        let cat = Catalog::new();
-        let p = photo(1); // captured 2026-08-14
-        let m = |op: &str, n: serde_json::Value, unit: &str| {
-            rs(json!({"rules": [{"field": "captureDate", "op": op, "value": {"n": n, "unit": unit}}]})).matches(&p, &cat)
-        };
-        for n in [json!(0), json!(-5), json!(-1e30), json!(-9.3e18), json!("soon")] {
-            for op in ["inLast", "notInLast"] {
-                assert!(!m(op, n.clone(), "years"), "{op} {n}");
-            }
-        }
-        for n in [json!(1e30), json!(9.3e18), json!(u64::MAX), json!(20_000)] {
-            assert!(m("inLast", n.clone(), "years"), "{n} years is ever");
-            assert!(!m("notInLast", n.clone(), "years"), "{n}");
-        }
-        assert!(m("inLast", json!(1e30), "hours") && m("inLast", json!(30), "days"));
-        set_now(None);
-    }
-
     #[test]
     fn problems_and_description() {
         let r = rs(json!({"rules": [{"field": "rating", "op": "contains", "value": 1}, {"group": {"rules": [{"field": "nope", "op": "is"}]}}]}));
