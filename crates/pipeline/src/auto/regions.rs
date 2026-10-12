@@ -201,7 +201,7 @@ fn regions(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) -> Option<Regio
     let frame = Frame::new(w, h, &base, false);
     let plane = |shape: MaskShape| {
         let m = Mask { components: vec![MaskComponent { name: None, op: MaskOp::Add, invert: false, shape }], ..Default::default() };
-        crate::masks::evaluate_one(&m, &frame, w, h, &img, &log_l, 0.0)
+        crate::masks::evaluate_one(&m, &frame, w, h, &img, &log_l, 0.0, None)
     };
     let subject = plane(MaskShape::Subject);
     let sky = plane(MaskShape::Sky);
