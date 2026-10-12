@@ -236,9 +236,9 @@ fn terminal(app: &mut LightcraftApp, ctx: &egui::Context, task: &LightroomTask, 
     let message = if let Some(e) = value.get("error").and_then(Value::as_str) {
         let warning = value.get("indexWarning").and_then(Value::as_str).map_or(String::new(), |w| format!("; index warning: {w}"));
         if matches!(kind, Kind::Inspect) {
-            crate::i18n::tr_format!("Catalog inspection failed: {e}{warning}", e = e, warning = warning)
+            crate::i18n::tr_format!("LRCAT inspection failed: {e}{warning}", e = e, warning = warning)
         } else {
-            crate::i18n::tr_format!("Catalog import failed: {e}{warning}", e = e, warning = warning)
+            crate::i18n::tr_format!("LRCAT import failed: {e}{warning}", e = e, warning = warning)
         }
     } else if value.get("cancelled").and_then(Value::as_bool).unwrap_or(false) {
         crate::i18n::tr(if matches!(kind, Kind::Inspect) { "Catalog inspection cancelled" } else { "Catalog import cancelled" }).into()
@@ -247,7 +247,7 @@ fn terminal(app: &mut LightcraftApp, ctx: &egui::Context, task: &LightroomTask, 
         let collections = value["collections"].as_u64().unwrap_or(0);
         let missing = value["missing"].as_array().map_or(0, Vec::len);
         crate::i18n::tr_format!(
-            "catalog inspected: {photos} photos, {collections} collections, {missing} missing",
+            "LRCAT catalog inspected: {photos} photos, {collections} collections, {missing} missing",
             photos = photos,
             collections = collections,
             missing = missing
@@ -259,14 +259,14 @@ fn terminal(app: &mut LightcraftApp, ctx: &egui::Context, task: &LightroomTask, 
         let warning = value.get("indexWarning").and_then(Value::as_str);
         if let Some(warning) = warning {
             crate::i18n::tr_format!(
-                "Catalog import complete: {imported} photos added; index warning: {warning}",
+                "LRCAT import complete: {imported} photos added; index warning: {warning}",
                 imported = imported,
                 warning = warning
             )
         } else if failed == 0 {
-            crate::i18n::tr_format!("Catalog import complete: {imported} photos added", imported = imported)
+            crate::i18n::tr_format!("LRCAT import complete: {imported} photos added", imported = imported)
         } else {
-            crate::i18n::tr_format!("Catalog import complete: {imported} photos added, {failed} failed", imported = imported, failed = failed)
+            crate::i18n::tr_format!("LRCAT import complete: {imported} photos added, {failed} failed", imported = imported, failed = failed)
         }
     };
     app.lightroom_last = Some(value);
