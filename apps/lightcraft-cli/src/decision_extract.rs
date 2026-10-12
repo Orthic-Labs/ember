@@ -64,7 +64,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         results.push(result);
     }
     let report = json!({
-        "schema": SCHEMA, "extractor_revision": "rendered-pair.v1", "input_sha256": digest(&input_bytes),
+        "schema": SCHEMA, "extractor_revision": "rendered-pair.v2", "input_sha256": digest(&input_bytes),
         "auto_revision": auto::REVISION, "feature_schema": FEATURE_SCHEMA, "feature_names": FEATURE_NAMES,
         "feature_frame": "source resampled into verified export frame; deterministic Auto is recomputed on that frame",
         "statistics": "linear Rec.2020 D65 luminance; gamma 2.2 encoded quantiles p01,p05,p50,p95,p995; floor((n-1)*q); clip Y>=0.985",

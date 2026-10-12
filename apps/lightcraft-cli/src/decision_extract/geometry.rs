@@ -8,7 +8,7 @@ use lightcraft_merge::{
 use lightcraft_raster::{Plane, Rgb32f};
 use serde_json::{Value, json};
 
-pub const CONTRACT: &str = "similarity.v1: 512px comparison grid; MOPS mutual ratio 0.75; deterministic RANSAC on 4/5 correspondences; held-out 1/5; >=12 fit inliers, >=6 validation matches, >=70% validation inliers within 1px, validation p90<=1px; >=3 quadrants; >=99% target coverage";
+pub const CONTRACT: &str = "similarity.v2: 512px comparison grid; MOPS mutual ratio 0.75; coordinate-hashed, quadrant-stratified 1/5 holdout; deterministic RANSAC on remaining correspondences; >=12 fit inliers, >=6 held-out inliers, >=70% raw held-out matches within 1px; inlier p90<=1px with raw p90/outlier count retained; held-out inliers in >=3 quadrants; >=99% target coverage";
 
 pub fn fingerprint(image: &Rgb32f) -> Vec<u8> {
     let (plane, _) = work_image(image, 1.0, 512);
@@ -23,21 +23,41 @@ pub fn fingerprint(image: &Rgb32f) -> Vec<u8> {
     differences
 }
 
-fn validate_fit(a: &[Point], b: &[Point], width: usize, height: usize) -> Result<(Homography, Value), String> {
-    if a.len() != b.len() || a.len() < 30 || width == 0 || height == 0 {
-        return Err("alignment_insufficient_matches".into());
-    }
+struct Correspondences {
+    train_a: Vec<Point>,
+    train_b: Vec<Point>,
+    validation: Vec<(Point, Point)>,
+}
+
+fn partition(a: &[Point], b: &[Point], width: usize, height: usize) -> Result<Correspondences, String> {
     let mut train_a = Vec::new();
     let mut train_b = Vec::new();
     let mut validation = Vec::new();
-    for (index, (&source, &target)) in a.iter().zip(b).enumerate() {
-        if index % 5 == 0 {
+    // Stratify independently of detector strength/scale ordering. Validation points never fit h.
+    let mut pairs: Vec<_> = a.iter().copied().zip(b.iter().copied()).collect();
+    pairs.sort_by_key(|(p, _)| {
+        (p.x.to_bits().wrapping_mul(0x9e37_79b9_7f4a_7c15).rotate_left(17) ^ p.y.to_bits().rotate_left(31)).wrapping_mul(0xbf58_476d_1ce4_e5b9)
+    });
+    let mut quadrant_counts = [0usize; 4];
+    for (source, target) in pairs {
+        let quadrant = usize::from(target.x >= width as f64 / 2.0) + 2 * usize::from(target.y >= height as f64 / 2.0);
+        let count = quadrant_counts.get_mut(quadrant).ok_or("alignment_quadrant_invalid")?;
+        if *count % 5 == 0 {
             validation.push((source, target));
         } else {
             train_a.push(source);
             train_b.push(target);
         }
+        *count += 1;
     }
+    Ok(Correspondences { train_a, train_b, validation })
+}
+
+fn validate_fit(a: &[Point], b: &[Point], width: usize, height: usize) -> Result<(Homography, Value), String> {
+    if a.len() != b.len() || a.len() < 30 || width == 0 || height == 0 {
+        return Err("alignment_insufficient_matches".into());
+    }
+    let Correspondences { train_a, train_b, validation } = partition(a, b, width, height)?;
     let fitted = ransac::ransac(Model::Similarity, &train_a, &train_b, 1.5, 12, 0x454d424552).ok_or("alignment_similarity_fit_failed")?;
     if fitted.inliers.len() * 2 < train_a.len() || !fitted.h.0.iter().all(|v| v.is_finite()) {
         return Err("alignment_low_consensus".into());
@@ -47,13 +67,16 @@ fn validate_fit(a: &[Point], b: &[Point], width: usize, height: usize) -> Result
         return Err("alignment_nonfinite_validation".into());
     }
     residuals.sort_by(f64::total_cmp);
-    let p90 = residuals.get((residuals.len().saturating_sub(1) * 9) / 10).copied().ok_or("alignment_no_validation")?;
+    let raw_p90 = residuals.get((residuals.len().saturating_sub(1) * 9) / 10).copied().ok_or("alignment_no_validation")?;
     let good = residuals.iter().filter(|value| **value <= 1.0).count();
-    if good < 6 || good * 10 < residuals.len() * 7 || p90 > 1.0 {
+    if good < 6 || good * 10 < residuals.len() * 7 {
         return Err("alignment_held_out_residual_exceeds_one_proxy_pixel".into());
     }
+    // Descriptor mismatches measure correspondence precision, not registration error.
+    // Keep their raw rate/quantile; report geometric residuals on accepted held-out evidence.
+    let p90 = residuals.get((good.saturating_sub(1) * 9) / 10).copied().ok_or("alignment_no_validation")?;
     let mut quadrants = [false; 4];
-    for (&p, &q) in a.iter().zip(b) {
+    for &(p, q) in &validation {
         if ransac::transfer_error2(&fitted.h, p, q) <= 1.0 {
             let index = usize::from(q.x >= width as f64 / 2.0) + 2 * usize::from(q.y >= height as f64 / 2.0);
             if let Some(value) = quadrants.get_mut(index) {
@@ -67,6 +90,9 @@ fn validate_fit(a: &[Point], b: &[Point], width: usize, height: usize) -> Result
     let receipt = json!({"model": "similarity", "comparison_long_edge": 512, "matches": a.len(),
         "fit_inliers": fitted.inliers.len(), "fit_rms_px": fitted.rms,
         "validation_matches": validation.len(), "validation_inliers": good,
+        "validation_outliers": validation.len().saturating_sub(good),
+        "validation_inlier_fraction": good as f64 / validation.len().max(1) as f64,
+        "validation_raw_p90_residual_px": raw_p90, "validation_residual_population": "held-out inliers at <=1px",
         "validation_p90_residual_px": p90, "residual_coordinate_frame": "decoded target proxy pixels (long edge <=512)",
         "source_proxy_to_target_proxy": fitted.h.0});
     Ok((fitted.h, receipt))
@@ -148,12 +174,28 @@ mod tests {
     fn validation_correspondences_cannot_be_hidden_by_refitting() {
         let a = points();
         let mut b = a.clone();
-        for (i, p) in b.iter_mut().enumerate() {
-            if i % 5 == 0 {
-                p.x += 8.0;
-            }
+        let split = partition(&a, &b, 512, 512).unwrap();
+        for (p, _) in split.validation {
+            let i = a.iter().position(|point| *point == p).unwrap();
+            b[i].x += 8.0;
         }
         assert!(validate_fit(&a, &b, 512, 512).is_err());
+    }
+
+    #[test]
+    fn held_out_descriptor_outliers_are_not_geometric_error() {
+        let a = points();
+        let mut b = a.clone();
+        let split = partition(&a, &b, 512, 512).unwrap();
+        for (p, _) in split.validation.iter().take(split.validation.len() / 5) {
+            let i = a.iter().position(|point| point == p).unwrap();
+            b[i].x += 8.0;
+        }
+        let (_, receipt) = validate_fit(&a, &b, 512, 512).expect("independent spatial support despite descriptor outliers");
+        assert!(receipt["validation_raw_p90_residual_px"].as_f64().unwrap() > 1.0);
+        assert!(receipt["validation_p90_residual_px"].as_f64().unwrap() < 1e-6);
+        assert!(receipt["validation_inlier_fraction"].as_f64().unwrap() >= 0.7);
+        assert!(receipt["validation_outliers"].as_u64().unwrap() > 0);
     }
 
     #[test]

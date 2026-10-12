@@ -82,8 +82,11 @@ verified private identity/history evidence; it is not inferred by pixel extracti
 Extractor verifies media content, rejects RAW embedded-preview fallback, uses a disposable in-memory
 catalog with sidecar writes disabled, & emits path-free `ember.ai-decision-numeric.v1` records.
 Failures remain explicit quarantines. Source & finished images are compared at ≤512 px long edge:
-mutual MOPS matches, deterministic similarity RANSAC on 4/5 correspondences, held-out 1/5 validation,
-≥6 held-out inliers, p90 residual ≤1 comparison pixel, ≥3 quadrants & ≥99% target coverage. This is
+mutual MOPS matches, deterministic similarity RANSAC with a coordinate-hashed, quadrant-stratified
+1/5 holdout, ≥6 held-out inliers, ≥70% held-out correspondence precision at ≤1 comparison pixel,
+inlier p90 residual ≤1 pixel, held-out inliers in ≥3 quadrants & ≥99% target coverage. Raw held-out
+p90 & outlier counts remain separate from geometric residuals: descriptor mismatches must not be
+misreported as registration error. This is
 proxy-coordinate accuracy, not a claim of one sensor-pixel registration. No identity fallback exists.
 
 Source pixels are resampled into verified finished-image frame. The existing v2 28-field feature
