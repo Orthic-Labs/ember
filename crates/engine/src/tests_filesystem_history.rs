@@ -352,7 +352,7 @@ fn initial_partial_rename_keeps_sidecar_repairs_for_noop_retry_and_history() {
     let plans = s.plan_rename_with(&fs, &[PhotoId(1)], "Trip", 1);
     *fs.fail.borrow_mut() = vec!["/p/a.xmp".into(), "/p/Trip.jpg".into()];
     assert!(s.execute_fn("photo.rename", |s| Ok(json!({"renamed": s.apply_rename_with(&fs, &plans)?}))).is_err());
-    assert_eq!(s.catalog.photo(PhotoId(1)).unwrap().source, Source::File { path: plans[0].to_path.clone() });
+    assert_eq!(s.catalog.photo(PhotoId(1)).unwrap().source, Source::File { path: plans[0].to_path.clone().unwrap() });
     assert_eq!(s.undo.len(), 1);
     assert_eq!(s.undo.last().unwrap().retry_sidecars.len(), 2);
     assert_file_catalog_and_journal(&s, &fs, &store);
