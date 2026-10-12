@@ -651,19 +651,22 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     }
     app.loupe_shown = Some((id, shown));
     // a wipe shows the Before whole-frame render on its side of the line…
+    let line = crate::region::wipe_line(img_rect, canvas);
     if app.ui.before_after == BeforeAfter::Split
         && let Some(tex) = app.renderer.textures.get(&Slot::Before).filter(|t| t.photo == id)
     {
         let before_rect = fit_texture_rect(img_rect, tex.size);
-        let left = Rect::from_min_max(before_rect.min, pos2(before_rect.center().x, before_rect.bottom()));
-        p.image(tex.tex.id(), left, Rect::from_min_max(pos2(0.0, 0.0), pos2(0.5, 1.0)), Color32::WHITE);
+        let u = ((line.x - before_rect.left()) / before_rect.width().max(1.0)).clamp(0.0, 1.0);
+        let left = Rect::from_min_max(before_rect.min, pos2(before_rect.left() + u * before_rect.width(), before_rect.bottom()));
+        p.image(tex.tex.id(), left, Rect::from_min_max(pos2(0.0, 0.0), pos2(u, 1.0)), Color32::WHITE);
     }
     if app.ui.before_after == BeforeAfter::SplitTopBottom
         && let Some(tex) = app.renderer.textures.get(&Slot::Before).filter(|t| t.photo == id)
     {
         let before_rect = fit_texture_rect(img_rect, tex.size);
-        let top = Rect::from_min_max(before_rect.min, pos2(before_rect.right(), before_rect.center().y));
-        p.image(tex.tex.id(), top, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 0.5)), Color32::WHITE);
+        let v = ((line.y - before_rect.top()) / before_rect.height().max(1.0)).clamp(0.0, 1.0);
+        let top = Rect::from_min_max(before_rect.min, pos2(before_rect.right(), before_rect.top() + v * before_rect.height()));
+        p.image(tex.tex.id(), top, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, v)), Color32::WHITE);
     }
     // …and the window renders go over the whole-frame ones, all of them, where they belong in the
     // frame (clipped to their pane, or their side of the line)
@@ -675,12 +678,10 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     }
     // the line of a wipe over both
     if app.ui.before_after == BeforeAfter::Split {
-        let mid = img_rect.center().x;
-        p.line_segment([pos2(mid, img_rect.top()), pos2(mid, img_rect.bottom())], Stroke::new(1.5, Color32::WHITE));
+        p.line_segment([pos2(line.x, img_rect.top()), pos2(line.x, img_rect.bottom())], Stroke::new(1.5, Color32::WHITE));
     }
     if app.ui.before_after == BeforeAfter::SplitTopBottom {
-        let mid = img_rect.center().y;
-        p.line_segment([pos2(img_rect.left(), mid), pos2(img_rect.right(), mid)], Stroke::new(1.5, Color32::WHITE));
+        p.line_segment([pos2(img_rect.left(), line.y), pos2(img_rect.right(), line.y)], Stroke::new(1.5, Color32::WHITE));
     }
     if app.ui.show_clipping && !show_before && !fullscreen {
         clipping_overlay(app, &p, img_rect);

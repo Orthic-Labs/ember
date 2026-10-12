@@ -157,17 +157,26 @@ impl SizeHold {
     }
 }
 
+/// Where the line of a wipe crosses: the middle of the part of the photo that is on screen. At
+/// Fit that is the photo's middle; zoomed in, the photo's own middle is mostly off screen, and a
+/// line there left the whole view to one side (#1351).
+pub fn wipe_line(img: egui::Rect, canvas: egui::Rect) -> egui::Pos2 {
+    let shown = img.intersect(canvas);
+    if shown.is_positive() { shown.center() } else { img.center() }
+}
+
 /// Where a window of one side of a Before/After view may be drawn: its own pane in side by side
 /// and stacked views (a window carries margin beyond what its pane shows, which would otherwise
 /// spill into the neighbour), its side of the line in a wipe, else the canvas.
 pub fn window_clip(mode: crate::state::BeforeAfter, before_side: bool, pane: egui::Rect, canvas: egui::Rect, img: egui::Rect) -> egui::Rect {
     use crate::state::BeforeAfter;
     let (min, max) = (canvas.min, canvas.max);
+    let line = wipe_line(img, canvas);
     let clip = match (mode, before_side) {
-        (BeforeAfter::Split, true) => egui::Rect::from_min_max(min, egui::pos2(img.center().x, max.y)),
-        (BeforeAfter::SplitTopBottom, true) => egui::Rect::from_min_max(min, egui::pos2(max.x, img.center().y)),
-        (BeforeAfter::Split, false) => egui::Rect::from_min_max(egui::pos2(img.center().x, min.y), max),
-        (BeforeAfter::SplitTopBottom, false) => egui::Rect::from_min_max(egui::pos2(min.x, img.center().y), max),
+        (BeforeAfter::Split, true) => egui::Rect::from_min_max(min, egui::pos2(line.x, max.y)),
+        (BeforeAfter::SplitTopBottom, true) => egui::Rect::from_min_max(min, egui::pos2(max.x, line.y)),
+        (BeforeAfter::Split, false) => egui::Rect::from_min_max(egui::pos2(line.x, min.y), max),
+        (BeforeAfter::SplitTopBottom, false) => egui::Rect::from_min_max(egui::pos2(min.x, line.y), max),
         (BeforeAfter::SideBySide | BeforeAfter::TopBottom, _) => pane,
         _ => canvas,
     };
@@ -423,6 +432,10 @@ mod tests {
         assert_eq!((before.max.x, after.min.x), (500.0, 500.0), "the line is the image's middle");
         assert_eq!(window_clip(SplitTopBottom, true, canvas, canvas, img).max.y, 300.0);
         assert_eq!(window_clip(SplitTopBottom, false, canvas, canvas, img).min.y, 300.0);
+        // zoomed in, the photo's middle (x = 1600) is off screen: the line is the view's middle
+        let zoomed = egui::Rect::from_min_max(egui::pos2(-200.0, -900.0), egui::pos2(3400.0, 1500.0));
+        assert_eq!(window_clip(Split, false, canvas, canvas, zoomed).min.x, 500.0);
+        assert_eq!(window_clip(SplitTopBottom, true, canvas, canvas, zoomed).max.y, 300.0);
         assert_eq!(window_clip(Off, false, canvas, canvas, img), canvas);
         assert_eq!(window_clip(Original, true, canvas, canvas, img), canvas);
     }
