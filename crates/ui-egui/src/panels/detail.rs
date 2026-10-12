@@ -456,7 +456,8 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         canvas_long: canvas.width().max(canvas.height()) * ppp,
         native_long,
         texture_side,
-        draft_scale: scale,
+        // Draft quality is selected on the RenderJob while request dimensions stay at display size.
+        draft_scale: 1.0,
         windows: !app.ui.soft_proof && overlay_supports_window(overlay),
     };
     let mut plan = crate::region::plan(&app.ui.settings, sizes);

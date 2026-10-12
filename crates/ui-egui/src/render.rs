@@ -523,14 +523,6 @@ impl Renderer {
         self.pending.contains_key(&slot)
     }
 
-    /// The app is closing: drop the jobs that have not started and wait up to `timeout` for the
-    /// ones running on the worker threads. Returns whether all of them have ended. Nothing is
-    /// rendered afterwards.
-    pub fn shutdown(&mut self, timeout: std::time::Duration) -> bool {
-        self.queue.clear();
-        self.pool.shutdown(timeout)
-    }
-
     /// Worker threads that are still alive (0 before the first render).
     pub fn live_workers(&self) -> usize {
         self.pool.live_workers()
