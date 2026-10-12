@@ -27,3 +27,8 @@ sync_github_name = true
 
 [people.sanyamsingh001]
 display_name = "sanyamsingh001"
+
+[people.switch87]
+real_name = "Gert Pellin"
+display_name = "Gert Pellin"
+sync_github_name = false
