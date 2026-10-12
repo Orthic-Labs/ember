@@ -326,7 +326,13 @@ fn other_tiff_reason(bytes: &[u8]) -> String {
     }
 }
 
-/// Decode a raw file.
+/// File-declared full frame for offline registration, ignoring an optional camera aspect crop.
+/// Currently available for Sony ARW with explicit DNG-style default crop tags; no pixel decode.
+pub fn declared_full_crop(bytes: &[u8]) -> Result<Option<Rect>> {
+    if probe(bytes) == Some(RawFormat::Arw) { vendor::arw::declared_full_crop(bytes) } else { Ok(None) }
+}
+
+/// Decode the file using its normal camera aspect crop.
 pub fn decode(bytes: &[u8]) -> Result<RawImage> {
     decode_with(bytes, Mode::Full)
 }

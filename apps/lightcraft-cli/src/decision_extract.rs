@@ -10,7 +10,7 @@ use std::path::Path;
 
 use lightcraft_codecs::DecodeOptions;
 use lightcraft_develop::DevelopSettings;
-use lightcraft_engine::{Session, SourceLevel, camera_profiles, catalog::PhotoId, media::RENDER_CACHE_VERSION};
+use lightcraft_engine::{camera_profiles, files, media::RENDER_CACHE_VERSION};
 use lightcraft_geom::Orientation;
 use lightcraft_photo_ai::digest;
 use lightcraft_pipeline::auto::{self, SceneKey};
@@ -64,7 +64,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         results.push(result);
     }
     let report = json!({
-        "schema": SCHEMA, "extractor_revision": "rendered-pair.v2", "input_sha256": digest(&input_bytes),
+        "schema": SCHEMA, "extractor_revision": "rendered-pair.v3", "input_sha256": digest(&input_bytes),
         "auto_revision": auto::REVISION, "feature_schema": FEATURE_SCHEMA, "feature_names": FEATURE_NAMES,
         "feature_frame": "source resampled into verified export frame; deterministic Auto is recomputed on that frame",
         "statistics": "linear Rec.2020 D65 luminance; gamma 2.2 encoded quantiles p01,p05,p50,p95,p995; floor((n-1)*q); clip Y>=0.985",
@@ -227,7 +227,7 @@ fn extract_pair(row: &Value) -> Result<Value, String> {
         return Err("source_and_export_identical_content".into());
     }
     let source_before = std::fs::metadata(source_path).map_err(|_| "source_metadata_unreadable")?;
-    drop(checked_media(source_path, source_sha)?);
+    let source_bytes = checked_media(source_path, source_sha)?;
     let export_bytes = checked_media(export_path, export_sha)?;
     let decoded = lightcraft_codecs::decode(&export_bytes, DecodeOptions { max_size: Some((EDGE as u32, EDGE as u32)), max_pixels: 64_000_000 })
         .map_err(|_| "finished_export_decode_failed")?;
@@ -245,20 +245,8 @@ fn extract_pair(row: &Value) -> Result<Value, String> {
     drop(decoded);
     drop(export_bytes);
 
-    let mut session = Session::new().with_fs();
-    session.xmp.auto_write = false;
-    let imported = session
-        .execute("library.import", &json!({"paths": [source_path], "local": true, "rawJpegPolicy": "keepBoth"}))
-        .map_err(|_| "source_import_failed")?;
-    let ids = imported.get("imported").and_then(Value::as_array).ok_or("source_import_missing_id")?;
-    if ids.len() != 1 {
-        return Err("source_import_not_single".into());
-    }
-    let id = PhotoId(ids.first().and_then(Value::as_u64).ok_or("source_import_invalid_id")?);
     let base = DevelopSettings::default();
-    session.set_develop(id, base.clone(), "Offline rendered-pair source").map_err(|_| "source_reset_failed")?;
-    let source = session.source_now(id, SourceLevel::Thumb).map_err(|_| "source_decode_failed")?;
-    let info = session.source_info(id);
+    let (source, info, full_crop) = files::load_vec_for_alignment(source_bytes, EDGE).map_err(|_| "source_decode_failed")?;
     if row.get("source_is_raw").and_then(Value::as_bool) != Some(info.raw) {
         return Err("source_decode_kind_mismatch_or_embedded_preview_fallback".into());
     }
@@ -274,10 +262,10 @@ fn extract_pair(row: &Value) -> Result<Value, String> {
     let (aligned_source, geometry) = match geometry::align(&source, &before, &finished) {
         Ok(aligned) => aligned,
         Err(reason) => {
-            return Ok(json!({"photo_id": text(row, "photo_id")?, "status": "quarantined", "reason": reason,
+            return Ok(json!({"photo_id": text(row, "photo_id")?, "status": "quarantined", "reason": reason.reason, "geometry": reason.evidence,
                 "source_sha256": source_sha, "export_sha256": export_sha, "provenance_sha256": text(row, "provenance_sha256")?,
                 "source_fingerprint": source_fingerprint, "finished_fingerprint": finished_fingerprint,
-                "source_proxy_dimensions": [source.width, source.height], "finished_proxy_dimensions": [finished.width, finished.height],
+                "source_frame_crops": full_crop, "source_proxy_dimensions": [source.width, source.height], "finished_proxy_dimensions": [finished.width, finished.height],
                 "training_eligible": false, "split": "unassigned"}));
         }
     };
@@ -313,7 +301,7 @@ fn extract_pair(row: &Value) -> Result<Value, String> {
         "before_pixels_sha256": pixels_digest(&before_aligned), "baseline_pixels_sha256": pixels_digest(&baseline),
         "finished_pixels_sha256": pixels_digest(&finished), "geometry": geometry,
         "source_fingerprint": source_fingerprint, "finished_fingerprint": finished_fingerprint,
-        "source_info_sha256": digest(&source_info_bytes), "finished_color_space": finished_color_space,
+        "source_info_sha256": digest(&source_info_bytes), "source_frame_crops": full_crop, "finished_color_space": finished_color_space,
         "finished_source_dimensions": finished_dimensions, "finished_icc_sha256": finished_icc_sha,
         "split": "unassigned", "training_eligible": false
     }))

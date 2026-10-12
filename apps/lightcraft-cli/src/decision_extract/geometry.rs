@@ -10,6 +10,26 @@ use serde_json::{Value, json};
 
 pub const CONTRACT: &str = "similarity.v2: 512px comparison grid; MOPS mutual ratio 0.75; coordinate-hashed, quadrant-stratified 1/5 holdout; deterministic RANSAC on remaining correspondences; >=12 fit inliers, >=6 held-out inliers, >=70% raw held-out matches within 1px; inlier p90<=1px with raw p90/outlier count retained; held-out inliers in >=3 quadrants; >=99% target coverage";
 
+#[derive(Debug)]
+pub struct AlignmentError {
+    pub reason: String,
+    pub evidence: Value,
+}
+
+impl From<&str> for AlignmentError {
+    fn from(reason: &str) -> Self {
+        Self { reason: reason.into(), evidence: json!({}) }
+    }
+}
+impl From<String> for AlignmentError {
+    fn from(reason: String) -> Self {
+        Self { reason, evidence: json!({}) }
+    }
+}
+fn failure(reason: &str, evidence: &Value) -> AlignmentError {
+    AlignmentError { reason: reason.into(), evidence: evidence.clone() }
+}
+
 pub fn fingerprint(image: &Rgb32f) -> Vec<u8> {
     let (plane, _) = work_image(image, 1.0, 512);
     let mut differences = Vec::with_capacity(256);
@@ -53,28 +73,30 @@ fn partition(a: &[Point], b: &[Point], width: usize, height: usize) -> Result<Co
     Ok(Correspondences { train_a, train_b, validation })
 }
 
-fn validate_fit(a: &[Point], b: &[Point], width: usize, height: usize) -> Result<(Homography, Value), String> {
+fn validate_fit(a: &[Point], b: &[Point], width: usize, height: usize) -> Result<(Homography, Value), AlignmentError> {
+    let mut receipt = json!({"model": "similarity", "comparison_long_edge": 512,
+        "matches": a.len(), "target_matches": b.len(), "target_dimensions": [width, height]});
     if a.len() != b.len() || a.len() < 30 || width == 0 || height == 0 {
-        return Err("alignment_insufficient_matches".into());
+        return Err(failure("alignment_insufficient_matches", &receipt));
     }
     let Correspondences { train_a, train_b, validation } = partition(a, b, width, height)?;
-    let fitted = ransac::ransac(Model::Similarity, &train_a, &train_b, 1.5, 12, 0x454d424552).ok_or("alignment_similarity_fit_failed")?;
+    receipt["fit_matches"] = json!(train_a.len());
+    receipt["validation_matches"] = json!(validation.len());
+    let fitted = ransac::ransac(Model::Similarity, &train_a, &train_b, 1.5, 12, 0x454d424552)
+        .ok_or_else(|| failure("alignment_similarity_fit_failed", &receipt))?;
+    receipt["fit_inliers"] = json!(fitted.inliers.len());
+    receipt["fit_rms_px"] = json!(fitted.rms);
+    receipt["source_proxy_to_target_proxy"] = json!(fitted.h.0);
     if fitted.inliers.len() * 2 < train_a.len() || !fitted.h.0.iter().all(|v| v.is_finite()) {
-        return Err("alignment_low_consensus".into());
+        return Err(failure("alignment_low_consensus", &receipt));
     }
     let mut residuals: Vec<f64> = validation.iter().map(|(p, q)| ransac::transfer_error2(&fitted.h, *p, *q).sqrt()).collect();
     if residuals.iter().any(|v| !v.is_finite()) {
-        return Err("alignment_nonfinite_validation".into());
+        return Err(failure("alignment_nonfinite_validation", &receipt));
     }
     residuals.sort_by(f64::total_cmp);
-    let raw_p90 = residuals.get((residuals.len().saturating_sub(1) * 9) / 10).copied().ok_or("alignment_no_validation")?;
+    let raw_p90 = residuals.get((residuals.len().saturating_sub(1) * 9) / 10).copied().ok_or_else(|| failure("alignment_no_validation", &receipt))?;
     let good = residuals.iter().filter(|value| **value <= 1.0).count();
-    if good < 6 || good * 10 < residuals.len() * 7 {
-        return Err("alignment_held_out_residual_exceeds_one_proxy_pixel".into());
-    }
-    // Descriptor mismatches measure correspondence precision, not registration error.
-    // Keep their raw rate/quantile; report geometric residuals on accepted held-out evidence.
-    let p90 = residuals.get((good.saturating_sub(1) * 9) / 10).copied().ok_or("alignment_no_validation")?;
     let mut quadrants = [false; 4];
     for &(p, q) in &validation {
         if ransac::transfer_error2(&fitted.h, p, q) <= 1.0 {
@@ -84,21 +106,27 @@ fn validate_fit(a: &[Point], b: &[Point], width: usize, height: usize) -> Result
             }
         }
     }
-    if quadrants.into_iter().filter(|present| *present).count() < 3 {
-        return Err("alignment_insufficient_spatial_coverage".into());
+    let quadrant_count = quadrants.into_iter().filter(|present| *present).count();
+    receipt["validation_inliers"] = json!(good);
+    receipt["validation_outliers"] = json!(validation.len().saturating_sub(good));
+    receipt["validation_inlier_fraction"] = json!(good as f64 / validation.len().max(1) as f64);
+    receipt["validation_raw_p90_residual_px"] = json!(raw_p90);
+    receipt["validation_quadrant_count"] = json!(quadrant_count);
+    receipt["validation_residual_population"] = json!("held-out inliers at <=1px");
+    receipt["residual_coordinate_frame"] = json!("decoded target proxy pixels (long edge <=512)");
+    if good < 6 || good * 10 < residuals.len() * 7 {
+        return Err(failure("alignment_held_out_residual_exceeds_one_proxy_pixel", &receipt));
     }
-    let receipt = json!({"model": "similarity", "comparison_long_edge": 512, "matches": a.len(),
-        "fit_inliers": fitted.inliers.len(), "fit_rms_px": fitted.rms,
-        "validation_matches": validation.len(), "validation_inliers": good,
-        "validation_outliers": validation.len().saturating_sub(good),
-        "validation_inlier_fraction": good as f64 / validation.len().max(1) as f64,
-        "validation_raw_p90_residual_px": raw_p90, "validation_residual_population": "held-out inliers at <=1px",
-        "validation_p90_residual_px": p90, "residual_coordinate_frame": "decoded target proxy pixels (long edge <=512)",
-        "source_proxy_to_target_proxy": fitted.h.0});
+    // Descriptive inlier p90; the independent gate is >=70% of all held-out matches within 1px.
+    let p90 = residuals.get((good.saturating_sub(1) * 9) / 10).copied().ok_or_else(|| failure("alignment_no_validation", &receipt))?;
+    receipt["validation_p90_residual_px"] = json!(p90);
+    if quadrant_count < 3 {
+        return Err(failure("alignment_insufficient_spatial_coverage", &receipt));
+    }
     Ok((fitted.h, receipt))
 }
 
-pub fn align(source: &Rgb32f, before: &Rgb32f, finished: &Rgb32f) -> Result<(Rgb32f, Value), String> {
+pub fn align(source: &Rgb32f, before: &Rgb32f, finished: &Rgb32f) -> Result<(Rgb32f, Value), AlignmentError> {
     if source.width != before.width || source.height != before.height {
         return Err("before_render_changes_source_frame".into());
     }
@@ -116,11 +144,11 @@ pub fn align(source: &Rgb32f, before: &Rgb32f, finished: &Rgb32f) -> Result<(Rgb
         target_points.push(Point::new(q.x as f64, q.y as f64));
     }
     let (h, mut receipt) = validate_fit(&source_points, &target_points, finished.width, finished.height)?;
-    let inverse = h.inverse().ok_or("alignment_transform_singular")?;
+    let inverse = h.inverse().ok_or_else(|| failure("alignment_transform_singular", &receipt))?;
     let [c, _, _, s, _, _, _, _, _] = h.0;
     let scale = c.hypot(s);
     if !(0.2..=5.0).contains(&scale) {
-        return Err("alignment_scale_outside_bounds".into());
+        return Err(failure("alignment_scale_outside_bounds", &receipt));
     }
     let mut valid = 0usize;
     let mut aligned = Rgb32f::new(finished.width, finished.height);
@@ -129,7 +157,7 @@ pub fn align(source: &Rgb32f, before: &Rgb32f, finished: &Rgb32f) -> Result<(Rgb
         let y = (index / finished.width) as f64 + 0.5;
         let p = inverse.apply(Point::new(x, y));
         if !p.x.is_finite() || !p.y.is_finite() {
-            return Err("alignment_nonfinite_transform".into());
+            return Err(failure("alignment_nonfinite_transform", &receipt));
         }
         if p.x >= 0.5 && p.x <= source.width as f64 - 0.5 && p.y >= 0.5 && p.y <= source.height as f64 - 0.5 {
             valid += 1;
@@ -137,13 +165,13 @@ pub fn align(source: &Rgb32f, before: &Rgb32f, finished: &Rgb32f) -> Result<(Rgb
         *pixel = source.sample_bilinear(p.x as f32, p.y as f32);
     }
     let coverage = valid as f64 / aligned.data.len().max(1) as f64;
-    if coverage < 0.99 {
-        return Err("alignment_target_outside_source".into());
-    }
     receipt["target_coverage"] = json!(coverage);
     receipt["source_dimensions"] = json!([source.width, source.height]);
     receipt["target_dimensions"] = json!([finished.width, finished.height]);
     receipt["target_proxy_to_source_proxy"] = json!(inverse.0);
+    if coverage < 0.99 {
+        return Err(failure("alignment_target_outside_source", &receipt));
+    }
     Ok((aligned, receipt))
 }
 
@@ -167,6 +195,7 @@ mod tests {
         let b: Vec<_> = a.iter().map(|p| h.apply(*p)).collect();
         let (found, receipt) = validate_fit(&a, &b, 512, 512).expect("known similarity");
         assert!(receipt["validation_p90_residual_px"].as_f64().unwrap() < 1e-6);
+        assert!(receipt["validation_quadrant_count"].as_u64().unwrap() >= 3);
         assert!(ransac::transfer_error2(&found, a[3], b[3]) < 1e-10);
     }
 
@@ -179,7 +208,10 @@ mod tests {
             let i = a.iter().position(|point| *point == p).unwrap();
             b[i].x += 8.0;
         }
-        assert!(validate_fit(&a, &b, 512, 512).is_err());
+        let failure = validate_fit(&a, &b, 512, 512).unwrap_err();
+        assert_eq!(failure.evidence["matches"], a.len());
+        assert!(failure.evidence["validation_inlier_fraction"].as_f64().unwrap() < 0.7);
+        assert!(failure.evidence["validation_quadrant_count"].as_u64().is_some());
     }
 
     #[test]
@@ -194,6 +226,7 @@ mod tests {
         let (_, receipt) = validate_fit(&a, &b, 512, 512).expect("independent spatial support despite descriptor outliers");
         assert!(receipt["validation_raw_p90_residual_px"].as_f64().unwrap() > 1.0);
         assert!(receipt["validation_p90_residual_px"].as_f64().unwrap() < 1e-6);
+        assert!(receipt["validation_quadrant_count"].as_u64().unwrap() >= 3);
         assert!(receipt["validation_inlier_fraction"].as_f64().unwrap() >= 0.7);
         assert!(receipt["validation_outliers"].as_u64().unwrap() > 0);
     }

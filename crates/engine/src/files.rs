@@ -344,20 +344,38 @@ pub fn bin_factor(raw: &lightcraft_raw::RawImage, max_edge: usize) -> Option<usi
 /// instead of each one waking the pool from outside and waiting for it (which costs more than the
 /// loops themselves when the machine is busy).
 pub fn load_bytes(bytes: &[u8], max_edge: usize) -> Result<(Rgb32f, SourceInfo), String> {
-    rayon::scope(|_| load_bytes_now(std::borrow::Cow::Borrowed(bytes), max_edge, None).map(|(img, _, info)| (img, info)))
+    rayon::scope(|_| load_bytes_now(std::borrow::Cow::Borrowed(bytes), max_edge, None, None).map(|(img, _, info)| (img, info)))
 }
 
 /// [`load_bytes`] taking the file's bytes: a raw file's bytes are freed as soon as it is decoded
 /// (less memory held while it is developed).
 pub fn load_vec(bytes: Vec<u8>, max_edge: usize) -> Result<(Rgb32f, SourceInfo), String> {
-    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None).map(|(img, _, info)| (img, info)))
+    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, None).map(|(img, _, info)| (img, info)))
+}
+
+/// Per-file crop provenance for an offline registration source, in un-oriented active-area pixels.
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+pub struct AlignmentCrop {
+    pub camera_crop: lightcraft_raw::Rect,
+    pub full_default_crop: lightcraft_raw::Rect,
+}
+
+/// Offline registration source: recover a Sony file's declared full default frame after fitting
+/// its starting colour against the unchanged camera-aspect preview. Normal loading keeps camera crop.
+pub fn load_vec_for_alignment(bytes: Vec<u8>, max_edge: usize) -> Result<(Rgb32f, SourceInfo, Option<AlignmentCrop>), String> {
+    let crop = lightcraft_raw::declared_full_crop(&bytes).map_err(|error| error.to_string())?;
+    let provenance = crop
+        .map(|full_default_crop| lightcraft_raw::probe_info(&bytes).map(|info| AlignmentCrop { camera_crop: info.crop, full_default_crop }))
+        .transpose()
+        .map_err(|error| error.to_string())?;
+    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, crop).map(|(image, _, info)| (image, info, provenance)))
 }
 
 /// [`load_vec`] that also develops the photo's cached denoised picture (`spec`) from the same decode: the plain
 /// picture, the denoised one (`None` when it cannot be read or does not fit this raw: the plain one is then all
 /// there is) and the source facts. Both pictures are the same size.
 pub fn load_vec_pair(bytes: Vec<u8>, max_edge: usize, spec: &DenoiseSpec) -> Result<(Rgb32f, Option<Rgb32f>, SourceInfo), String> {
-    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, Some(spec)))
+    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, Some(spec), None))
 }
 
 /// The denoised camera RGB of `raw` from its cached product, as the plain development would have it: the default
@@ -386,6 +404,7 @@ fn load_bytes_now(
     bytes: std::borrow::Cow<'_, [u8]>,
     max_edge: usize,
     denoise: Option<&DenoiseSpec>,
+    alignment_crop: Option<lightcraft_raw::Rect>,
 ) -> Result<(Rgb32f, Option<Rgb32f>, SourceInfo), String> {
     if lightcraft_raw::probe(&bytes).is_some() {
         let mut raw = match lightcraft_raw::decode(&bytes).map_err(|e| preview_reason(&bytes, e)) {
@@ -408,6 +427,12 @@ fn load_bytes_now(
         let scale = WbScaleOf::new(raw.format, &raw.color, raw.wb_multipliers, &raw.metadata);
         // the source's segmentation mattes (DNG semantic masks), read while the starting colour is fitted
         let ((xy, t, camera_look), mattes) = rayon::join(|| crate::camera_preview::starting_colour(&mut raw, &bytes), || dng_mattes(&bytes, &info));
+        if let Some(crop) = alignment_crop {
+            if crop.clipped(raw.active_area.width, raw.active_area.height) != crop {
+                return Err("alignment crop outside active raw frame".into());
+            }
+            raw.crop = crop;
+        }
         drop(bytes);
         // Previews and thumbnails bin the mosaic straight to (about) the size they need; only
         // larger levels (exports, 1:1) demosaic the whole sensor.
@@ -895,6 +920,44 @@ impl crate::Session {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn offline_alignment_restores_file_frame_without_changing_camera_default() {
+        use lightcraft_tiff::{IfdBuilder, ImageData, TiffWriter, Value, tags as t};
+        for origin in [4u32, 8] {
+            let mut raw = IfdBuilder::new();
+            raw.set(t::MAKE, Value::Ascii("SONY".into()));
+            raw.set(t::MODEL, Value::Ascii("ILCE-7M4".into()));
+            raw.set(t::IMAGE_WIDTH, Value::Long(vec![160]));
+            raw.set(t::IMAGE_LENGTH, Value::Long(vec![112]));
+            raw.set(t::BITS_PER_SAMPLE, Value::Short(vec![16]));
+            raw.set(t::SAMPLES_PER_PIXEL, Value::Short(vec![1]));
+            raw.set(t::PHOTOMETRIC, Value::Short(vec![32803]));
+            raw.set(t::COMPRESSION, Value::Short(vec![1]));
+            raw.set(t::ORIENTATION, Value::Short(vec![8]));
+            raw.set(0x74c7, Value::Long(vec![origin + 8, 6]));
+            raw.set(0x74c8, Value::Long(vec![128, 96]));
+            raw.set(t::DEFAULT_CROP_ORIGIN, Value::Long(vec![origin, 6]));
+            raw.set(t::DEFAULT_CROP_SIZE, Value::Long(vec![144, 96]));
+            let pixels: Vec<u8> = (0..160 * 112).flat_map(|i| (2000u16 + (i % 4000) as u16).to_le_bytes()).collect();
+            raw.set_image(ImageData::Strips { rows_per_strip: 112, strips: vec![pixels] });
+            let bytes = TiffWriter::default().write(&[raw.clone()]).unwrap();
+            let (normal, _) = super::load_vec(bytes.clone(), 512).unwrap();
+            let (aligned, info, frame) = super::load_vec_for_alignment(bytes, 512).unwrap();
+            assert!(info.raw);
+            assert_eq!((normal.width, normal.height), (96, 128));
+            assert_eq!((aligned.width, aligned.height), (96, 144));
+            let frame = frame.unwrap();
+            assert_eq!(frame.camera_crop.x, origin as usize + 8);
+            assert_eq!(frame.full_default_crop.x, origin as usize);
+            raw.set(0x74c7, Value::Long(vec![origin, 6]));
+            raw.set(0x74c8, Value::Long(vec![144, 96]));
+            let bytes = TiffWriter::default().write(&[raw]).unwrap();
+            let (normal, _) = super::load_vec(bytes.clone(), 512).unwrap();
+            let (aligned, _, _) = super::load_vec_for_alignment(bytes, 512).unwrap();
+            assert_eq!(normal, aligned);
+        }
+    }
+
     /// Keywords from a file keep their hierarchy: the paths of `lr:hierarchicalSubject`, not the
     /// flat names of `dc:subject` that Ember's exports (and Lightroom Classic) write besides
     /// them; an exported `travel|Italy|Rome` comes back as itself.

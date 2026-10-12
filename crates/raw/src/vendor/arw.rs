@@ -575,6 +575,25 @@ fn raw_ifd(tiff: &Tiff) -> Option<&Ifd> {
         .max_by_key(|i| i.u64(t::IMAGE_WIDTH).unwrap_or(0).saturating_mul(i.u64(t::IMAGE_LENGTH).unwrap_or(0)))
 }
 
+/// Full file-declared image frame for offline registration, independently of camera aspect crop.
+pub(crate) fn declared_full_crop(bytes: &[u8]) -> Result<Option<Rect>> {
+    let tiff = Tiff::parse(bytes)?;
+    let Some(raw) = raw_ifd(&tiff) else { return Ok(None) };
+    let (Some(origin), Some(size)) = (raw.u64s(t::DEFAULT_CROP_ORIGIN), raw.u64s(t::DEFAULT_CROP_SIZE)) else { return Ok(None) };
+    let ([x, y], [width, height]) = (origin.as_slice(), size.as_slice()) else {
+        return Err(RawError::Corrupt("invalid full default crop dimensions".into()));
+    };
+    let values = [*x, *y, *width, *height].map(usize::try_from);
+    let [Ok(x), Ok(y), Ok(width), Ok(height)] = values else { return Err(RawError::Limit("full default crop too large")) };
+    let frame_width = raw.u64(t::IMAGE_WIDTH).and_then(|n| usize::try_from(n).ok()).unwrap_or(0);
+    let frame_height = raw.u64(t::IMAGE_LENGTH).and_then(|n| usize::try_from(n).ok()).unwrap_or(0);
+    let crop = Rect::new(x, y, width, height);
+    if width < 2 || height < 2 || crop.clipped(frame_width, frame_height) != crop {
+        return Err(RawError::Corrupt("full default crop outside raw frame".into()));
+    }
+    Ok(Some(crop))
+}
+
 pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
     let tiff = Tiff::parse(bytes)?;
     let ifd0 = &tiff.ifds[0];
@@ -856,6 +875,30 @@ mod tests {
         // centred (packed 12-bit DSLR-A900: 6048 x 4032 in the middle of 6080 x 4048)
         assert_eq!(recorded_size_crop((6048, 4032), Some((6048, 4032)), 6080, 4048, true), Some(Rect::new(16, 8, 6048, 4032)));
         assert_eq!(recorded_size_crop((6046, 4030), None, 6080, 4048, true), Some(Rect::new(16, 8, 6046, 4030)));
+    }
+
+    #[test]
+    fn offline_full_crop_preserves_camera_aspect_default() {
+        use lightcraft_tiff::{IfdBuilder, ImageData, TiffWriter, Value};
+        let mut raw = IfdBuilder::new();
+        raw.set(t::MAKE, Value::Ascii("SONY".into()));
+        raw.set(t::MODEL, Value::Ascii("ILCE-7M4".into()));
+        raw.set(t::IMAGE_WIDTH, Value::Long(vec![32]));
+        raw.set(t::IMAGE_LENGTH, Value::Long(vec![24]));
+        raw.set(t::BITS_PER_SAMPLE, Value::Short(vec![16]));
+        raw.set(t::SAMPLES_PER_PIXEL, Value::Short(vec![1]));
+        raw.set(t::PHOTOMETRIC, Value::Short(vec![photometric::CFA]));
+        raw.set(t::COMPRESSION, Value::Short(vec![1]));
+        raw.set(CROP_TOP_LEFT, Value::Long(vec![4, 0]));
+        raw.set(CROP_SIZE, Value::Long(vec![24, 24]));
+        raw.set(t::DEFAULT_CROP_ORIGIN, Value::Long(vec![0, 0]));
+        raw.set(t::DEFAULT_CROP_SIZE, Value::Long(vec![32, 24]));
+        raw.set_image(ImageData::Strips { rows_per_strip: 24, strips: vec![vec![0u8; 32 * 24 * 2]] });
+        let bytes = TiffWriter::default().write(&[raw.clone()]).unwrap();
+        assert_eq!(decode(&bytes, Mode::Header).unwrap().crop, Rect::new(4, 0, 24, 24));
+        assert_eq!(declared_full_crop(&bytes).unwrap(), Some(Rect::new(0, 0, 32, 24)));
+        raw.set(t::DEFAULT_CROP_SIZE, Value::Long(vec![33, 24]));
+        assert!(declared_full_crop(&TiffWriter::default().write(&[raw]).unwrap()).is_err());
     }
 
     /// A 32767-compressed ARW whose single strip is `strip` bytes for a 32 x 4 image.
