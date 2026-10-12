@@ -25,7 +25,7 @@ Local Auto is deterministic & closed-loop ([docs/auto-tone.md](docs/auto-tone.md
 
 This fork is under active development. Fork `main` includes merged [React/Tauri PR #1](https://github.com/Orthic-Labs/lightcraft/pull/1), [OpenRouter PR #2](https://github.com/Orthic-Labs/lightcraft/pull/2) & [Ember branding PR #3](https://github.com/Orthic-Labs/lightcraft/pull/3). No React/Tauri PR has been submitted to upstream LightCraft.
 
-Source integration now targets upstream `76b5377868d912db69a777bda253a5b1b96b22bd` (0.6.0); see [integration record](docs/upstream-integration-2026-10-12.md). Public builds, Rust tests & native qualification run through generated **RightKit GitHub Actions** (`.rightgit.json`). Local work is source/static-only. Only qualified green artifacts are promoted to desktop default. [CI restoration](docs/ci-restoration.md) records restored workflow execution & previous native evidence. Source integration does not promote installed artifacts.
+Source integration now targets upstream `25ef65c81eef81833a50ff5b61f8676d80611b06` (0.7.0); see [integration record](docs/upstream-integration-2026-10-12.md). Public builds, Rust tests & native qualification run through generated **RightKit GitHub Actions** (`.rightgit.json`). Local work is source/static-only. Only qualified green artifacts are promoted to desktop default. [CI restoration](docs/ci-restoration.md) records restored workflow execution & previous native evidence. Source integration does not promote installed artifacts.
 
 ## Development
 

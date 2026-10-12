@@ -3,7 +3,7 @@
 Milestones toward a complete photo library & RAW editing workflow.
 
 **Source update, 2026-10-12:** [upstream integration](docs/upstream-integration-2026-10-12.md)
-incorporates revision `76b5377868d912db69a777bda253a5b1b96b22bd` (0.6.0), including
+incorporates revision `25ef65c81eef81833a50ff5b61f8676d80611b06` (0.7.0), including
 denoise/face infrastructure, additional RAW formats, lens profiles & display management.
 Historical estimates below predate this integration; they are not qualification results
 for current source. Next priority is remote CI & native verification, followed by measured

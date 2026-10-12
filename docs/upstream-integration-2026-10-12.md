@@ -1,8 +1,8 @@
 # Upstream integration — 2026-10-12
 
 Source candidate incorporates `storytold/lightcraft` through
-`76b5377868d912db69a777bda253a5b1b96b22bd` (workspace version 0.6.0),
-381 commits after previously fetched `0ba118de`. Ember base is
+`25ef65c81eef81833a50ff5b61f8676d80611b06` (workspace version 0.7.0),
+382 commits after previously fetched `0ba118de`. Ember base is
 `bccf37134a2970550e71ee4e2fbf7fdad267a341`.
 
 Imported source includes expanded RAW decoding, camera calibration, process versions,
