@@ -677,7 +677,7 @@ fn open_library_session(in_memory: bool, dir: Option<std::path::PathBuf>, seed_d
 }
 
 const HELP: &str = "\
-lightcraft — photo library + raw developer
+Ember — photo library + raw developer
 
 USAGE: lightcraft [OPTIONS] [FILES/FOLDERS…]   (files and folders are imported)
 

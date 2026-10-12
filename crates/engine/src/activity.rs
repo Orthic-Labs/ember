@@ -346,7 +346,7 @@ mod tests {
         assert!(a.cancel(42).is_err());
         let g = a.start("faces", "Finding faces", Cancel::No);
         assert!(a.cancel(g.id()).is_err());
-        let h = a.start("lightroom", "Importing Lightroom catalog", Cancel::Yes);
+        let h = a.start("lightroom", "Importing LRCAT catalog", Cancel::Yes);
         h.set_cancellable(false);
         assert!(a.cancel(h.id()).is_err());
         assert!(!h.is_cancelled());

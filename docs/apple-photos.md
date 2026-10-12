@@ -126,10 +126,10 @@ new empty library first: hold ⌥ while opening Photos ▸ Create New).
    aarch64` (or `x86_64` on an Intel Mac). Check its entitlement: `codesign -d --entitlements -
    target/macos-package/Ember.app` lists `com.apple.security.automation.apple-events`. With a Developer ID
    build, also run the notarized DMG from `dist/release/`.
-2. Open it from the Finder, or with `open target/macos-package/LightCraft.app --args --demo` (not by running
+2. Open it from the Finder, or with `open target/macos-package/Ember.app --args --demo` (not by running
    the binary in a terminal, which makes the terminal the app macOS asks about).
-3. Select three photos, choose File ▸ Export…, set a folder (e.g. `~/Pictures/LightCraft Exports`), tick **Add
-   to Apple Photos**, type the album `LightCraft test "1"` and press OK.
+3. Select three photos, choose File ▸ Export…, set a folder (e.g. `~/Pictures/Ember Exports`), tick **Add
+   to Apple Photos**, type the album `Ember test "1"` and press OK.
 4. macOS asks whether **Ember** may control Photos, showing the usage text from `Info.plist`: allow it.
    Expected: the toast reads "Exported 3 of 3 photos · 3 added to Apple Photos album “Ember test "1"”",
    and a top-level album of that name holds the three images.
