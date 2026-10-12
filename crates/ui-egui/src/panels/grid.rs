@@ -319,6 +319,36 @@ pub struct GridLayout {
     pub height: f32,
 }
 
+/// The cell straight above (`down` false) or below cell `i`: in the adjacent row, the one whose
+/// centre is nearest horizontally (justified rows don't line up in columns). None in the first /
+/// last row or for an index outside the layout.
+pub fn vertical_neighbor(lay: &GridLayout, i: usize, down: bool) -> Option<usize> {
+    let row = lay.rows.iter().position(|r| (r.start..r.end).contains(&i))?;
+    let next = if down { row.checked_add(1)? } else { row.checked_sub(1)? };
+    let target = lay.rows.get(next)?;
+    let x = lay.cells.get(i)?.center().x;
+    (target.start..target.end).filter_map(|k| Some((k, (lay.cells.get(k)?.center().x - x).abs()))).min_by(|a, b| a.1.total_cmp(&b.1)).map(|(k, _)| k)
+}
+
+/// Up / Down in the grids: how many photos `library.up` / `library.down` move to reach the cell
+/// above / below the active one in the grid as last laid out; None when the grid isn't laid out
+/// for the current photos (the filmstrip then steps one photo).
+pub fn row_distance(app: &mut LightcraftApp, down: bool) -> Option<u64> {
+    if !matches!(app.ui.view, ViewMode::PhotoGrid | ViewMode::SquareGrid) {
+        return None;
+    }
+    let active = app.session.selection.active?;
+    let (generation, ids) = app.session.visible_shared();
+    let i = ids.iter().position(|x| *x == active)?;
+    let (key, lay) = app.caches.grid.layout.as_ref()?;
+    if key.0.0 != generation {
+        return None;
+    }
+    // at the top / bottom row there's no cell to go to: stay put rather than step sideways
+    let j = vertical_neighbor(lay, i, down).unwrap_or(i);
+    Some(j.abs_diff(i) as u64)
+}
+
 /// One row of cells: `cells[start..end]`, between `top` and `bottom`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GridRow {

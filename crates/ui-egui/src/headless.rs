@@ -750,6 +750,51 @@ mod tests {
         assert!(egui::Popup::is_any_open(&h.view.ctx), "its context menu");
     }
 
+    /// #1171: Up / Down in the grid go to the cell above / below; in the filmstrip, one photo.
+    #[test]
+    fn up_and_down_move_through_the_grid_rows() {
+        let mut h = demo([1200.0, 760.0]);
+        let t = Duration::from_secs(10);
+        h.request("ui.set", json!({"view": "grid"}), t);
+        h.settle(SETTLE);
+        let first = h.app.session.visible_cloned()[0];
+        h.request("engine.execute", json!({"command": "library.select", "params": {"ids": [first.0]}}), t);
+        h.settle(SETTLE);
+        let rect = |h: &Headless| {
+            let a = h.app.session.selection.active.unwrap();
+            h.app.widgets.iter().find(|(w, _)| *w == format!("thumb:{}", a.0)).map(|(_, r)| *r).expect("grid cell")
+        };
+        let top = rect(&h);
+        h.request("ui.key", json!({"key": "down"}), t);
+        h.settle(SETTLE);
+        let below = rect(&h);
+        let pos = {
+            let a = h.app.session.selection.active;
+            h.app.session.visible_cloned().iter().position(|x| Some(*x) == a)
+        }
+        .unwrap();
+        assert!(below.top() > top.bottom(), "the next row, at {pos}: {top:?} -> {below:?}");
+        assert!(below.left() < top.right() && below.right() > top.left(), "overlapping horizontally");
+        h.request("ui.key", json!({"key": "up"}), t);
+        h.settle(SETTLE);
+        assert_eq!(h.app.session.selection.active, Some(first), "back up");
+        h.request("ui.key", json!({"key": "up"}), t);
+        h.settle(SETTLE);
+        assert_eq!(h.app.session.selection.active, Some(first), "the top row stays put");
+        // the filmstrip (one row): Down is the next photo
+        h.request("ui.set", json!({"view": "detail"}), t);
+        h.settle(SETTLE);
+        h.request("ui.key", json!({"key": "down"}), t);
+        h.settle(SETTLE);
+        assert_eq!(
+            {
+                let a = h.app.session.selection.active;
+                h.app.session.visible_cloned().iter().position(|x| Some(*x) == a)
+            },
+            Some(1)
+        );
+    }
+
     /// The search field is a shared text field: right-click ▸ Paste puts the clipboard's text in
     /// and filters by it.
     #[test]

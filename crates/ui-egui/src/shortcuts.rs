@@ -532,6 +532,19 @@ pub fn handle(app: &mut LightcraftApp, ctx: &egui::Context) {
                     continue;
                 }
             }
+            // Up / Down in the grids go to the cell above / below (the filmstrip steps one photo)
+            if matches!(f.as_str(), "library.up" | "library.down") {
+                match crate::panels::grid::row_distance(app, f == "library.down") {
+                    Some(0) => {}
+                    Some(rows) => {
+                        let _ = app.run(&f, json!({"rows": rows}));
+                    }
+                    None => {
+                        let _ = app.run(&f, json!({}));
+                    }
+                }
+                continue;
+            }
             // an export that can't start (e.g. no folder) says why instead of doing nothing
             if let Err(e) = app.run(&f, json!({}))
                 && matches!(f.as_str(), "app.export" | "app.exportPrevious")
