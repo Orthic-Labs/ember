@@ -140,7 +140,7 @@ pub(super) fn regions(
     info: &SourceInfo,
     before: &Rgb32f,
     baseline: &Rgb32f,
-    finished: &Rgb32f,
+    finished: Option<&Rgb32f>,
 ) -> Result<Value, String> {
     let base = DevelopSettings::default();
     let Some(planes) = auto::regions::region_planes(source, info, &base) else {
@@ -159,7 +159,9 @@ pub(super) fn regions(
             name.into(),
             json!({"plane": plane(root, alpha)?,
             "before": region_stats(alpha, &scene, before)?, "global_baseline": region_stats(alpha, &scene, baseline)?,
-            "regional_baseline": region_stats(alpha, &scene, &regional_baseline)?, "finished": region_stats(alpha, &scene, finished)?}),
+                "regional_baseline": region_stats(alpha, &scene, &regional_baseline)?,
+                "finished": finished.map(|image| region_stats(alpha, &scene, image)).transpose()?,
+                "finished_unavailable_reason": finished.is_none().then_some("source_has_no_verified_finished_target")}),
         );
     }
     Ok(json!({"status": "measured", "plane_population": "aligned source under default white balance; alpha>=0.6",

@@ -225,6 +225,7 @@ fn extract_source(row: &Value, root: Option<&Path>) -> Result<Value, String> {
             "before": reusable::image(root, &before, "display-linear Rec.2020 D65; default develop")?,
             "baseline": reusable::image(root, &baseline, "display-linear Rec.2020 D65; global Auto")?},
         "colour_diagnostics": {"before": reusable::colour(&before), "baseline": reusable::colour(&baseline)},
+        "region_diagnostics": reusable::regions(root, &source, &info, &before, &baseline, None)?,
         "finished_target": null, "label_unavailable_reason": "source_only_extraction_does_not_establish_finished_target",
         "training_eligible": false, "split": "unassigned"}))
 }
@@ -250,7 +251,8 @@ fn finite_image(image: &Rgb32f) -> Result<(), String> {
 }
 
 fn render_linear(source: &Rgb32f, info: &SourceInfo, settings: &DevelopSettings) -> Result<Rgb32f, String> {
-    let mut request = RenderRequest::fit(EDGE, EDGE);
+    // Preserve the comparison frame for small images too; fit requests otherwise upscale.
+    let mut request = RenderRequest::fit(source.width.min(EDGE), source.height.min(EDGE));
     request.space = OutputSpace::Rec2020;
     request.depth = OutputDepth::F32Linear;
     let rendered = lightcraft_pipeline::render(source, info, settings, &request);
@@ -334,6 +336,8 @@ fn extract_pair(row: &Value, proxy_root: Option<&Path>) -> Result<Value, String>
         return Ok(json!({"photo_id": text(row, "photo_id")?, "status": "quarantined", "reason": "unsupported_perspective_or_content_aware_edit",
             "source_sha256": source_sha, "export_sha256": export_sha, "provenance_sha256": text(row, "provenance_sha256")?,
             "unaligned_proxies": unaligned_proxies, "source_frame_crops": full_crop,
+            "region_diagnostics": {"status": "unavailable", "reason": "no_verified_common_frame"},
+            "colour_diagnostics": {"before_unaligned": reusable::colour(&before), "finished": reusable::colour(&finished)},
             "source_fingerprint": source_fingerprint, "finished_fingerprint": finished_fingerprint,
             "training_eligible": false, "split": "unassigned"}));
     }
@@ -344,6 +348,8 @@ fn extract_pair(row: &Value, proxy_root: Option<&Path>) -> Result<Value, String>
                 "source_sha256": source_sha, "export_sha256": export_sha, "provenance_sha256": text(row, "provenance_sha256")?,
                 "source_fingerprint": source_fingerprint, "finished_fingerprint": finished_fingerprint,
                 "unaligned_proxies": unaligned_proxies,
+                "region_diagnostics": {"status": "unavailable", "reason": "no_verified_common_frame"},
+                "colour_diagnostics": {"before_unaligned": reusable::colour(&before), "finished": reusable::colour(&finished)},
                 "source_frame_crops": full_crop, "source_proxy_dimensions": [source.width, source.height], "finished_proxy_dimensions": [finished.width, finished.height],
                 "training_eligible": false, "split": "unassigned"}));
         }
@@ -372,7 +378,7 @@ fn extract_pair(row: &Value, proxy_root: Option<&Path>) -> Result<Value, String>
         "baseline": reusable::image(proxy_root, &baseline, "display-linear Rec.2020 D65; global deterministic Auto, aligned frame")?,
         "finished": unaligned_proxies.get("finished")
     });
-    let region_diagnostics = reusable::regions(proxy_root, &aligned_source, &info, &before_aligned, &baseline, &finished)?;
+    let region_diagnostics = reusable::regions(proxy_root, &aligned_source, &info, &before_aligned, &baseline, Some(&finished))?;
     Ok(json!({
         "photo_id": text(row, "photo_id")?, "status": "extracted_pending_grouped_split",
         "source_sha256": source_sha, "export_sha256": export_sha, "provenance_sha256": text(row, "provenance_sha256")?,
@@ -450,6 +456,15 @@ mod tests {
     }
 
     #[test]
+    fn small_source_keeps_its_frame_for_region_statistics() {
+        let source = Rgb32f::from_fn(32, 24, |_, _| [0.2, 0.3, 0.4]);
+        let before = render_linear(&source, &SourceInfo::default(), &DevelopSettings::default()).unwrap();
+        assert_eq!([before.width, before.height], [32, 24]);
+        let diagnostics = reusable::regions(None, &source, &SourceInfo::default(), &before, &before, None).unwrap();
+        assert_eq!(diagnostics["status"], "measured");
+    }
+
+    #[test]
     fn paired_pixels_extract_repeatably_without_mutating_inputs() {
         use lightcraft_codecs::{EncodeImage, EncodeMeta, Samples};
         let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
@@ -502,6 +517,8 @@ mod tests {
         let unlabelled = extract_source(&row, Some(&cache)).expect("source without fabricated target");
         assert_eq!(unlabelled["finished_target"], Value::Null);
         assert_eq!(unlabelled["status"], "source_cached_without_finished_label");
+        assert_eq!(unlabelled["region_diagnostics"]["regions"]["subject"]["finished"], Value::Null);
+        assert_eq!(unlabelled["region_diagnostics"]["regions"]["subject"]["finished_unavailable_reason"], "source_has_no_verified_finished_target");
         row["source_sha256"] = json!("0".repeat(64));
         assert_eq!(extract_pair(&row, None).unwrap_err(), "media_sha256_mismatch");
         row["source_sha256"] = json!(digest(&source_bytes));
