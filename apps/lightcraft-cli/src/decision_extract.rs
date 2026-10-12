@@ -185,9 +185,12 @@ fn render_linear(source: &Rgb32f, info: &SourceInfo, settings: &DevelopSettings)
         return Err("deep_render_invalid_storage".into());
     }
     let mut image = Rgb32f::new(deep.width, deep.height);
-    for (pixel, channels) in image.data.iter_mut().zip(samples.chunks_exact(3)) {
-        let [r, g, b] = channels else { return Err("deep_render_invalid_channel_count".into()) };
-        *pixel = [*r, *g, *b];
+    let (pixels, remainder) = samples.as_chunks::<3>();
+    if !remainder.is_empty() {
+        return Err("deep_render_invalid_channel_count".into());
+    }
+    for (pixel, channels) in image.data.iter_mut().zip(pixels) {
+        *pixel = *channels;
     }
     finite_image(&image)?;
     Ok(image)
@@ -231,6 +234,10 @@ fn extract_pair(row: &Value) -> Result<Value, String> {
     if decoded.has_alpha || decoded.cmyk {
         return Err("unsupported_alpha_or_cmyk_export".into());
     }
+    if matches!(decoded.space.origin, lightcraft_codecs::SpaceOrigin::IccUnsupported | lightcraft_codecs::SpaceOrigin::Naive) {
+        return Err("unsupported_export_color_interpretation".into());
+    }
+    let finished_color_space = decoded.space.clone();
     let finished = decoded.to_working().into_oriented(Orientation::from_exif(decoded.orientation));
     finite_image(&finished)?;
     let finished_dimensions = [decoded.source_width, decoded.source_height];
@@ -257,12 +264,23 @@ fn extract_pair(row: &Value) -> Result<Value, String> {
     }
     finite_image(&source)?;
     let before = render_linear(&source, &info, &base)?;
-    let (aligned_source, geometry) = geometry::align(&source, &before, &finished)?;
+    let source_fingerprint = geometry::fingerprint(&before);
+    let finished_fingerprint = geometry::fingerprint(&finished);
     let source_after = std::fs::metadata(source_path).map_err(|_| "source_metadata_unreadable")?;
     if source_before.len() != source_after.len() || source_before.modified().ok() != source_after.modified().ok() {
         return Err("source_changed_during_extraction".into());
     }
     drop(checked_media(source_path, source_sha)?);
+    let (aligned_source, geometry) = match geometry::align(&source, &before, &finished) {
+        Ok(aligned) => aligned,
+        Err(reason) => {
+            return Ok(json!({"photo_id": text(row, "photo_id")?, "status": "quarantined", "reason": reason,
+                "source_sha256": source_sha, "export_sha256": export_sha, "provenance_sha256": text(row, "provenance_sha256")?,
+                "source_fingerprint": source_fingerprint, "finished_fingerprint": finished_fingerprint,
+                "source_proxy_dimensions": [source.width, source.height], "finished_proxy_dimensions": [finished.width, finished.height],
+                "training_eligible": false, "split": "unassigned"}));
+        }
+    };
     let population = auto::scene_population(&aligned_source, &info, &base).ok_or("source_population_empty")?;
     let auto = auto::auto_tone_of(&population, &info);
     let settings = look::settings_with(&base, auto);
@@ -278,6 +296,9 @@ fn extract_pair(row: &Value) -> Result<Value, String> {
     let spread = p95 - p05;
     let feature_bytes = serde_json::to_vec(&features.0).map_err(|_| "feature_serialization_failed")?;
     let settings_bytes = serde_json::to_vec(&settings).map_err(|_| "settings_serialization_failed")?;
+    let source_info = json!({"raw": info.raw, "as_shot_temp": info.as_shot_temp, "as_shot_tint": info.as_shot_tint,
+        "relative_wb": info.relative_wb, "camera_tone": info.camera_tone, "lens": info.lens});
+    let source_info_bytes = serde_json::to_vec(&source_info).map_err(|_| "source_info_serialization_failed")?;
     Ok(json!({
         "photo_id": text(row, "photo_id")?, "status": "extracted_pending_grouped_split",
         "source_sha256": source_sha, "export_sha256": export_sha, "provenance_sha256": text(row, "provenance_sha256")?,
@@ -291,7 +312,8 @@ fn extract_pair(row: &Value) -> Result<Value, String> {
         "source_pixels_sha256": pixels_digest(&source), "aligned_source_pixels_sha256": pixels_digest(&aligned_source),
         "before_pixels_sha256": pixels_digest(&before_aligned), "baseline_pixels_sha256": pixels_digest(&baseline),
         "finished_pixels_sha256": pixels_digest(&finished), "geometry": geometry,
-        "source_fingerprint": geometry::fingerprint(&before), "finished_fingerprint": geometry::fingerprint(&finished),
+        "source_fingerprint": source_fingerprint, "finished_fingerprint": finished_fingerprint,
+        "source_info_sha256": digest(&source_info_bytes), "finished_color_space": finished_color_space,
         "finished_source_dimensions": finished_dimensions, "finished_icc_sha256": finished_icc_sha,
         "split": "unassigned", "training_eligible": false
     }))
@@ -372,8 +394,16 @@ mod tests {
         assert!(!serde_json::to_string(&first).unwrap().contains("source.png"));
         assert_eq!(std::fs::read(&source).unwrap(), source_bytes);
         assert_eq!(std::fs::read(&export).unwrap(), export_bytes);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2, "no catalog or sidecar writes");
         row["source_sha256"] = json!("0".repeat(64));
         assert_eq!(extract_pair(&row).unwrap_err(), "media_sha256_mismatch");
+        row["source_sha256"] = json!(digest(&source_bytes));
+        row["source_is_raw"] = json!(true);
+        assert_eq!(extract_pair(&row).unwrap_err(), "source_decode_kind_mismatch_or_embedded_preview_fallback");
+        let bad_profile = lightcraft_codecs::encode_png(&final_image, &EncodeMeta { icc: Some(b"bad ICC"), ..Default::default() }).unwrap();
+        std::fs::write(&export, &bad_profile).unwrap();
+        row["export_sha256"] = json!(digest(&bad_profile));
+        assert_eq!(extract_pair(&row).unwrap_err(), "unsupported_export_color_interpretation");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
