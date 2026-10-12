@@ -11,11 +11,11 @@
 - Lossy JPEG XL files in Display P3 or Rec. 2020 now open in their real colours; saturated colours used to come in
   noticeably duller.
 
-### Open Library knows a Lightroom catalog
-- Choosing a Lightroom Classic catalog folder in File → Open Library… (or one of its `Previews.lrdata` /
-  `.lrcat-data` folders, or the `.lrcat`) no longer makes an empty LightCraft library inside it (issue #891). The
-  library open now stays, and LightCraft says "This is a Lightroom catalog, not a LightCraft library" and offers
-  **Import Lightroom Catalog…** with that catalog, or Cancel. `lightcraft-cli --library` refuses those folders too.
+### Open Library knows a reference editor catalog
+- Choosing a reference catalog editor catalog folder in File → Open Library… (or one of its `Previews.lrdata` /
+  `.lrcat-data` folders, or the `.lrcat`) no longer makes an empty Ember library inside it (issue #891). The
+  library open now stays, and Ember says "This is a reference editor catalog, not a Ember library" and offers
+  **Import reference editor Catalog…** with that catalog, or Cancel. `lightcraft-cli --library` refuses those folders too.
 
 ### Canon EOS R5 Mark II
 - Canon EOS R5 Mark II C-RAW files that opened as "preview only" (more than half of them, depending on the
@@ -33,16 +33,16 @@
 
 ### Edit in PhotoCraft
 - Right-click a photo ▸ Edit In ▸ Edit in PhotoCraft (or Photo ▸ Edit In, ⇧⌘E) renders a copy with your edits, stacks it
-  with the original and opens it in PhotoCraft. LightCraft finds PhotoCraft where its installer put it (Windows,
+  with the original and opens it in PhotoCraft. Ember finds PhotoCraft where its installer put it (Windows,
   macOS, Linux packages, AppImage, Flatpak), and says so if it isn't installed, before making a copy.
 - The copy is a 16-bit PSD by default, which PhotoCraft saves straight back to with File ▸ Save; when you come back to
-  LightCraft the copy shows what you saved.
+  Ember the copy shows what you saved.
 - Settings ▸ General ▸ External Editing: the format (PSD or TIFF), colour space and bit depth for PhotoCraft and for
   the other editor (Edit in Other Editor, now ⌥⌘E), and where PhotoCraft is if you use a portable copy.
 - Export can write PSD too (flat, 8- or 16-bit).
 
 ### Reliability
-- Upgrading from a Windows installer older than 0.6 (such as 0.5.0) keeps LightCraft in the folder it was installed
+- Upgrading from a Windows installer older than 0.6 (such as 0.5.0) keeps Ember in the folder it was installed
   in, instead of moving it back to Program Files (issue #399). If that folder has been deleted since, the upgrade
   installs to Program Files.
 
@@ -75,15 +75,15 @@
 - Agents: `view.sidebarSection`, `view.sidebarMoveSection`, `view.sidebarReset`; `ui.set` takes `sidebar`.
 
 ### Kelvin white balance for raws whose camera has colour matrices
-- Raws from the 52 camera models whose colour matrices LightCraft has measured (Sony ILCE-7M3, ILCE-7M4, ILCE-7RM3,
-  Nikon D850, Canon EOS 5D Mark III and others) now show white balance in Kelvin, as a DNG does and as Lightroom
+- Raws from the 52 camera models whose colour matrices Ember has measured (Sony ILCE-7M3, ILCE-7M4, ILCE-7RM3,
+  Nikon D850, Canon EOS 5D Mark III and others) now show white balance in Kelvin, as a DNG does and as reference editor
   does: As Shot reads the file's white (an ILCE-7M3 sample: 4268 K / +7), the Temp slider runs 2000–50000 K and the
   Daylight, Cloudy, Shade, Tungsten, Fluorescent and Flash presets set real temperatures (issue #730). The matrices
   only convert between the camera's multipliers and Kelvin; the colour look is what it was.
 - Nothing already edited changes: a Custom white balance set on the old relative scale renders pixel for pixel as
   before, and becomes the Kelvin value with the same look the next time it is edited. A photo imported earlier shows
   its real As Shot temperature once the file is opened (or Reload reads it).
-- Lightroom's `crs:Temperature` for these raws is read as the Kelvin it is (sidecars, Lightroom catalogs, presets);
+- reference editor's `crs:Temperature` for these raws is read as the Kelvin it is (sidecars, reference editor catalogs, presets);
   raws of other cameras keep the as-shot shift of issue #510. The two Kelvin scales come from different matrices and
   differ by about 7–10 % on the ILCE-7M3; which one is off is still open.
 
@@ -105,14 +105,14 @@
 - The Export dialog has **Add to Apple Photos**, with an optional album. The files are exported to your folder as
   usual and then added to Photos, into a top-level album of that name (made when it's missing). The toast says how
   many Photos added, or why it added none. Export with Previous and export presets repeat it.
-- The first time, macOS asks whether LightCraft may control Photos. Photos may ask about duplicates; files it skips
+- The first time, macOS asks whether Ember may control Photos. Photos may ask about duplicates; files it skips
   show as a partial import.
 - Agents: `app.export {addToPhotos, photosAlbum}`, `export.addToPhotos {paths}` for files already on disk, and
   `export.photosImports`. See [Add to Apple Photos](apple-photos.md).
 
 ### Activity stack
-- Long-running tasks show in one place, top left under the top bar, as in Lightroom Classic (issue #345): imports and
-  folder scans, exports (and the contact sheet PDF), Synchronize Folder, Build / Smart Previews, Lightroom catalog import, Photo Merge, model downloads, the face scan,
+- Long-running tasks show in one place, top left under the top bar, as in reference catalog editor (issue #345): imports and
+  folder scans, exports (and the contact sheet PDF), Synchronize Folder, Build / Smart Previews, reference editor catalog import, Photo Merge, model downloads, the face scan,
   AI Denoise and Find Missing Photos. Each row has the task's name, a progress bar, the count and what it is working
   on; ✕ stops the tasks that can stop. Three rows show, then "+N more". The separate export panel and the progress
   windows and toasts are gone.
@@ -125,7 +125,7 @@
   import review checks such files, marks them "Will be restored" and counts them as "in Recently Deleted"; the
   choice next to that (Restore them / Import as new / Leave them) now starts on Restore. Files dropped on the window
   restore the photo too and say "Restored 1 photo from Recently Deleted". A deleted photo whose file was moved is
-  relinked to the file it is imported from. Browsing a folder in Local, Auto Import and a Lightroom catalog import
+  relinked to the file it is imported from. Browsing a folder in Local, Auto Import and a reference editor catalog import
   never restore anything. Agents: `library.import` → `onDeleted` defaults to `restore` (`skip` keeps the old
   behaviour, `fresh` imports a clean copy and deletes the old record).
 
@@ -139,7 +139,7 @@
 - Closing a library releases its lock explicitly (issue #680). On Linux and macOS the lock used to go with the file
   handle, and a program being started by another thread at that moment held a copy of the handle until it was fully
   launched, so reopening the library straight away could be refused with "This library is already open in another
-  LightCraft program" although nothing had it open. Nothing in the shipped app is known to hit the window today; it
+  Ember program" although nothing had it open. Nothing in the shipped app is known to hit the window today; it
   made a lock test flaky, and the fix closes the window for good.
 
 ## 2026-10-09
@@ -189,10 +189,10 @@
 - Any Searchable Text also finds the state / province, alt text, people and a virtual copy's name.
 
 ### Keyword lists
-- File ▸ Import Keywords… and Export Keywords… read and write keyword list files as Lightroom Classic does (a keyword
-  a line, a tab per level, synonyms in braces, keywords left out of export in brackets). Capture One, darktable, Adobe
+- File ▸ Import Keywords… and Export Keywords… read and write keyword list files as reference catalog editor does (a keyword
+  a line, a tab per level, synonyms in braces, keywords left out of export in brackets). Capture One, darktable, reference publisher
   Bridge and Photo Supreme (its Formatted Vocabulary File) use the same files, so keyword lists move between them and
-  LightCraft. Importing adds the keywords you don't have, in one undo step; a file it can't read says which line, or
+  Ember. Importing adds the keywords you don't have, in one undo step; a file it can't read says which line, or
   to save it as UTF-8. Exporting warns about keywords Capture One won't import, and names any keyword the format can't
   hold (such as a name in brackets), which it leaves out so the file always reads back.
 
@@ -212,7 +212,7 @@
   menu, and Return in the painter's box starts painting.
 
 ### Keyword List
-- The Keywords panel ends with a Keyword List, as in Lightroom Classic: every keyword with its photo count, those no
+- The Keywords panel ends with a Keyword List, as in reference catalog editor: every keyword with its photo count, those no
   photo has yet too. Filter it, tick a keyword to give it to the selected photos (a dash: only some have it), or click
   the arrow to see its photos.
 - Create keywords with + (inside the one you picked, with synonyms, and given to the selection if you like), edit one
@@ -233,7 +233,7 @@
   no longer saves it). Return in those dialogs now confirms them, and their name opens selected. More fields will
   follow.
 - On Windows and Linux, Ctrl+C outside a text field copies edit settings and Ctrl+V pastes them (⇧Ctrl+V: Paste
-  Selected Settings). Ctrl+V only reaches LightCraft while the system clipboard holds text; otherwise use Edit ▸ Paste Edit
+  Selected Settings). Ctrl+V only reaches Ember while the system clipboard holds text; otherwise use Edit ▸ Paste Edit
   Settings.
 
 ### Dialogs
@@ -253,7 +253,7 @@
 - Right-click a folder (or a disk other than the startup disk) in the sidebar's Folders section ▸ Set Color Label ▸ a colour or None. The row
   shows the label's dot before its photo count. Agents use `folder.label` (`path`, `label`); `library.folders`
   reports each row's `label`.
-- A label follows its folder when it is renamed or moved in LightCraft, together with the labels of the folders
+- A label follows its folder when it is renamed or moved in Ember, together with the labels of the folders
   inside it; undo and redo carry them back and forth.
 - The catalog format is now version 4 (`Catalog.folder_records`, `Op::SetFolderRecord`). Once this version has
   opened a library, older versions refuse it, as with every format change.
@@ -348,11 +348,11 @@
 - Sony A7R II (and other) raws whose camera JPEG is lens-corrected no longer open grey and too dark (issue #232): the
   starting look is fitted to the camera JPEG away from edges when the misaligned edges spoil the fit on all pixels.
 
-### Lightroom Classic catalogs
-- File → Import Lightroom Catalog… opens `.lrcat` directly, with originals referenced in place.
+### reference catalog editor catalogs
+- File → Import reference editor Catalog… opens `.lrcat` directly, with originals referenced in place.
   Ratings, flags, labels, keywords, collections/sets, virtual copies and supported edits migrate;
   existing Ember edits are preserved by default. Source settings/history are archived, unsupported
-  fields are reported, and the original Lightroom database stays read-only. Rendering is approximate.
+  fields are reported, and the original reference editor database stays read-only. Rendering is approximate.
 
 ### Presets and profiles
 - Import presets from other editors: XMP presets, classic `.lrtemplate` files, "DNG presets" from mobile apps and `.zip`
@@ -364,16 +364,16 @@
   white, empty Point Color slots…) as settings that couldn't be carried over.
 - A preset whose lens-profile switch is off no longer turns off the lens corrections built into a DNG (iPhone ProRAW
   and other files with embedded distortion / vignetting corrections), matching what the preset does elsewhere.
-- A red / green / blue curve in an XMP preset without the master curve is ignored, as Lightroom ignores it.
+- A red / green / blue curve in an XMP preset without the master curve is ignored, as reference editor ignores it.
 - Imported `.cube` LUT profiles appear in the Profile menu and the profile browser, grouped by their folder, and stay
   favourites across restarts (issue #328).
 
 ### Editing
 - The Tint slider works the right way round (issues #188, #321): left adds green, right adds magenta, as its track
-  shows and as in Lightroom, and Tint values in Lightroom XMP sidecars now render as they do there. A custom Tint
+  shows and as in reference editor, and Tint values in reference editor XMP sidecars now render as they do there. A custom Tint
   saved in an earlier version now shifts the other way; set it again (or re-run Auto / the white-balance picker).
 - White balance on DNGs (and other raws with a colour matrix) re-develops the photo for the new white through the
-  camera's own colour matrices, as Lightroom does, instead of shifting the colours of the as-shot rendering: a grey
+  camera's own colour matrices, as reference editor does, instead of shifting the colours of the as-shot rendering: a grey
   lit by the chosen white comes out grey and saturated colours move as the camera records them. The eyedropper and
   Auto use the same model. Custom white balances on these photos render slightly differently than before.
 - Crop (issue #295): a Lock toggle keeps the aspect ratio on every handle, Custom takes your own ratio (Apply), and
@@ -414,7 +414,7 @@
 ### RAW decoding
 - Olympus ORF raws get the starting look fitted to the camera's own JPEG too, instead of opening flat and grey (the
   E-1, E-400 and XZ-2 corpus files: all accepted), with white balance relative to the as-shot look as for the other
-  formats. On an E-1 photo the starting render moved from ΔE00 11.3 to 8.3 against Lightroom's. Photos already
+  formats. On an E-1 photo the starting render moved from ΔE00 11.3 to 8.3 against reference editor's. Photos already
   imported pick it up when re-rendered.
 - Samsung SRW files without compression now open as raws: NX5, NX10, NX11, NX20, NX200, NX210, NX1000, NX1100, EX1
   and WB2000. The compressed ones (NX1, NX30, NX300, NX500, NX2000, NX3000, NX3300, NX mini) still open from their
@@ -427,7 +427,7 @@
 - Canon CR2 raws no longer open too dark with blocked-up shadows: the black level was measured over border columns
   that light already reaches (left of the image area Canon records), 4 % of the range too high on the EOS 6D. It is
   now measured on the masked columns alone (8 corpus bodies, EOS 40D to 5DS R). On a 6D photo the starting render
-  moved from ΔE00 7.6 to 5.2 against Lightroom's.
+  moved from ΔE00 7.6 to 5.2 against reference editor's.
 - Canon CR2 and Pentax PEF raws get the same starting look fitted to the camera's own JPEG as ARW, NEF, RW2, RAF
   and CR3, instead of opening flat and desaturated (issue #310). Photos already imported pick it up when re-rendered.
 - JPEG XL compressed DNGs (DNG 1.7) now open: lossless tiles decode sample for sample (checked on synthetic files);
@@ -435,7 +435,7 @@
   preview, with the reason, instead of showing a black tile. A JPEG XL preview stored in the DNG is used like an
   embedded JPEG.
 - Apple ProRAW's gain table map (its local tone mapping, `ProfileGainTableMap`) is now read and kept when a photo is
-  exported or converted to DNG. It is not applied by default: Lightroom Classic renders ProRAW without it. To see a
+  exported or converted to DNG. It is not applied by default: reference catalog editor renders ProRAW without it. To see a
   ProRAW the way the iPhone renders it, turn on Profile ▸ Camera local tone mapping (shown for photos that carry the
   map); the option is per photo, so presets and Copy Settings carry it.
 - iPhone ProRAW and other DNGs that carry their own segmentation mattes (DNG semantic masks) use them for the Select
@@ -450,36 +450,36 @@
   M50, R100 and R8. CR3 files the decoder can't read yet still open from their embedded JPEG, as before.
 - Canon EOS R7 C-RAW files develop from their sensor data too, instead of opening from their embedded JPEG. For R7
   C-RAWs imported earlier, Photo ▸ Reload from Disk picks up the raw data.
-- Canon CRW, Minolta MRW, Sigma X3F, Kodak KDC, Leaf MOS and Epson ERF files that LightCraft can't decode yet
+- Canon CRW, Minolta MRW, Sigma X3F, Kodak KDC, Leaf MOS and Epson ERF files that Ember can't decode yet
   now import as "preview only" with their embedded JPEG instead of failing. A raw whose data is damaged but whose
   preview is intact does the same.
 - Raw files whose raw data sits in a private block of a TIFF (Phase One / Leaf IIQ, Canon EOS-1D / 1Ds and Kodak DCS
-  TIFFs) are no longer opened as a thumbnail-sized ordinary image. They are recognised as raws LightCraft can't decode
+  TIFFs) are no longer opened as a thumbnail-sized ordinary image. They are recognised as raws Ember can't decode
   yet and import as "preview only", with the reason.
 - Sony ILCE-7M4 downsized lossless ARWs now decode subsampled YCbCr tiles into linear RGB,
   preserving RAW editing & full-resolution export instead of using embedded JPEG previews.
 - Sony A7R II (and other) raws whose camera JPEG is lens-corrected no longer open grey and too dark (issue #232): the
   starting look is fitted to the camera JPEG away from edges when the misaligned edges spoil the fit on all pixels.
 
-### Lightroom Classic catalogs
-- File → Import Lightroom Catalog… opens `.lrcat` directly, with originals referenced in place.
+### reference catalog editor catalogs
+- File → Import reference editor Catalog… opens `.lrcat` directly, with originals referenced in place.
   Ratings, flags, labels, keywords, collections/sets, virtual copies and supported edits migrate;
-  existing LightCraft edits are preserved by default. Source settings/history are archived, unsupported
-  fields are reported, and the original Lightroom database stays read-only. Rendering is approximate.
+  existing Ember edits are preserved by default. Source settings/history are archived, unsupported
+  fields are reported, and the original reference editor database stays read-only. Rendering is approximate.
 
 ## 2026-10-05
 
 ### Reliability
-- The Windows installer asks where to install LightCraft (Program Files by default; upgrades keep the folder you
-  chose) and ends on a page saying it was installed, with a "Launch LightCraft" box. It used to finish without a word,
+- The Windows installer asks where to install Ember (Program Files by default; upgrades keep the folder you
+  chose) and ends on a page saying it was installed, with a "Launch Ember" box. It used to finish without a word,
   so a successful install looked like nothing had happened (issues #18, #399). Silent installs (`/qn`, `/passive`)
   show no dialogs and take `INSTALLFOLDER=...`.
 - If the desktop app can't open its window (for example when no graphics device can be used), it now says so in a
   message box that names the log file, instead of quitting without a trace (issue #260).
 - On Linux and FreeBSD, file dialogs (Import Photos…, Open Library, Export, presets, keyword lists…) are children of
-  the LightCraft window. The xdg-desktop-portal picker used to open as a separate top-level window on Wayland
+  the Ember window. The xdg-desktop-portal picker used to open as a separate top-level window on Wayland
   ("Failed to associate portal window with parent window" in the portal's log): tiling compositors put it beside the
-  app, and with LightCraft fullscreen it was hidden altogether, so Import Photos… looked like a hang until the
+  app, and with Ember fullscreen it was hidden altogether, so Import Photos… looked like a hang until the
   dialog was found and closed.
 - On macOS, single-key shortcuts that appear in the menu bar now work: E, C, H, M, ⇧P, I, K, D, ratings 0–5,
   labels 6–9, P / U and the rest did nothing, because macOS only passes ⌘ / ⌃ combinations and function keys
@@ -583,7 +583,7 @@
 - A preset whose lens-profile switch is off no longer turns off the lens corrections built into a DNG (iPhone ProRAW
   and other files with embedded distortion / vignetting corrections), matching what the preset does elsewhere.
 - XMP presets apply their red / green / blue curves only when they also have the master curve and all three channel
-  curves, as Lightroom does: a preset with just one channel curve (or no master curve) leaves the channels alone.
+  curves, as reference editor does: a preset with just one channel curve (or no master curve) leaves the channels alone.
 - Imported `.cube` LUT profiles appear in the Profile menu and the profile browser, grouped by their folder, and stay
   favourites across restarts (issue #328).
 

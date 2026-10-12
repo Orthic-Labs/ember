@@ -1,10 +1,10 @@
 # Roadmap: milestones, current focus and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (created; milestones moved here from ROADMAP.md, focus re-ranked after the 2026-10-10 re-measure) · **Target:** Adobe Lightroom Classic 15.5 / Lightroom 9.6
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (created; milestones moved here from ROADMAP.md, focus re-ranked after the 2026-10-10 re-measure) · **Target:** reference catalog editor 15.5 / reference editor 9.6
 
 Forward-looking plan. The summary with the headline numbers is [ROADMAP.md](../ROADMAP.md); the
 ranked shortfalls are [gaps.md](gaps.md); the numbers come from [target-app-parity.md](target-app-parity.md).
-LightCraft has no `cargo xtask scorecard`; the measured checklist is
+Ember has no `cargo xtask scorecard`; the measured checklist is
 [parity-checklist.md](parity-checklist.md) (`cargo xtask parity`).
 
 ## Current focus
@@ -12,11 +12,11 @@ LightCraft has no `cargo xtask scorecard`; the measured checklist is
 Toward **beta** (~340–600 Opus 5.5 agent hours; ranked, each a gap in [gaps.md](gaps.md)):
 
 1. **Camera colour of our own** (gap 1, 50–90 h): chart-based calibration for the most-used models,
-   building on the per-file JPEG fits and pooled profiles (`lightcraft-cli calibrate`); never Adobe
+   building on the per-file JPEG fits and pooled profiles (`lightcraft-cli calibrate`); never reference publisher
    data.
 2. **CR3 for every Canon body** (gap 2, 25–45 h): the remaining CRX variants, sRAW / mRAW, HEIF CR3;
    clean-room from prose descriptions (decided 2026-10-05; compressed NEF is the template).
-3. **Render-fidelity suite** (gap 3, 30–60 h): score our output against Lightroom's on the same CC0
+3. **Render-fidelity suite** (gap 3, 30–60 h): score our output against reference editor's on the same CC0
    raws (references local in `plan/`), then tune; a retune ships as a new process version.
 4. **Full-resolution zoom** (gap 4, 8–15 h): visible-region rendering so 100% shows original pixels.
 5. **AI masks** (gap 5, 40–70 h): Subject / Sky / People on licensable weights; configure the SAM 3
@@ -28,7 +28,7 @@ Toward **beta** (~340–600 Opus 5.5 agent hours; ranked, each a gap in [gaps.md
 
 ## Alpha gate
 
-The target's core workflows: what a typical Lightroom user does every day. Alpha requires each to
+The target's core workflows: what a typical reference editor user does every day. Alpha requires each to
 work end to end on the main platform (macOS) and the work to save and reopen. Checked on 2026-10-10
 against the code, tests, issues and [gaps.md](gaps.md).
 
@@ -43,7 +43,7 @@ against the code, tests, issues and [gaps.md](gaps.md).
 
 **Result: passes.** Every core workflow runs end to end on macOS and the work survives quit and
 reopen; the partial rows degrade fidelity for some cameras and large files but don't stop the
-workflow, so LightCraft stays **alpha** (ready for real work ~61%, above the ~40% bar).
+workflow, so Ember stays **alpha** (ready for real work ~61%, above the ~40% bar).
 
 ## After beta
 
@@ -61,7 +61,7 @@ calibration: M0–M13 took ≈ 25 active hours against an estimate of ≈ 110–
 
 | # | Milestone | Scope (summary) | Estimate (h) | Status |
 |---|---|---|---|---|
-| M0 | Skeleton + visual shell | workspace, xtask CI + layering, geom/color/raster, develop model, pipeline v0, catalog v0, engine commands, Lightroom-look UI (grid, loupe, filmstrip, Edit panel), control channel, MCP, web build | 3–5 | ✅ |
+| M0 | Skeleton + visual shell | workspace, xtask CI + layering, geom/color/raster, develop model, pipeline v0, catalog v0, engine commands, reference editor-look UI (grid, loupe, filmstrip, Edit panel), control channel, MCP, web build | 3–5 | ✅ |
 | M1 | Library core | import (JPEG/PNG/TIFF/WebP), EXIF/XMP, persistent catalog (op log + snapshots), albums, ratings/flags/labels, filter/search/sort, thumbnail cache, 100k-photo grid | 6–10 | ✅ (100k-photo grid scale test pending) |
 | M2 | Pipeline v1 (quality) | WB temp/tint, profiles, local tone mapping (highlights/shadows), curves, HSL, point colour, colour grading, texture/clarity/dehaze, vignette, grain, B&W, auto tone/WB, histogram, before/after | 10–15 | ✅ (look tuning vs our references ongoing) |
 | M3 | RAW I | TIFF/DNG (LJ92, deflate, tiles, opcodes), demosaic (AHD/PPG/bilinear), highlight recovery, DNG colour model, CR2, NEF, ARW, embedded previews | 10–15 | ✅ (DNG, CR2 incl. sRAW, ARW, NEF uncompressed / lossless / lossy / lossy after split, embedded previews) |
@@ -84,13 +84,13 @@ calibration: M0–M13 took ≈ 25 active hours against an estimate of ≈ 110–
 - **AI features** (subject / sky / people masks, generative remove) need model weights with
   licences we can ship; classical fallbacks first. No permissively licensed sky-segmentation or
   raw-denoise model was found; we may need to train our own.
-- **Camera colour and lens data** is a data problem: we never use Adobe's matrices, DCPs or LCPs.
+- **Camera colour and lens data** is a data problem: we never use reference publisher's matrices, DCPs or LCPs.
   DNG-embedded data first, then our own calibration; long-tail coverage grows over time and needs
   people with cameras, lenses and charts.
 - **Raw-format sources:** decoders are written from prose format descriptions (even ones published
   alongside GPL code); decoder source is never read (decided 2026-10-05). Still open:
   freedom-to-operate review for local Laplacian filters, PatchMatch and HEVC (HEIC).
-- **Look parity** with Adobe's default rendering is tuned by eye until the fidelity suite exists.
+- **Look parity** with reference publisher's default rendering is tuned by eye until the fidelity suite exists.
   Retuning changes existing edits, so it ships as a new process version
   ([process-versions.md](process-versions.md)).
 

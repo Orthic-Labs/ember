@@ -53,7 +53,7 @@ cargo build --release --locked -p lightcraft-segment --bin lightcraft-sam3-worke
 target/release/lightcraft-sam3-worker "$HOME/Library/Application Support/LightCraft/models/sam3" 127.0.0.1:8793
 ```
 
-On the editing computer, start an SSH tunnel in one terminal and LightCraft in another:
+On the editing computer, start an SSH tunnel in one terminal and Ember in another:
 
 ```sh
 ssh -N -T -o ExitOnForwardFailure=yes -L 127.0.0.1:8793:127.0.0.1:8793 user@your-mac

@@ -128,14 +128,14 @@ are `button:libraryRetry`, `button:libraryChoose`, `button:libraryTemporary` (Co
 `button:libraryQuit`. A temporary session shows a banner (`indicator:temporarySession`, `button:libraryReopen`) and
 writes nothing. `app.openLibrary` opening a library ends it.
 
-### Open Library on a Lightroom catalog
+### Open Library on a reference editor catalog
 
-`app.openLibrary` never makes a LightCraft library inside a Lightroom Classic catalog (issue #891): given the catalog
+`app.openLibrary` never makes a Ember library inside a reference catalog editor catalog (issue #891): given the catalog
 folder (it holds a `*.lrcat`), one of its `*.lrdata` / `*.lrcat-data` folders or `Backups/`, the `.lrcat` itself or
 its `-wal` / `-shm` / `.lock` files, it keeps the library open now and returns `{opened: false, lightroomCatalog:
-<the .lrcat found, or null>, path}`; the window shows a dialog whose `button:dialogOk` (Import Lightroom Catalog…, or
+<the .lrcat found, or null>, path}`; the window shows a dialog whose `button:dialogOk` (Import reference editor Catalog…, or
 `ui.dialog.confirm`) runs `file.importLightroom` with that catalog (no catalog found: it asks for one) and
-`button:dialogCancel` (`ui.dialog.cancel`) does nothing. A folder that is a LightCraft library (`catalog.snap` / `catalog.log`) always
+`button:dialogCancel` (`ui.dialog.cancel`) does nothing. A folder that is a Ember library (`catalog.snap` / `catalog.log`) always
 opens as one. With no library open (the library problem window) it is an error instead. The engine refuses the same
 places (`EngineError::LightroomCatalog`, so `lightcraft-cli --library` and `mcp --library` too). `library.importLightroom
 {status: true}` reports the catalog's `path` after the task ends as well as while it runs.

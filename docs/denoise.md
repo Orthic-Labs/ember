@@ -131,7 +131,7 @@ export LIGHTCRAFT_DENOISE_TOKEN='a long random string, at least 16 characters'
 lightcraft-cli denoise-serve --listen 100.101.102.103:7990          # e.g. the machine's Tailscale address
 ```
 
-On the laptop, before LightCraft starts:
+On the laptop, before Ember starts:
 
 ```text
 export LIGHTCRAFT_DENOISE_URL=100.101.102.103:7990
@@ -179,5 +179,5 @@ for WASM. Settings and models remain opt-in; nothing is downloaded on launch.
 
 This implementation supports **Bayer RAW only**. X-Trans, Foveon, demosaiced DNG and
 non-RAW images remain unsupported by this model contract. No measured quality parity
-with Lightroom is claimed. Apple/Metal and wider hardware verification, model policy,
+with reference editor is claimed. Apple/Metal and wider hardware verification, model policy,
 a linear-RGB contract and a side-by-side fidelity suite remain future work.

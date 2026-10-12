@@ -46,7 +46,7 @@ Overrides (read once at launch):
 
 **DX12 shader compiler (issue #471).** Every instance (window and compute) compiles DX12 shaders with
 FXC (`d3dcompiler_47.dll`, part of Windows; `lightcraft_gpu::backend::backend_options`). wgpu's
-default, `Auto`, loads whichever `dxcompiler.dll` the DLL search path finds first. LightCraft ships
+default, `Auto`, loads whichever `dxcompiler.dll` the DLL search path finds first. Ember ships
 none, so that copy belongs to another program (a Windows SDK, a folder on `PATH`). An older copy without
 `dxil.dll` beside it (e.g. DXC 1.7) warns that the DXIL is unsigned, wgpu treats the warning as a
 compile error, its indirect-validation pipelines fail, the device is lost, and the window never opened

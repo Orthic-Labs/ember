@@ -1,19 +1,19 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (created; formats measured from the code and the target's Info.plist) · **Target:** Adobe Lightroom Classic 15.5 / Lightroom 9.6
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (created; formats measured from the code and the target's Info.plist) · **Target:** reference catalog editor 15.5 / reference editor 9.6
 
-Every format Lightroom reads or writes, with our support, fidelity and tests. Camera raw formats are
+Every format reference editor reads or writes, with our support, fidelity and tests. Camera raw formats are
 deep enough to have their own document: [raw-parity.md](raw-parity.md).
 
-**How measured:** the target's document types come from the installed Lightroom 9.6
+**How measured:** the target's document types come from the installed reference editor 9.6
 `Info.plist` (`CFBundleDocumentTypes`: catalog `mcat`, `xmp`, toolkit / module / library bundles, and
-the raw-and-image list: jpg, tif, dng, heic and 27 raw extensions) plus Lightroom Classic's documented
+the raw-and-image list: jpg, tif, dng, heic and 27 raw extensions) plus reference catalog editor's documented
 import and export formats. Ours come from `crates/codecs/src/sniff.rs`, `crates/codecs/src/encode.rs`,
 `crates/engine/src/export.rs`, `crates/engine/src/import.rs` and the tests named below.
 
 ## Images (non-raw)
 
-| Format | Target reads | Target writes | LightCraft reads | LightCraft writes | Notes / tests |
+| Format | Target reads | Target writes | Ember reads | Ember writes | Notes / tests |
 |---|---|---|---|---|---|
 | JPEG | ✅ | ✅ | ✅ (parallel decoder, ICC, EXIF orientation) | ✅ quality, size limit, ICC, metadata | `crates/codecs/src/jpeg.rs`, export tests |
 | TIFF | ✅ 8/16/32-bit | ✅ 8/16-bit, LZW/ZIP | ✅ 1–64-bit integer, 16–64-bit float, bilevel, CCITT fax, WhiteIsZero | ✅ 8/16-bit, 32-bit float linear, none / LZW / ZIP | `crates/tiff`, `crates/codecs/src/tiff_codec.rs` |
@@ -34,7 +34,7 @@ import and export formats. Ours come from `crates/codecs/src/sniff.rs`, `crates/
 
 ## Colour spaces and profiles
 
-| Feature | Target | LightCraft |
+| Feature | Target | Ember |
 |---|---|---|
 | Export colour spaces | sRGB, Adobe RGB, Display P3, ProPhoto, Rec.2020, custom ICC | ✅ sRGB, Display P3, Adobe RGB-compatible, ProPhoto, Rec.2020 with gamut mapping (CPU and GPU), embedded ICC; ⬜ custom ICC output profiles; AVIF stays sRGB |
 | Input ICC (JPEG / TIFF / PNG) | ✅ | ✅ matrix / TRC and LUT profiles (moxcms) |
@@ -42,22 +42,22 @@ import and export formats. Ours come from `crates/codecs/src/sniff.rs`, `crates/
 
 ## Metadata, sidecars, presets and catalogs
 
-| Format | Target | LightCraft | Notes |
+| Format | Target | Ember | Notes |
 |---|---|---|---|
 | XMP sidecars (`crs:` develop settings, ratings, keywords, regions) | read / write | ✅ read / write, manual (⌘S) and automatic | [xmp-interop.md](xmp-interop.md) |
 | EXIF / IPTC / XMP embedded on export | ✅ | ✅ with metadata filters | `crates/meta` |
 | Develop presets `.xmp` | ✅ | ✅ import (mapping of supported settings) | |
 | Legacy presets `.lrtemplate` | ✅ (converted) | ✅ import | |
-| Camera / creative profiles (`.dcp`, `.xmp` profiles) | ✅ | ⬜ deliberately (Adobe profile formats are never used); `.cube` LUT profiles ✅ | |
+| Camera / creative profiles (`.dcp`, `.xmp` profiles) | ✅ | ⬜ deliberately (reference publisher profile formats are never used); `.cube` LUT profiles ✅ | |
 | Lens profiles `.lcp` | ✅ | ⬜ deliberately | |
 | Other apps' presets | — | ✅ Luminar `.lmp` / `.mplumpack`, `.zip` bundles | beyond target |
-| Lightroom Classic catalog `.lrcat` | native | 🟡 import (ratings, flags, labels, keywords, collections, virtual copies, supported develop settings; read-only pure-Rust SQLite incl. WAL) | [lightroom-catalog-import.md](lightroom-catalog-import.md) |
-| Lightroom (cloud) library `.lrlibrary` | native | ⬜ | cloud library format, local cache only |
+| reference catalog editor catalog `.lrcat` | native | 🟡 import (ratings, flags, labels, keywords, collections, virtual copies, supported develop settings; read-only pure-Rust SQLite incl. WAL) | [lightroom-catalog-import.md](lightroom-catalog-import.md) |
+| reference editor (cloud) library `.lrlibrary` | native | ⬜ | cloud library format, local cache only |
 | Write back to `.lrcat` | native | ⬜ (one-way migration by design) | |
 | Keyword lists (text) | import / export | ✅ | |
 | GPX track logs | ✅ | ✅ | `crates/meta/src/gpx.rs` |
 | Export presets, metadata presets, filename templates | ✅ (`.lrtemplate`) | ✅ own JSON | not interchangeable |
-| Lightroom plug-ins (`.lrplugin`, `.lrdevplugin`) | ✅ | ⬜ | see ecosystem in [target-app-parity.md](target-app-parity.md) |
+| reference editor plug-ins (`.lrplugin`, `.lrdevplugin`) | ✅ | ⬜ | see ecosystem in [target-app-parity.md](target-app-parity.md) |
 
 ## Scores
 
@@ -65,7 +65,7 @@ import and export formats. Ours come from `crates/codecs/src/sniff.rs`, `crates/
 |---|---:|---:|---|
 | Standard image import / export | 35% | ~85% | estimated (table above; missing: AVIF read, PSD write, lossy DNG) |
 | Sidecars, metadata, presets | 25% | ~85% | estimated |
-| Lightroom catalog migration | 25% | ~50% | estimated (one-way, approximate rendering of unsupported settings) |
+| reference editor catalog migration | 25% | ~50% | estimated (one-way, approximate rendering of unsupported settings) |
 | HDR, print, video output | 15% | ~35% | estimated |
 | **Non-raw file formats** | 100% | **~70%** | estimated; raw is in [raw-parity.md](raw-parity.md) (~50%) |
 
@@ -75,5 +75,5 @@ Remaining: **26–47 h** (AVIF decode 8–15 h if a permissive decoder is writte
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-10-10 | major | Created from the code and the installed Lightroom's document types |
+| 2026-10-10 | major | Created from the code and the installed reference editor's document types |
 | 2026-10-10 | minor | JPEG XL export (#247): JXL write ✅ (native only), PQ JPEG XL HDR |

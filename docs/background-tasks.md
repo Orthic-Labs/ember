@@ -42,7 +42,7 @@ guard.detail(&file_name);
     job's own Cancel then all set the same atomic.
   - `Cancel::Yes`: the job polls `guard.is_cancelled()` itself.
   - `Cancel::No`: the job can't stop; it gets no ✕ and doesn't make Quit ask.
-  - `set_cancellable(false)` for a phase that has to finish once started (a Lightroom import adding its photos).
+  - `set_cancellable(false)` for a phase that has to finish once started (a reference editor import adding its photos).
 - **Quiet periodic work** shows no row: the auto-import folder listing runs every few seconds through
   `tasks::spawn(.., None, ..)`.
 
@@ -53,7 +53,7 @@ guard.detail(&file_name);
 | Export, contact sheet | `crates/ui-egui/src/export_task.rs` | adopt the job's flag; update the row each frame |
 | Build Previews | `crates/engine/src/cmd/previews.rs` | move the guard into the worker thread |
 | Model downloads | `crates/engine/src/face_download.rs` | report progress through a `TaskHandle` in shared state |
-| Lightroom catalog import | `crates/ui-egui/src/lightroom_import.rs` | stop being cancellable for a phase that must finish |
+| reference editor catalog import | `crates/ui-egui/src/lightroom_import.rs` | stop being cancellable for a phase that must finish |
 | Face scan, AI Denoise | `crates/engine/src/cmd/face_recognize.rs`, `crates/engine/src/denoise.rs` | a continuous job with no ✕, kept in session state |
 | Find Missing Photos | `crates/ui-egui/src/tasks.rs` | a generic background task with a row (`kind: Some(..)`) |
 

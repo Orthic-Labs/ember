@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (first per-language measurement from the catalogs) · **Target:** Adobe Lightroom Classic 15.5 / Lightroom 9.6
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (first per-language measurement from the catalogs) · **Target:** reference catalog editor 15.5 / reference editor 9.6
 
 How far each interface language is from `full`. How to add or maintain a language is in
 [localization.md](localization.md); per-language notes are in `localization-<code>.md`
@@ -10,10 +10,10 @@ How far each interface language is from `full`. How to add or maintain a languag
 
 ## The target
 
-Lightroom 9.6 (installed on the owner's Mac) ships 16 interface languages, listed from its bundle's
+reference editor 9.6 (installed on the owner's Mac) ships 16 interface languages, listed from its bundle's
 `.lproj` folder names: English, German, Spanish, French, Italian, Japanese, Korean, Norwegian Bokmål,
 Dutch, Polish, Portuguese (Brazil), Russian, Swedish, Thai, Simplified Chinese and Traditional
-Chinese. It does **not** ship Hindi, Arabic, Indonesian or Vietnamese, so for those LightCraft would
+Chinese. It does **not** ship Hindi, Arabic, Indonesian or Vietnamese, so for those Ember would
 go beyond the target.
 
 ## How the numbers are measured
@@ -55,10 +55,10 @@ that is promising but is not recorded as review, so the column says `no (communi
 | 8 | Indonesian | `id` | 0 (0%) | none | Latin (Inter covers it) | no | none (target: not shipped) | 10–16 h |
 | 9 | Japanese | `ja` | 1,995 / 2,304 (87%) | as zh-hans; vertical export watermarks | Jpan via craft-fonts (BIZ UDPGothic / UDMincho); IME through winit | no (community edits) | partial | 6–10 h |
 | 10 | German | `de` | 2,104 / 2,304 (91%) | as zh-hans; What's New translated line by line | Latin | no (community edits) | partial | 4–8 h |
-| 11 | Korean | `ko` | 0 (0%) | none | **no Korean (Hangul) face**: needs a non-Adobe OFL face in craft-fonts (Noto CJK is allowed only for Chinese) | no | none | 14–22 h |
+| 11 | Korean | `ko` | 0 (0%) | none | **no Korean (Hangul) face**: needs a non-reference publisher OFL face in craft-fonts (Noto CJK is allowed only for Chinese) | no | none | 14–22 h |
 | 12 | Vietnamese | `vi` | 0 (0%) | none | Latin with stacked diacritics (Inter covers it; check combining marks) | no | none (target: not shipped) | 10–16 h |
 
-## Other languages LightCraft ships (3)
+## Other languages Ember ships (3)
 
 | Language | Code | UI strings translated | Script | Native review | Status | To `full` |
 |---|---|---:|---|---|---|---:|
@@ -66,7 +66,7 @@ that is promising but is not recorded as review, so the column says `no (communi
 | Russian | `ru` | 1,704 / 2,304 (74%) | Cyrillic (Inter) | no (community edits) | partial | 8–12 h |
 | Ukrainian | `uk` | 2,287 / 2,304 (99%) | Cyrillic (Inter) | no (community edits) | partial (lower-layer errors English) | 2–4 h |
 
-Target languages LightCraft lacks: Italian, Korean, Dutch, Polish, Swedish, Norwegian Bokmål, Thai
+Target languages Ember lacks: Italian, Korean, Dutch, Polish, Swedish, Norwegian Bokmål, Thai
 (Thai needs shaping and line breaking without spaces). Each Latin-script one is ~10–16 h; Thai
 ~20–35 h on top of the shaping work.
 
@@ -75,7 +75,7 @@ Target languages LightCraft lacks: Italian, Korean, Dutch, Polish, Swedish, Norw
 - Route lower-layer error messages (catalog, raw, codecs, engine) through translatable message ids
   instead of English `format!` strings (~12–20 h).
 - A check in `cargo xtask ci` that every user-visible literal reaches a catalog (~4–8 h).
-- A user manual / help pages beyond What's New and the shortcut sheet (Lightroom links to online
+- A user manual / help pages beyond What's New and the shortcut sheet (reference editor links to online
   help; ~4–8 h for a translatable in-app help index).
 - Native-speaker review passes (human; cannot be done by agents).
 

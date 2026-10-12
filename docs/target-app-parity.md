@@ -1,8 +1,8 @@
-# Target-app parity: LightCraft vs Adobe Lightroom
+# Target-app parity: Ember vs reference editor
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (EOS R5 Mark II CR3 verified: RAW decoding 76% → 77%; headline numbers unchanged) · **Target:** Adobe Lightroom Classic 15.5 (August 2026) and Lightroom 9.6 (desktop)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (EOS R5 Mark II CR3 verified: RAW decoding 76% → 77%; headline numbers unchanged) · **Target:** reference catalog editor 15.5 (August 2026) and reference editor 9.6 (desktop)
 
-The authoritative assessment of how close LightCraft is to Lightroom. The row-by-row checklist is
+The authoritative assessment of how close Ember is to reference editor. The row-by-row checklist is
 [parity-checklist.md](parity-checklist.md); the ranked work list is [gaps.md](gaps.md); deep areas
 have their own documents: [raw-parity.md](raw-parity.md), [file-format-parity.md](file-format-parity.md),
 [ui-parity.md](ui-parity.md), [hardware-parity.md](hardware-parity.md),
@@ -23,23 +23,23 @@ have their own documents: [raw-parity.md](raw-parity.md), [file-format-parity.md
 
 ## The target and how it was measured
 
-- **Target:** Lightroom Classic 15.5 (August 2026; latest per Adobe's release notes) for the
-  library, modules and depth; Lightroom 9.6 (the cloud-library desktop app), installed on the
-  owner's Mac at `/Applications/Adobe Lightroom CC`, for the interface LightCraft's layout follows.
+- **Target:** reference catalog editor 15.5 (August 2026; latest per reference publisher's release notes) for the
+  library, modules and depth; reference editor 9.6 (the cloud-library desktop app), installed on the
+  owner's Mac at `/Applications/Adobe Lightroom CC`, for the interface Ember's layout follows.
   Both share the Camera Raw engine.
 - **Installed bundle, inspected by listing only** (the clean-room rule forbids reading contents):
   `Info.plist` document types (31 raw extensions, jpg, tif, heic, xmp, catalog bundles); 16
-  `.lproj` localizations; `CameraProfiles` (1,500 Adobe Standard and 395 Camera Matching model
+  `.lproj` localizations; `CameraProfiles` (1,500 reference publisher Standard and 395 Camera Matching model
   names); `LensProfiles` (3,635 files, 56 makers); `ModelZoo` (37 AI model names). The app was not
   launched.
-- **LightCraft side:** origin/main at `b70ae174` (2026-10-10): code counts (226 engine commands, 143
+- **Ember side:** origin/main at `b70ae174` (2026-10-10): code counts (226 engine commands, 143
   UI commands, 122 + 10 develop controls, 2,561 tests, ≈ 202,000 Rust lines in 24 crates + 3 apps),
   the checklist rows, raw corpus manifests, locale catalogs, CI workflows, docs.
-- **Behaviour and output** were not compared against a running Lightroom in this pass; the
+- **Behaviour and output** were not compared against a running reference editor in this pass; the
   measured ΔE figures in [raw-parity.md](raw-parity.md) come from earlier work.
 
 **Presence is not parity.** ✅ rows are set by whoever lands a feature and have not been checked
-systematically against Lightroom's behaviour; bugs keep turning up in ✅ areas (CR2 colour-filter
+systematically against reference editor's behaviour; bugs keep turning up in ✅ areas (CR2 colour-filter
 phase #85, duplicate Local entries #22, black GPU exports on an Intel iGPU #78).
 
 ## By dimension
@@ -47,7 +47,7 @@ phase #85, duplicate Local entries #22, black GPU exports on an Intel iGPU #78).
 | Dimension | Breadth | Ready for real work | Remaining | Doc |
 |---|---:|---:|---:|---|
 | Features (weighted areas below) | ~77% (checklist 81.1%, measured) | ~61% | 600–1,100 h | [Features](#features) |
-| ↳ RAW cameras, colour and lens profiles (part of features) | 81% of Adobe's 1,446 models decode (16% verified), measured | ~56% | 255–480 h | [raw-parity.md](raw-parity.md) |
+| ↳ RAW cameras, colour and lens profiles (part of features) | 81% of reference publisher's 1,446 models decode (16% verified), measured | ~56% | 255–480 h | [raw-parity.md](raw-parity.md) |
 | UI/UX fidelity | ~85% | ~70% | 40–70 h | [ui-parity.md](ui-parity.md) |
 | File formats (non-raw: images, sidecars, presets, catalogs) | ~85% | ~70% | 30–55 h | [file-format-parity.md](file-format-parity.md) |
 | Hardware | ~50% | ~40% | 40–80 h (+ tethering and printing, counted under Classic modules) | [hardware-parity.md](hardware-parity.md) |
@@ -55,12 +55,12 @@ phase #85, duplicate Local entries #22, black GPU exports on an Intel iGPU #78).
 | Performance | ~80% | ~70% | 30–50 h | 24 MP GPU slider 3.9 ms, export 0.3 s (measured, [gpu-pipeline.md](gpu-pipeline.md)); 85k library opens in 1.7–4.7 s; 100k test pending |
 | Stability | — | ~60% | 30–60 h | never-crash lints and guards workspace-wide, crash-tested journal, 2,561 tests; but CI runs tests only on FreeBSD, user reports keep finding bugs in ✅ areas |
 | Platforms | macOS, Windows (x64 / x86 / ARM64), Linux (AppImage, deb, rpm, Flatpak, Nix), FreeBSD, web | ~60% | 25–45 h | macOS is where it is tested; Windows installer UI unverified on Windows (#79); web experimental (CPU only) |
-| Ecosystem / plug-ins | ~25% | ~15% | 40–80 h + owner decision | no Lightroom SDK equivalent (export, publish, metadata plug-ins); beyond the target: JSON-lines control channel, MCP server with 28 tools + one per command, CLI |
+| Ecosystem / plug-ins | ~25% | ~15% | 40–80 h + owner decision | no reference editor SDK equivalent (export, publish, metadata plug-ins); beyond the target: JSON-lines control channel, MCP server with 28 tools + one per command, CLI |
 | AI features | ~30% | ~20% | 120–220 h + model decisions | [AI](#ai) (overlaps the masking and Enhance rows; not added twice) |
 
 ## Features
 
-Weights are a judgement of what Lightroom users spend their time on (library and develop dominate;
+Weights are a judgement of what reference editor users spend their time on (library and develop dominate;
 Classic output modules and video are used by few). Breadth and readiness per area are estimated
 from the checklist sections and the deep-dive documents.
 
@@ -68,7 +68,7 @@ from the checklist sections and the deep-dive documents.
 |---|---:|---:|---:|---:|---|
 | Import and library (import, folders, albums, smart albums, keywords, metadata, search, faces) | 15% | 90% | 80% | 25–45 h | checklist A–E 83–92%; robust journal; 85k-photo libraries |
 | RAW decoding and camera coverage | 15% | 81% | 77% | 120–220 h | [raw-parity.md](raw-parity.md), measured model by model: 85% of photographers' cameras decode (use-weighted), × 0.9 for per-body bugs; CR3 variants, compressed ORF, HE NEF |
-| Colour, camera profiles, render fidelity | 10% | 65% | 35% | 80–150 h | 4 bundled profiles vs Adobe's 1,500; per-file fits median ΔE ~5 vs the camera JPEG, ~10% far off; no fidelity suite ([raw-parity.md](raw-parity.md#colour)) |
+| Colour, camera profiles, render fidelity | 10% | 65% | 35% | 80–150 h | 4 bundled profiles vs reference publisher's 1,500; per-file fits median ΔE ~5 vs the camera JPEG, ~10% far off; no fidelity suite ([raw-parity.md](raw-parity.md#colour)) |
 | Global develop adjustments (light, colour, curves, grading, effects, detail) | 15% | 93% | 70% | 30–60 h | checklist F 91.7%; character tuned by eye |
 | Optics, lens profiles, crop and geometry | 6% | 80% | 50% | 40–80 h | no lens database; crop / Upright complete |
 | Masking | 8% | 67% | 45% | 60–110 h | checklist K 67.4%; AI masks heuristic or SAM 3 without mirror |
@@ -83,12 +83,12 @@ from the checklist sections and the deep-dive documents.
 
 ## AI
 
-Lightroom 9.6 ships 37 on-device models (names listed from its `ModelZoo`), covering subject, sky,
+reference editor 9.6 ships 37 on-device models (names listed from its `ModelZoo`), covering subject, sky,
 portrait, skin and object selection with refinement, depth estimation, denoise, dust detection,
 reflections removal, distraction / people detection, culling scores (eyes open, blur, aesthetics) and
-search embeddings; generative remove runs in Adobe's cloud.
+search embeddings; generative remove runs in reference publisher's cloud.
 
-| Feature | LightCraft | Status |
+| Feature | Ember | Status |
 |---|---|---|
 | Subject / Sky / Background masks | classical heuristics; the file's own DNG semantic mattes | 🟡 |
 | People (faces, body, hair, skin…) and Landscape masks | — | ⬜ |
@@ -100,7 +100,7 @@ search embeddings; generative remove runs in Adobe's cloud.
 | Dust detection | ✅ | ✅ |
 | Faces / People | YuNet detection, SFace / AuraFace recognition (opt-in downloads), People view | ✅ (MVP, [faces.md](faces.md)) |
 | Assisted culling | focus, bursts | 🟡 (no eyes-open / aesthetics scores) |
-| Auto (tone), adaptive presets | Auto calibrated on Lightroom's Auto results (#628); no adaptive presets | 🟡 |
+| Auto (tone), adaptive presets | Auto calibrated on reference editor's Auto results (#628); no adaptive presets | 🟡 |
 | Natural-language search | — | ⬜ |
 
 **Blocked on a model strategy** (maintainer decision): licensable weights or our own training;
@@ -117,7 +117,7 @@ work. Each has its own hours to ~95%, calibrated as in [How hours are calibrated
 | Audience | Ready | Opus 5.5 agent wall-clock hours to ~95% | Work that dominates |
 |---|---:|---:|---|
 | Full target (ready for real work) | **~61%** | **1,000–1,800 h** (~70% parallelizes) | raw colour, lens and camera data; AI models; Classic output modules; localization; plug-in ecosystem |
-| Mainstream practitioner | **~49%** | **450–840 h** (~60% parallelizes) | camera colour and render fidelity; CR3 / ORF / HE NEF; lens database; subject / sky masks; Lightroom XMP exchange; stability |
+| Mainstream practitioner | **~49%** | **450–840 h** (~60% parallelizes) | camera colour and render fidelity; CR3 / ORF / HE NEF; lens database; subject / sky masks; reference editor XMP exchange; stability |
 | Essentials user | **~64%** | **160–300 h** (~50% parallelizes) | default raw look for popular cameras; launch stability; basic-slider feel; opening CR3 / HEIC files people send |
 
 ### Full target (ready for real work): ~61%
@@ -141,12 +141,12 @@ valued from the model-by-model measurement in [raw-parity.md](raw-parity.md):
 | Ecosystem / plug-ins | 2% | 15% |
 | **Weighted sum** | 100% | **60.7% ≈ 61%** (range 56–66%) |
 
-Mainstream comes out lower than full: its scope is the raw-develop core, where LightCraft is weakest
+Mainstream comes out lower than full: its scope is the raw-develop core, where Ember is weakest
 (camera colour, CR3 coverage), and its discounts are multiplicative, while the full sum is lifted by
 strong library, presets, UI and format dimensions.
 
 **Why the numbers moved with the RAW measurement:** decoding measured model by model against
-Adobe's list is better than the earlier 50% estimate (84% of photographers' cameras decode, 76% after
+reference publisher's list is better than the earlier 50% estimate (84% of photographers' cameras decode, 76% after
 a bug discount), colour is lower (35%, was 40%) and is now its own row. Net: full +2 points.
 Mainstream now carries colour as a ×0.85 discount on top of the measured coverage (−2 points);
 essentials replaces its guessed 45% raw look with 84% × 0.75 (+1 point).
@@ -157,7 +157,7 @@ essentials replaces its guessed 45% raw look with 84% × 0.75 (+1 point).
 |---|---:|---:|---|
 | Interaction fidelity / UI clarity | ×0.95 | ×0.95 | brush live preview gaps and feathering (#517, #518); crop artefacts and limits (#731, #742, #770, #771); Compare white-balance selector (#743–#745); low-res slider previews (#330); dialogs taller than the window (#781); mouse-wheel scroll (#714); 100% zoom capped (gap 4) |
 | Stability on real machines | ×0.92 | ×0.92 | launch and quit crashes or silent startup failures (#250 macOS 12 Intel, #315 Windows Intel GPU, #431 Intel Mac, #260, #462, #783 Linux / Nouveau, #790 Windows installer); tests run in CI on FreeBSD only (gap 9) |
-| File exchange with Lightroom users (mainstream) / opening files people send (essentials) | ×0.92 | ×0.95 | Adobe XMP sidecars change colours (#290), XMP CameraProfile and Upright ignored (#204, #205), catalog import fails (#599), same Light values render differently (#523, #209), no write-back to `.lrcat`; for casual users: CR3 beyond verified bodies, compressed ORF, HE NEF open as previews (#473, #485, #556), HEIC trouble (#693) |
+| File exchange with reference editor users (mainstream) / opening files people send (essentials) | ×0.92 | ×0.95 | reference publisher XMP sidecars change colours (#290), XMP CameraProfile and Upright ignored (#204, #205), catalog import fails (#599), same Light values render differently (#523, #209), no write-back to `.lrcat`; for casual users: CR3 beyond verified bodies, compressed ORF, HE NEF open as previews (#473, #485, #556), HEIC trouble (#693) |
 | **Product** | **×0.804** | **×0.830** | |
 
 ### Mainstream practitioner: ~49%
@@ -181,7 +181,7 @@ than the user's own.
 | **Weighted depth** | 100% | **72.1%** |
 
 Colour fidelity is a written discount, **×0.85**: most raws start near the camera's own look (median
-ΔE ~5), about 10% far off (ΔE ~18), none calibrated to Adobe Standard, so a working photographer
+ΔE ~5), about 10% far off (ΔE ~18), none calibrated to reference publisher Standard, so a working photographer
 corrects colour by hand (33 open colour issues). 72.1% × 0.804 × 0.85 = **~49%** (range 44–54%).
 
 ### Essentials user: ~64%
@@ -194,7 +194,7 @@ basic sliders, crop, apply a preset, undo, export JPEGs.
 | Import photos | 15% | 80% |
 | Browse grid and detail view | 10% | 85% |
 | Rate and flag | 5% | 90% |
-| Basic sliders (exposure, contrast, highlights, shadows, white balance, vibrance / saturation) | 22% | 70% (slider strength differs from Lightroom, #196, #521) |
+| Basic sliders (exposure, contrast, highlights, shadows, white balance, vibrance / saturation) | 22% | 70% (slider strength differs from reference editor, #196, #521) |
 | Auto | 5% | 65% (#318) |
 | Crop and straighten | 10% | 80% |
 | Presets and profiles | 8% | 80% |
@@ -212,7 +212,7 @@ basic sliders, crop, apply a preset, undo, export JPEGs.
   launch / stability), ~11 developer / test infrastructure, **~59 feature requests or niche asks**
   (plug-ins, mobile, sync servers, tablets, MIDI, geocoding, themes).
 - Praise in issue text (love / amazing / great work / awesome): ~14 issues; "thank you" in 27.
-  **No explicit "switched from Lightroom" report** was found ("switched" matches 6 issues, none a
+  **No explicit "switched from reference editor" report** was found ("switched" matches 6 issues, none a
   switch report).
 - Reading: strong interest, but most open user issues are core-path, and raw colour dominates them,
   so the mainstream number is held down by default rendering rather than missing features.
@@ -274,7 +274,7 @@ most of its list; what remains is the data-heavy part (colour, lenses, models) i
 
 | Date | Checklist (all / P0 / P1 / P2) | Ready for real work | Remaining to full parity | Source |
 |---|---|---|---|---|
-| 2026-10-10 (RAW) | 81.1% (unchanged) | ~61% full · ~49% mainstream · ~64% essentials | unchanged | RAW measured model by model against Adobe's list; RAW decode and colour as explicit rows |
+| 2026-10-10 (RAW) | 81.1% (unchanged) | ~61% full · ~49% mainstream · ~64% essentials | unchanged | RAW measured model by model against reference publisher's list; RAW decode and colour as explicit rows |
 | 2026-10-10 (final) | 81.1% (unchanged) | ~59% full (weighted sum) · ~51% mainstream · ~63% essentials | full 1,000–1,800 h · mainstream 450–840 h · essentials 160–300 h | method aligned with the standard |
 | 2026-10-10 (later) | 81.1% (unchanged) | ~46% full · ~51% mainstream · ~63% essentials | 1,000–1,800 h | full × discounts (superseded) |
 | 2026-10-10 | 81.1% / 98.0% / 95.1% / 46.9% (517 rows) | ~55% | 1,000–1,800 h | this re-measure |
@@ -302,4 +302,4 @@ P2 items 12–25 h; look tuning, performance, packaging, hardening 25–45 h.
 | 2026-10-10 | minor | Full number restored to an additive weighted sum over the dimensions (~59%; method aligned with the standard, no new evidence); hours to ~95% for each of the three audiences; beta distance ~16 points |
 | 2026-10-10 | minor | Added mainstream practitioner (~51%) and essentials user (~63%) numbers; full ready re-derived from written weights × discounts (55% → 46%); user-issue evidence; beta hours 340–600 |
 | 2026-10-10 | minor | Stage re-checked against the core-workflow alpha gate: passes, stays alpha |
-| 2026-10-10 | major | Created per the progress-docs standard: full re-measure (checklist recount, installed Lightroom 9.6 bundle listing, code counts, catalogs, CI), feature areas with weights, dimensions, AI, stage, calibration; merged ROADMAP's *Where we stand* and *Parity estimate* |
+| 2026-10-10 | major | Created per the progress-docs standard: full re-measure (checklist recount, installed reference editor 9.6 bundle listing, code counts, catalogs, CI), feature areas with weights, dimensions, AI, stage, calibration; merged ROADMAP's *Where we stand* and *Parity estimate* |

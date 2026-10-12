@@ -55,7 +55,7 @@ control. The exact inputs and reference hashes are:
 | Canon R8 RAW, raw.pixls.us 6585 | `7d5c6dbb11ff7e6ee58715d90a20f5d801e8b103f4711ff6ea329ceafcef254c` | `63c1c6d8d1eb2312` |
 | Canon R8 C-RAW, raw.pixls.us 6587 | `df33cf394573645ce03dea1b2e9f0b5cc2b7734e9e3391ee7114151414cf2812` | `f836a663a795a375` |
 
-The EOS R5 Mark II files (raw.pixls.us 7881–7884, CC0) are pinned to LightCraft's own decode; no external
+The EOS R5 Mark II files (raw.pixls.us 7881–7884, CC0) are pinned to Ember's own decode; no external
 decoder was run on them:
 
 | File | Input SHA-256 | Sensor FNV-1a (u16 little-endian) |
