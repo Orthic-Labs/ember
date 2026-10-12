@@ -335,6 +335,21 @@ mod in_the_loupe {
         assert_eq!(h.app.region_view, None);
     }
 
+    // Given a zoomed view with a window render, when I go to the grid, then its windows are freed
+    // too (while one is held the app never counts as idle and keeps the GPU copy of the original)
+    #[test]
+    fn leaving_a_zoomed_detail_view_frees_its_windows() {
+        let (mut h, _) = detail();
+        h.app.ui.before_after = crate::state::BeforeAfter::SideBySide;
+        h.request("engine.execute", json!({"command": "view.zoom100"}), T);
+        h.settle(SETTLE);
+        assert!(tile(&h, Slot::Region).is_some() && tile(&h, Slot::RegionBefore).is_some());
+        h.request("ui.set", json!({"view": "photoGrid"}), T);
+        h.step();
+        assert_eq!((tile(&h, Slot::Region), tile(&h, Slot::RegionBefore)), (None, None));
+        assert_eq!((h.app.region_view, h.app.region_before_view), (None, None));
+    }
+
     // Given a zoomed view, when the photo is edited, then the old window (made with the old look)
     // is no longer current and is replaced by one for the new look
     #[test]

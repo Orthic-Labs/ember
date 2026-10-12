@@ -820,10 +820,12 @@ impl Renderer {
     }
 
     /// Free the GPU renderer's recycled buffers once nothing has rendered for [`IDLE_TRIM`] (they
-    /// are reallocated by the next render; while working, renders reuse them).
+    /// are reallocated by the next render; while working, renders reuse them). A zoomed view
+    /// showing its windows is not idle: the device copy of the original they are cut from stays for
+    /// the next pan (a 64 MP raw is 800 MB to upload again, over a second).
     #[cfg(not(target_arch = "wasm32"))]
     fn trim_when_idle(&mut self, ctx: &egui::Context) {
-        if !self.pending.is_empty() {
+        if !self.pending.is_empty() || self.textures.contains_key(&Slot::Region) || self.textures.contains_key(&Slot::RegionBefore) {
             self.idle = None;
             return;
         }
@@ -1402,6 +1404,25 @@ mod stage_budget_tests {
     use super::*;
 
     const MB: usize = 1 << 20;
+
+    // Given a zoomed view showing a window, the app idling does not free the GPU copy of the
+    // original the next window is cut from; once the windows are gone the idle trim runs again
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_zoomed_view_is_not_trimmed_while_idle() {
+        let ctx = egui::Context::default();
+        let mut r = Renderer::default();
+        let tex = ctx.load_texture("window", egui::ColorImage::new([1, 1], vec![egui::Color32::BLACK]), Default::default());
+        r.textures.insert(Slot::Region, Tex { key: 1, photo: PhotoId(1), tex, size: [1, 1], histogram: None, ms: 0.0, quick: None, pixels: None });
+        let long_ago = std::time::Instant::now().checked_sub(IDLE_TRIM * 2).unwrap();
+        r.idle = Some((long_ago, false));
+        r.trim_when_idle(&ctx);
+        assert_eq!(r.idle, None, "a zoomed view is not idle");
+        r.release(Slot::Region);
+        r.idle = Some((long_ago, false));
+        r.trim_when_idle(&ctx);
+        assert_eq!(r.idle, Some((long_ago, true)), "trimmed once the window is gone");
+    }
 
     // Given stage caches within the budget, nothing is cleared
     #[test]
