@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/app-icon/ember-1024.png" width="112" alt="Ember flame icon"></p>
+<p align="center"><img src="assets/app-icon/ember-1024.png" width="112" alt="Ember aperture &amp; flame icon"></p>
 
 # Ember
 
