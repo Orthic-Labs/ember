@@ -244,7 +244,7 @@ pub async fn restore(file: web_sys::File, backend: Backend) -> Result<String, St
     let cd = read_range(&file, cd_offset, cd_end).await?;
     let entries = parse_central(&cd)?;
     if !entries.iter().any(|e| e.name == "library/catalog.snap" || e.name == "library/catalog.log") {
-        return Err("this isn't a Ember library backup (no library/catalog files)".into());
+        return Err("this isn't an Ember library backup (no library/catalog files)".into());
     }
     let dir = restored_dir_name(js_sys::Date::now());
     let accepted: Vec<RestoreEntry<'_>> = entries
@@ -292,7 +292,7 @@ pub async fn restore(file: web_sys::File, backend: Backend) -> Result<String, St
 /// File ▸ Restore Library from Backup…: confirm, pick the zip, restore, reload.
 pub fn pick_and_restore(backend: Backend, before_reload: impl FnOnce() + 'static) {
     let ok = confirm(
-        "Restore a Ember library backup?\n\nThe backup becomes the library in this browser and the page reloads. \
+        "Restore an Ember library backup?\n\nThe backup becomes the library in this browser and the page reloads. \
          The current library is not deleted: it stays in browser storage.",
     );
     if !ok {

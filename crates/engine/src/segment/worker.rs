@@ -341,12 +341,13 @@ fn encoded<'a>(state: &'a mut State, shared: &Shared, job: &mut Job) -> Result<(
 
 fn remote_job(state: &mut State, shared: &Shared, job: &mut Job, endpoint: &str) -> Result<Option<SegMask>, String> {
     let _busy = Flag::raise(&shared.encoding);
-    if state.remote.is_none() {
-        state.remote = Some(remote::Client::connect(endpoint)?);
-    }
-    let client = state.remote.as_mut().ok_or("remote SAM unavailable")?;
     let mut region = None;
     let operation = match std::mem::replace(&mut job.kind, Kind::Prepare) {
+        Kind::Reset => {
+            *state = State::default();
+            shared.loaded.store(false, Ordering::SeqCst);
+            return Ok(None);
+        }
         Kind::Prepare => Operation::Prepare,
         Kind::Text(text) => Operation::Text(text),
         Kind::Clicks(clicks) => Operation::Clicks(clicks.iter().map(|c| [c.x, c.y, if c.positive { 1.0 } else { 0.0 }]).collect()),
@@ -374,6 +375,10 @@ fn remote_job(state: &mut State, shared: &Shared, job: &mut Job, endpoint: &str)
         #[cfg(test)]
         Kind::Panic => return Err("test panic request".into()),
     };
+    if state.remote.is_none() {
+        state.remote = Some(remote::Client::connect(endpoint)?);
+    }
+    let client = state.remote.as_mut().ok_or("remote SAM unavailable")?;
     let input = if region.is_some() || client.key != Some(job.key) { render(job)? } else { Input { rgb: Vec::new(), w: 0, h: 0 } };
     let request = Request { width: input.w, height: input.h, temporary: region.is_some(), operation };
     let logits = client.request(&request, &input.rgb)?;
@@ -455,6 +460,21 @@ mod tests {
         // an empty folder: loading fails with an error (no model files)
         let dir = std::env::temp_dir().join(format!("lc-sam3-worker-none-{}", std::process::id()));
         Job { dir, key: 1, render: None, missing: None, kind: Kind::Prepare, tag, reply: reply.clone() }
+    }
+
+    #[test]
+    fn remote_reset_releases_state_without_connecting_or_rendering() {
+        let (tx, _rx) = mpsc::channel();
+        let mut reset = job(Tag::Prepare, &tx);
+        reset.kind = Kind::Reset;
+        let mut state = State::default();
+        let shared = Shared::default();
+        shared.loaded.store(true, Ordering::SeqCst);
+        let result = remote_job(&mut state, &shared, &mut reset, "invalid endpoint");
+        assert!(matches!(result, Ok(None)), "{result:?}");
+        assert!(!shared.loaded.load(Ordering::SeqCst));
+        assert!(!shared.encoding.load(Ordering::SeqCst));
+        assert!(state.model.is_none() && state.cache.is_none() && state.remote.is_none());
     }
 
     #[test]

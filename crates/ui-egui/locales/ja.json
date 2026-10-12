@@ -1905,7 +1905,7 @@
   "Finding faces": "顔を検索中",
   "Synchronizing folder": "フォルダを同期中",
   "Looking for changes": "変更を確認中",
-  "This is a LRCAT catalog, not a Ember library. Import it into a Ember library instead?": "これは LRCAT カタログで、Ember ライブラリではありません。代わりに Ember ライブラリに読み込みますか?",
+  "This is a LRCAT catalog, not an Ember library. Import it into an Ember library instead?": "これは LRCAT カタログで、Ember ライブラリではありません。代わりに Ember ライブラリに読み込みますか?",
   "The import reads the catalog without changing it and adds its photos, edits, keywords and collections to the library open now.": "読み込みはカタログを変更せずに読み取り、写真・編集・キーワード・コレクションを現在開いているライブラリに追加します。",
   "Albums hold library photos: Add to My Photos first": "アルバムに入れられるのはライブラリの写真です：先にマイフォトに追加してください",
   "Add to My Photos First": "先にマイフォトに追加",

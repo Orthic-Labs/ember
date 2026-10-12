@@ -287,7 +287,7 @@ impl Drop for SetUpEnded {
 
 /// Set the graphics card up with `card` on a thread of its own while `meanwhile` runs here, and give up on the card when
 /// it takes longer than `limit` (a driver building kernels for minutes, or stuck). The `marker` file exists while `card`
-/// runs: one found before it starts was left by a Ember that closed during a set-up (a driver crash takes the app
+/// runs: one found before it starts was left by an Ember that closed during a set-up (a driver crash takes the app
 /// with it), so the card is not tried again until the user chooses where denoise runs (`denoise.settings {runOn}`).
 #[cfg(feature = "denoise")]
 fn set_up_card<T: Send + 'static, R>(

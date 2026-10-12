@@ -1890,7 +1890,7 @@
   "Reset Panel Layout": "Reset Panel Layout",
   "Resize panel window": "Resize panel window",
   "Resize panels": "Resize panels",
-  "This is a LRCAT catalog, not a Ember library. Import it into a Ember library instead?": "Ceci est un catalogue LRCAT, pas une bibliothèque Ember. L’importer plutôt dans une bibliothèque Ember ?",
+  "This is a LRCAT catalog, not an Ember library. Import it into an Ember library instead?": "Ceci est un catalogue LRCAT, pas une bibliothèque Ember. L’importer plutôt dans une bibliothèque Ember ?",
   "The import reads the catalog without changing it and adds its photos, edits, keywords and collections to the library open now.": "L’importation lit le catalogue sans le modifier et ajoute ses photos, retouches, mots-clés et collections à la bibliothèque ouverte.",
   "Albums hold library photos: Add to My Photos first": "Les albums contiennent des photos de la bibliothèque : ajoutez-les d’abord à Mes photos",
   "Add to My Photos First": "Ajouter d’abord à Mes photos",

@@ -1095,7 +1095,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 }
                 d @ Dialog::SynchronizeFolder { .. } => crate::sync::body(app, ui, d),
                 Dialog::LightroomCatalog { folder, catalog } => {
-                    ui.label(crate::i18n::tr("This is a LRCAT catalog, not a Ember library. Import it into a Ember library instead?"));
+                    ui.label(crate::i18n::tr("This is a LRCAT catalog, not an Ember library. Import it into an Ember library instead?"));
                     ui.label(egui::RichText::new(catalog.as_deref().unwrap_or(folder.as_str())).color(t.text_dim));
                     ui.label(
                         egui::RichText::new(crate::i18n::tr(

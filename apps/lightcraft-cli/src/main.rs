@@ -53,7 +53,7 @@ USAGE:
             develop.auto app.export path=/tmp/a.jpg longEdge=1600
       Options:
         --demo            headless, the procedural demo library
-        --library DIR     headless, open (or create) a Ember library; edits are saved
+        --library DIR     headless, open (or create) an Ember library; edits are saved
         --import PATH     headless, import a file or folder first (repeatable)
         --connect [ADDR]  drive the running app (`lightcraft --control 7980`; default 127.0.0.1:7980)
         --script FILE|-   also run JSON lines {\"command\": id, \"params\": {…}} (or {\"method\": …})
@@ -88,7 +88,7 @@ USAGE:
       Run the full app UI headlessly (no window, no GPU: CPU-rasterized egui) and write PNGs.
       Options:
         --demo            the procedural demo library (default unless --library or FILES)
-        --library DIR     open (or create) a Ember library
+        --library DIR     open (or create) an Ember library
         --script FILE     JSON-lines control-protocol requests (docs/control-protocol.md), one
                           per line: {\"method\": \"ui.set\", \"params\": {\"view\": \"detail\"}}.
                           Replies go to stdout. `ui.screenshot` without a path writes -o (then

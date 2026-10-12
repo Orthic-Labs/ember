@@ -2058,7 +2058,7 @@
   "Finding faces": "Gesichter werden gesucht",
   "Synchronizing folder": "Ordner wird synchronisiert",
   "Looking for changes": "Änderungen werden gesucht",
-  "This is a LRCAT catalog, not a Ember library. Import it into a Ember library instead?": "Dies ist ein LRCAT-Katalog, keine Ember-Bibliothek. Stattdessen in eine Ember-Bibliothek importieren?",
+  "This is a LRCAT catalog, not an Ember library. Import it into an Ember library instead?": "Dies ist ein LRCAT-Katalog, keine Ember-Bibliothek. Stattdessen in eine Ember-Bibliothek importieren?",
   "The import reads the catalog without changing it and adds its photos, edits, keywords and collections to the library open now.": "Der Import liest den Katalog, ohne ihn zu ändern, und fügt seine Fotos, Bearbeitungen, Stichwörter und Sammlungen der jetzt geöffneten Bibliothek hinzu.",
   "Albums hold library photos: Add to My Photos first": "Alben enthalten Bibliotheksfotos: zuerst zu „Meine Fotos“ hinzufügen",
   "Add to My Photos First": "Zuerst zu „Meine Fotos“ hinzufügen",

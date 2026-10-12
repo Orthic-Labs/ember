@@ -95,14 +95,20 @@ fn a_straighten_slider_drag_fits_live_and_is_one_undo_step() {
     let (w, h) = dims(&s);
     let start = geometry(&s);
     let undo = s.undo.len();
-    s.execute("develop.beginInteraction", &json!({"label": "Straighten"})).unwrap();
-    for angle in [1.0, 4.0, 9.0, 15.0] {
-        s.execute("develop.set", &json!({"control": "crop.angle", "value": angle})).unwrap();
-        assert!(geometry(&s).is_within_image(w, h), "fitted at every step ({angle}°)");
+    for explicit_ids in [false, true] {
+        s.execute("develop.beginInteraction", &json!({"label": "Straighten"})).unwrap();
+        for angle in [1.0, 4.0, 9.0, 15.0] {
+            let mut params = json!({"control": "crop.angle", "value": angle});
+            if explicit_ids {
+                params["ids"] = json!([s.active().unwrap().0]);
+            }
+            s.execute("develop.set", &params).unwrap();
+            assert!(geometry(&s).is_within_image(w, h), "fitted at every step ({angle}°, explicit IDs: {explicit_ids})");
+        }
+        s.execute("develop.endInteraction", &json!({})).unwrap();
+        assert_eq!(s.undo.len(), undo + 1, "the drag is one undo step");
+        assert_eq!(geometry(&s).angle, 15.0);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(close(geometry(&s), start));
     }
-    s.execute("develop.endInteraction", &json!({})).unwrap();
-    assert_eq!(s.undo.len(), undo + 1, "the drag is one undo step");
-    assert_eq!(geometry(&s).angle, 15.0);
-    s.execute("edit.undo", &json!({})).unwrap();
-    assert!(close(geometry(&s), start));
 }

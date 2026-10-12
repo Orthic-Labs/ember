@@ -219,7 +219,7 @@ pub fn specs() -> Vec<CommandSpec> {
                         }
                         for (id, mut settings) in updates {
                             let info = s.source_info(id);
-                            apply(&mut settings, &info);
+                            apply(&mut settings, &info, crop_dims(s, id));
                             let now = (s.clock)();
                             s.apply_silent(Op::SetDevelop { id, settings: Arc::new(settings), label: label.clone(), edited: Some(now) })?;
                         }
