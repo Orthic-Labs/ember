@@ -505,7 +505,11 @@ impl MediaCache {
     /// one just decoded) is never evicted here, nor is the original of the photo on screen
     /// ([`Self::set_on_screen`]).
     pub fn enforce_budget(&mut self) {
-        let mut held = self.held();
+        // The on-screen original is never evicted here, so it does not count either: counted, a 64 MP original (760 MiB)
+        // nearly fills the default share (768 MiB) alone and everything else went instead — the photo's preview and
+        // thumbnail sources and the neighbours' were decoded again from the raw on every edit, zoom-out and step.
+        let pinned: usize = self.full.iter().filter(|e| Some(e.0) == self.on_screen).map(|e| e.1.bytes()).sum();
+        let mut held = self.held().saturating_sub(pinned);
         while held > self.budget {
             let newest_preview = self.previews.iter().map(|e| e.2).max();
             let candidates = [
@@ -1927,6 +1931,24 @@ mod tests {
         m.set_budget(15 * mb);
         assert_eq!(m.usage().2.count, 1, "the budget evicts the older original");
         assert!(m.has_source(PhotoId(3), SourceLevel::Full));
+    }
+
+    // Given the on-screen original alone over the budget, the photo's other sources and its neighbour's stay
+    // (counted, it evicted them all: each edit decoded the raw again for the thumbnail and the whole-frame render)
+    #[test]
+    fn the_on_screen_original_does_not_evict_the_other_sources() {
+        let img = |w: usize| Arc::new(Rgb32f::new(w, w));
+        let mut m = MediaCache::default();
+        let mb = 1 << 20;
+        m.set_budget(20 * mb);
+        m.set_on_screen(Some(PhotoId(1)));
+        m.insert(PhotoId(1), SourceLevel::Preview, img(500));
+        m.insert(PhotoId(1), SourceLevel::Thumb, img(200));
+        m.insert(PhotoId(1), SourceLevel::Full, img(1500)); // 27 MB
+        m.insert(PhotoId(2), SourceLevel::Preview, img(500)); // a prefetched neighbour
+        for (id, level) in [(1, SourceLevel::Preview), (1, SourceLevel::Thumb), (1, SourceLevel::Full), (2, SourceLevel::Preview)] {
+            assert!(m.has_source(PhotoId(id), level), "{id} {level:?}");
+        }
     }
 
     // A 64 MP original (797 MB as linear float) is bigger than the default cache share (768 MiB):
