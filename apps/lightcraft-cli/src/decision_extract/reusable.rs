@@ -66,9 +66,12 @@ pub(super) fn image(root: Option<&Path>, image: &Rgb32f, interpretation: &str) -
 }
 
 fn plane(root: Option<&Path>, plane: &Plane) -> Result<Value, String> {
+    // Running-sum smoothing can drift just outside unit alpha at empty/full boundaries.
+    // Permit only rounding-scale excursions; malformed or non-finite planes still fail.
+    const ALPHA_ROUNDING: f32 = 1e-5;
     if plane.width.checked_mul(plane.height) != Some(plane.data.len())
         || plane.data.len() > super::EDGE * super::EDGE
-        || plane.data.iter().any(|v| !v.is_finite() || !(0.0..=1.0).contains(v))
+        || plane.data.iter().any(|v| !v.is_finite() || !(-ALPHA_ROUNDING..=1.0 + ALPHA_ROUNDING).contains(v))
     {
         return Err("invalid_region_plane".into());
     }
@@ -76,9 +79,9 @@ fn plane(root: Option<&Path>, plane: &Plane) -> Result<Value, String> {
     bytes.extend_from_slice(&(plane.width as u64).to_le_bytes());
     bytes.extend_from_slice(&(plane.height as u64).to_le_bytes());
     for value in &plane.data {
-        bytes.extend_from_slice(&value.to_le_bytes());
+        bytes.extend_from_slice(&(*value).clamp(0.0, 1.0).to_le_bytes());
     }
-    store(root, &bytes, plane.width, plane.height, 1, "heuristic region alpha; not human segmentation labels")
+    store(root, &bytes, plane.width, plane.height, 1, "heuristic region alpha; smoothing roundoff bounded to [0,1]; not human segmentation labels")
 }
 
 pub(super) fn colour(image: &Rgb32f) -> Value {
@@ -173,6 +176,26 @@ pub(super) fn regions(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn alpha_cache_bounds_smoothing_roundoff_but_rejects_invalid_values() {
+        let root = std::env::temp_dir().join(format!("ember-alpha-{}-{}", std::process::id(), SEQUENCE.fetch_add(1, Ordering::Relaxed)));
+        let mut alpha = Plane::new(2, 1);
+        alpha.data = vec![-3e-7, 1.0 + f32::EPSILON];
+        let reference = plane(Some(&root), &alpha).expect("smoothing roundoff is valid alpha");
+        let bytes = fs::read(root.join(reference["object"].as_str().unwrap())).unwrap();
+        assert_eq!(
+            bytes,
+            [2u64.to_le_bytes().as_slice(), 1u64.to_le_bytes().as_slice(), 0f32.to_le_bytes().as_slice(), 1f32.to_le_bytes().as_slice()].concat()
+        );
+        for invalid in [f32::NAN, f32::INFINITY, -0.01, 1.01] {
+            alpha.data = vec![invalid, 0.5];
+            assert_eq!(plane(Some(&root), &alpha).unwrap_err(), "invalid_region_plane");
+        }
+        alpha.data = vec![0.5];
+        assert_eq!(plane(Some(&root), &alpha).unwrap_err(), "invalid_region_plane");
+        fs::remove_dir_all(&root).unwrap();
+    }
 
     #[test]
     fn cache_replays_exact_float_bytes_and_rejects_corruption() {

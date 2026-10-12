@@ -26,6 +26,8 @@ Cache objects contain little-endian u64 width & height, then row-major interleav
 RGB uses three channels; alpha planes use one. Filename includes SHA256 & channel count.
 Dimensions & samples participate in SHA256. Atomic publication never replaces an existing object;
 every existing object is verified before reuse. Failed writes are errors, not successful corpus rows.
+Alpha export bounds smoothing roundoff within 0.00001 of unit range; larger excursions & non-finite
+values fail. Retained alpha samples remain within [0,1].
 Numeric JSON contains relative object names only; cache paths & originals stay private.
 
 Proxies have at most 512 pixels on their long edge. They support image/colour/region experiments at
