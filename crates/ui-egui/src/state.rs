@@ -234,9 +234,8 @@ pub struct AppSettings {
     /// [`RECENT_LIBRARIES`]).
     pub recent_libraries: Vec<String>,
     pub startup_view: StartupView,
-    /// Ask before moving photos to Recently Deleted (keyboard, menu bar and a photo's menu); on by
-    /// default. Saved as `askBeforeDelete`: earlier versions saved `confirmDelete: false` for
-    /// everyone who never opened Settings, so that key is no longer read (#1239).
+    /// Ask before moving photos to Recently Deleted. Saved under a new key: earlier versions saved
+    /// `confirmDelete: false` by default (#1239).
     #[serde(rename = "askBeforeDelete")]
     pub confirm_delete: bool,
     /// GPU rendering allowed (`app.gpu`).

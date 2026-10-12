@@ -2298,9 +2298,7 @@ fn deleting_a_photo_asks_first_from_the_key_the_menu_and_the_right_click_menu() 
     let mut h = demo([1400.0, 900.0], json!({"view": "photoGrid"}));
     assert!(h.app.ui.settings.confirm_delete, "on by default");
     let photo = h.app.session.visible_cloned()[0];
-    let r = h.request("engine.execute", json!({"command": "library.select", "params": {"ids": [photo.0]}}), T);
-    assert_eq!(r["ok"], true, "{r}");
-    h.settle(SETTLE);
+    exec(&mut h, "library.select", json!({"ids": [photo.0]}));
     let deleted = |h: &Headless| h.app.session.catalog.photo(photo).unwrap().deleted;
 
     // ⌫ and Photo ▸ Delete Photo ask; Cancel keeps the photo
@@ -2315,17 +2313,9 @@ fn deleting_a_photo_asks_first_from_the_key_the_menu_and_the_right_click_menu() 
     assert!(!deleted(&h));
 
     // the right-click menu's Delete Photo asks too; OK deletes
-    let right_click_delete = |h: &mut Headless| {
-        let thumb = widget(h, &format!("thumb:{}", photo.0));
-        let r = h.request("ui.click", json!({"x": thumb.center().x, "y": thumb.center().y, "button": "right"}), T);
-        assert_eq!(r["ok"], true, "{r}");
-        h.step();
-        h.step();
-        let r = h.request("ui.clickWidget", json!({"id": "button:contextDeletePhoto"}), T);
-        assert_eq!(r["ok"], true, "{r}");
-        h.step();
-    };
-    right_click_delete(&mut h);
+    let thumb = format!("thumb:{}", photo.0);
+    right_click(&mut h, &thumb);
+    click(&mut h, "button:contextDeletePhoto");
     assert_eq!(h.app.ui.dialog, Some(Dialog::ConfirmDelete { count: 1 }), "the right-click menu asks");
     assert!(!deleted(&h), "nothing deleted before the answer");
     let r = h.request("ui.dialog.confirm", json!({}), T);
@@ -2333,11 +2323,11 @@ fn deleting_a_photo_asks_first_from_the_key_the_menu_and_the_right_click_menu() 
     assert!(deleted(&h));
 
     // turned off, the right-click menu deletes at once
-    h.request("engine.execute", json!({"command": "edit.undo"}), T);
+    exec(&mut h, "edit.undo", json!({}));
     assert!(!deleted(&h));
     h.app.ui.settings.confirm_delete = false;
-    h.settle(SETTLE);
-    right_click_delete(&mut h);
+    right_click(&mut h, &thumb);
+    click(&mut h, "button:contextDeletePhoto");
     assert_eq!(h.app.ui.dialog, None);
     assert!(deleted(&h));
 }

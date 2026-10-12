@@ -1188,9 +1188,8 @@ pub fn context_menu(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
     } else {
         let delete = ui.button(crate::i18n::tr("Delete Photo"));
         register(ui.ctx(), "button:contextDeletePhoto", delete.rect);
-        // asks first like the key and the menu bar (Settings ▸ General)
-        if delete.clicked() && !crate::menus::confirm_delete(app) {
-            let _ = app.run("photo.delete", json!({}));
+        if delete.clicked() {
+            let _ = crate::menubar::run_item(app, "photo.delete", json!({}));
         }
     }
 }

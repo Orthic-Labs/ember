@@ -41,7 +41,6 @@ fn new_users_keep_the_dark_look_and_old_settings_load_unchanged() {
 /// A choice made from now on survives a restart.
 #[test]
 fn delete_asks_first_by_default_also_for_settings_saved_by_earlier_versions() {
-    assert!(AppSettings::default().confirm_delete);
     let old: UiState = serde_json::from_str(r#"{"settings": {"confirmDelete": false}}"#).unwrap();
     assert!(old.settings.confirm_delete, "the old default does not turn the question off");
     let mut ui = UiState::default();
