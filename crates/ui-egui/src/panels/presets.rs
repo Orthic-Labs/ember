@@ -395,7 +395,8 @@ mod tests {
         let pid = "lc.golden-hour";
         session.execute("preset.apply", &json!({"id": pid})).unwrap();
         let state = AppliedPreset::new(&session, pid.into(), 100.0);
-        let other = session.visible().iter().copied().find(|id| Some(*id) != session.active()).unwrap();
+        let active = session.active();
+        let other = session.visible().iter().copied().find(|id| Some(*id) != active).unwrap();
         session.execute("library.select", &json!({"ids": [other.0]})).unwrap();
         assert!(!state.is_current(&session), "the preset belongs to the earlier selection");
     }
