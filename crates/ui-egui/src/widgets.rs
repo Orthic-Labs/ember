@@ -216,9 +216,9 @@ pub fn slider(ui: &mut Ui, spec: &ControlSpec, value: f64, enabled: bool, label_
         ui.memory_mut(|m| m.surrender_focus(crate::text_field::id(&format!("sliderField:{}", spec.id))));
     }
     let mut out = SliderOut::default();
-    let span = (spec.max - spec.min).max(1e-9);
-    let to_x = |v: f64| track_rect.left() + ((v - spec.min) / span).clamp(0.0, 1.0) as f32 * track_rect.width();
-    let from_x = |x: f32| spec.min + ((x - track_rect.left()) / track_rect.width()).clamp(0.0, 1.0) as f64 * span;
+    // value ↔ track position: linear, except for the Kelvin temperature (`ControlSpec::position`)
+    let to_x = |v: f64| track_rect.left() + spec.position(v) as f32 * track_rect.width();
+    let from_x = |x: f32| spec.value_at(f64::from((x - track_rect.left()) / track_rect.width()));
     let mut v = value;
     if let Some((mut text, frames, pressed)) = typing.take() {
         // Keep the owned opening release focused without restarting its draft or selection.
@@ -267,13 +267,19 @@ pub fn slider(ui: &mut Ui, spec: &ControlSpec, value: f64, enabled: bool, label_
             && let Some(p) = resp.interact_pointer_pos()
         {
             let fine = ui.input(|i| i.modifiers.shift);
+            let step = spec.step.max(1e-9);
             let nv = if fine {
+                // a tenth of the pointer's movement along the track; the unrounded position is kept, so a
+                // slow drag adds up instead of rounding back to the same step every frame
+                let fine_id = id.with("fine-pos");
                 let dx = ui.input(|i| i.pointer.delta().x);
-                value + dx as f64 * span / track_rect.width() as f64 * 0.1
+                let kept = ui.data(|m| m.get_temp::<f64>(fine_id)).filter(|&p| ((spec.value_at(p) / step).round() * step - value).abs() < step / 2.0);
+                let pos = (kept.unwrap_or_else(|| spec.position(value)) + f64::from(dx / track_rect.width()) * 0.1).clamp(0.0, 1.0);
+                ui.data_mut(|m| m.insert_temp(fine_id, pos));
+                spec.value_at(pos)
             } else {
                 from_x(p.x)
             };
-            let step = spec.step.max(1e-9);
             let nv = ((nv / step).round() * step).clamp(spec.min, spec.max);
             if (nv - value).abs() > 1e-12 {
                 out.value = Some(nv);
@@ -632,6 +638,44 @@ mod tests {
         assert_eq!(wheel_nudges(&mut remainder, -100.0), -2.0);
         assert_eq!(wheel_nudges(&mut remainder, -20.0), -1.0);
         assert_eq!(remainder, 0.0);
+    }
+
+    /// Shift-drag moves a tenth of the pointer's way along the track, also on the Kelvin track (where a pixel of
+    /// fine drag near the centre is about 4 K): a pointer creeping a pixel a frame still adds up to steps.
+    #[test]
+    fn a_slow_shift_drag_adds_up() {
+        let ctx = egui::Context::default();
+        let temp = lightcraft_develop::controls::find("wb.temp").unwrap();
+        let mut value = 7000.0;
+        let frame = |time: f64, events: Vec<egui::Event>, value: f64| {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(320.0, 120.0))),
+                time: Some(time),
+                events,
+                ..Default::default()
+            };
+            let mut out = SliderOut::default();
+            ctx.run_ui(input, |ui| out = slider(ui, temp, value, true, None)).textures_delta.clear();
+            let track = take_registry(&ctx).into_iter().find(|(id, _)| id == "slider:wb.temp").unwrap().1;
+            (out, track)
+        };
+        // Shift is held from the start (the modifiers stay until they change)
+        let (_, track) = frame(0.0, vec![egui::Event::ModifiersChanged(egui::Modifiers::SHIFT)], value);
+        let mut at = pos2(track.left() + temp.position(value) as f32 * track.width(), track.center().y);
+        let press =
+            |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::SHIFT };
+        frame(0.1, vec![egui::Event::PointerMoved(at), press(at, true)], value);
+        let moves = 60;
+        for i in 0..moves {
+            at.x += 1.0;
+            let (out, _) = frame(0.2 + f64::from(i) * 0.02, vec![egui::Event::PointerMoved(at)], value);
+            value = out.value.unwrap_or(value);
+        }
+        frame(2.0, vec![press(at, false)], value);
+        // the drag starts once the pointer has moved a few pixels; every pixel after that counts
+        let lo = temp.value_at(temp.position(7000.0) + f64::from(moves - 10) / f64::from(track.width()) * 0.1);
+        let hi = temp.value_at(temp.position(7000.0) + f64::from(moves) / f64::from(track.width()) * 0.1);
+        assert!(value >= lo - 50.0 && value <= hi + 50.0 && value > 7000.0, "{value} K, expected {lo:.0}–{hi:.0} K");
     }
 
     /// Typed values (issue #322): signs, a decimal comma, units; on the control's steps, in range.

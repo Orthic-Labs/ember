@@ -114,6 +114,8 @@ mod tests_switch_library;
 #[cfg(test)]
 mod tests_sync;
 #[cfg(test)]
+mod tests_temp_slider;
+#[cfg(test)]
 mod tests_titlebar;
 #[cfg(test)]
 mod tests_unsaved;
