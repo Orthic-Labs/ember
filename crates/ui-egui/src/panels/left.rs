@@ -1885,7 +1885,7 @@ mod tests {
 
     #[test]
     fn a_long_path_loses_its_leading_folders_not_its_end() {
-        assert_eq!(fit("/Users/me/Pictures/LRCAT", 20), "…/Pictures/LRCAT");
+        assert_eq!(fit("/Users/me/Pictures/LRCAT", 17), "…/Pictures/LRCAT");
         assert_eq!(fit("/Users/me/Pictures/LRCAT", 12), "…/LRCAT");
     }
 

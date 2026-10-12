@@ -358,23 +358,19 @@ impl MoveFs for RealFs {
         if a == b {
             return true;
         }
-        let (Ok(ma), Ok(mb)) = (std::fs::metadata(a), std::fs::metadata(b)) else { return false };
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
+            let (Ok(ma), Ok(mb)) = (std::fs::metadata(a), std::fs::metadata(b)) else { return false };
             ma.dev() == mb.dev() && ma.ino() == mb.ino()
         }
         #[cfg(not(unix))]
         {
-            // no stable file id in std here: `b` is `a` under another spelling when they look
-            // alike and the folder has no entry spelled exactly like `b` (on a case-sensitive
-            // folder holding both `IMG.JPG` and `img.jpg`, both entries are listed)
-            let (Some(dir), Some(name)) = (b.parent(), b.file_name()) else { return false };
-            if a.parent() != Some(dir) || ma.len() != mb.len() || ma.modified().ok() != mb.modified().ok() {
-                return false;
-            }
-            let Ok(entries) = std::fs::read_dir(dir) else { return false };
-            !entries.flatten().any(|e| e.file_name() == name)
+            // Resolve both spellings through the filesystem. A directory-entry heuristic was
+            // asymmetric and rejected an existing uppercase packet through its lowercase alias.
+            // Exact resolved paths also keep distinct files on case-sensitive volumes separate.
+            let (Ok(a), Ok(b)) = (std::fs::canonicalize(a), std::fs::canonicalize(b)) else { return false };
+            a == b
         }
     }
 
@@ -1124,6 +1120,28 @@ pub(crate) mod tests {
     use super::*;
     use std::cell::RefCell;
 
+    #[test]
+    fn native_packet_alias_identity_is_symmetric_and_keeps_distinct_files_separate() {
+        let dir = crate::tests_xmp::temp_dir("rename-native-packet-aliases");
+        let upper = dir.join("packet.XMP");
+        let lower = dir.join("packet.xmp");
+        let other = dir.join("other.XMP");
+        std::fs::write(&upper, b"same bytes").unwrap();
+        std::fs::write(&other, b"same bytes").unwrap();
+        if lower.exists() {
+            assert!(RealFs.same_file(&upper, &lower));
+            assert!(RealFs.same_file(&lower, &upper));
+        } else {
+            std::fs::write(&lower, b"same bytes").unwrap();
+            assert!(!RealFs.same_file(&upper, &lower));
+            assert!(!RealFs.same_file(&lower, &upper));
+        }
+        assert!(!RealFs.same_file(&upper, &other));
+        assert!(!RealFs.same_file(&other, &upper));
+        assert!(!RealFs.same_file(&upper, &dir.join("missing.xmp")));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     /// The cross-volume move's check compares files chunk by chunk: equal files across several
     /// chunks, a difference in the last chunk, different lengths, a missing file.
     #[test]
@@ -1171,7 +1189,10 @@ pub(crate) mod tests {
         }
         fn idx(&self, p: &Path) -> Option<usize> {
             let p = Self::norm(p);
-            self.files.borrow().iter().position(|(f, _)| if self.ci { folded_path(f) == folded_path(&p) } else { *f == p })
+            self.files.borrow().iter().position(|(f, _)| {
+                let f = Self::norm(Path::new(f));
+                if self.ci { folded_path(&f) == folded_path(&p) } else { f == p }
+            })
         }
         /// The listing: (exact path, contents), sorted.
         pub fn listing(&self) -> Vec<(String, String)> {
@@ -1196,7 +1217,7 @@ pub(crate) mod tests {
             self.idx(a).is_some() && self.idx(a) == self.idx(b)
         }
         fn rename_no_replace(&self, a: &Path, b: &Path) -> std::io::Result<()> {
-            if self.fail.borrow().iter().any(|f| Self::norm(a).contains(f.as_str())) {
+            if self.fail.borrow().iter().any(|f| Self::norm(a).contains(Self::norm(Path::new(f)).as_str())) {
                 return Err(std::io::Error::other("injected failure"));
             }
             if self.exists(b) {
@@ -1207,7 +1228,7 @@ pub(crate) mod tests {
             Ok(())
         }
         fn copy_no_replace(&self, a: &Path, b: &Path) -> std::io::Result<()> {
-            if self.fail.borrow().iter().any(|f| Self::norm(a).contains(f.as_str())) {
+            if self.fail.borrow().iter().any(|f| Self::norm(a).contains(Self::norm(Path::new(f)).as_str())) {
                 return Err(std::io::Error::other("injected failure"));
             }
             if self.exists(b) {
@@ -1293,7 +1314,7 @@ pub(crate) mod tests {
                     } else {
                         serde_json::json!({"path": from, "into": root.join("Archive")})
                     };
-                    let to = if command == "folder.rename" { root.join("Holiday") } else { root.join("Archive/Trip") };
+                    let to = if command == "folder.rename" { root.join("Holiday") } else { root.join("Archive").join("Trip") };
                     let before = s.catalog.to_snapshot();
                     let history = (s.undo.len(), s.redo.len());
                     assert!(s.execute(command, &params).is_err());

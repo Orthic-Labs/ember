@@ -19,14 +19,15 @@ impl MoveFs for PartialRename {
         RealFs.same_file(a, b)
     }
     fn rename_no_replace(&self, a: &Path, b: &Path) -> std::io::Result<()> {
-        if a == self.sidecar || a == self.photo {
+        // Discovery may use an uppercase extension for a lowercase file on Windows.
+        if [&self.sidecar, &self.photo].iter().any(|p| a == *p || RealFs.same_file(p, a) || RealFs.same_file(a, p)) {
             Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "transient rename fault"))
         } else {
             RealFs.rename_no_replace(a, b)
         }
     }
     fn copy_no_replace(&self, a: &Path, b: &Path) -> std::io::Result<()> {
-        if a == self.sidecar {
+        if a == self.sidecar || RealFs.same_file(&self.sidecar, a) || RealFs.same_file(a, &self.sidecar) {
             Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "transient copy fault"))
         } else {
             RealFs.copy_no_replace(a, b)
@@ -150,7 +151,7 @@ fn autowrite_repairs_partial_rename_before_merging_foreign_xmp_across_library_sw
                     assert_eq!(parsed.rating, Some(4));
                     assert_eq!(parsed.title.as_deref(), Some("Final title"));
                     assert!(parsed.keywords.as_ref().unwrap().contains(&"café".to_string()));
-                    if upper {
+                    if upper && !RealFs.same_file(&destination, &preferred) && !RealFs.same_file(&preferred, &destination) {
                         assert!(!preferred.exists(), "merge uses the repaired uppercase packet");
                     }
                     for (step, title) in [("edit.undo", "Fresh title"), ("edit.redo", "Final title")] {

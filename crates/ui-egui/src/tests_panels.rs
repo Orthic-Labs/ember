@@ -2031,6 +2031,11 @@ fn local_photos_cannot_be_added_to_albums_until_they_join_my_photos() {
     let img = lightcraft_raster::Rgba8::from_fn(24, 16, |x, y| [(x * 9) as u8, (y * 12) as u8, 80, 255]);
     let o = lightcraft_engine::export::ExportOptions { format: lightcraft_engine::export::ExportFormat::Png, ..Default::default() };
     std::fs::write(dir.join("a.png"), lightcraft_engine::export::encode_image(&img, &o).unwrap()).unwrap();
+    // Demo sessions have no native probe; ImportJob correctly rejects a zero-size fallback.
+    h.app.session.media.file_probe = Some(std::sync::Arc::new(|path: &str| {
+        let file_size = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
+        Ok(lightcraft_engine::media::ProbeInfo { format: "PNG".into(), file_size, ..Default::default() })
+    }));
     let r = h.request("engine.execute", json!({"command": "library.browse", "params": {"path": dir.to_string_lossy()}}), T);
     assert_eq!(r["ok"], true, "{r}");
     h.settle(SETTLE);

@@ -172,8 +172,9 @@ fn desktop_exec(entry: &str) -> Option<PathBuf> {
         Some(rest) => rest.split('"').next()?,
         None => exec.split_whitespace().next()?,
     };
-    // a bare name (`photocraft %F`) was already looked for on the PATH
-    Some(PathBuf::from(program)).filter(|p| p.is_absolute())
+    // Desktop entries describe Unix paths even when this parser is tested on Windows.
+    // A bare name (`photocraft %F`) was already looked for on the PATH.
+    program.starts_with('/').then(|| PathBuf::from(program))
 }
 
 #[cfg(test)]
@@ -222,6 +223,8 @@ mod tests {
         assert_eq!(desktop_exec(appimage), Some(PathBuf::from("/home/simon/Apps/photocraft-1.2-linux-x86_64.AppImage")));
         assert_eq!(desktop_exec("Exec=/opt/photocraft/photocraft %F\n"), Some(PathBuf::from("/opt/photocraft/photocraft")));
         assert_eq!(desktop_exec("Exec=photocraft %F\nTryExec=photocraft\n"), None, "a bare name is a PATH lookup");
+        assert_eq!(desktop_exec("Exec=relative/photocraft %F\n"), None);
+        assert_eq!(desktop_exec(r"Exec=C:\Apps\photocraft.exe %F"), None, "desktop entries require Unix absolute paths");
         assert_eq!(desktop_exec("[Desktop Entry]\n"), None);
         let dirs = desktop_entry_dirs(|k| (k == "HOME").then(|| "/home/simon".to_string()));
         assert_eq!(dirs[0], PathBuf::from("/home/simon/.local/share/applications"));

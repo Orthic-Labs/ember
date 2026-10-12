@@ -5,6 +5,15 @@ use serde_json::json;
 
 use crate::{Selection, Session};
 
+// The model volume uses `/`; native joins may introduce `\` on Windows.
+fn model_path(path: &str) -> String {
+    path.replace('\\', "/")
+}
+
+fn model_moves(moves: Vec<(String, String)>) -> Vec<(String, String)> {
+    moves.into_iter().map(|(from, to)| (model_path(&from), model_path(&to))).collect()
+}
+
 fn select(s: &mut Session, ids: &[u64], active: u64) {
     s.execute("library.select", &json!({"ids": ids, "active": active})).unwrap();
 }
@@ -35,7 +44,7 @@ fn assert_file_catalog_and_journal(s: &Session, fs: &crate::rename::tests::FakeF
     let files = fs.listing();
     for photo in s.catalog.photos() {
         let Source::File { path } = &photo.source else { panic!("synthetic file fixture") };
-        assert!(files.iter().any(|(file, _)| file == path), "photo {} points to missing {path}: {files:?}", photo.id.0);
+        assert!(files.iter().any(|(file, _)| *file == model_path(path)), "photo {} points to missing {path}: {files:?}", photo.id.0);
         assert_eq!(std::path::Path::new(path).file_name().unwrap().to_string_lossy(), photo.file_name.as_str());
     }
     let replayed = memory_library(store);
@@ -102,7 +111,7 @@ fn merged_renames_coalesce_physical_moves_and_keep_retry_inverses_and_journal() 
     let renamed = fs.listing();
     s.merge_undo(2, "Rename Twice");
     assert_eq!(s.undo.len(), 1);
-    assert_eq!(s.file_moves(&s.undo.last().unwrap().op), vec![("/p/final.jpg".into(), "/p/a.jpg".into())]);
+    assert_eq!(model_moves(s.file_moves(&s.undo.last().unwrap().op)), vec![("/p/final.jpg".into(), "/p/a.jpg".into())]);
     // First exercise the ordinary merged step, before any corrective paths exist.
     for redo in [false, true] {
         file_history_step(&mut s, &fs, redo).unwrap();
@@ -343,7 +352,7 @@ fn initial_partial_rename_keeps_sidecar_repairs_for_noop_retry_and_history() {
     let plans = s.plan_rename_with(&fs, &[PhotoId(1)], "Trip", 1);
     *fs.fail.borrow_mut() = vec!["/p/a.xmp".into(), "/p/Trip.jpg".into()];
     assert!(s.execute_fn("photo.rename", |s| Ok(json!({"renamed": s.apply_rename_with(&fs, &plans)?}))).is_err());
-    assert_eq!(s.catalog.photo(PhotoId(1)).unwrap().source, Source::File { path: "/p/Trip.jpg".into() });
+    assert_eq!(s.catalog.photo(PhotoId(1)).unwrap().source, Source::File { path: plans[0].to_path.clone() });
     assert_eq!(s.undo.len(), 1);
     assert_eq!(s.undo.last().unwrap().retry_sidecars.len(), 2);
     assert_file_catalog_and_journal(&s, &fs, &store);
@@ -513,10 +522,13 @@ fn merged_rename_failure_keeps_rolled_back_photo_identity() {
     );
     s.merge_undo(3, "Rename Three Times");
     assert_eq!((s.undo.len(), s.redo.len()), (1, 0));
-    assert_eq!(s.file_moves(&s.undo.last().unwrap().op), vec![("/p/d.jpg".into(), "/p/b.jpg".into()), ("/p/c.jpg".into(), "/p/a.jpg".into())]);
+    assert_eq!(
+        model_moves(s.file_moves(&s.undo.last().unwrap().op)),
+        vec![("/p/d.jpg".into(), "/p/b.jpg".into()), ("/p/c.jpg".into(), "/p/a.jpg".into())]
+    );
     // The second photo move sticks; the preceding d -> b move must roll back to d.
     *fs.fail.borrow_mut() = vec!["/p/c.xmp".into(), "/p/a.jpg".into()];
-    let error = file_history_step(&mut s, &fs, false).unwrap_err().to_string();
+    let error = model_path(&file_history_step(&mut s, &fs, false).unwrap_err().to_string());
     assert!(error.contains("rename /p/c.xmp: injected failure"), "{error}");
     assert!(error.contains("/p/c.jpg could not be moved back"), "{error}");
     let files = fs.listing();
@@ -531,7 +543,7 @@ fn merged_rename_failure_keeps_rolled_back_photo_identity() {
     assert_eq!((s.undo.len(), s.redo.len()), (1, 0));
     assert_eq!(s.catalog.photo(PhotoId(1)).unwrap().source, Source::File { path: "/p/a.jpg".into() });
     let photo2 = s.catalog.photo(PhotoId(2)).unwrap();
-    assert_eq!(photo2.source, Source::File { path: "/p/d.jpg".into() }, "photo 2 rolled back physically and must still identify d.jpg");
     let Source::File { path } = &photo2.source else { panic!("file fixture") };
-    assert_eq!(files.iter().find(|(file, _)| file == path).map(|(_, bytes)| bytes.as_str()), Some("Photo 2"));
+    assert_eq!(model_path(path), "/p/d.jpg", "photo 2 rolled back physically and must still identify d.jpg");
+    assert_eq!(files.iter().find(|(file, _)| *file == model_path(path)).map(|(_, bytes)| bytes.as_str()), Some("Photo 2"));
 }

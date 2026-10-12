@@ -16,7 +16,8 @@ impl MoveFs for Faults {
         RealFs.same_file(a, b)
     }
     fn rename_no_replace(&self, a: &Path, b: &Path) -> std::io::Result<()> {
-        if self.0.iter().any(|p| p == a) {
+        // Match the physical packet even when sidecar discovery uses another case spelling.
+        if self.0.iter().any(|p| p == a || RealFs.same_file(p, a) || RealFs.same_file(a, p)) {
             Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "injected partial move"))
         } else {
             RealFs.rename_no_replace(a, b)
