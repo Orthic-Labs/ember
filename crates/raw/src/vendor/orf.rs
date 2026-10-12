@@ -19,7 +19,8 @@
 //!   six CC0 files (C5060WZ, C7070WZ, SP-510UZ, SP-550UZ, SP-565UZ, SP-570UZ). Their Exif `CFAPattern` states the
 //!   layout (it matches the embedded thumbnails), the maker note's entries `0x1017`/`0x1018` hold the red and
 //!   blue gain (first value, 256 = 1.0; checked against neutral areas of the thumbnail), and nothing states a
-//!   black level or an active area.
+//!   black level or an active area. The E-10 (16-bit words) has no ImageProcessing sub-directory either and keeps
+//!   its gains in the same two entries.
 //! - 12-bit blocks (E-300, E-500, E-330; the E-M5 Mark II and PEN-F high-resolution files): one strip of 12.8 bits
 //!   per pixel, `width * 8 / 5` bytes per row, made of 16-byte blocks. A block is 15 sample bytes followed by one
 //!   pad byte that is always zero; the 15 bytes are a little-endian 120-bit string holding ten 12-bit samples, sample
@@ -195,7 +196,6 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
     let chunks = info.chunks(bytes.len() as u64);
     let total: u64 = chunks.iter().map(|c| c.len).sum();
     let stated = cfa_from_exif(&tiff);
-    let mut two_field = false;
     let (mut data, bits) = if info.compression != 1 {
         return Err(RawError::Unsupported(format!("ORF compression {}", info.compression)));
     } else if total >= (n as u64) * 2 {
@@ -232,7 +232,6 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         .then(|| field_rows(&info.offsets.iter().copied().zip(info.byte_counts.iter().copied()).collect::<Vec<_>>(), w, h, bytes.len()))
         .flatten()
     {
-        two_field = true;
         let d = if mode == Mode::Full || stated.is_none() {
             let (rb, h0) = (w * 3 / 2, h.div_ceil(2));
             let mut d = vec![0u16; n];
@@ -290,8 +289,8 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         .filter(|v| v.len() >= 2 && v[0] > 0.0 && v[1] > 0.0)
         .map(|v| [(v[0] / 256.0) as f32, 1.0, (v[1] / 256.0) as f32])
         .or_else(|| {
-            // two-field bodies: the red and blue gains lead the entries of the main maker note
-            let m = mn.as_ref().filter(|_| two_field)?;
+            // two-field bodies and the E-10: the red and blue gains lead the entries of the main maker note
+            let m = mn.as_ref()?;
             let g = |tag| m.ifd.f64s(tag).and_then(|v| v.first().copied()).filter(|g| *g > 0.0);
             Some([(g(MN_WB_RED)? / 256.0) as f32, 1.0, (g(MN_WB_BLUE)? / 256.0) as f32])
         });
@@ -344,6 +343,11 @@ mod tests {
 
     /// A minimal ORF with one strip in IFD0 and, optionally, an Exif `CFAPattern`.
     fn orf_with(w: u32, h: u32, bits: u16, strip: Vec<u8>, cfa_pattern: Option<&[u8]>) -> Vec<u8> {
+        orf_with_note(w, h, bits, strip, cfa_pattern, None)
+    }
+
+    /// [`orf_with`] plus an optional maker note blob in the Exif IFD.
+    fn orf_with_note(w: u32, h: u32, bits: u16, strip: Vec<u8>, cfa_pattern: Option<&[u8]>, note: Option<Vec<u8>>) -> Vec<u8> {
         let mut ifd = IfdBuilder::new();
         ifd.set(t::IMAGE_WIDTH, Value::Long(vec![w]));
         ifd.set(t::IMAGE_LENGTH, Value::Long(vec![h]));
@@ -352,15 +356,52 @@ mod tests {
         ifd.set(t::PHOTOMETRIC, Value::Short(vec![1]));
         ifd.set(t::MAKE, Value::Ascii("OLYMPUS IMAGING CORP.".into()));
         ifd.set_image(ImageData::Strips { rows_per_strip: h, strips: vec![strip] });
-        if let Some(p) = cfa_pattern {
+        if cfa_pattern.is_some() || note.is_some() {
             let mut exif = IfdBuilder::new();
-            exif.set(EXIF_CFA_PATTERN, Value::Undefined(p.to_vec()));
+            if let Some(p) = cfa_pattern {
+                exif.set(EXIF_CFA_PATTERN, Value::Undefined(p.to_vec()));
+            }
+            if let Some(n) = note {
+                exif.set(t::MAKER_NOTE, Value::Undefined(n));
+            }
             ifd.set_child(t::EXIF_IFD, exif);
         }
         let mut b = TiffWriter::new(ByteOrder::Little, false).write(&[ifd]).unwrap();
         b[2] = b'R';
         b[3] = b'O';
         b
+    }
+
+    /// An old-style little-endian Olympus maker note (`OLYMP\0`, version 1, then the IFD) holding two-short
+    /// entries, whose values fit inline.
+    fn olymp_note(entries: &[(u16, [u16; 2])]) -> Vec<u8> {
+        let mut b = b"OLYMP\0\x01\0".to_vec();
+        b.extend_from_slice(&(entries.len() as u16).to_le_bytes());
+        for (tag, [v0, v1]) in entries {
+            b.extend_from_slice(&tag.to_le_bytes());
+            b.extend_from_slice(&3u16.to_le_bytes());
+            b.extend_from_slice(&2u32.to_le_bytes());
+            b.extend_from_slice(&v0.to_le_bytes());
+            b.extend_from_slice(&v1.to_le_bytes());
+        }
+        b.extend_from_slice(&0u32.to_le_bytes());
+        b
+    }
+
+    /// Issue #1273: the E-10 (16-bit words, no ImageProcessing sub-directory) keeps its red and blue gains in
+    /// maker-note entries `0x1017`/`0x1018`, as the two-field compacts do.
+    #[test]
+    fn as_shot_white_balance_from_the_main_maker_note() {
+        let (w, h) = (16usize, 4usize);
+        let words: Vec<u8> = (0..w * h).flat_map(|i| (((100 + i * 37) % 4096) as u16).to_le_bytes()).collect();
+        let wb = |entries: &[(u16, [u16; 2])]| {
+            crate::decode(&orf_with_note(w as u32, h as u32, 16, words.clone(), Some(RGGB), Some(olymp_note(entries)))).unwrap().wb_multipliers
+        };
+        assert_eq!(wb(&[(MN_WB_RED, [384, 64]), (MN_WB_BLUE, [406, 64])]), Some([1.5, 1.0, 406.0 / 256.0]));
+        // both gains are needed, and a zero gain is none
+        assert_eq!(wb(&[(MN_WB_RED, [384, 64])]), None);
+        assert_eq!(wb(&[(MN_WB_RED, [0, 64]), (MN_WB_BLUE, [406, 64])]), None);
+        assert_eq!(wb(&[]), None);
     }
 
     /// A 12-bit mosaic stored as 16-bit words: `site(cx, cy)` gives the four values of the 2×2 cell at (cx, cy).
