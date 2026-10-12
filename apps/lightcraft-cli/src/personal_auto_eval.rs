@@ -1447,7 +1447,7 @@ mod tests {
     fn baseline_renderer_contract_requires_retraining() {
         let parsed = parse_manifest(&manifest()).unwrap();
         let mut model = train_model(&parsed, "fixture").unwrap();
-        model["baselineContract"]["autoRevision"] = json!("lightcraft.deterministic-auto.old");
+        model["baselineContract"]["autoRevision"] = json!("lightcraft.deterministic-auto.v3");
         let error = evaluate_model(&parsed, &model, "fixture", Some(Variant::Ember)).expect_err("renderer drift must reject model");
         assert!(error.contains("baseline renderer contract"));
     }

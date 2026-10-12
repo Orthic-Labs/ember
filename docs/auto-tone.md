@@ -34,7 +34,7 @@ Regression `a_dark_subject_on_a_washed_out_background_gets_two_treatments`: subj
 
 ## Contract for offline work
 
-`auto::REVISION` names the rules (`lightcraft.deterministic-auto.v3`: v2 added the closed-loop fit & continuous keys, v3 the centre-weighted key); Personal Auto receipts bind to it & reject stale baselines. Changing any constant above is a new revision.
+`auto::REVISION` names the rules (`lightcraft.deterministic-auto.v4`: v2 added the closed-loop fit & continuous keys, v3 the centre-weighted key, v4 process-version-aware baseline preparation & camera-space Auto WB); Personal Auto receipts bind to it & reject stale baselines. Changing any constant above is a new revision.
 
 ## Next
 

@@ -19,7 +19,7 @@ use crate::local::effective_wb;
 
 /// Identity of the Auto rules below. Bump it when their output changes: offline receipts
 /// (Personal Auto) bind baseline values to it.
-pub const REVISION: &str = "lightcraft.deterministic-auto.v3";
+pub const REVISION: &str = "lightcraft.deterministic-auto.v4";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
