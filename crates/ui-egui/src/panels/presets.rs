@@ -19,6 +19,33 @@ use crate::{HoverPreview, LightcraftApp};
 /// Long edge of preset thumbnails (px).
 const THUMB_EDGE: usize = 128;
 
+/// The preset amount slider may replace only the undo step it created.
+#[derive(Clone)]
+struct AppliedPreset {
+    id: String,
+    amount: f64,
+    selected: Vec<lightcraft_catalog::PhotoId>,
+    active: Option<lightcraft_catalog::PhotoId>,
+    commits: u64,
+}
+
+impl AppliedPreset {
+    fn new(session: &lightcraft_engine::Session, id: String, amount: f64) -> Self {
+        Self { id, amount, selected: session.selection.ids.clone(), active: session.active(), commits: session.commits() }
+    }
+
+    fn is_current(&self, session: &lightcraft_engine::Session) -> bool {
+        self.selected == session.selection.ids
+            && self.active == session.active()
+            && self.commits == session.commits()
+            && session.interaction.is_none()
+            && session.redo.is_empty()
+            && session.undo.last().is_some_and(|entry| {
+                session.presets.iter().any(|preset| preset.id == self.id && entry.label == format!("Preset: {}", preset.name))
+            })
+    }
+}
+
 pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     egui::Frame::NONE.fill(t.chrome).stroke(egui::Stroke::new(1.0, t.divider)).show(ui, |ui| {
@@ -49,8 +76,8 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         divider(ui);
         // amount slider (applies to the last applied preset)
         let amt_id = egui::Id::new("preset-amount");
-        let last: Option<(String, f64)> = ui.data(|d| d.get_temp(amt_id));
-        if let Some((pid, amount)) = last.clone() {
+        let last: Option<AppliedPreset> = ui.data(|d| d.get_temp(amt_id));
+        if let Some(last) = last.filter(|last| last.is_current(&app.session)) {
             let spec = ControlSpec {
                 id: "presetAmount",
                 label: "Amount",
@@ -62,14 +89,19 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                 decimals: 0,
                 track: Track::Plain,
             };
-            let out = slider(ui, &spec, amount, true, None);
-            if let Some(v) = out.value {
-                // re-apply from the pre-preset state: undo last preset step then apply with the new amount
-                let _ = app.run("edit.undo", json!({}));
-                let _ = app.run("preset.apply", json!({"id": pid, "amount": v}));
-                ui.data_mut(|d| d.insert_temp(amt_id, (pid, v)));
+            let out = slider(ui, &spec, last.amount, true, None);
+            if let Some(v) = out.value && app.run("edit.undo", json!({})).is_ok() {
+                // Only replace the most recent preset; never undo intervening edits.
+                if app.run("preset.apply", json!({"id": &last.id, "amount": v})).is_ok() {
+                    ui.data_mut(|d| d.insert_temp(amt_id, AppliedPreset::new(&app.session, last.id, v)));
+                } else {
+                    let _ = app.run("edit.redo", json!({}));
+                    ui.data_mut(|d| d.remove::<AppliedPreset>(amt_id));
+                }
             }
             divider(ui);
+        } else {
+            ui.data_mut(|d| d.remove::<AppliedPreset>(amt_id));
         }
         let active = app.session.active();
         let current = active.and_then(|id| app.session.develop_of(id)).map(|d| (*d).clone());
@@ -153,10 +185,11 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                         }
                     }
                     if resp.clicked() {
-                        let _ = app.run("preset.apply", json!({"id": pid, "amount": 100}));
-                        ui.data_mut(|d| d.insert_temp(amt_id, (pid.clone(), 100.0)));
-                        ui.data_mut(|d| d.remove::<(lightcraft_catalog::PhotoId, Preset, String)>(egui::Id::new("last-preset-hover")));
-                        app.toast(ui.ctx(), crate::i18n::tr_format!("Preset: {name}", name = name));
+                        if app.run("preset.apply", json!({"id": pid, "amount": 100})).is_ok() {
+                            ui.data_mut(|d| d.insert_temp(amt_id, AppliedPreset::new(&app.session, pid.clone(), 100.0)));
+                            ui.data_mut(|d| d.remove::<(lightcraft_catalog::PhotoId, Preset, String)>(egui::Id::new("last-preset-hover")));
+                            app.toast(ui.ctx(), crate::i18n::tr_format!("Preset: {name}", name = name));
+                        }
                     }
                     let (builtin, group) = (pr.builtin, pr.group.clone());
                     resp.context_menu(|ui| {
@@ -337,5 +370,33 @@ pub fn cover_uv(r: Rect, size: [usize; 2]) -> Rect {
     } else {
         let f = a / ra;
         Rect::from_min_max(pos2(0.0, (1.0 - f) / 2.0), pos2(1.0, (1.0 + f) / 2.0))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn amount_slider_does_not_undo_a_later_edit() {
+        let mut session = lightcraft_engine::Session::with_demo();
+        let pid = "lc.golden-hour";
+        session.execute("preset.apply", &json!({"id": pid})).unwrap();
+        let state = AppliedPreset::new(&session, pid.into(), 100.0);
+        assert!(state.is_current(&session));
+
+        session.execute("develop.set", &json!({"values": {"light.exposure": 0.75}})).unwrap();
+        assert!(!state.is_current(&session), "a newer edit owns the undo step");
+    }
+
+    #[test]
+    fn amount_slider_does_not_undo_on_another_photo() {
+        let mut session = lightcraft_engine::Session::with_demo();
+        let pid = "lc.golden-hour";
+        session.execute("preset.apply", &json!({"id": pid})).unwrap();
+        let state = AppliedPreset::new(&session, pid.into(), 100.0);
+        let other = session.visible().iter().copied().find(|id| Some(*id) != session.active()).unwrap();
+        session.execute("library.select", &json!({"ids": [other.0]})).unwrap();
+        assert!(!state.is_current(&session), "the preset belongs to the earlier selection");
     }
 }
