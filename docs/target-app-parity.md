@@ -1,6 +1,6 @@
 # Target-app parity: Ember vs reference editor
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-11 · **Change:** minor (EOS R5 Mark II CR3 verified: RAW decoding 76% → 77%; headline numbers unchanged) · **Target:** reference catalog editor 15.5 (August 2026) and reference editor 9.6 (desktop)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (research authorization wording aligned with Ember policy; historical measurements unchanged) · **Target:** reference catalog editor 15.5 (August 2026) and reference editor 9.6 (desktop)
 
 The authoritative assessment of how close Ember is to reference editor. The row-by-row checklist is
 [parity-checklist.md](parity-checklist.md); the ranked work list is [gaps.md](gaps.md); deep areas
@@ -25,13 +25,16 @@ have their own documents: [raw-parity.md](raw-parity.md), [file-format-parity.md
 
 - **Target:** reference catalog editor 15.5 (August 2026; latest per reference publisher's release notes) for the
   library, modules and depth; reference editor 9.6 (the cloud-library desktop app), installed on the
-  owner's Mac at `/Applications/Adobe Lightroom CC`, for the interface Ember's layout follows.
-  Both share the Camera Raw engine.
-- **Installed bundle, inspected by listing only** (the clean-room rule forbids reading contents):
+  owner's Mac, for the interface Ember's layout follows.
+  Both share the reference publisher's RAW engine.
+- **Installed bundle, inspected by listing only in this historical assessment:**
   `Info.plist` document types (31 raw extensions, jpg, tif, heic, xmp, catalog bundles); 16
   `.lproj` localizations; `CameraProfiles` (1,500 reference publisher Standard and 395 Camera Matching model
   names); `LensProfiles` (3,635 files, 56 makers); `ModelZoo` (37 AI model names). The app was not
   launched.
+- **Current research policy:** maintainer-authorized read-only internal analysis is permitted.
+  Research remains outside Ember; proprietary code, assets, profiles & model weights must not enter
+  this repository. This authorization does not change this assessment's evidence or measurements.
 - **Ember side:** origin/main at `b70ae174` (2026-10-10): code counts (226 engine commands, 143
   UI commands, 122 + 10 develop controls, 2,561 tests, ≈ 202,000 Rust lines in 24 crates + 3 apps),
   the checklist rows, raw corpus manifests, locale catalogs, CI workflows, docs.
@@ -297,6 +300,7 @@ P2 items 12–25 h; look tuning, performance, packaging, hardening 25–45 h.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-13 | minor | Removed stale prohibition on internal research & publisher-specific installed-app path; aligned wording with maintainer-authorized read-only analysis while retaining historical evidence, asset exclusions & all measurements |
 | 2026-10-11 | minor | EOS R5 Mark II CR3 verified (raw-parity.md): use-weighted share whose camera decodes 84% → 85%, RAW decoding 76% → 77%; full 60.6% → 60.7%, mainstream depth 71.8% → 72.1%, essentials depth 77.4% → 77.5%; the rounded numbers (~61%, ~49%, ~64%) are unchanged |
 | 2026-10-10 | minor | RAW measured model by model (raw-parity.md): RAW decoding (76%) and colour (35%) are explicit rows of the full sum (59% → 61%); mainstream uses the use-weighted 84% plus a ×0.85 colour discount (51% → 49%); essentials uses 84% × colour 0.75 (63% → 64%); beta ~14 points |
 | 2026-10-10 | minor | Full number restored to an additive weighted sum over the dimensions (~59%; method aligned with the standard, no new evidence); hours to ~95% for each of the three audiences; beta distance ~16 points |
