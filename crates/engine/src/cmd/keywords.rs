@@ -431,7 +431,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Keywords",
             [],
             None,
-            "{path?} — the keyword list as a file (Lightroom Classic's format, which Capture One, Photo Supreme and Bridge read) → {keywords, captureOneRefuses: keywords with ; , < > that Capture One's importer refuses, unwritable: keywords left out because the format can't hold them (a name in brackets or braces, a line break, deeper than 64 levels; a synonym as \"path {synonym}\"), text when there is no path}",
+            "{path?} — the keyword list as a hierarchical text file → {keywords, captureOneRefuses: keywords with ; , < > that Capture One's importer refuses, unwritable: keywords left out because the format can't hold them (a name in brackets or braces, a line break, deeper than 64 levels; a synonym as \"path {synonym}\"), text when there is no path}",
             always,
             |s, p| {
                 let file = s.catalog.keyword_list_text();
@@ -458,7 +458,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Keywords",
             [],
             None,
-            "{path | text} — a keyword list (Lightroom Classic's format, also Capture One's and Photo Supreme's Formatted Vocabulary File): adds the keywords the library doesn't have, gives those it has the list's synonyms; one undo step → {added, updated}",
+            "{path | text} — a hierarchical keyword list: adds the keywords the library doesn't have, gives those it has the list's synonyms; one undo step → {added, updated}",
             always,
             |s, p| {
                 let text = match (str_param(p, "path").map(str::trim).filter(|x| !x.is_empty()), str_param(p, "text")) {

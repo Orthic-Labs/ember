@@ -327,15 +327,6 @@ fn reference_at(reference: &Rgb32f, sensor: &Rgb32f) -> Rgb32f {
     resize(reference, sensor.width, sensor.height, Filter::Box)
 }
 
-/// The camera JPEG at exactly the sensor proxy's size, so the two pair pixel for pixel. Fitting it
-/// into the proxy's box instead keeps its own aspect, which can round a pixel short: an ILCE-7RM4's
-/// 1616×1080 preview, decoded at 384×257, fits a 192×128 proxy as 191×128, and `collect_pairs`
-/// then rejected every file `lightcraft-cli calibrate` was given. `proxies` has already checked
-/// that the aspects agree within 2 %.
-fn reference_at(reference: &Rgb32f, sensor: &Rgb32f) -> Rgb32f {
-    resize(reference, sensor.width, sensor.height, Filter::Box)
-}
-
 #[derive(Clone, Copy, Debug)]
 struct Cr3Framing {
     scale: f32,

@@ -24,7 +24,7 @@ const INVALID_PARAMS: i64 = -32602;
 const INTERNAL_ERROR: i64 = -32603;
 const RESOURCE_NOT_FOUND: i64 = -32002;
 
-const INSTRUCTIONS: &str = "Ember is a non-destructive photo library and raw developer (a Lightroom alternative). \
+const INSTRUCTIONS: &str = "Ember is a non-destructive photo library and raw developer. \
 Photos have integer ids; most editing acts on the *active* photo (tools that take `id` make that photo active first). \
 Typical loop: query_photos → select_photos (or pass id) → list_controls → set_develop {values: {\"light.exposure\": 0.5}} → \
 render_preview to look at the result → export. Positions (crop rects, mask points, brush strokes) are normalized image \

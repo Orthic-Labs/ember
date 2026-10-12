@@ -1,4 +1,4 @@
-//! Bounded, deduplicated persistence for Lightroom import source data.
+//! Bounded, deduplicated persistence for LRCAT import source data.
 //!
 //! Archives use a deterministic JSON representation wrapped in zlib.  The JSON
 //! writer streams through a bounded compressor, so an import cannot first build
@@ -75,7 +75,7 @@ pub fn store(directory: &Path, data: &CatalogImport) -> Result<PathBuf, String> 
     let index = managed.last().map_or(0, |entry| entry.index.saturating_add(1));
     if managed.last().is_some_and(|entry| entry.index == u64::MAX) {
         let _ = remove_managed_file(&temporary);
-        return Err("managed Lightroom archive index is exhausted".into());
+        return Err("managed LRCAT archive index is exhausted".into());
     }
     let destination = match next_destination(directory, index) {
         Ok(path) => path,
@@ -131,7 +131,7 @@ pub fn store(directory: &Path, data: &CatalogImport) -> Result<PathBuf, String> 
 pub fn store_best_effort(directory: &Path, data: &CatalogImport) -> Result<Option<PathBuf>, String> {
     match store(directory, data) {
         Ok(path) => Ok(Some(path)),
-        Err(error) if error.contains("Lightroom archive exceeds 32 MiB") => Ok(None),
+        Err(error) if error.contains("LRCAT archive exceeds 32 MiB") => Ok(None),
         Err(error) => Err(error),
     }
 }
@@ -223,7 +223,7 @@ fn write_archive(path: &Path, data: &CatalogImport) -> Result<(), String> {
         Ok(())
     })
     .map(|_| ())
-    .map_err(|error| format!("could not write Lightroom archive: {error}"))
+    .map_err(|error| format!("could not write LRCAT archive: {error}"))
 }
 
 fn json_io(error: serde_json::Error) -> io::Error {
@@ -252,7 +252,7 @@ impl Write for BoundedWriter<'_> {
 }
 
 fn limit_error() -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, "Lightroom archive exceeds 32 MiB")
+    io::Error::new(io::ErrorKind::InvalidData, "LRCAT archive exceeds 32 MiB")
 }
 
 struct ZlibWriter<'a, 'b> {

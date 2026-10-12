@@ -249,38 +249,6 @@ pub(crate) fn switched_off() -> Option<String> {
     (!ENABLED.load(Ordering::Relaxed)).then(|| "disabled by the GPU rendering preference (app.gpu)".into())
 }
 
-/// Close GPU entry for process teardown. This is irreversible for current process and must only
-/// be called when host is ending, never while switching libraries.
-pub fn begin_shutdown() {
-    #[cfg(not(target_arch = "wasm32"))]
-    exit::begin_shutdown();
-}
-
-/// Whether process teardown has closed GPU entry.
-pub fn shutting_down() -> bool {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        exit::shutting_down()
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        false
-    }
-}
-
-/// Wait up to `timeout` for GPU work already inside driver to leave.
-pub fn wait_idle(timeout: std::time::Duration) -> bool {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        exit::wait_idle(timeout)
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = timeout;
-        true
-    }
-}
-
 /// `LIGHTCRAFT_GPU=0` (or `LIGHTCRAFT_GPU_BACKEND=off`): no GPU for the whole process.
 fn env_disabled() -> bool {
     static OFF: std::sync::OnceLock<bool> = std::sync::OnceLock::new();

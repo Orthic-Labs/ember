@@ -971,10 +971,10 @@ fn prepare_primary_preferences(path: &Path) -> Option<String> {
     }
     let legacy = services::legacy_preferences_paths().into_iter().find(|legacy| legacy.try_exists().unwrap_or(true))?;
     match services::migrate_preferences(&legacy, path) {
-        Ok(true) => log::info!("migrated legacy LightCraft preferences from {}", legacy.display()),
+        Ok(true) => log::info!("migrated legacy preferences from {}", legacy.display()),
         Ok(false) => {}
         Err(error) => {
-            let warning = format!("legacy LightCraft preferences were not migrated: {error}");
+            let warning = format!("legacy preferences were not migrated: {error}");
             log::warn!("{warning}");
             return Some(warning);
         }
