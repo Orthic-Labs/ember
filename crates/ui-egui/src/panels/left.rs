@@ -1575,6 +1575,24 @@ fn folder_menu(app: &mut LightcraftApp, resp: &egui::Response, a: &Album) {
                     Err(e) => app.toast(ui.ctx(), e),
                 }
             }
+            // File ▸ Import's ways in; the import review opens with this album chosen
+            let menu = ui.menu_button(crate::i18n::tr("Import"), |ui| {
+                for (label, command, widget) in [
+                    ("Import Photos…", "file.addPhotos", "button:albumImportPhotos"),
+                    ("Import from Folder…", "file.addFolder", "button:albumImportFolder"),
+                    ("Import from Device", "file.addFromDevice", "button:albumImportDevice"),
+                ] {
+                    let r = ui.button(crate::i18n::tr(label));
+                    crate::widgets::register(ui.ctx(), widget, r.rect);
+                    if r.clicked() {
+                        if let Err(e) = app.run(command, json!({"album": a.id.0})) {
+                            app.toast(ui.ctx(), e);
+                        }
+                        ui.close();
+                    }
+                }
+            });
+            crate::widgets::register(ui.ctx(), "button:albumImport", menu.response.rect);
         }
         if !a.folder && !a.is_smart() {
             let is_target = app.session.target_album == Some(a.id) || (app.session.target_album.is_none() && a.quick);

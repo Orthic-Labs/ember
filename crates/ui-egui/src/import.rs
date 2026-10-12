@@ -417,6 +417,8 @@ pub struct ScanTask {
     /// Open the review with "copy into the library" checked (a camera / card).
     pub copy: bool,
     pub options: ImportScanOptions,
+    /// Open the review with this album chosen (an album's context menu ▸ Import…).
+    pub album: Option<u64>,
     /// Browsing a folder (Local): the photos are read in place instead of opening the review.
     browse: bool,
     /// What is being scanned (the review's source).
@@ -459,7 +461,7 @@ pub fn open_with_options(app: &mut LightcraftApp, paths: Vec<String>, options: I
     #[cfg(target_arch = "wasm32")]
     job();
     let guard = scan_guard(app, &progress, false);
-    app.scan = Some(ScanTask { progress, rx, copy: false, browse: false, sources, options, guard });
+    app.scan = Some(ScanTask { progress, rx, copy: false, album: None, browse: false, sources, options, guard });
     Ok(json!({"scanning": true}))
 }
 
@@ -521,7 +523,8 @@ pub fn browse(app: &mut LightcraftApp, path: &str, subfolders: Option<bool>) -> 
     #[cfg(target_arch = "wasm32")]
     job();
     let guard = scan_guard(app, &progress, true);
-    app.scan = Some(ScanTask { progress, rx, copy: false, browse: true, sources: Vec::new(), options: ImportScanOptions::default(), guard });
+    app.scan =
+        Some(ScanTask { progress, rx, copy: false, album: None, browse: true, sources: Vec::new(), options: ImportScanOptions::default(), guard });
     app.renderer.forget_imports();
     Ok(json!({"path": dir_s, "subfolders": subfolders, "scanning": true}))
 }
@@ -584,6 +587,8 @@ pub fn poll_scan(app: &mut LightcraftApp, ctx: &egui::Context) {
     d.set_trashed(trashed);
     d.copy = task.copy;
     d.scan_options = task.options;
+    // only an album the review offers (it may have been deleted while the scan ran)
+    d.album = task.album.filter(|id| app.session.catalog.album(lightcraft_catalog::AlbumId(*id)).is_some_and(|a| !a.folder && !a.is_smart()));
     d.sources = task.sources;
     app.ui.dialog = Some(crate::state::Dialog::Import { opts: Box::new(d) });
 }

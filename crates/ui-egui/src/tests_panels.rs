@@ -2160,3 +2160,75 @@ fn right_click_add_to_album_offers_a_new_album_when_there_is_none() {
     assert!(trip.photos.contains(&photo), "the right-clicked photo is in it: {:?}", trip.photos);
     assert!(h.app.ui.dialog.is_none(), "{:?}", h.app.ui.dialog);
 }
+
+/// An album's context menu ▸ Import ▸ Import from Folder… (and Import Photos…, Import from Device)
+/// opens the import review with that album chosen; a folder row doesn't offer it, and an `album`
+/// the review can't offer (a folder, or an album deleted while the scan ran) leaves its album empty.
+#[test]
+fn an_album_menu_imports_into_that_album() {
+    let dir = std::env::temp_dir().join(format!("lc-ui-album-import-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for i in 0..2u8 {
+        let (w, h) = (40usize, 30usize);
+        let data: Vec<[u8; 4]> = (0..w * h).map(|k| [(k % w * 6) as u8, i * 90, (k / w * 8) as u8, 255]).collect();
+        let img = lightcraft_raster::Rgba8 { width: w, height: h, data };
+        let png = lightcraft_codecs::encode_png(&lightcraft_codecs::EncodeImage::rgba8(&img), &lightcraft_codecs::EncodeMeta::default()).unwrap();
+        std::fs::write(dir.join(format!("card{i}.png")), png).unwrap();
+    }
+    let picked = dir.to_string_lossy().to_string();
+    let services = Services { png: None, pick_folder: Some(Box::new(move || Some(picked.clone()))), ..Default::default() };
+    let app = LightcraftApp::new(lightcraft_engine::Session::with_demo().with_fs(), services);
+    let mut h = Headless::new(app, [1400.0, 900.0], 1.0);
+    let r = h.request("ui.set", json!({"view": "photoGrid", "leftPanel": true}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    h.settle(SETTLE);
+    // the demo's top-level album and album folder, both shown in the sidebar
+    let id_of = |name: &str| h.app.session.catalog.albums().find(|a| a.name == name).map(|a| a.id.0).expect(name);
+    let (album, folder) = (id_of("Garden"), id_of("Travel 2026"));
+    let right_click = |h: &mut Headless, id: &str| {
+        let row = widget(h, id);
+        let r = h.request("ui.click", json!({"x": row.center().x, "y": row.center().y, "button": "right"}), T);
+        assert_eq!(r["ok"], true, "{r}");
+        h.step();
+        h.step();
+    };
+    let review_album = |h: &mut Headless| {
+        h.step_until(SETTLE, |h| matches!(h.app.ui.dialog, Some(crate::state::Dialog::Import { .. })));
+        let Some(crate::state::Dialog::Import { opts }) = &h.app.ui.dialog else { panic!("no import review: {:?}", h.app.ui.dialog) };
+        let chosen = opts.album;
+        h.app.ui.dialog = None;
+        chosen
+    };
+
+    // a folder row has no Import
+    right_click(&mut h, &format!("source:folder:{folder}"));
+    assert!(!has(&h, "button:albumImport"), "folders hold no photos");
+    let r = h.request("ui.key", json!({"key": "Escape"}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    h.step();
+
+    // an album's menu: Import ▸ Import from Folder… → the (stubbed) folder dialog → the review, album chosen
+    right_click(&mut h, &format!("source:album:{album}"));
+    let r = h.request("ui.hoverWidget", json!({"id": "button:albumImport"}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    h.step();
+    h.step();
+    for way in ["button:albumImportPhotos", "button:albumImportFolder", "button:albumImportDevice"] {
+        assert!(has(&h, way), "{way} is offered");
+    }
+    let r = h.request("ui.clickWidget", json!({"id": "button:albumImportFolder"}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(review_album(&mut h), Some(album));
+
+    // Import Photos… passes the album the same way
+    let r = h.request("engine.execute", json!({"command": "file.addPhotos", "params": {"paths": [dir.to_string_lossy()], "album": album}}), T);
+    assert_eq!(r["result"]["scanning"], true, "{r}");
+    assert_eq!(review_album(&mut h), Some(album));
+
+    // an album the review can't offer (here a folder) is not chosen
+    let r = h.request("engine.execute", json!({"command": "file.addPhotos", "params": {"paths": [dir.to_string_lossy()], "album": folder}}), T);
+    assert_eq!(r["result"]["scanning"], true, "{r}");
+    assert_eq!(review_album(&mut h), None);
+    let _ = std::fs::remove_dir_all(&dir);
+}

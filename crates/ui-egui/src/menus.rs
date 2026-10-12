@@ -265,6 +265,18 @@ fn parent_param(p: &Value) -> Option<u64> {
     p.get("parent").and_then(Value::as_u64)
 }
 
+/// `file.addPhotos` / `file.addFolder` / `file.addFromDevice` `{album?}`: the review of the scan
+/// just started opens with that album chosen (an album's context menu ▸ Import ▸ …). An error
+/// means another scan is running.
+fn import_into_album(app: &mut LightcraftApp, p: &Value, r: Result<Value, String>) -> Result<Value, String> {
+    if r.is_ok()
+        && let Some(t) = &mut app.scan
+    {
+        t.album = p.get("album").and_then(Value::as_u64);
+    }
+    r
+}
+
 /// An sRGB colour from `"#rrggbb"` or `[r, g, b]` (0..255).
 pub fn parse_rgb(v: &Value) -> Option<[u8; 3]> {
     if let Some(s) = v.as_str() {
@@ -1311,7 +1323,8 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 return Some(Ok(Value::Null));
             }
             // review first: the import dialog lists what was found
-            crate::import::open(app, paths)
+            let r = crate::import::open(app, paths);
+            import_into_album(app, p, r)
         }
         "file.importLightroom" => {
             let path = match p.get("path").and_then(Value::as_str).map(str::to_string) {
@@ -1479,7 +1492,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             {
                 t.copy = true;
             }
-            r
+            import_into_album(app, p, r)
         }
         "file.addFolder" => {
             // a folder (searched recursively) into the import review
@@ -1493,7 +1506,10 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 },
             };
             match path {
-                Some(path) => crate::import::open(app, vec![path]),
+                Some(path) => {
+                    let r = crate::import::open(app, vec![path]);
+                    import_into_album(app, p, r)
+                }
                 None => Ok(Value::Null),
             }
         }
