@@ -171,9 +171,11 @@ pub(crate) fn decode_huffman(src: &[u8], h: &Huffman, w: usize, hgt: usize, bits
     Ok(out)
 }
 
-/// The image area without all-dark leading/trailing columns and rows (masked or empty), kept at even offsets. A
-/// line is dark when its mean is less than 5% of the interior's above `black`: masked lines sit at the black level.
-fn dark_trimmed(d: &[u16], w: usize, h: usize, black: f64) -> Rect {
+/// The image area without all-dark leading/trailing columns and rows (masked or empty), kept at even offsets. With
+/// the maker-note `black` level, a line is dark when its mean is at most 1/256 of the remaining range (at least 16)
+/// above it: masked lines sit at the black level plus noise, while dark real content (a night sky) is well above.
+/// The tolerance is the one `cr2::masked_columns` uses. Without it, below 5% of the interior's mean.
+fn dark_trimmed(d: &[u16], w: usize, h: usize, black: Option<f64>, white: f32) -> Rect {
     if w < 256 || h < 256 {
         return Rect::new(0, 0, w, h);
     }
@@ -181,7 +183,10 @@ fn dark_trimmed(d: &[u16], w: usize, h: usize, black: f64) -> Rect {
     let col_mean = |x: usize| (0..h).step_by(ystep).map(|y| d[y * w + x] as f64).sum::<f64>() / h.div_ceil(ystep) as f64;
     let row_mean = |y: usize| (0..w).step_by(xstep).map(|x| d[y * w + x] as f64).sum::<f64>() / w.div_ceil(xstep) as f64;
     let interior = (w / 4..w * 3 / 4).step_by(w / 64).map(col_mean).sum::<f64>() / 32.0;
-    let dark = black + (interior - black) * 0.05;
+    let dark = match black {
+        Some(b) => b + ((f64::from(white) - b) / 256.0).max(16.0),
+        None => interior * 0.05,
+    };
     let edges = |n: usize, mean: &dyn Fn(usize) -> f64| {
         let mut lo = 0;
         while lo < 64 && mean(lo) < dark {
@@ -260,10 +265,11 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
     };
     let RawData::U16(ref samples) = data else { return Err(RawError::Unsupported("float PEF".into())) };
 
+    let white = white_from_data(samples, bits);
     let black_point = mn.as_ref().and_then(|m| m.ifd.f64s(BLACK_POINT)).filter(|v| v.len() == 4);
     let active = match tagged {
         Some(r) => r,
-        None => dark_trimmed(samples, w, hgt, black_point.as_deref().map_or(0.0, |v| v.iter().sum::<f64>() / 4.0)),
+        None => dark_trimmed(samples, w, hgt, black_point.as_deref().map(|v| v.iter().sum::<f64>() / 4.0), white),
     };
     let cfa = match (ifd0.u64s(t::CFA_REPEAT_PATTERN_DIM).as_deref(), ifd0.bytes(t::CFA_PATTERN_EP)) {
         (Some([2, 2]), Some(p)) if p.len() == 4 && p.iter().all(|&c| c <= 2) => Cfa { width: 2, height: 2, pattern: p.to_vec() },
@@ -287,7 +293,6 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         let g = (v[1] + v[2]) / 2.0;
         [(v[0] / g) as f32, 1.0, (v[3] / g) as f32]
     });
-    let white = white_from_data(samples, bits);
     let mut metadata = lightcraft_meta::from_tiff(&tiff);
     metadata.width = Some(active.width as u32);
     metadata.height = Some(active.height as u32);
@@ -577,6 +582,28 @@ mod tests {
         });
         let img = decode(&file, Mode::Full).unwrap();
         assert_eq!(img.black.values, vec![256.0; 4]);
+        assert_eq!(img.active_area, Rect::new(24, 28, w - 40, h - 42));
+    }
+
+    /// A night frame (bright centre, dark sky): 20 lines of real content 100 DN above the black level inside the
+    /// masked border stay in the picture, whatever the interior's brightness.
+    #[test]
+    fn dark_real_content_next_to_the_masked_border_is_kept() {
+        let (w, h) = (512, 384);
+        let file = pef_with_black_point(256, |x, y| {
+            if x >= w - 8 {
+                0
+            } else if y >= h - 14 {
+                15
+            } else if x < 24 || x >= w - 16 || y < 28 {
+                256 + ((x + y) % 3) as u16
+            } else if x < 44 || x >= w - 36 || y < 48 || y >= h - 34 {
+                356 + ((x * 7 + y * 13) % 16) as u16
+            } else {
+                3256 + ((x * 7 + y * 13) % 64) as u16
+            }
+        });
+        let img = decode(&file, Mode::Full).unwrap();
         assert_eq!(img.active_area, Rect::new(24, 28, w - 40, h - 42));
     }
 }
