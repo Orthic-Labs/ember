@@ -1544,9 +1544,11 @@ pub struct Exported {
 /// Output size of photo `p` under `o` (its cropped full size when `o.resize` is `None`).
 pub fn output_size(p: &lightcraft_catalog::Photo, o: &ExportOptions) -> (usize, usize) {
     let (w, h) = lightcraft_pipeline::native_output_size(p.width.max(1) as usize, p.height.max(1) as usize, &p.develop);
+    // whole pixels first: a crop's float noise (5999.999… for 6000) must not decide a half-pixel tie
+    let (w, h) = (w.round().max(1.0), h.round().max(1.0));
     match &o.resize {
         Some(r) => r.apply(w, h),
-        None => ((w.round() as usize).max(1), (h.round() as usize).max(1)),
+        None => (w as usize, h as usize),
     }
 }
 
@@ -2790,6 +2792,47 @@ mod tests {
         assert_eq!(Resize::long_edge(2000).apply(70_000.0, 1.0), (65_535, 1));
         assert_eq!(Resize::long_edge(2000).apply(1.0, 70_000.0), (1, 65_535));
     }
+    #[test]
+    fn resize_size_survives_the_render() {
+        // the render fits the photo into the size `apply` gives; that must not cost a pixel (#1312)
+        let cropped = |r: Resize, w: u32, h: u32, x1: f64| {
+            let mut p = named("IMG.ARW");
+            (p.width, p.height) = (w, h);
+            std::sync::Arc::make_mut(&mut p.develop).crop.geometry.rect = lightcraft_geom::Rect::new(0.0, 0.0, x1, 1.0);
+            let (bw, bh) = output_size(&p, &ExportOptions { resize: Some(r), ..Default::default() });
+            lightcraft_pipeline::output_size(w as usize, h as usize, &p.develop, &lightcraft_pipeline::RenderRequest::fit(bw, bh))
+        };
+        let rendered = |r: Resize, w: u32, h: u32| cropped(r, w, h, 1.0);
+        let mode = |mode: ResizeMode, value: f32, height: u32| Resize { mode, value, height, dont_enlarge: true };
+        // a frame a hair narrower than 3:2 (a raw's default crop in floats) puts 1333 × 1.5 just under 1999.5
+        let hair = 1.0 - 1e-9;
+        assert_eq!(cropped(Resize::long_edge(2000), 6000, 4000, hair), (2000, 1333));
+        assert_eq!(cropped(Resize::long_edge(2048), 6000, 4000, hair), (2048, 1365));
+        assert_eq!(cropped(mode(ResizeMode::Width, 2000.0, 0), 6000, 4000, hair), (2000, 1333));
+        assert_eq!(cropped(mode(ResizeMode::ShortEdge, 1333.0, 0), 6000, 4000, hair), (2000, 1333));
+        assert_eq!(cropped(mode(ResizeMode::Height, 1333.0, 0), 6000, 4000, hair), (2000, 1333));
+        assert_eq!(rendered(Resize::long_edge(2000), 4000, 6000), (1333, 2000));
+        // 3:2, 4:3, 16:9, 1:1 and their portraits, every mode: the render keeps what `apply` says
+        for (w, h) in [(6000u32, 4000u32), (6240, 4160), (4032, 3024), (5184, 3888), (3840, 2160), (6000, 3375), (4000, 4000)] {
+            for (w, h) in [(w, h), (h, w)] {
+                for value in [1000.0, 1080.0, 1333.0, 2000.0, 2048.0, 2500.0, 3000.0] {
+                    for r in [
+                        Resize::long_edge(value as u32),
+                        mode(ResizeMode::ShortEdge, value, 0),
+                        mode(ResizeMode::Width, value, 0),
+                        mode(ResizeMode::Height, value, 0),
+                        mode(ResizeMode::Dimensions, value, 1365),
+                        mode(ResizeMode::Megapixels, value / 1000.0, 0),
+                        mode(ResizeMode::Percent, value / 100.0, 0),
+                    ] {
+                        let want = r.apply(w.into(), h.into());
+                        assert_eq!(rendered(r, w, h), want, "{r:?} on {w}×{h}");
+                    }
+                }
+            }
+        }
+    }
+
     /// A flat field of a saturated green inside Display P3 but outside sRGB, rendered into `space`.
     fn p3_green(space: OutputSpace) -> Rgba8 {
         use lightcraft_color::{DISPLAY_P3, REC2020};
