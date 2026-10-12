@@ -1,8 +1,10 @@
-<p align="center"><img src="assets/app-icon/ember-1024.png" width="112" alt="Ember flame icon"></p>
+<img src=".github/banner.svg" alt="Ember: photo library and non-destructive RAW editor" width="100%">
 
 # Ember
 
 Photo library & non-destructive RAW editor, maintained by **Orthic Labs**. Ember is based on [LightCraft](https://github.com/storytold/lightcraft) by ArtCraft Team & contributors, with our React/Tauri desktop workspace & RightKit integrations.
+
+> **Build status:** no desktop artifact is qualified yet. Public builds, Rust tests and native qualification run through generated RightKit GitHub Actions; the latest recorded hidden native QA runs failed on both targets ([CI restoration](docs/ci-restoration.md), [local AI delivery](docs/local-ai-delivery.md)). Only qualified green artifacts are promoted to desktop default. Local work is source/static-only.
 
 ## Workspace
 
@@ -12,6 +14,8 @@ Photo library & non-destructive RAW editor, maintained by **Orthic Labs**. Ember
 - **Automation:** engine commands, CLI/MCP & native control/hidden QA. [Control protocol](docs/control-protocol.md) documents interfaces.
 
 React/Tauri targets **macOS & Windows**. Existing egui, Linux, web/WASM & CLI hosts remain in source. Format support & implementation gaps are tracked in [ROADMAP](ROADMAP.md) & [parity tracker](docs/parity.md); feature availability is not proof of reference editor parity.
+
+![Develop view: "The Tetons and the Snake River" (Ansel Adams, 1942, public domain) open in the editor](docs/images/hero-tetons.jpg)
 
 ## Auto, masks & AI
 
@@ -58,3 +62,7 @@ Use generated `ci` & `release-candidate` Actions lanes for compilation, eight Ru
 Original upstream code is Copyright (c) 2026 ArtCraft Team & LightCraft contributors. Ember fork changes & original flame artwork are by Orthic Labs. Preserve [NOTICE](NOTICE), contributor provenance & [asset attribution](assets/ATTRIBUTION.md).
 
 Code is **MIT OR Apache-2.0**, except `crates/segment` & `crates/fetch`, which are **Apache-2.0 only**; SAM model weights have separate terms & are not distributed here. See [LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE) & [NOTICE](NOTICE). Inter uses SIL OFL 1.1. ArtCraft product marks have been removed; Ember is independently maintained.
+
+---
+
+<picture><source media="(prefers-color-scheme: dark)" srcset=".github/orthic-labs-mark.svg"><img src=".github/orthic-labs-mark-light.svg" alt="Orthic Labs" width="22" style="max-width:100%;height:auto"></picture> **[Orthic Labs](https://orthiclabs.com)** · [github.com/Orthic-Labs](https://github.com/Orthic-Labs) · More: [Legion](https://github.com/Orthic-Labs/legion) · [SellRight](https://github.com/Orthic-Labs/sellright) · [SwiftRight](https://github.com/Orthic-Labs/swiftright) · [Pulse](https://github.com/Orthic-Labs/pulse) · [RightKit](https://github.com/Orthic-Labs/rightkit) · [RustRight](https://github.com/Orthic-Labs/rustright)
