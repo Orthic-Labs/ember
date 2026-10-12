@@ -229,7 +229,7 @@ fn show_inner(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     let active = app.session.selection.active;
     // bring the active photo into view when it changes (keyboard, click, command) or the grid
     // comes back on screen; otherwise the scroll position is the user's
-    let scroll_to: Option<Rect> = if follow_active(ui.ctx(), egui::Id::new("grid-follow-active"), active) {
+    let scroll_to: Option<Rect> = if follow_active(ui.ctx(), egui::Id::new("grid-follow-active"), active, app.session.source) {
         active.and_then(|a| ids.iter().position(|x| *x == a)).and_then(|i| lay.cells.get(i).copied())
     } else {
         None
@@ -295,14 +295,27 @@ fn show_inner(app: &mut LightcraftApp, ui: &mut egui::Ui) {
 /// the strip was not drawn on the previous pass (view switch, panel shown again). Otherwise the
 /// scroll position is the user's: time passing, finished renders, edits to the photo or a released
 /// scroll bar never move it (issue #11).
-pub(crate) fn follow_active(ctx: &egui::Context, key: egui::Id, active: Option<PhotoId>) -> bool {
+pub(crate) fn follow_active(ctx: &egui::Context, key: egui::Id, active: Option<PhotoId>, source: lightcraft_engine::LibrarySource) -> bool {
     let pass = ctx.cumulative_pass_nr();
-    let last: Option<(Option<PhotoId>, u64)> = ctx.data(|d| d.get_temp(key));
-    ctx.data_mut(|d| d.insert_temp(key, (active, pass)));
+    let last: Option<(Option<PhotoId>, lightcraft_engine::LibrarySource, u64)> = ctx.data(|d| d.get_temp(key));
+    ctx.data_mut(|d| d.insert_temp(key, (active, source, pass)));
     match last {
-        Some((was, drawn)) => was != active || drawn + 1 < pass,
+        Some((was, where_, drawn)) => follow_changed(was, where_, drawn, active, source, pass),
         None => true,
     }
+}
+
+/// Scroll when the active photo changes, the strip was not drawn last pass, or the same photo
+/// sits in a different library source (another album) (#1142).
+pub(crate) fn follow_changed(
+    was: Option<PhotoId>,
+    where_was: lightcraft_engine::LibrarySource,
+    drawn: u64,
+    active: Option<PhotoId>,
+    source: lightcraft_engine::LibrarySource,
+    pass: u64,
+) -> bool {
+    was != active || where_was != source || drawn + 1 < pass
 }
 
 /// Height of a date header row (points).
@@ -1180,6 +1193,15 @@ pub fn context_menu(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_same_photo_in_another_source_scrolls_into_view() {
+        let id = PhotoId(3);
+        let all = lightcraft_engine::LibrarySource::All;
+        let album = lightcraft_engine::LibrarySource::Album(lightcraft_catalog::AlbumId(9));
+        assert!(!follow_changed(Some(id), all, 4, Some(id), all, 5));
+        assert!(follow_changed(Some(id), all, 4, Some(id), album, 5));
+    }
 
     #[test]
     fn ungrouped_justified_rows_fill_the_width() {
