@@ -885,6 +885,7 @@ fn main() -> eframe::Result {
                 app.notices.extend(prefs_warning);
                 app.notices.extend(launch_notices);
                 app.notices.extend(window_notice);
+                app.gpu_notice = true;
                 // what's on disk now: only changes are written
                 let writer = PrefsWriter {
                     path: if in_memory { None } else { prefs_path() },

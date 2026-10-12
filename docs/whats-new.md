@@ -84,6 +84,13 @@
 - Arabic names and other Arabic text in headings, chosen tabs and other bold places are now drawn bold, as Latin text
   beside them is; they used to stay at regular weight.
 
+## 2026-10-13
+
+### Told when there is no GPU
+- When GPU rendering is on but no graphics processor can be found, LightCraft now says so once at start-up instead
+  of quietly rendering everything on the CPU, much more slowly. Help ▸ System Info says why. On NixOS this happens
+  when a `cargo` build runs outside `nix develop` (no Vulkan loader); start it from there.
+
 ## 2026-10-11
 
 ### HDR and panorama merges of CR2 keep their colour

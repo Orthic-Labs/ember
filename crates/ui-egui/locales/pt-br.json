@@ -1997,5 +1997,7 @@
   "Choose a model below (Use) to start.": "Escolha um modelo abaixo (Usar) para começar.",
   "Face detector": "Detector de rostos",
   "Detect Faces (Photo menu) needs it: a small one-time download.": "Detectar rostos (menu Foto) precisa dele: um pequeno download único.",
-  "Recognition models": "Modelos de reconhecimento"
+  "Recognition models": "Modelos de reconhecimento",
+  "No graphics processor found: Ember renders on the CPU, which is much slower. Details in Help → System Info.": "Nenhum processador gráfico encontrado: o Ember renderiza na CPU, o que é muito mais lento. Detalhes em Ajuda → Informações do sistema.",
+  "On NixOS, start it from `nix develop`.": "No NixOS, inicie-o a partir de `nix develop`."
 }
