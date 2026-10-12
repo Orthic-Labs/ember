@@ -1,5 +1,5 @@
-//! Direct, read-only Lightroom Classic catalog import. SQLite pages are read in Rust;
-//! Lightroom, Python and a C SQLite runtime are not needed. Original paths stay in place.
+//! Direct, read-only LRCAT Classic catalog import. SQLite pages are read in Rust;
+//! LRCAT, Python and a C SQLite runtime are not needed. Original paths stay in place.
 //! Raw settings are archived before mutation; mapped edits approximate reference rendering.
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
@@ -50,7 +50,7 @@ struct Reader {
 impl Reader {
     fn table(&self, name: &str, required: bool) -> Result<Vec<Row>, String> {
         let Some(t) = self.tables.iter().find(|t| t.name == name) else {
-            return if required { Err(format!("unsupported Lightroom catalog: missing {name}")) } else { Ok(Vec::new()) };
+            return if required { Err(format!("unsupported LRCAT catalog: missing {name}")) } else { Ok(Vec::new()) };
         };
         let columns = t.column_names.as_ref().ok_or_else(|| format!("cannot read {name} columns"))?;
         let rows = self.db.read_table(t.rootpage, columns.len()).map_err(|e| format!("{name}: {e:?}"))?;
@@ -68,7 +68,7 @@ impl Reader {
                         SqlValue::Integer(n) => Some(json!(n)),
                         SqlValue::Real(n) => Some(json!(n)),
                         SqlValue::Text(s) => Some(json!(s)),
-                        // Opaque Lightroom payloads never become JSON byte arrays.
+                        // Opaque LRCAT payloads never become JSON byte arrays.
                         SqlValue::Blob(_) => None,
                     }))
                     .filter_map(|(column, value)| value.map(|value| (column, value)))
@@ -81,7 +81,7 @@ impl Reader {
         match self.table(name, false) {
             Ok(rows) => Ok(rows),
             Err(error) => {
-                warnings.push(format!("skipping optional Lightroom table {name}: {error}"));
+                warnings.push(format!("skipping optional LRCAT table {name}: {error}"));
                 Ok(Vec::new())
             }
         }
@@ -172,15 +172,15 @@ pub(crate) fn load_index(path: Option<&Path>) -> crate::Result<ImportIndex> {
                 Err(e) => return Err(error(e.to_string())),
             };
             if file.metadata().map_err(|e| error(e.to_string()))?.len() > 16 * 1024 * 1024 {
-                return Err(error("Lightroom import index exceeds 16 MiB"));
+                return Err(error("LRCAT import index exceeds 16 MiB"));
             }
             let mut bytes = Vec::new();
             use std::io::Read;
             file.take(16 * 1024 * 1024 + 1).read_to_end(&mut bytes).map_err(|e| error(e.to_string()))?;
             if bytes.len() > 16 * 1024 * 1024 {
-                return Err(error("Lightroom import index exceeds 16 MiB"));
+                return Err(error("LRCAT import index exceeds 16 MiB"));
             }
-            serde_json::from_slice(&bytes).map_err(|e| error(format!("invalid Lightroom import index: {e}")))
+            serde_json::from_slice(&bytes).map_err(|e| error(format!("invalid LRCAT import index: {e}")))
         }
         None => Ok(ImportIndex::default()),
     }
@@ -337,7 +337,7 @@ fn committed_wal_len(main: &[u8], wal: &[u8]) -> Result<usize, String> {
 }
 
 /// Where a root folder is when its `absolutePath` isn't a folder here (the catalog came from
-/// another computer): `relativePathFromCatalog`, which Lightroom records for roots on the
+/// another computer): `relativePathFromCatalog`, which LRCAT records for roots on the
 /// catalog's volume, resolved against the catalog's folder, if that is a folder.
 fn relocated_root(absolute: &str, relative: &str, catalog: &Path) -> Option<PathBuf> {
     if relative.is_empty() || !Path::new(relative).is_relative() || Path::new(absolute).is_dir() {
@@ -387,7 +387,7 @@ pub fn read_with_progress(path: &Path, cancel: &AtomicBool, total: &AtomicUsize,
     let after = std::fs::metadata(path).map_err(|e| e.to_string())?;
     let wal_after = std::fs::metadata(&wal_path).ok().map(|m| (m.len(), m.modified().ok()));
     if before.len() != after.len() || before.modified().ok() != after.modified().ok() || wal_before != wal_after {
-        return Err("catalog changed during reading; close Lightroom and retry".into());
+        return Err("catalog changed during reading; close its source editor and retry".into());
     }
     let reader = Reader { tables: db.live_tables()?, db };
     let mut warnings = Vec::new();
@@ -414,7 +414,7 @@ pub fn read_with_progress(path: &Path, cancel: &AtomicBool, total: &AtomicUsize,
     let (metadata_rows, metadata_warnings) = match reader.xmp_table() {
         Ok(result) => result,
         Err(error) => {
-            warnings.push(format!("skipping optional Lightroom table Adobe_AdditionalMetadata: {error}"));
+            warnings.push(format!("skipping optional LRCAT table Adobe_AdditionalMetadata: {error}"));
             (Vec::new(), Vec::new())
         }
     };
@@ -513,7 +513,7 @@ pub fn read_with_progress(path: &Path, cancel: &AtomicBool, total: &AtomicUsize,
 }
 
 fn ensure_read_active(cancel: &AtomicBool) -> Result<(), String> {
-    if cancel.load(Ordering::Relaxed) { Err("Lightroom import cancelled".into()) } else { Ok(()) }
+    if cancel.load(Ordering::Relaxed) { Err("LRCAT import cancelled".into()) } else { Ok(()) }
 }
 
 fn mapped_settings(
@@ -526,7 +526,7 @@ fn mapped_settings(
     let mut root = crate::preset_import::parse_lua(text)?;
     let deferred = strip_lua_sentinels(&mut root);
     let (mut props, values) = crate::preset_import::lua_settings_props(&root)?;
-    // Lightroom catalog settings carry crop fields without XMP's HasCrop marker. Keep this
+    // LRCAT catalog settings carry crop fields without XMP's HasCrop marker. Keep this
     // inference local to catalog import; sidecar/import paths retain their own semantics.
     const CROP: [&str; 5] = ["crs:CropLeft", "crs:CropTop", "crs:CropRight", "crs:CropBottom", "crs:CropAngle"];
     if !props.contains_key("crs:HasCrop") && CROP.iter().any(|key| props.contains_key(*key)) {
@@ -535,19 +535,19 @@ fn mapped_settings(
     let (mut partial, mut unknown) = crate::crs::to_partial_report(&props, Some(&values), target, aspect);
     if !catalog_crop_values_valid(&props) {
         remove_catalog_crop(&mut partial);
-        unknown.push("Crop: invalid Lightroom catalog values".into());
+        unknown.push("Crop: invalid LRCAT catalog values".into());
     } else if let Some(warning) = catalog_crop(&mut partial, orientation, stored_aspect) {
         remove_catalog_crop(&mut partial);
         unknown.push(warning.into());
     }
     if deferred > 0 {
-        unknown.push("Deferred Lightroom adjustments (-999999)".into());
+        unknown.push("Deferred LRCAT adjustments (-999999)".into());
     }
     Ok((partial, unknown))
 }
 
-/// Lightroom stores crop corners in the un-oriented source frame. Carry them into the displayed
-/// frame, then apply Lightroom's straighten angle around that frame's centre. Invalid catalog
+/// LRCAT stores crop corners in the un-oriented source frame. Carry them into the displayed
+/// frame, then apply LRCAT's straighten angle around that frame's centre. Invalid catalog
 /// dimensions or crop values are left untouched rather than producing non-finite geometry.
 fn catalog_crop_values_valid(props: &crate::crs::Props) -> bool {
     let number = |key: &str, default: f64| -> Option<f64> {
@@ -594,11 +594,11 @@ fn catalog_crop(partial: &mut Value, orientation: Orientation, stored_aspect: Op
     let edge = |key: &str| geometry.get("rect").and_then(|rect| rect.get(key)).and_then(Value::as_f64);
     let (Some(x0), Some(y0), Some(x1), Some(y1)) = (edge("x0"), edge("y0"), edge("x1"), edge("y1")) else { return None };
     if [x0, y0, x1, y1].iter().any(|value| !value.is_finite() || !(0.0..=1.0).contains(value)) || x0 >= x1 || y0 >= y1 {
-        return Some("Crop: invalid Lightroom catalog geometry");
+        return Some("Crop: invalid LRCAT catalog geometry");
     }
     let lightroom_angle = geometry.get("angle").and_then(Value::as_f64).unwrap_or(0.0);
     if !lightroom_angle.is_finite() || lightroom_angle.abs() > 360.0 {
-        return Some("Crop: invalid Lightroom catalog angle");
+        return Some("Crop: invalid LRCAT catalog angle");
     }
     if orientation == Orientation::Normal && lightroom_angle == 0.0 {
         return None;
@@ -609,14 +609,14 @@ fn catalog_crop(partial: &mut Value, orientation: Orientation, stored_aspect: Op
             geometry.insert("rect".into(), json!({"x0": rect.x0, "y0": rect.y0, "x1": rect.x1, "y1": rect.y1}));
             return None;
         }
-        return Some("Crop: invalid Lightroom catalog orientation");
+        return Some("Crop: invalid LRCAT catalog orientation");
     }
     let Some(stored_aspect) = stored_aspect.filter(|value| value.is_finite() && *value > 0.0) else {
         return Some("Crop: skipped straighten because catalog dimensions are invalid");
     };
     let (ow, oh) = if orientation.swaps_axes() { (1.0, stored_aspect) } else { (stored_aspect, 1.0) };
     if !ow.is_finite() || !oh.is_finite() || ow <= 0.0 || oh <= 0.0 {
-        return Some("Crop: invalid Lightroom catalog dimensions");
+        return Some("Crop: invalid LRCAT catalog dimensions");
     }
     // Mirrors reverse the angle sign in LightCraft's oriented frame.
     let angle = if orientation.to_parts().0 { lightroom_angle } else { -lightroom_angle };
@@ -632,7 +632,7 @@ fn catalog_crop(partial: &mut Value, orientation: Orientation, stored_aspect: Op
         geometry.insert("angle".into(), json!(angle));
         None
     } else {
-        Some("Crop: invalid Lightroom catalog dimensions")
+        Some("Crop: invalid LRCAT catalog dimensions")
     }
 }
 
@@ -751,7 +751,7 @@ fn apply(s: &mut crate::Session, data: CatalogImport, update_existing: bool) -> 
     Ok(applied.report)
 }
 
-/// Apply prepared normal-file results and Lightroom metadata in one owner-thread operation.
+/// Apply prepared normal-file results and LRCAT metadata in one owner-thread operation.
 /// This function does no filesystem work; callers finish its returned index separately.
 pub(crate) struct ApplyPrepared<'a> {
     pub(crate) update_existing: bool,
@@ -889,7 +889,7 @@ pub(crate) fn apply_prepared(s: &mut crate::Session, data: CatalogImport, contex
                 Op::SetMeta { id: p.id, meta: Box::new(p.meta.clone()) },
                 Op::SetCaptured { id: p.id, captured: p.captured.clone() },
             ]);
-            ops.push(Op::SetDevelop { id: p.id, settings: p.develop.clone(), label: "Lightroom catalog".into(), edited: p.edited.clone() });
+            ops.push(Op::SetDevelop { id: p.id, settings: p.develop.clone(), label: "LRCAT catalog".into(), edited: p.edited.clone() });
         } else {
             ops.push(Op::AddPhoto { photo: Box::new(p.clone()) });
         }
@@ -963,9 +963,9 @@ pub(crate) fn apply_prepared(s: &mut crate::Session, data: CatalogImport, contex
         }
     }
     if !ops.is_empty() {
-        s.commit("Import Lightroom Catalog", Op::Batch { ops })?;
+        s.commit("Import LRCAT Catalog", Op::Batch { ops })?;
     }
-    s.merge_undo(s.undo.len().saturating_sub(undo0), "Import Lightroom Catalog");
+    s.merge_undo(s.undo.len().saturating_sub(undo0), "Import LRCAT Catalog");
     Ok(AppliedImport {
         report: json!({"source":data.source,"photos":ids.len(),"imported":files.imported.len(),"collections":albums.len(),"preservedExistingEdits":preserved,"missing":missing,"failed":files.failed,"warnings":warnings,"unmapped":unmapped,"archive":archive_path,"mapping":ids}),
         index: index.clone(),
@@ -1407,9 +1407,9 @@ mod tests {
     fn a_root_missing_here_is_found_relative_to_the_catalog() {
         let dir = std::env::temp_dir().join(format!("lightcraft-relocated-catalog-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(dir.join("Lightroom")).unwrap();
+        std::fs::create_dir_all(dir.join("LRCAT")).unwrap();
         std::fs::create_dir_all(dir.join("RAW")).unwrap();
-        let path = dir.join("Lightroom").join("Lightroom.lrcat");
+        let path = dir.join("LRCAT").join("LRCAT.lrcat");
         std::fs::write(&path, native_catalog(&photo_tables(("C:/Users/me/Project/RAW/", "../RAW/")))).unwrap();
         let catalog = read(&path).unwrap();
         assert_eq!(Path::new(&catalog.photos[0].path), dir.join("RAW").join("Photos").join("test.ARW"));
@@ -1455,7 +1455,7 @@ mod tests {
     }
     #[test]
     fn catalog_crops_without_has_crop_are_imported() {
-        // Lightroom Classic catalogs store crop edges and angle but never `HasCrop`
+        // LRCAT Classic catalogs store crop edges and angle but never `HasCrop`
         let (partial, unknown) = mapped_settings(
             "s = { CropConstrainAspectRatio = true, CropLeft = 0.042702, CropRight = 0.957298, CropTop = 0.1 }",
             crate::crs::Target::RawAbsolute,
@@ -1471,7 +1471,7 @@ mod tests {
         assert_eq!(crop["rect"]["y1"], 1.0);
         assert_eq!(crop["angle"], 0.0);
         assert!(!unknown.iter().any(|k| k.starts_with("CropLeft")), "{unknown:?}");
-        // an angle alone still means a crop (Lightroom's angle turns the other way to LightCraft's)
+        // an angle alone still means a crop (LRCAT's angle turns the other way to LightCraft's)
         let (partial, unknown) =
             mapped_settings("s = { CropAngle = -1.5 }", crate::crs::Target::RawAbsolute, 1.5, Orientation::Normal, Some(1.5)).unwrap();
         assert_eq!(partial["crop"]["geometry"]["angle"], 1.5);
@@ -1526,7 +1526,7 @@ mod tests {
         assert!(partial.get("crop").is_none());
     }
 
-    /// The `crs` corners and angle Lightroom would store for LightCraft crop `g` on a stored image
+    /// The `crs` corners and angle LRCAT would store for LightCraft crop `g` on a stored image
     /// of aspect `w` (height 1) shown with orientation `o`.
     fn lightroom_crop(g: CropGeometry, o: Orientation, w: f64) -> String {
         let (ow, oh) = if o.swaps_axes() { (1.0, w) } else { (w, 1.0) };
@@ -1564,8 +1564,8 @@ mod tests {
 
     #[test]
     fn straightened_catalog_crops_match_lightroom_exports() {
-        // Settings and pixel sizes from a real Lightroom Classic catalog (9504 × 6336 stored) and the
-        // JPEGs Lightroom exported from it at full size.
+        // Settings and pixel sizes from a real LRCAT Classic catalog (9504 × 6336 stored) and the
+        // JPEGs LRCAT exported from it at full size.
         for (settings, o, export) in [
             (
                 "s = { CropAngle = -9.34444, CropBottom = 0.802034, CropLeft = 0.05499, CropRight = 0.94501, CropTop = 0.197966 }",
@@ -1582,7 +1582,7 @@ mod tests {
             let r: Rect = serde_json::from_value(partial["crop"]["geometry"]["rect"].clone()).unwrap();
             let (ow, oh) = if o.swaps_axes() { (6336.0, 9504.0) } else { (9504.0, 6336.0) };
             let (w, h) = (r.width() * ow, r.height() * oh);
-            assert!((w - export.0).abs() <= 3.0 && (h - export.1).abs() <= 3.0, "{o:?}: {w:.1} × {h:.1}, Lightroom exported {export:?}");
+            assert!((w - export.0).abs() <= 3.0 && (h - export.1).abs() <= 3.0, "{o:?}: {w:.1} × {h:.1}, LRCAT exported {export:?}");
         }
     }
 }

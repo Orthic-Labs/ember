@@ -60,7 +60,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     refuse_live_catalog(&catalog_path)?;
     let catalog_after = fs::metadata(&catalog_path).map_err(|e| format!("catalog metadata: {e}"))?;
     if catalog_before.len() != catalog_after.len() || catalog_before.modified().ok() != catalog_after.modified().ok() {
-        return Err("catalog changed during discovery; close Lightroom and retry with a stable local snapshot".into());
+        return Err("catalog changed during discovery; close its source editor and retry with a stable local snapshot".into());
     }
     if catalog.photos.len() > MAX_ROWS {
         return Err(format!("catalog has {} photos; discovery cap is {MAX_ROWS}", catalog.photos.len()));
@@ -244,7 +244,7 @@ fn refuse_live_catalog(path: &Path) -> Result<(), String> {
     let appended = PathBuf::from(format!("{}.lock", path.display()));
     let stem_lock = path.with_extension("lock");
     if appended.exists() || stem_lock.exists() {
-        return Err("catalog has a Lightroom lock file; close Lightroom and use a stable catalog snapshot".into());
+        return Err("catalog has an LRCAT lock file; close its source editor and use a stable catalog snapshot".into());
     }
     Ok(())
 }

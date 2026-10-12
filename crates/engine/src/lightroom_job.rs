@@ -1,4 +1,4 @@
-//! Detached Lightroom catalog preparation and owner-thread commit.
+//! Detached LRCAT catalog preparation and owner-thread commit.
 //!
 //! `LightroomJob::new` takes only an in-memory session snapshot.  `prepare` owns all catalog
 //! reading, probing and archive staging, while `commit_prepared` only applies catalog operations
@@ -27,7 +27,7 @@ fn error(message: impl Into<String>) -> crate::EngineError {
 fn stage_archive(archive_dir: Option<&Path>, data: &mut CatalogImport) -> crate::Result<Option<PathBuf>> {
     let archive_path = archive_dir.map(|dir| crate::lightroom_archive::store_best_effort(dir, data).map_err(error)).transpose()?.flatten();
     if archive_dir.is_some() && archive_path.is_none() {
-        data.warnings.push("Lightroom source archive exceeded 32 MiB; archive skipped".into());
+        data.warnings.push("LRCAT source archive exceeded 32 MiB; archive skipped".into());
     }
     Ok(archive_path)
 }
@@ -109,7 +109,7 @@ impl LightroomArchiveFinalization {
     pub fn finish(self) -> crate::Result<()> {
         let (Some(path), Some(bytes)) = (self.path, self.bytes) else { return Ok(()) };
         if bytes.len() > MAX_INDEX_BYTES {
-            return Err(error("Lightroom import index exceeds 16 MiB"));
+            return Err(error("LRCAT import index exceeds 16 MiB"));
         }
         lightcraft_catalog::safe_file::write_atomic(&path, &bytes).map_err(|e| error(e.to_string()))
     }
@@ -129,7 +129,7 @@ pub struct LightroomCompletion {
 /// Alias used by hosts that call the result a commit.
 pub type LightroomCommit = LightroomCompletion;
 
-/// A Lightroom import detached from the owner thread.
+/// A LRCAT import detached from the owner thread.
 pub struct LightroomJob {
     path: PathBuf,
     update_existing: bool,
@@ -180,14 +180,14 @@ impl LightroomJob {
     /// Read/probe/stage all source data off the owner thread.
     pub fn prepare(&mut self, cancel: &AtomicBool) -> crate::Result<PreparedLightroom> {
         if cancel.load(Ordering::Relaxed) {
-            return Err(error("Lightroom import cancelled"));
+            return Err(error("LRCAT import cancelled"));
         }
         self.import.total.store(1, Ordering::Relaxed);
         self.import.done.store(0, Ordering::Relaxed);
         let mut data = lightroom_catalog::read_with_progress(&self.path, cancel, &self.import.total, &self.import.done).map_err(error)?;
         lightroom_catalog::validate_for_job(&data).map_err(error)?;
         if cancel.load(Ordering::Relaxed) {
-            return Err(error("Lightroom import cancelled"));
+            return Err(error("LRCAT import cancelled"));
         }
         self.import.done.fetch_add(1, Ordering::Relaxed);
         let paths: Vec<String> = data
@@ -206,7 +206,7 @@ impl LightroomJob {
         let normal = self.import.prepare(&paths, cancel);
         if cancel.load(Ordering::Relaxed) {
             normal.rollback();
-            return Err(error("Lightroom import cancelled"));
+            return Err(error("LRCAT import cancelled"));
         }
         let archive_path = stage_archive(self.archive_dir.as_deref(), &mut data)?;
         let index_path = self.archive_dir.as_ref().map(|dir| dir.join("lightroom-index.json"));
@@ -229,13 +229,13 @@ impl LightroomJob {
 pub fn commit_prepared(s: &mut crate::Session, mut prepared: PreparedLightroom) -> crate::Result<LightroomCompletion> {
     if prepared.cancelled {
         prepared.normal.rollback();
-        return Err(error("Lightroom import cancelled"));
+        return Err(error("LRCAT import cancelled"));
     }
     if !prepared.token.matches(s) {
         prepared.normal.rollback();
-        return Err(error("Lightroom import belongs to a different open library"));
+        return Err(error("LRCAT import belongs to a different open library"));
     }
-    // A command-scoped Lightroom import must never rewrite source XMP sidecars.  Direct depth-0
+    // A command-scoped LRCAT import must never rewrite source XMP sidecars.  Direct depth-0
     // callers do not set this transient flag, so they cannot affect a later command.
     if s.depth > 0 {
         s.skip_auto_write = true;
@@ -422,7 +422,7 @@ mod tests {
         assert!(
             completion.report["warnings"]
                 .as_array()
-                .is_some_and(|warnings| warnings.iter().any(|warning| warning == "Lightroom source archive exceeded 32 MiB; archive skipped"))
+                .is_some_and(|warnings| warnings.iter().any(|warning| warning == "LRCAT source archive exceeded 32 MiB; archive skipped"))
         );
         assert_eq!(session.catalog.len(), 5_000);
         std::fs::remove_dir_all(archive_dir).unwrap();
