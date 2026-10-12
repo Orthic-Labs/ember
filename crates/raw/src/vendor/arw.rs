@@ -62,6 +62,9 @@ const CROP_SIZE: u16 = 0x74c8;
 const SR2_OLD_BLACK: u16 = 0x7300;
 const SR2_OLD_WB: u16 = 0x7303;
 const SR2_OLD_CROP: u16 = 0x74c3;
+/// `SR2SubIFD` white-balance presets at a stated temperature (`WB_RGBLevels2500K` … `8500K`: R, G, B), which give
+/// the Kelvin scale of a camera without colour matrices (`crate::kelvin_presets`).
+const SR2_KELVIN_PRESETS: [(f32, u16); 5] = [(2500.0, 0x782d), (3200.0, 0x782c), (4500.0, 0x7824), (6000.0, 0x782b), (8500.0, 0x782a)];
 const YCBCR_COEFFICIENTS: u16 = 529;
 const REFERENCE_BLACK_WHITE: u16 = 532;
 /// Maker-note tags (ExifTool Sony tag names): the enciphered `Tag2010` block and `FullImageSize` (height, width).
@@ -480,6 +483,16 @@ fn sr2_old_wb(sr2: &super::sr2::SubIfd) -> Option<[f32; 3]> {
 }
 
 /// The DSC-R1's crop from `0x74c3` (x0, y0, x1, y1): an even origin (CFA phase) and a window inside the `w × h` frame.
+/// The five presets of [`SR2_KELVIN_PRESETS`], when the block has them all and they make a curve.
+fn sr2_kelvin_presets(sr2: &super::sr2::SubIfd) -> Option<crate::kelvin_presets::KelvinPresets> {
+    let mut points = [(0.0f32, [0.0f32; 3]); 5];
+    for (p, (k, tag)) in points.iter_mut().zip(SR2_KELVIN_PRESETS) {
+        let v = sr2.shorts(tag).filter(|v| v.len() == 3)?;
+        *p = (k, [v[0] as f32, v[1] as f32, v[2] as f32]);
+    }
+    crate::kelvin_presets::KelvinPresets::new(points)
+}
+
 fn sr2_old_crop(sr2: &super::sr2::SubIfd, w: usize, h: usize) -> Option<Rect> {
     let v = sr2.shorts(SR2_OLD_CROP).filter(|v| v.len() == 4)?;
     let [x0, y0, x1, y1] = [v[0] as usize, v[1] as usize, v[2] as usize, v[3] as usize];
@@ -752,7 +765,8 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         active_area: Rect::new(0, 0, w, h),
         crop,
         orientation: Orientation::from_exif(ifd0.u16(t::ORIENTATION).unwrap_or(1)),
-        color: ColorData::default(),
+        // (linear YCbCr comes white-balanced: its unit multipliers have no place on the presets' curve)
+        color: ColorData { kelvin_presets: if linear_rgb { None } else { sr2().and_then(sr2_kelvin_presets) }, ..Default::default() },
         // Sony's linear YCbCr already carries as-shot WB. Applying the CFA gains again
         // makes a neutral surface magenta. WB edits remain relative to this as-shot RGB.
         wb_multipliers: if linear_rgb { Some([1.0; 3]) } else { wb },

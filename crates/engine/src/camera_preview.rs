@@ -2129,17 +2129,19 @@ mod tests {
             let mut raw = lightcraft_raw::decode(&bytes).unwrap();
             raw.opcodes.list3.retain(|op| !op.is_lens_correction());
             let own = lightcraft_raw::color::has_matrix(&raw.color);
-            let covered = raw.metadata.model.as_deref().and_then(|m| lightcraft_raw::spectral::find(raw.metadata.make.as_deref(), m)).is_some();
+            let (make, model) = (raw.metadata.make.as_deref(), raw.metadata.model.as_deref().unwrap_or_default());
+            let measured = lightcraft_raw::spectral::find(make, model).is_some();
+            let covered = measured || lightcraft_raw::kelvin_presets::covers(make, model);
             let before = raw.color.clone();
             let (_, t, fitted) = starting_colour(&mut raw, &bytes);
-            let spectral = !own && fitted.is_none() && covered;
+            let spectral = !own && fitted.is_none() && measured;
             eprintln!("{name}: own matrices {own}, JPEG fit {}, spectral {spectral}", fitted.is_some());
             assert_eq!(raw.color != before, spectral, "{name}");
             assert_eq!(t.matrix_is_fallback, !own && !spectral, "{name}");
             let (_, info) = crate::files::load_bytes(&bytes, 400).unwrap();
             assert_eq!(info.camera_tone.is_some(), fitted.is_some(), "{name}");
-            // white balance: relative only without matrices anywhere; a covered camera edits in Kelvin, through the
-            // spectral matrices, whichever look it got (issue #730)
+            // white balance: relative only without matrices anywhere (or presets); a covered camera edits in Kelvin,
+            // through the spectral matrices or its presets, whichever look it got (issue #730)
             assert_eq!(info.relative_wb, !own && !covered, "{name}");
             assert_eq!(info.legacy_relative_wb, !own && covered, "{name}");
             if covered && !own {
@@ -2646,6 +2648,36 @@ mod tests {
             } else {
                 assert!(small.as_shot_temp == 6500.0 && small.as_shot_tint == 0.0, "{name}");
             }
+        }
+    }
+
+    /// Sony ARWs without measured matrices read Kelvin from their white-balance presets
+    /// (`lightcraft_raw::kelvin_presets`): the ILCE-3500 sample was shot at 5600 K on the camera's Kelvin setting and
+    /// the ILCE-7S sample on its Shade preset (7500 K on Sony's scale); the SLT-A33's Auto white is within 20 K of its
+    /// Daylight preset. Header and decode agree. Skips cleanly without these CC0 corpus files.
+    #[test]
+    fn corpus_arw_white_balance_in_kelvin_through_the_presets() {
+        let dir = std::env::var_os("LIGHTCRAFT_CORPUS")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus"))
+            .join("raw");
+        for (name, kelvin) in [("arw-sony-a3500-5600k.arw", 5600.0), ("arw-sony-a7s-shade.arw", 7500.0), ("arw-sony-a33.arw", 5311.0)] {
+            let Ok(bytes) = std::fs::read(dir.join(name)) else {
+                eprintln!("skip: {name} absent");
+                continue;
+            };
+            let header = crate::files::probe_bytes(name, &bytes).unwrap();
+            let (_, info) = crate::files::load_bytes(&bytes, 400).unwrap();
+            assert_eq!(header.as_shot_wb, Some((info.as_shot_temp, info.as_shot_tint)), "{name}");
+            assert!(info.raw && !info.relative_wb && info.legacy_relative_wb, "{name}: {info:?}");
+            assert!(
+                (info.as_shot_temp - kelvin).abs() <= 20.0 && info.as_shot_tint.abs() <= 2.0,
+                "{name}: {} {}",
+                info.as_shot_temp,
+                info.as_shot_tint
+            );
+            let camera = format!("SONY {}", lightcraft_meta::extract(&bytes).model.unwrap_or_default());
+            assert!(!lightcraft_catalog::relative_wb_camera("ARW", &camera), "{camera}");
         }
     }
 

@@ -537,15 +537,16 @@ fn load_bytes_now(
 ///
 /// A file with colour matrices of its own (DNG) has an absolute scale from its tags. A file without
 /// (`camera_preview::file_local_look`) has one when its camera's matrices are measured
-/// (`lightcraft_raw::spectral`): they turn its as-shot multipliers into Kelvin and tint, nothing else — the look
-/// stays the file's fit. Any other raw is edited relative to its as-shot look (6500 K / 0 means as shot).
+/// (`lightcraft_raw::spectral`), else when its camera's white-balance presets give one
+/// (`lightcraft_raw::kelvin_presets`): either turns its as-shot multipliers into Kelvin and tint, nothing else — the
+/// look stays the file's fit. Any other raw is edited relative to its as-shot look (6500 K / 0 means as shot).
 struct WbScaleOf {
     own_matrix: bool,
     relative: bool,
-    /// Kelvin through the camera's measured matrices: edited on the relative scale before those were used.
+    /// Kelvin through the camera's measured matrices or presets: edited on the relative scale before those were used.
     legacy_relative: bool,
-    /// The as-shot white through the measured matrices, when that is where the scale comes from.
-    spectral_white: Option<lightcraft_color::Xy>,
+    /// The as-shot white through the measured matrices or the presets, when that is where the scale comes from.
+    scale_white: Option<lightcraft_color::Xy>,
 }
 
 impl WbScaleOf {
@@ -557,18 +558,26 @@ impl WbScaleOf {
     ) -> Self {
         let own_matrix = lightcraft_raw::color::has_matrix(color);
         let fitted = crate::camera_preview::file_local_look(format) && !own_matrix;
-        let camera = fitted.then(|| meta.model.as_deref().and_then(|model| lightcraft_raw::spectral::find(meta.make.as_deref(), model))).flatten();
-        let spectral_white = camera.and_then(|c| lightcraft_raw::spectral::as_shot_white_through(c, color, wb_multipliers));
-        WbScaleOf { own_matrix, relative: fitted && camera.is_none(), legacy_relative: fitted && camera.is_some(), spectral_white }
+        let model = meta.model.as_deref().filter(|_| fitted);
+        let camera = model.and_then(|model| lightcraft_raw::spectral::find(meta.make.as_deref(), model));
+        let presets = camera.is_none() && model.is_some_and(|model| lightcraft_raw::kelvin_presets::covers(meta.make.as_deref(), model));
+        let scale_white = match camera {
+            Some(c) => lightcraft_raw::spectral::as_shot_white_through(c, color, wb_multipliers),
+            None if presets => lightcraft_raw::kelvin_presets::as_shot_white(color, wb_multipliers),
+            None => None,
+        };
+        let covered = camera.is_some() || presets;
+        WbScaleOf { own_matrix, relative: fitted && !covered, legacy_relative: fitted && covered, scale_white }
     }
     /// The as-shot temperature and tint on the file's scale: the relative scale's reference, the white through
-    /// the measured matrices, else `own` (the white the file's own tags give). Whole numbers, as the catalog
-    /// keeps them. A covered camera whose file names no white (no multipliers) falls back to `own`, D65.
+    /// the measured matrices or the presets, else `own` (the white the file's own tags give). Whole numbers, as the
+    /// catalog keeps them. A covered camera whose file names no white (no multipliers, or no presets) falls back to
+    /// `own`, D65.
     fn as_shot(&self, own: lightcraft_color::Xy) -> (f64, f64) {
         if self.relative {
             return (6500.0, 0.0);
         }
-        let (t, tint) = xy_to_temp_tint(self.spectral_white.unwrap_or(own));
+        let (t, tint) = xy_to_temp_tint(self.scale_white.unwrap_or(own));
         (t.round(), tint.round())
     }
 }
@@ -986,28 +995,49 @@ mod tests {
         let d65 = lightcraft_color::D65;
         // a covered camera: Kelvin through the spectral matrices, near the daylight these multipliers describe
         let a7m3 = WbScaleOf::new(RawFormat::Arw, &ColorData::default(), mul, &meta("SONY", "ILCE-7M3"));
-        assert!(!a7m3.own_matrix && !a7m3.relative && a7m3.legacy_relative && a7m3.spectral_white.is_some());
+        assert!(!a7m3.own_matrix && !a7m3.relative && a7m3.legacy_relative && a7m3.scale_white.is_some());
         let (t, tint) = a7m3.as_shot(d65);
         assert!((3500.0..7000.0).contains(&t) && t != 6500.0 && tint.abs() < 30.0 && t.fract() == 0.0 && tint.fract() == 0.0, "{t} {tint}");
         assert!(!lightcraft_catalog::relative_wb_camera("ARW", "SONY ILCE-7M3"));
         // the same camera without multipliers: the scale is Kelvin still, the white falls back to the tags' (D65)
         let bare = WbScaleOf::new(RawFormat::Arw, &ColorData::default(), None, &meta("SONY", "ILCE-7M3"));
-        assert!(bare.legacy_relative && bare.spectral_white.is_none());
+        assert!(bare.legacy_relative && bare.scale_white.is_none());
         assert_eq!(bare.as_shot(d65), {
             let (t, tint) = xy_to_temp_tint(d65);
             (t.round(), tint.round())
         });
         // a camera without measured matrices: relative, whatever the multipliers
         let a7m2 = WbScaleOf::new(RawFormat::Arw, &ColorData::default(), mul, &meta("SONY", "ILCE-7M2"));
-        assert!(a7m2.relative && !a7m2.legacy_relative && a7m2.spectral_white.is_none());
+        assert!(a7m2.relative && !a7m2.legacy_relative && a7m2.scale_white.is_none());
         assert_eq!(a7m2.as_shot(d65), (6500.0, 0.0));
         assert!(lightcraft_catalog::relative_wb_camera("ARW", "SONY ILCE-7M2"));
+        // a camera without matrices whose presets give the scale: Kelvin through them, Sony's daylight preset as
+        // 5500 K or so; without presets in the file the scale is Kelvin still, the white the tags' (D65)
+        let g = |r: f32, b: f32| [r / 1024.0, 1.0, b / 1024.0];
+        let presets = lightcraft_raw::kelvin_presets::KelvinPresets::new([
+            (2500.0, g(1336.0, 3672.0)),
+            (3200.0, g(1720.0, 2620.0)),
+            (4500.0, g(2256.0, 1880.0)),
+            (6000.0, g(2680.0, 1544.0)),
+            (8500.0, g(3136.0, 1300.0)),
+        ]);
+        let with = ColorData { kelvin_presets: presets, ..Default::default() };
+        let a99m2 = WbScaleOf::new(RawFormat::Arw, &with, Some(g(2500.0, 1668.0)), &meta("SONY", "ILCA-99M2"));
+        assert!(!a99m2.own_matrix && !a99m2.relative && a99m2.legacy_relative && a99m2.scale_white.is_some());
+        let (t, tint) = a99m2.as_shot(d65);
+        assert!((5000.0..6000.0).contains(&t) && tint.abs() < 10.0 && t.fract() == 0.0, "{t} {tint}");
+        assert!(!lightcraft_catalog::relative_wb_camera("ARW", "SONY ILCA-99M2"));
+        let bare = WbScaleOf::new(RawFormat::Arw, &ColorData::default(), mul, &meta("SONY", "ILCA-99M2"));
+        assert!(bare.legacy_relative && bare.scale_white.is_none());
+        // presets in a file of a camera not listed: relative, as the catalog decides from the camera alone
+        let other = WbScaleOf::new(RawFormat::Arw, &with, mul, &meta("SONY", "ILCE-1"));
+        assert!(other.relative && other.scale_white.is_none());
         let unknown = WbScaleOf::new(RawFormat::Nef, &ColorData::default(), mul, &lightcraft_meta::Metadata::default());
         assert!(unknown.relative && unknown.as_shot(d65) == (6500.0, 0.0));
         // a file with matrices of its own (DNG): absolute from them, no matter whose camera
         let own = ColorData { illuminant: [21, 0], color_matrix: [Some(lightcraft_color::Mat3::IDENTITY), None], ..Default::default() };
         let dng = WbScaleOf::new(RawFormat::Dng, &own, mul, &meta("SONY", "ILCE-7M3"));
-        assert!(dng.own_matrix && !dng.relative && !dng.legacy_relative && dng.spectral_white.is_none());
+        assert!(dng.own_matrix && !dng.relative && !dng.legacy_relative && dng.scale_white.is_none());
         let xy = lightcraft_color::cct::temp_tint_to_xy(4200.0, 12.0);
         assert_eq!(dng.as_shot(xy), (4200.0, 12.0));
         assert!(!lightcraft_catalog::relative_wb_camera("DNG", "SONY ILCE-7M3"));
