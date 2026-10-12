@@ -1525,6 +1525,64 @@ mod tests {
     }
 
     #[test]
+    fn camera_toe_requires_lower_independent_dark_error() {
+        for holdout_matches_original in [true, false] {
+            let mut sensor = Rgb32f::new(96, 64);
+            let mut reference = sensor.clone();
+            for (i, (src, dst)) in sensor.data.iter_mut().zip(&mut reference.data).enumerate() {
+                let y = if i < 600 { 0.0015 + (i % 200) as f32 * 0.00001 } else { 0.02 + ((i * 7919) % 6144) as f32 / 6144.0 * 0.23 };
+                *src = [y; 3];
+                // Midtones teach the original slope of 3. Dark training teaches 0.3,
+                // but the independent dark holdout can agree with either slope.
+                let slope = if i < 600 && !(holdout_matches_original && i % 3 == 0) { 0.3 } else { 3.0 };
+                *dst = [y * slope; 3];
+                assert_eq!(colour_pair(*src, *dst), i >= 600);
+            }
+            let (pairs, _) = collect_pairs(&sensor, &reference, f32::NEG_INFINITY, None).unwrap();
+            let original = fit_tone(pairs.iter().enumerate().filter(|(i, _)| i % 3 != 0).map(|(_, (x, y))| (luma(*x), luma(*y))).collect()).unwrap();
+            // Both sample sets start at a multiple of three, so this split matches
+            // the helper's separate colour and extra-sample indices.
+            let candidate = fit_tone(
+                sensor
+                    .data
+                    .iter()
+                    .zip(&reference.data)
+                    .enumerate()
+                    .filter(|(i, _)| i % 3 != 0)
+                    .map(|(_, (x, y))| (luma(x.map(f64::from)), luma(y.map(f64::from))))
+                    .collect(),
+            )
+            .unwrap();
+            let held: Pairs =
+                sensor.data.iter().zip(&reference.data).take(600).step_by(3).map(|(x, y)| (x.map(f64::from), y.map(f64::from))).collect();
+            assert_eq!(held.len(), 200);
+            assert!(held.iter().all(|(_, y)| (0.0003..0.015).contains(&luma(*y))));
+            assert!(rank_correlation_ties(&held) > 0.99);
+            let error = |tone: &CameraTone| {
+                held.iter().map(|(x, y)| (f64::from(tone.apply(luma(*x) as f32)).powf(1.0 / 2.2) - luma(*y).powf(1.0 / 2.2)).powi(2)).sum::<f64>()
+            };
+            assert_ne!(candidate, original);
+            let selected = fit_tone_with_shadows(ToneFit::Quantile, &pairs, &sensor, &reference, None, |x| x).unwrap();
+            if holdout_matches_original {
+                assert!(error(&candidate) > error(&original) + 0.1);
+                assert_eq!(selected, original, "a correlated but misleading training set must keep the original curve");
+            } else {
+                assert!(error(&candidate) < error(&original) * 0.99);
+                assert_eq!(selected, candidate, "matching dark training and holdout must accept the candidate");
+            }
+            let mut previous = 0.0;
+            assert_eq!(selected.apply(0.0), 0.0);
+            for i in 0..10_000 {
+                let y = selected.apply(10f32.powf(-8.0 + i as f32 / 1000.0));
+                assert!(y.is_finite() && y >= previous && y <= 1.0);
+                previous = y;
+            }
+            assert_eq!(selected.apply(f32::NAN), 0.0);
+            assert_eq!(selected.apply(f32::INFINITY), 0.0);
+        }
+    }
+
+    #[test]
     fn unreliable_dark_pairs_keep_the_original_tone_and_colour() {
         let (sensor, reference) = steep_toe_scene();
         let dark: Vec<_> = reference.data.iter().enumerate().filter(|(_, p)| luminance_2020(**p) < 0.015).map(|(i, _)| i).collect();
