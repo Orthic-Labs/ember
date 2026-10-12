@@ -407,8 +407,9 @@ pub(crate) fn fingerprint(img: &Rgb32f) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325 ^ ((img.width as u64) << 32 | img.height as u64);
     let n = img.data.len();
     for i in 0..512usize {
-        let p = img.data[(i.wrapping_mul(2_654_435_761) ^ i) % n.max(1)];
-        for c in p {
+        // (an empty image has no pixels to sample: its dimensions are the fingerprint)
+        let Some(p) = img.data.get((i.wrapping_mul(2_654_435_761) ^ i) % n.max(1)) else { break };
+        for c in *p {
             h ^= c.to_bits() as u64;
             h = h.wrapping_mul(0x0100_0000_01b3);
         }
@@ -651,6 +652,13 @@ fn min_filter(p: &Plane, r: usize, max: bool) -> Plane {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // An empty image (no pixel to sample) has a fingerprint, its dimensions' (indexing its first pixel panicked)
+    #[test]
+    fn an_empty_image_has_a_fingerprint() {
+        assert_eq!(fingerprint(&Rgb32f::new(0, 0)), fingerprint(&Rgb32f::new(0, 0)));
+        assert_ne!(fingerprint(&Rgb32f::new(0, 3)), fingerprint(&Rgb32f::new(3, 0)));
+    }
 
     /// splitmix64: deterministic pseudo-random numbers for the warp tests.
     struct Rng(u64);

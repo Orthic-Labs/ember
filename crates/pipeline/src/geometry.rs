@@ -16,7 +16,7 @@ use crate::optics::{Warp, reorient_lens};
 pub const BLANK: [f32; 3] = [0.55, 0.55, 0.55];
 
 /// The geometric frame of a render.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Frame {
     /// Source (EXIF-oriented) dimensions in pixels.
     pub src_w: usize,
