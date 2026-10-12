@@ -1,0 +1,305 @@
+{
+  "schema": "ember.icon-pack.v1",
+  "master_sha256": "ab51f047945f2da700a9da566d9d3738bc4590363858be732c02199accdb224a",
+  "sizes": [
+    16,
+    24,
+    32,
+    48,
+    64,
+    128,
+    256,
+    512,
+    1024
+  ],
+  "variants": [
+    "color",
+    "black",
+    "white",
+    "reverse"
+  ],
+  "files": [
+    {
+      "path": "png/color/ember-16.png",
+      "size": 16,
+      "sha256": "1cc323660d5b0a91e4ff6ddcf5cb97405311267417356e5108bfa2874c1c8b91",
+      "background_alpha": 0,
+      "aperture_alpha": 6
+    },
+    {
+      "path": "png/color/ember-24.png",
+      "size": 24,
+      "sha256": "c1a8738299fbce8bef406c02d9f15990e1c3957b29c118f768ca8e8b0b9cff22",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/color/ember-32.png",
+      "size": 32,
+      "sha256": "5ea4ee21dc208606e531c243850958da83a5e7e92aa8187ebb34d6c5e4721816",
+      "background_alpha": 0,
+      "aperture_alpha": 2
+    },
+    {
+      "path": "png/color/ember-48.png",
+      "size": 48,
+      "sha256": "2856a2efa42939c187c19b34ce677631b1c3c9e73265bf28b1ec464afa11d5f7",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/color/ember-64.png",
+      "size": 64,
+      "sha256": "af16846cad31877da1b75b9a9c7ef88b9f65eb750c5de5eb458bf1d033fbedf9",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/color/ember-128.png",
+      "size": 128,
+      "sha256": "5d9792ccd89e5c6fd2ca421ed81cc6aa6c2720db6c62687f3236c9c98c4e7768",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/color/ember-256.png",
+      "size": 256,
+      "sha256": "499afb06b6b07f6aeb3661e7b83bc9a4f863d941aaf342dd0d35c31e140d361c",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/color/ember-512.png",
+      "size": 512,
+      "sha256": "c9b8396cff0cf9cf3ae697f35d284850d63b42341cc62c117a4d6321e88815c8",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/color/ember-1024.png",
+      "size": 1024,
+      "sha256": "d07853b1d53b83fd912747397b67a9d7819b6469658ad470239bc49a648b1d8c",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/black/ember-16.png",
+      "size": 16,
+      "sha256": "89eef8eb1873f249d919c4af6cb34920e0f6840115eb3e82ecef8604ec3d3cb6",
+      "background_alpha": 0,
+      "aperture_alpha": 6
+    },
+    {
+      "path": "png/black/ember-24.png",
+      "size": 24,
+      "sha256": "9d5862d9d4daa5b60a9dd6e8620021d1727e1d945bf62bc1f70d31337b394731",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/black/ember-32.png",
+      "size": 32,
+      "sha256": "820c3b1a9ed3b3eb247297c5d136a3ddb7a09fee6a2167b6f26b82002e82fe83",
+      "background_alpha": 0,
+      "aperture_alpha": 2
+    },
+    {
+      "path": "png/black/ember-48.png",
+      "size": 48,
+      "sha256": "55aef842dec88668bab21860c8004b64485c6434322c95a236f83484597ae7ec",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/black/ember-64.png",
+      "size": 64,
+      "sha256": "1cabb083923d4862a6591ee0297cee0677c08a86f4766c877a27e340469f3182",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/black/ember-128.png",
+      "size": 128,
+      "sha256": "96dcd3a421a3fb3843be7ed32083220881eb6fb09d3655d825e9666e3b45b3e7",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/black/ember-256.png",
+      "size": 256,
+      "sha256": "c67265a5e49af79adba25b76e9609a373efdaa8aa1a131959af9a0a841d99093",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/black/ember-512.png",
+      "size": 512,
+      "sha256": "e6c40ecc1255f7554d9e335fd0de7a96b7473b6ab55c22114ad01ab2218bfb91",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/black/ember-1024.png",
+      "size": 1024,
+      "sha256": "9832a525e971a210ec9344bf4273e5751c77f200a2fd5ff456fba525852a2581",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/white/ember-16.png",
+      "size": 16,
+      "sha256": "cd69f32ab578158cba22f2af3b3f7de4cc2c8873f075454478cd1c3ac12aed9d",
+      "background_alpha": 0,
+      "aperture_alpha": 6
+    },
+    {
+      "path": "png/white/ember-24.png",
+      "size": 24,
+      "sha256": "2389c346f6413d2379fee36b2ca9b275bb3d9b4184a8c19b458bf8fd36694763",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/white/ember-32.png",
+      "size": 32,
+      "sha256": "2d06b7209c7bcb3cdefb9e7bc8768f4349c081263fb4fe800560b40f01c83578",
+      "background_alpha": 0,
+      "aperture_alpha": 2
+    },
+    {
+      "path": "png/white/ember-48.png",
+      "size": 48,
+      "sha256": "2cdd61439439cdd40fda4bc6fa9c5b535bd53d42900567a0721a78f05735fb2c",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/white/ember-64.png",
+      "size": 64,
+      "sha256": "b65733a38da47b153536c14d8234e5fb9e98c74e3ce1c9558a49a8f06021c904",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/white/ember-128.png",
+      "size": 128,
+      "sha256": "712761b32b2cc92e1db4ac893b54a8bcc25bd245071bad05ba7cd984d526b629",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/white/ember-256.png",
+      "size": 256,
+      "sha256": "c7c946fd92bb52d3b25edaf78d46d1aa07b24462d545b7bcd0f6903c8e2b770a",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/white/ember-512.png",
+      "size": 512,
+      "sha256": "964cc78c5b19937ac0d3a4b74da309c981929ed60d56964dd2e27356645b15cc",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/white/ember-1024.png",
+      "size": 1024,
+      "sha256": "387f720e1d864638d6dfa11a9435334de605634465f9fbdc78aaf4f5d8cd60eb",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/reverse/ember-16.png",
+      "size": 16,
+      "sha256": "2ecc7c65e9b97fdae6deb8fbb25434051f731c5766dcb0222d0c66c3671cb07d",
+      "background_alpha": 0,
+      "aperture_alpha": 6
+    },
+    {
+      "path": "png/reverse/ember-24.png",
+      "size": 24,
+      "sha256": "5773a1660205b9fadd91823cb3b8451341bd62c380d16f522239033f9e886dc9",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/reverse/ember-32.png",
+      "size": 32,
+      "sha256": "02c7368d90e9983f6861c0e2589bd547c723c9bcc41f5a49622e3ee7b356241e",
+      "background_alpha": 0,
+      "aperture_alpha": 2
+    },
+    {
+      "path": "png/reverse/ember-48.png",
+      "size": 48,
+      "sha256": "9cf98c90780c8f3141314855d694e691838ce0e6ab4b9b078b3331a115229703",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/reverse/ember-64.png",
+      "size": 64,
+      "sha256": "b7bbbe0c37891dffa4f090bd97a69203881701c9cb7841bfa9732439974d37a8",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/reverse/ember-128.png",
+      "size": 128,
+      "sha256": "549be58e64f1b09dbaf5223e30fc584450def925e37312f0a2e75ded33bb02f7",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/reverse/ember-256.png",
+      "size": 256,
+      "sha256": "da0a0dacbf3ba43bce9ad93201fa5a41541da35d1971aebe0741a82df7ed4fb7",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/reverse/ember-512.png",
+      "size": 512,
+      "sha256": "05146ef6f2b4c7753dded5f6520825281a64d0497cac2d28bf911f2a4ea0beeb",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    },
+    {
+      "path": "png/reverse/ember-1024.png",
+      "size": 1024,
+      "sha256": "7f268a14cb0036d9db61c098781362c2dfb330cee06e31bb033dfd04c68e0f7b",
+      "background_alpha": 0,
+      "aperture_alpha": 0
+    }
+  ],
+  "desktop": {
+    "ico_sizes": [
+      16,
+      24,
+      32,
+      48,
+      64,
+      128,
+      256
+    ],
+    "icns_sizes": [
+      16,
+      32,
+      64,
+      128,
+      256,
+      512,
+      1024
+    ]
+  },
+  "apple": {
+    "size": 1024,
+    "opaque": true,
+    "appearances": [
+      "default",
+      "dark",
+      "tinted"
+    ]
+  },
+  "checks": "decoded PNG dimensions, transparent corners & aperture; opaque Apple fallbacks"
+}

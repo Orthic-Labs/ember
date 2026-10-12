@@ -8,6 +8,7 @@ covers a whole directory), or if a licence file referenced in the Licence column
 
 | Path | Asset | Creator | Source | Licence | Added | Modifications |
 |---|---|---|---|---|---|---|
+| `assets/brand/aperture-flame-v1/` (PNG, ICO & ICNS exports) | Ember aperture + single-flame icon pack | Orthic Labs; direction selected by Adrian | original work; transparent master isolated with OpenAI Imagegen from our original concept | MIT OR Apache-2.0 (`assets/brand/aperture-flame-v1/LICENSE.txt`) | 2026-10-13 | one master; identical-alpha monochrome/reverse variants, size exports & platform container encoding via `packaging/build-aperture-icon-pack.cjs` |
 | `assets/fonts/Inter-*.ttf` (Regular, Medium, SemiBold) | Inter | Rasmus Andersson | https://github.com/rsms/inter | SIL Open Font License 1.1 (`assets/fonts/OFL-Inter.txt`) | 2026-09-30 | none |
 | `assets/app-icon/` (Ember SVG & derived PNG/ICNS/ICO files) | Ember flame icon | Orthic Labs | original work; `assets/app-icon/ember.svg` | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) | 2026-10-09 | supersampled PNG/ICO/ICNS renders via `packaging/render-icons.py` |
 | `assets/camera-profiles/*.json` | Camera colour profiles (matrix + hue/saturation/value table), built into LightCraft | ILCE-7M4: Harald Hoyer | original work: fitted by `lightcraft-cli calibrate` to the contributor's own raw photos and their in-camera JPEGs (597 ILCE-7M4 photos, 2026); aggregate colour statistics only, no image content or third-party profile data | MIT OR Apache-2.0 | 2026-10-07 | none |

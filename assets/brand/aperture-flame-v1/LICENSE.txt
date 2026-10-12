@@ -1,0 +1,7 @@
+Ember aperture + single-flame icon pack.
+Copyright (c) 2026 Orthic Labs.
+Original concept selected by Adrian; transparent master isolated with OpenAI Imagegen.
+Size, monochrome, reverse & platform derivatives assembled by Orthic Labs.
+
+Licensed under either Apache License, Version 2.0 or MIT licence, at your option.
+Full licence texts: LICENSE-APACHE.txt & LICENSE-MIT.txt in this pack.

@@ -1,0 +1,10 @@
+{
+  "schema": "ember.icon-provenance.v1",
+  "selected_direction": "aperture + single flame",
+  "input_sha256": "7bbb35a47e74f7a9d829a6c414aacf6e615adb223307d90b43764e21a0f454d1",
+  "tool": "built-in image_gen",
+  "transparent_background": true,
+  "prompt": "Precise logo asset extraction edit. Edit target is supplied Ember aperture + single orange flame logo. Extract ONLY the large upper SYMBOL, removing white background, Ember wordmark, and tiny lower symbol. Preserve exactly its geometry: four dark charcoal curved aperture blades plus ONE tall orange flame at upper right, identical silhouette/negative gaps/central opening to input. Do not convert all blades into flames; do not redesign or change proportions. Output a single clean centered large symbol on genuine transparent background, with center hole and gaps transparent too. Sharp smooth vector-like edges, flat dark charcoal #282828 blades and solid ember orange #ce551b flame, no shadows, no texture, no gradients, no glow, no border, no letters, no duplicate marks. Fit symbol within square canvas with 8% padding.",
+  "output_master_sha256": "ab51f047945f2da700a9da566d9d3738bc4590363858be732c02199accdb224a",
+  "prepared_at_utc": "2026-10-12T19:53:52.8261498Z"
+}
