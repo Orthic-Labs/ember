@@ -1965,6 +1965,37 @@ mod tests {
         assert!(e.contains("without an embedded preview"), "{e}");
     }
 
+    /// Issue #1275: an uncompressed Leaf MOS (IFD0 is the 16-bit mosaic, no Make tag; Leaf's data block `0x8606`
+    /// holds the preview) imports as a raw shown from its preview, not as a greyscale image of the mosaic.
+    #[test]
+    fn uncompressed_leaf_mos_imports_as_a_preview_only_raw() {
+        use lightcraft_tiff::{IfdBuilder, ImageData, TiffWriter, Value, tags as t};
+        let px: Vec<u8> = (0..40 * 30).flat_map(|i| [(i % 251) as u8, 128, 200]).collect();
+        let jpeg = encode_jpeg(&EncodeImage::new(40, 30, 3, Samples::U8(&px)), 90, ChromaSubsampling::S444, &EncodeMeta::default()).unwrap();
+        let mos = |leaf_data: bool| {
+            let mut ifd0 = IfdBuilder::new();
+            ifd0.set(t::IMAGE_WIDTH, Value::Long(vec![16]));
+            ifd0.set(t::IMAGE_LENGTH, Value::Long(vec![12]));
+            ifd0.set(t::BITS_PER_SAMPLE, Value::Short(vec![16]));
+            ifd0.set(t::SAMPLES_PER_PIXEL, Value::Short(vec![1]));
+            ifd0.set(t::PHOTOMETRIC, Value::Short(vec![1]));
+            ifd0.set(t::COMPRESSION, Value::Short(vec![1]));
+            ifd0.set_image(ImageData::Tiles { tile_width: 16, tile_height: 12, tiles: vec![vec![0x30; 16 * 12 * 2]] });
+            if leaf_data {
+                ifd0.set(0x8606, Value::Undefined([&b"PKTS\0\0\0\x01"[..], &jpeg].concat()));
+            }
+            TiffWriter::default().write(&[ifd0]).unwrap()
+        };
+        let p = probe_bytes("aptus22.mos", &mos(true)).unwrap();
+        assert_eq!((p.kind, p.format.as_str(), p.width, p.height), (MediaKind::Raw, "MOS", 40, 30));
+        assert!(p.preview_only.is_some_and(|why| !why.is_empty()));
+        let (img, src) = load_bytes(&mos(true), 20).unwrap();
+        assert_eq!((img.width, img.height, src.raw), (20, 15, false));
+        // the same grey image without Leaf's block is an ordinary 16-bit TIFF
+        let plain = probe_bytes("grey.tif", &mos(false)).unwrap();
+        assert_eq!((plain.kind, plain.preview_only, plain.width, plain.height), (MediaKind::Image, None, 16, 12));
+    }
+
     /// A GoPro GPR (DNG with VC-5 coded data, no preview anywhere) still imports, described from its
     /// headers; loading it says what is wrong instead of naming a bare TIFF compression number.
     #[test]

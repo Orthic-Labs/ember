@@ -28,6 +28,14 @@
 - Olympus E-10 raws open with the camera's white balance (White Balance ▸ As Shot) and without the grey haze in
   the shadows: the black level recorded in the file is now subtracted.
 
+## 2026-10-12
+
+### Leaf and Hasselblad raws
+- The Hasselblad Lunar's raws (a Sony NEX-7 inside) now develop from their sensor data with every editing tool,
+  instead of opening as their embedded preview. Photos imported earlier switch over with Photo ▸ Reload from Disk.
+- An uncompressed Leaf Aptus 22 MOS no longer opens as a dark, colourless picture of its sensor mosaic: it imports
+  as a raw and shows its embedded preview (preview only, with the reason), as the compressed MOS files do.
+
 ## 2026-10-11
 
 ### HDR and panorama merges of CR2 keep their colour
