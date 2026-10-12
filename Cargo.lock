@@ -4437,6 +4437,7 @@ dependencies = [
  "lightcraft-denoise",
  "lightcraft-develop",
  "lightcraft-engine",
+ "lightcraft-geom",
  "lightcraft-mcp",
  "lightcraft-merge",
  "lightcraft-photo-ai",

@@ -1,7 +1,7 @@
 # Auto decision model (plan)
 
-Status: read-only `ai decision manifest` discovery is implemented in source; extraction, training,
-evaluation & model integration are planned. This is an offline experiment for learning continuous treatment targets from
+Status: read-only `ai decision manifest` discovery & `ai decision extract` rendered-pair extraction
+are implemented in source; training, evaluation & model integration remain separate. This is an offline experiment for learning continuous treatment targets from
 finished renders. It does not change deterministic Auto or authorize a default change. If enabled
 later, an absent, invalid or incompatible model must preserve deterministic Auto's current result.
 
@@ -62,13 +62,38 @@ reasons. Compare aligned mask populations before measuring region labels.
 
 ## Eligible examples and provenance
 
-Use only positive evidence of human develop edits. The catalog field
+For this owner's corpus, every existing finished export is an intended treatment example, including
+Auto plus personal adjustments. No shortlist or per-look approval filter applies. Retain manual-edit,
+Auto-only & copied-setting provenance as evaluation strata; never fabricate missing history or pair
+identity. Untouched catalog JPEGs are sources, not automatically finished targets. The catalog field
 `Adobe_libraryImageDevelopHistoryStep` is an implementation identifier for history inspection,
-not proof by itself that a photo was personally edited. Require recognized edit evidence and
-exclude untouched photos, Auto-only edits, sync/paste-only copies, and uncertain histories with
-explicit drop reasons. History labels may vary; unknown history is excluded. Treat edits after an
-Auto step as candidate preference evidence only when an actual human change is established; retain
-confidence/source strata for evaluation.
+not proof by itself that a photo was personally edited. History labels may vary; uncertain identity
+or export-version history remains quarantined with an explicit reason.
+
+### Rendered-pair extractor
+
+`lightcraft-cli ai decision extract --manifest PRIVATE_JSON --out NEW_NUMERIC_JSON` reads
+`ember.ai-decision-extract-input.v1`: `user_consented:true` & 1–64 `records`. Each record requires
+opaque `photo_id`, `source_path`, `export_path`, lowercase SHA256 `source_sha256`, `export_sha256`,
+`provenance_sha256`, `metadata_identity_bound:true`, `source_is_raw`, `unsupported_geometry`, &
+`target_intent:"user_selected_finished_export"`. Provenance hash references caller's separately
+verified private identity/history evidence; it is not inferred by pixel extraction.
+
+Extractor verifies media content, rejects RAW embedded-preview fallback, uses a disposable in-memory
+catalog with sidecar writes disabled, & emits path-free `ember.ai-decision-numeric.v1` records.
+Failures remain explicit quarantines. Source & finished images are compared at ≤512 px long edge:
+mutual MOPS matches, deterministic similarity RANSAC on 4/5 correspondences, held-out 1/5 validation,
+≥6 held-out inliers, p90 residual ≤1 comparison pixel, ≥3 quadrants & ≥99% target coverage. This is
+proxy-coordinate accuracy, not a claim of one sensor-pixel registration. No identity fallback exists.
+
+Source pixels are resampled into verified finished-image frame. The existing v2 28-field feature
+extractor & full deterministic Auto run on that frame. Finished image is decoded with its ICC profile
+& orientation, converted to linear Rec.2020 D65, then measured with shared `look::extract_linear`.
+Labels are gamma-2.2 luminance median & p95−p05 spread, minus deterministic objective targets.
+Top, bottom, clip & weights remain unchanged. Before/Auto/finished pixel hashes & statistics,
+geometry, fingerprints, runtime, camera-profile cache key & Auto revision accompany numeric rows.
+Pixels are not saved in numeric output. Rows remain split-unassigned & ineligible until complete
+corpus grouping joins exact/near duplicates, source families & shoot/session relationships.
 
 Raw/export pairing must bind source identity, virtual-copy identity, export recipe, dimensions,
 edit/version time, and geometry. Filename similarity alone is insufficient. The private pairing

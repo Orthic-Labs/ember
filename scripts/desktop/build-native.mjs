@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { runCargoSync } from '@rightkit/release/managed-cargo.mjs';
 import { resolveTauriBundleDirectory } from '@rightkit/release/development.mjs';
-import { artifactRoot, currentPlatform, fail, repoRoot, sha256 } from './lib.mjs';
+import { artifactRoot, cargoCompilerArtifacts, currentPlatform, fail, materializeArtifacts, repoRoot, sha256 } from './lib.mjs';
 
 if (process.env.GITHUB_ACTIONS !== 'true') fail('native build requires generated RightKit Actions');
 const platform = currentPlatform();
@@ -28,7 +28,7 @@ function printCompilerErrors(stdout) {
 const fonts = path.join(process.env.RUNNER_TEMP, 'lightcraft-build-fonts');
 const clone = spawnSync('git', ['clone', '--quiet', 'https://github.com/storytold/craft-fonts.git', fonts], { stdio: 'inherit', windowsHide: true });
 if (clone.error || clone.status !== 0) fail('craft-fonts clone failed');
-const checkout = spawnSync('git', ['-C', fonts, 'checkout', '--quiet', 'abb83316d96aa59c1cf64784289e378fe9fa5695'], { stdio: 'inherit', windowsHide: true });
+const checkout = spawnSync('git', ['-C', fonts, 'checkout', '--quiet', '8dcdacd5153e64560d109541a47d806f26f048c0'], { stdio: 'inherit', windowsHide: true });
 if (checkout.error || checkout.status !== 0) fail('pinned craft-fonts checkout failed');
 const env = { ...process.env, CRAFT_FONTS_DIR: fonts, CRAFT_FONTS_REQUIRED: '1' };
 run(['run', 'build'], repoRoot, env);
@@ -40,6 +40,18 @@ if (cliCompiler.error || cliCompiler.status !== 0) {
   printCompilerErrors(cliCompiler.stdout);
   fail(`RightKit headless CLI Cargo failed: ${cliCompiler.error?.message || cliCompiler.status}`);
 }
+// Preserve offline extractor independently of later desktop packaging/installation.
+const cliRecord = path.join(root, 'cli-cargo-artifacts.jsonl');
+const cliEntries = cargoCompilerArtifacts(cliRecord).filter(entry => entry.target === 'lightcraft-cli' && entry.kind === 'executable');
+if (cliEntries.length !== 1) fail('expected one headless CLI compiler artifact');
+materializeArtifacts(cliEntries, path.join(root, 'headless-cli'), {
+  sourceRevision: process.env.RIGHT_GIT_SOURCE_REVISION,
+  platform,
+  architecture: platform === 'macos' ? 'arm64' : 'x86_64',
+  compilerRecordSha256: sha256(cliRecord),
+  qualification: 'compiled; source gates required before corpus extraction',
+  unsigned: true,
+});
 const compiler = runCargoSync(['build', '--locked', '--manifest-path', 'apps/lightcraft-desktop/Cargo.toml', '--features', 'qa-native,custom-protocol', '--target', target, '--profile', 'release-iterate', '--message-format=json'], { cwd: repoRoot, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true });
 // Retain compiler records on failures too. A large asynchronous stdout write
 // followed by process failure can drop diagnostics near the end of JSON output.
