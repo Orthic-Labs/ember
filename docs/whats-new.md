@@ -16,6 +16,12 @@
   3396 K, one on the Shade preset 7493 K. As for #730, only the numbers change: edits made on the old relative
   scale keep their look, and As Shot shows the real temperature once the file is opened.
 
+## 2026-10-12
+
+### Older raw cameras
+- Canon PowerShot G9 raws open with the camera's white balance (White Balance ▸ As Shot); it used to start from a
+  neutral default.
+
 ## 2026-10-11
 
 ### HDR and panorama merges of CR2 keep their colour
