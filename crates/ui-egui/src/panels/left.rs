@@ -570,7 +570,7 @@ fn sections_menu(app: &mut LightcraftApp, ui: &mut egui::Ui, on: Option<SidebarS
 /// The menu of Albums' +: Create Album, Smart Album, Folder…
 fn new_album_menu(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     if ui.button(crate::i18n::tr("Create Album…")).clicked() {
-        app.ui.dialog = Some(crate::state::Dialog::NewAlbum { name: String::new(), folder: false, parent: None });
+        app.ui.dialog = Some(crate::state::Dialog::NewAlbum { name: String::new(), folder: false, parent: None, include_selected: true });
     }
     if ui.button(crate::i18n::tr("Create Smart Album…")).clicked() {
         app.ui.dialog = Some(crate::state::Dialog::SmartRules {
@@ -584,7 +584,7 @@ fn new_album_menu(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         app.ui.dialog = Some(crate::state::Dialog::NewSmartAlbum { name: String::new(), parent: None });
     }
     if ui.button(crate::i18n::tr("Create Folder…")).clicked() {
-        app.ui.dialog = Some(crate::state::Dialog::NewAlbum { name: String::new(), folder: true, parent: None });
+        app.ui.dialog = Some(crate::state::Dialog::NewAlbum { name: String::new(), folder: true, parent: None, include_selected: false });
     }
     // only once the albums were put in an order by hand
     if app.session.catalog.album_children_are_ordered(None) {

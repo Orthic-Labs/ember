@@ -1085,13 +1085,22 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             Ok(Value::Null)
         }
         "dialog.newFolder" => {
-            app.ui.dialog =
-                Some(Dialog::NewAlbum { name: p.get("name").and_then(Value::as_str).unwrap_or("").into(), folder: true, parent: parent_param(p) });
+            app.ui.dialog = Some(Dialog::NewAlbum {
+                name: p.get("name").and_then(Value::as_str).unwrap_or("").into(),
+                folder: true,
+                parent: parent_param(p),
+                include_selected: false,
+            });
             Ok(Value::Null)
         }
         "dialog.newAlbum" => {
-            app.ui.dialog =
-                Some(Dialog::NewAlbum { name: p.get("name").and_then(Value::as_str).unwrap_or("").into(), folder: false, parent: parent_param(p) });
+            // {name?, parent?, includeSelected? (true)}
+            app.ui.dialog = Some(Dialog::NewAlbum {
+                name: p.get("name").and_then(Value::as_str).unwrap_or("").into(),
+                folder: false,
+                parent: parent_param(p),
+                include_selected: p.get("includeSelected").and_then(Value::as_bool).unwrap_or(true),
+            });
             Ok(Value::Null)
         }
         "dialog.autoStack" => {

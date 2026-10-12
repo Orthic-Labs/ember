@@ -608,7 +608,18 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                         confirm = true;
                     }
                 }
-                Dialog::NewAlbum { name, .. } | Dialog::RenameAlbum { name, .. } => {
+                Dialog::NewAlbum { name, folder, include_selected, .. } => {
+                    if dialog_field(ui, "field:albumName", name, "Name") {
+                        confirm = true;
+                    }
+                    // as in Lightroom, the option is only there when something is selected
+                    if !*folder && !app.session.targets(&json!({})).is_empty() {
+                        ui.add_space(6.0);
+                        let r = ui.checkbox(include_selected, crate::i18n::tr("Include selected photos"));
+                        crate::widgets::register(ui.ctx(), "check:albumIncludeSelected", r.rect);
+                    }
+                }
+                Dialog::RenameAlbum { name, .. } => {
                     if dialog_field(ui, "field:albumName", name, "Name") {
                         confirm = true;
                     }
@@ -1542,8 +1553,8 @@ pub fn confirm_dialog(app: &mut LightcraftApp, dlg: &Dialog) -> Result<serde_jso
             }
             r
         }
-        Dialog::NewAlbum { name, folder, parent } => {
-            created_in(app, "album.create", json!({"name": name, "folder": folder, "addSelected": !folder, "parent": parent}))
+        Dialog::NewAlbum { name, folder, parent, include_selected } => {
+            created_in(app, "album.create", json!({"name": name, "folder": folder, "addSelected": !folder && *include_selected, "parent": parent}))
         }
         Dialog::RenameAlbum { id, name } => app.run("album.rename", json!({"id": id, "name": name})),
         Dialog::TextPrompt { value, command, params, key, .. } => {

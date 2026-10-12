@@ -1851,7 +1851,7 @@ mod tests {
             }
             assert_eq!(h.app.ui.dialog, None, "Return confirmed the dialog ({typed})");
         };
-        confirm(&mut h, Dialog::NewAlbum { name: String::new(), folder: false, parent: None }, "Weddings");
+        confirm(&mut h, Dialog::NewAlbum { name: String::new(), folder: false, parent: None, include_selected: true }, "Weddings");
         assert!(album(&h, "Weddings").is_some(), "New Album");
         confirm(&mut h, Dialog::RenameAlbum { id: garden, name: "Garden".into() }, "Flowers");
         assert_eq!(album(&h, "Flowers"), Some(garden), "Rename Album");
