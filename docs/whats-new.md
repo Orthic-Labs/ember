@@ -46,6 +46,16 @@
 
 ## 2026-10-13
 
+### Large libraries: Synchronize Folder, import and sidecars start sooner
+- Opening Synchronize Folder, an import review or an import no longer makes a table of every photo in the library
+  before it looks at the first file. In a library of 3.5 million photos that held the window for about 6 s before
+  a Synchronize scan began (now under 1 s), 2.6 s before an import review (now 0.05 s) and 1.7 s before an import
+  (now 0.05 s). The scan looks up only the files it finds and the contents it reads, on its own thread.
+- Writing one photo's XMP sidecar (Save Metadata to File, or automatically after an edit) no longer works out who
+  owns every shared sidecar name in the library: 2.4 s a write in that library, now under 1 s.
+- Nothing else changes: the same files are found new, already there, moved or missing, and sidecars get the same
+  names.
+
 ### Slider drags on large raws
 - Dragging a slider no longer re-renders the edited photo's filmstrip thumbnail on every frame; it follows once you
   let go. On a 64 MP raw the first of those renders decoded the whole file again, which held up the loupe's
