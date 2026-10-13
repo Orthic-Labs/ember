@@ -51,12 +51,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
     println!(
         "{}",
         json!({
-            "schema": "ember.gray-plane-extract.v1", "extractor_revision": "gray-plane.v1",
+            "schema": "ember.gray-plane-extract.v1", "extractor_revision": "gray-plane.v2",
             "input_sha256": expected, "pgm_sha256": digest(&pgm), "pgm_bytes": pgm.len(),
             "width": plane.width, "height": plane.height, "bits": plane.bits,
             "samples": plane.samples.len(), "sample_order": "row-major",
             "sample_encoding": if plane.bits == 8 { "u8" } else { "u16-big-endian" },
             "nominal_max": if plane.bits == 8 { 255 } else { 65535 },
+            "sample_fidelity": "codec_reconstructed_unsigned_samples",
+            "pre_lossy_encoding_codes_verified": false, "chunks": plane.chunks,
             "orientation": 1, "rescaled": false, "semantic_label": null,
             "image_registration_verified": false, "training_eligible": false,
             "source_writes": false, "decoder_threads": 1
@@ -106,9 +108,9 @@ mod tests {
 
     #[test]
     fn pgm_has_exact_sample_codes_and_network_byte_order() {
-        let plane = GrayPlane { width: 2, height: 1, bits: 16, samples: vec![1, 65535] };
+        let plane = GrayPlane { width: 2, height: 1, bits: 16, samples: vec![1, 65535], chunks: vec![] };
         assert_eq!(pgm(&plane).unwrap(), b"P5\n2 1\n65535\n\x00\x01\xff\xff");
-        let plane = GrayPlane { width: 2, height: 1, bits: 8, samples: vec![0, 255] };
+        let plane = GrayPlane { width: 2, height: 1, bits: 8, samples: vec![0, 255], chunks: vec![] };
         assert_eq!(pgm(&plane).unwrap(), b"P5\n2 1\n255\n\x00\xff");
     }
 }

@@ -57,9 +57,15 @@ one unsigned grayscale TIFF image through Rust, including tiled JPEG XL. It requ
 input SHA256 & create-new output, caps input at 32 MiB, image at 8 Mi pixels/8192 per edge,
 chunks at 256 & total nominal chunk samples at 16 Mi. Decoding uses one worker thread.
 Incomplete coverage, truncated extents, prediction, non-identity orientation, unsupported
-sample conventions & child IFDs fail explicitly. PGM retains original integer codes:
+sample conventions & child IFDs fail explicitly. PGM carries codec-reconstructed integer samples:
 8-bit bytes or 16-bit big-endian samples, without development, scaling or library imports.
-Receipt binds input/output hashes, dimensions & nominal bit depth. Failed new files have
+Linear D65 grayscale XYB tiles reconstruct luminance through the declared grayscale encoding;
+ICC, non-linear, mismatched colour planes & HDR intensity targets fail explicitly. Lossy
+reconstruction cannot recover original pre-encoding codes. Lossless decoding retains exact codes.
+Revision `gray-plane.v2` receipts bind input/output hashes, dimensions, nominal bit depth &
+per-chunk JPEG XL dimensions, codestream depth, frame mode, XYB flag, colour encoding & intensity.
+These facts qualify decoded representation only; callers must accept the new revision explicitly.
+Failed new files have
 no successful receipt & must not become corpus objects.
 
 This generic raster decoder does not interpret private store envelopes. External private

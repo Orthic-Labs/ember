@@ -16,6 +16,8 @@
 //! [0, 1], which destroys raw values above 1.0 (a `WhiteLevel` of 32768 puts them far above) and
 //! desaturates. The result is the linear sample space the DNG's `WhiteLevel` refers to, up to the
 //! codec's loss, and can exceed 1.0 or dip below 0.
+//! Linear D65 grayscale XYB tiles request a grayscale reconstruction, without treating
+//! one RGB channel as luminance. Lossy samples cannot recover pre-encoding integer codes.
 //!
 //! Every tile is decoded with wide (32-bit) modular buffers. A lossy tile whose header sets
 //! `modular_16bit_buffers` can still carry values that need more than 16 bits; the narrow buffers then
@@ -87,31 +89,36 @@ enum Output {
     /// XYB (lossy) data: linear sRGB primaries from the decoder, then `Some(matrix)` to the declared
     /// primaries (`None` when those are sRGB's).
     FromXyb(Option<[[f32; 3]; 3]>),
+    /// Linear D65 grayscale reconstruction in the declared nominal sample space.
+    GrayFromXyb,
 }
 
 /// Decide how to render a chunk from its header: whether it is XYB-coded, the declared colour
 /// encoding and the intensity target. Lossy data is only accepted when the declared encoding is a
-/// linear RGB one with a D65 white point (what a raw DNG writer signals) and no HDR tone mapping would
+/// linear RGB or grayscale one with a D65 white point and no HDR tone mapping would
 /// apply, otherwise the samples cannot be restored faithfully.
 fn output_for(xyb: bool, encoding: &ColourEncoding, intensity_target: f32, planes: usize) -> Result<Output> {
     if !xyb {
         return Ok(Output::AsCoded);
     }
     let unsupported = |what: &str| RawError::Unsupported(format!("lossy JPEG XL tile with {what}"));
-    if planes != 3 {
-        return Err(unsupported("a single colour plane"));
-    }
     let ColourEncoding::Enum(e) = encoding else {
         return Err(unsupported("an ICC profile instead of a colour encoding"));
     };
-    if e.colour_space != ColourSpace::Rgb || e.tf != TransferFunction::Linear {
-        return Err(unsupported("a declared encoding that is not linear RGB"));
+    if e.tf != TransferFunction::Linear {
+        return Err(unsupported("a non-linear declared encoding"));
     }
     if e.white_point != WhitePoint::D65 {
         return Err(unsupported("a white point other than D65"));
     }
-    if intensity_target > 255.0 {
-        return Err(unsupported("an intensity target above 255 nits"));
+    if !intensity_target.is_finite() || intensity_target <= 0.0 || intensity_target > 255.0 {
+        return Err(unsupported("an invalid or HDR intensity target"));
+    }
+    if planes == 1 && e.colour_space == ColourSpace::Grey {
+        return Ok(Output::GrayFromXyb);
+    }
+    if planes != 3 || e.colour_space != ColourSpace::Rgb {
+        return Err(unsupported("a colour-space/plane mismatch"));
     }
     let primaries = match e.primaries {
         Primaries::Srgb => return Ok(Output::FromXyb(None)),
@@ -177,8 +184,15 @@ fn open(src: &[u8], cw: usize, ch: usize, vw: usize, vh: usize, cpp: usize, bits
         d => return Err(RawError::Corrupt(format!("JPEG XL tile sample type {d:?} does not match the IFD"))),
     };
     let output = output_for(header.metadata.xyb_encoded, &header.metadata.colour_encoding, header.metadata.tone_mapping.intensity_target, planes)?;
-    if matches!(output, Output::FromXyb(_)) {
-        img.request_color_encoding(EnumColourEncoding::srgb_linear(RenderingIntent::Relative));
+    if float && output == Output::GrayFromXyb {
+        return Err(RawError::Unsupported("lossy floating grayscale JPEG XL sample restoration".into()));
+    }
+    if !matches!(output, Output::AsCoded) {
+        let mut encoding = EnumColourEncoding::srgb_linear(RenderingIntent::Relative);
+        if output == Output::GrayFromXyb {
+            encoding.colour_space = ColourSpace::Grey;
+        }
+        img.request_color_encoding(encoding);
     }
     Ok((img, max, output))
 }
@@ -187,6 +201,36 @@ fn open(src: &[u8], cw: usize, ch: usize, vw: usize, vh: usize, cpp: usize, bits
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn check(src: &[u8], cw: usize, ch: usize, vw: usize, vh: usize, cpp: usize, bits: u32, float: bool) -> Result<()> {
     open(src, cw, ch, vw, vh, cpp, bits, float).map(|_| ())
+}
+
+/// Retain actual codestream/frame metadata separately from TIFF's nominal sample layout.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn coding(src: &[u8], cw: usize, ch: usize, vw: usize, vh: usize, bits: u32) -> Result<crate::plane::JxlCoding> {
+    let (img, _, _) = open(src, cw, ch, vw, vh, 1, bits, false)?;
+    let metadata = &img.image_header().metadata;
+    if metadata.animation.is_some() || !metadata.ec_info.is_empty() || img.num_loaded_keyframes() != 1 {
+        return Err(RawError::Unsupported("grayscale plane requires one complete still frame without extra channels".into()));
+    }
+    if !metadata.tone_mapping.intensity_target.is_finite() || metadata.tone_mapping.intensity_target <= 0.0 {
+        return Err(corrupt("invalid plane intensity target"));
+    }
+    let BitDepth::IntegerSample { bits_per_sample } = metadata.bit_depth else {
+        return Err(corrupt("plane codestream is not integer"));
+    };
+    let frame = img.frame_header(0).ok_or_else(|| corrupt("missing plane frame header"))?;
+    Ok(crate::plane::JxlCoding {
+        width: img.width(),
+        height: img.height(),
+        bits: bits_per_sample,
+        frame_encoding: match frame.encoding {
+            Encoding::VarDct => "vardct",
+            Encoding::Modular => "modular",
+        }
+        .into(),
+        xyb_encoded: metadata.xyb_encoded,
+        colour_encoding: format!("{:?}", metadata.colour_encoding),
+        intensity_target: metadata.tone_mapping.intensity_target,
+    })
 }
 
 /// Decode one chunk into `cw × ch × cpp` samples (row-major, interleaved); a chunk coded at its
@@ -208,7 +252,7 @@ pub(crate) fn decode(src: &[u8], cw: usize, ch: usize, vw: usize, vh: usize, cpp
     // lossy data: restore the declared primaries (see the module documentation)
     let matrix = match output {
         Output::FromXyb(m) => m,
-        Output::AsCoded => None,
+        Output::AsCoded | Output::GrayFromXyb => None,
     };
     let restore = |s: &[f32], d: &mut [f32]| match matrix {
         Some(m) => {
@@ -276,6 +320,36 @@ mod tests {
     #[test]
     fn lossy_data_with_srgb_primaries_needs_no_matrix() {
         assert_eq!(output_for(true, &linear(Primaries::Srgb), 255.0, 3).unwrap(), Output::FromXyb(None));
+    }
+
+    #[test]
+    fn lossy_linear_gray_reconstructs_luminance_instead_of_rgb_channel() {
+        let bytes = crate::plane::LOSSY_GRAY_8X8;
+        let metadata = coding(bytes, 8, 8, 8, 8, 8).unwrap();
+        assert!(metadata.xyb_encoded);
+        assert_eq!(metadata.frame_encoding, "vardct");
+        assert_eq!(metadata.bits, 8);
+        let ChunkPx::U16(samples) = decode(bytes, 8, 8, 8, 8, 1, 8, false).unwrap() else { panic!("integer grayscale") };
+        assert_eq!(samples.len(), 64);
+        for (sample, reference) in samples.iter().zip(crate::plane::LOSSY_GRAY_REFERENCE) {
+            assert!(sample.abs_diff(u16::from(*reference)) <= 1, "{sample} versus {reference}");
+        }
+    }
+
+    #[test]
+    fn grayscale_xyb_requires_linear_d65_without_tone_mapping() {
+        let mut encoding = EnumColourEncoding::srgb_linear(RenderingIntent::Relative);
+        encoding.colour_space = ColourSpace::Grey;
+        assert_eq!(output_for(true, &ColourEncoding::Enum(encoding.clone()), 255.0, 1).unwrap(), Output::GrayFromXyb);
+        for target in [f32::NAN, f32::INFINITY, 0.0, -1.0, 10_000.0] {
+            assert!(output_for(true, &ColourEncoding::Enum(encoding.clone()), target, 1).is_err());
+        }
+        encoding.tf = TransferFunction::Srgb;
+        assert!(output_for(true, &ColourEncoding::Enum(encoding.clone()), 255.0, 1).is_err());
+        encoding.tf = TransferFunction::Linear;
+        encoding.white_point = WhitePoint::Dci;
+        assert!(output_for(true, &ColourEncoding::Enum(encoding), 255.0, 1).is_err());
+        assert!(output_for(true, &ColourEncoding::IccProfile(ColourSpace::Grey), 255.0, 1).is_err());
     }
 
     #[test]
