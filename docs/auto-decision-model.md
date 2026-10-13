@@ -88,7 +88,8 @@ verified private identity/history evidence; it is not inferred by pixel extracti
 
 Extractor verifies media content, rejects RAW embedded-preview fallback, decodes verified bytes through
 engine's offline loader without catalog or sidecar writes, & emits path-free `ember.ai-decision-numeric.v1`
-records (`rendered-pair.v4`). For Sony files with explicit full default crop tags, alignment recovers that
+records (`rendered-pair.v5`). State-bound current renders use separate target manifests; see
+[current render binding](reusable-auto-corpus.md). For Sony files with explicit full default crop tags, alignment recovers that
 per-file frame after starting colour is fitted against unchanged camera crop. Normal product loading
 still honors in-camera aspect crops. Numeric receipts retain camera crop & applied full default crop;
 orientation is applied once. This permits existing exports that recover wider sensor framing.

@@ -76,10 +76,18 @@ pub fn run(args: &[String]) -> Result<(), String> {
             Ok(Err(reason)) => json!({"photo_id": id, "status": "quarantined", "reason": reason}),
             Err(_) => json!({"photo_id": id, "status": "quarantined", "reason": "decoder_or_renderer_panicked"}),
         };
+        let mut result = result;
+        if !source_only {
+            let fields = result.as_object_mut().ok_or("extract result must be object")?;
+            fields.insert("target_intent".into(), json!(text(row, "target_intent")?));
+            if let Some(binding) = row.get("target_state_binding") {
+                fields.insert("target_state_binding".into(), binding.clone());
+            }
+        }
         results.push(result);
     }
     let report = json!({
-        "schema": SCHEMA, "extractor_revision": "rendered-pair.v4", "input_sha256": digest(&input_bytes),
+        "schema": SCHEMA, "extractor_revision": "rendered-pair.v5", "input_sha256": digest(&input_bytes),
         "proxy_cache_requested": proxy_root.is_some(), "reusable_schema": "ember.reusable-pair.v1",
         "source_only": source_only,
         "auto_revision": auto::REVISION, "feature_schema": FEATURE_SCHEMA, "feature_names": FEATURE_NAMES,
@@ -117,6 +125,7 @@ fn validate_manifest(value: &Value) -> Result<(), String> {
         return Err("extract batch must contain 1..64 records".into());
     }
     let mut ids = BTreeSet::new();
+    let mut intents = BTreeSet::new();
     for row in records {
         let fields = row.as_object().ok_or("record must be object")?;
         let allowed = [
@@ -128,6 +137,7 @@ fn validate_manifest(value: &Value) -> Result<(), String> {
             "provenance_sha256",
             "metadata_identity_bound",
             "target_intent",
+            "target_state_binding",
             "unsupported_geometry",
             "source_is_raw",
         ];
@@ -147,14 +157,47 @@ fn validate_manifest(value: &Value) -> Result<(), String> {
         text(row, "source_path")?;
         text(row, "export_path")?;
         if row.get("metadata_identity_bound").and_then(Value::as_bool) != Some(true)
-            || row.get("target_intent").and_then(Value::as_str) != Some("user_selected_finished_export")
             || row.get("unsupported_geometry").and_then(Value::as_bool).is_none()
             || row.get("source_is_raw").and_then(Value::as_bool).is_none()
         {
             return Err("explicit identity, target intent & geometry disposition required".into());
         }
+        validate_target_binding(row)?;
+        intents.insert(text(row, "target_intent")?);
+        if intents.len() != 1 {
+            return Err("target sets with different intents require separate manifests".into());
+        }
     }
     Ok(())
+}
+
+fn validate_target_binding(row: &Value) -> Result<(), String> {
+    match text(row, "target_intent")? {
+        "user_selected_finished_export" if row.get("target_state_binding").is_none() => Ok(()),
+        "latest_catalog_render" => {
+            let binding = row.get("target_state_binding").and_then(Value::as_object).ok_or("current target requires state binding")?;
+            let allowed = ["schema", "source_sha256", "target_sha256", "snapshot_sha256", "develop_blob_sha256", "render_receipt_sha256"];
+            if binding.len() != allowed.len()
+                || binding.keys().any(|key| !allowed.contains(&key.as_str()))
+                || binding.get("schema").and_then(Value::as_str) != Some("ember.current-catalog-render-binding.v1")
+            {
+                return Err("invalid current target state binding schema".into());
+            }
+            for key in allowed.iter().skip(1) {
+                let hash = binding.get(*key).and_then(Value::as_str).ok_or("missing state binding digest")?;
+                if hash.len() != 64 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
+                    return Err("invalid state binding digest".into());
+                }
+            }
+            if binding.get("source_sha256") != row.get("source_sha256") || binding.get("target_sha256") != row.get("export_sha256") {
+                return Err("current target media binding mismatch".into());
+            }
+            // Supplied receipt hashes bind provenance, not authenticity or human acceptance.
+            // Native catalog/state/colour qualification is performed by the corpus caller.
+            Ok(())
+        }
+        _ => Err("unsupported target intent or unexpected historical state binding".into()),
+    }
 }
 
 fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, String> {
@@ -303,6 +346,15 @@ fn extract_pair(row: &Value, proxy_root: Option<&Path>) -> Result<Value, String>
     if matches!(decoded.space.origin, lightcraft_codecs::SpaceOrigin::IccUnsupported | lightcraft_codecs::SpaceOrigin::Naive) {
         return Err("unsupported_export_color_interpretation".into());
     }
+    if row.get("target_intent").and_then(Value::as_str) == Some("latest_catalog_render")
+        && (lightcraft_codecs::sniff(&export_bytes) != Some(lightcraft_codecs::Format::Tiff)
+            || decoded.bit_depth != 16
+            || decoded.float
+            || decoded.space.named != Some(lightcraft_codecs::NamedSpace::ProPhoto)
+            || !matches!(decoded.space.origin, lightcraft_codecs::SpaceOrigin::IccMatrixTrc))
+    {
+        return Err("current_target_requires_16_bit_matrix_trc_prophoto_tiff".into());
+    }
     let finished_color_space = decoded.space.clone();
     let finished = decoded.to_working().into_oriented(Orientation::from_exif(decoded.orientation));
     finite_image(&finished)?;
@@ -406,6 +458,19 @@ fn extract_pair(row: &Value, proxy_root: Option<&Path>) -> Result<Value, String>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn current_render_requires_distinct_state_and_media_binding() {
+        let mut row = json!({"target_intent":"latest_catalog_render", "source_sha256":"a".repeat(64), "export_sha256":"b".repeat(64)});
+        assert!(validate_target_binding(&row).is_err());
+        row["target_state_binding"] = json!({"schema":"ember.current-catalog-render-binding.v1", "source_sha256":"a".repeat(64),
+            "target_sha256":"b".repeat(64), "snapshot_sha256":"c".repeat(64), "develop_blob_sha256":"d".repeat(64), "render_receipt_sha256":"e".repeat(64)});
+        assert!(validate_target_binding(&row).is_ok());
+        row["target_state_binding"]["target_sha256"] = json!("f".repeat(64));
+        assert!(validate_target_binding(&row).is_err());
+        row["target_intent"] = json!("user_selected_finished_export");
+        assert!(validate_target_binding(&row).is_err());
+    }
 
     #[test]
     fn manifest_rejects_unbound_or_unapproved_pairs() {
