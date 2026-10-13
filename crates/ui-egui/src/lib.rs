@@ -532,6 +532,11 @@ impl LightcraftApp {
                     .map(|d| d.crop.aspect.map_or(serde_json::json!("free"), |(w, h)| serde_json::json!([w as f64 / 100.0, h as f64 / 100.0])))
             };
         }
+        if r.is_ok() && id == "library.clearFilter" {
+            // the search field shows the text filter: cleared from anywhere (the loupe's pill, the
+            // menu), it must not keep a search that no longer applies (issue #1648)
+            self.ui.search.clear();
+        }
         if r.is_ok() && id == "mask.adjust" {
             // Judge local adjustments on the photo, without the selection overlay obscuring them.
             // Keep it hidden after release; O / the overlay eye can show it again.

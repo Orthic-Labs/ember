@@ -895,6 +895,28 @@ mod tests {
         assert_eq!(h.app.session.filter.text, "wedding", "and the library is filtered by it");
     }
 
+    /// Issue #1648: clearing the filters from the loupe's pill empties the search field too, so
+    /// the field never shows a search that is no longer applied.
+    #[test]
+    fn clearing_the_loupe_filters_empties_the_search_field() {
+        let mut h = demo([1200.0, 760.0]);
+        let t = Duration::from_secs(10);
+        h.settle(SETTLE);
+        for (method, params) in [("ui.clickWidget", json!({"id": "field:search"})), ("ui.text", json!({"text": "a"}))] {
+            let r = h.request(method, params, t);
+            assert_eq!(r["ok"], true, "{r}");
+            h.settle(SETTLE);
+        }
+        assert_eq!(h.app.session.filter.text, "a", "filtered while typing");
+        assert!(!h.app.session.visible_cloned().is_empty(), "the search finds photos, so the loupe has one to show");
+        h.request("engine.execute", json!({"command": "view.detail"}), t);
+        h.settle(SETTLE);
+        let r = h.request("ui.clickWidget", json!({"id": "loupe:filters"}), t);
+        assert_eq!(r["ok"], true, "{r}");
+        h.settle(SETTLE);
+        assert_eq!((h.app.ui.search.as_str(), h.app.session.filter.text.as_str()), ("", ""));
+    }
+
     /// Esc in the search field gives back the search from before the edit, and the filter with it.
     #[test]
     fn escape_in_the_search_field_gives_back_the_search() {
