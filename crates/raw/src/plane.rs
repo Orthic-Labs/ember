@@ -129,21 +129,21 @@ mod tests {
     fn tiled_lossless_jxl_retains_edge_codes_without_rescaling() {
         use zune_core::{bit_depth::BitDepth, colorspace::ColorSpace, options::EncoderOptions};
         let mut tiles = Vec::new();
-        for values in [vec![0u8, 1, 42, 255], vec![17u8, 239]] {
+        for values in [vec![0u8, 1, 42, 255, 128, 63], vec![17u8, 239, 7, 200]] {
             let width = values.len() / 2;
             let mut coded = Vec::new();
             zune_jpegxl::JxlSimpleEncoder::new(&values, EncoderOptions::new(width, 2, ColorSpace::Luma, BitDepth::Eight)).encode(&mut coded).unwrap();
             tiles.push(coded);
         }
-        let mut image = ifd(3, 2, 8);
+        let mut image = ifd(5, 2, 8);
         image.set(tags::COMPRESSION, Value::Short(vec![tags::compression::JPEG_XL]));
-        image.set_image(ImageData::Tiles { tile_width: 2, tile_height: 2, tiles });
+        image.set_image(ImageData::Tiles { tile_width: 3, tile_height: 2, tiles });
         let bytes = TiffWriter::new(ByteOrder::Little, false).write(std::slice::from_ref(&image)).unwrap();
         let plane = gray_tiff(&bytes).unwrap();
-        assert_eq!(plane.samples, [0, 1, 17, 42, 255, 239]);
+        assert_eq!(plane.samples, [0, 1, 42, 17, 239, 255, 128, 63, 7, 200]);
         assert_eq!(plane.bits, 8);
         let mut corrupt = image.clone();
-        corrupt.set_image(ImageData::Tiles { tile_width: 2, tile_height: 2, tiles: vec![vec![0; 8], vec![0; 8]] });
+        corrupt.set_image(ImageData::Tiles { tile_width: 3, tile_height: 2, tiles: vec![vec![0; 8], vec![0; 8]] });
         assert!(gray_tiff(&TiffWriter::new(ByteOrder::Little, false).write(&[corrupt]).unwrap()).is_err());
     }
 
