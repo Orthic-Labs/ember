@@ -741,6 +741,13 @@ pub struct UiState {
     /// The result of the last Find Missing Photos (it searches in the background).
     #[serde(skip)]
     pub last_find_missing: Option<serde_json::Value>,
+    /// The outcome (success or error) of the last Find Missing Photos task.
+    #[serde(skip)]
+    pub last_find_missing_result: Option<Result<serde_json::Value, String>>,
+    /// Injected delay for Find Missing Photos worker (test-only, for timeout testing).
+    #[cfg(test)]
+    #[serde(skip)]
+    pub find_missing_test_delay: Option<std::time::Duration>,
     #[serde(skip)]
     pub status: String,
     #[serde(skip)]
@@ -1144,6 +1151,9 @@ impl Default for UiState {
             reference: None,
             toast: None,
             last_find_missing: None,
+            last_find_missing_result: None,
+            #[cfg(test)]
+            find_missing_test_delay: None,
             status: String::new(),
             dialog: None,
         }

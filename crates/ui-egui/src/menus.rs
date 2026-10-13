@@ -1374,6 +1374,25 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 Some(Value::String(_)) => return Some(Err("file.findMissing: `within` must not be empty".into())),
                 Some(value) => return Some(Err(format!("file.findMissing: `within` must be a folder path, not {value}"))),
             };
+            let wait = p.get("wait").and_then(Value::as_bool).unwrap_or(false);
+            let timeout = match p.get("timeout") {
+                None | Some(Value::Null) => std::time::Duration::from_secs(600),
+                Some(Value::Number(n)) => {
+                    if let Some(s) = n.as_f64() {
+                        if s.is_finite() && s >= 0.0 {
+                            match std::time::Duration::try_from_secs_f64(s) {
+                                Ok(d) => d,
+                                Err(_) => return Some(Err("file.findMissing: `timeout` is too large".into())),
+                            }
+                        } else {
+                            return Some(Err("file.findMissing: `timeout` must be a non-negative number of seconds".into()));
+                        }
+                    } else {
+                        return Some(Err("file.findMissing: `timeout` must be a number of seconds".into()));
+                    }
+                }
+                Some(other) => return Some(Err(format!("file.findMissing: `timeout` must be a number of seconds, not {other}"))),
+            };
             let title = if within.is_some() { "Locate Missing Files…" } else { "Find Missing Photos…" };
             let folder = match p.get("folder").and_then(Value::as_str) {
                 Some(f) => Some(f.to_string()),
@@ -1395,7 +1414,15 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             if let Some(within) = within {
                 candidates.retain(|candidate| lightcraft_catalog::query::folder_within(&candidate.path, &within));
             }
-            let work = move || lightcraft_engine::cmd::missing::plan_find_missing(&candidates, &folder);
+            #[cfg(test)]
+            let test_delay = app.ui.find_missing_test_delay;
+            let work = move || {
+                #[cfg(test)]
+                if let Some(d) = test_delay {
+                    std::thread::sleep(d);
+                }
+                lightcraft_engine::cmd::missing::plan_find_missing(&candidates, &folder)
+            };
             let done = |app: &mut LightcraftApp, ctx: &egui::Context, plan: Result<lightcraft_engine::cmd::missing::FindPlan, String>| {
                 // relinked under the session as it is now: photos relinked meanwhile and files
                 // now in use are skipped
@@ -1420,19 +1447,31 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                                 unsure = unsure
                             ),
                         );
-                        app.ui.last_find_missing = Some(v);
+                        app.ui.last_find_missing = Some(v.clone());
+                        app.ui.last_find_missing_result = Some(Ok(v));
                     }
-                    Err(e) => app.toast(ctx, e),
+                    Err(e) => {
+                        app.toast(ctx, e.clone());
+                        app.ui.last_find_missing_result = Some(Err(e));
+                    }
                 }
             };
             app.ui.last_find_missing = None;
+            app.ui.last_find_missing_result = None;
             if let Err(e) = crate::tasks::spawn(app, LABEL, Some("findMissing"), work, done) {
                 return Some(Err(e));
             }
-            if p.get("wait").and_then(Value::as_bool).unwrap_or(false) {
+            if wait {
                 let ctx = app.tasks.repaint.clone().unwrap_or_default();
-                crate::tasks::wait(app, &ctx, std::time::Duration::from_secs(600));
-                return Some(Ok(app.ui.last_find_missing.clone().unwrap_or(Value::Null)));
+                let completed = crate::tasks::wait_for(app, &ctx, LABEL, timeout);
+                if !completed {
+                    return Some(Err("Find Missing Photos: search timed out (search continues in the background)".into()));
+                }
+                return match app.ui.last_find_missing_result.take() {
+                    Some(Ok(v)) => Some(Ok(v)),
+                    Some(Err(e)) => Some(Err(e)),
+                    None => Some(Err("Find Missing Photos: worker terminated unexpectedly".into())),
+                };
             }
             Ok(json!({"background": true}))
         }
