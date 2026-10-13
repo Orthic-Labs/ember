@@ -37,6 +37,7 @@ mod jxl;
 pub mod ljpeg;
 pub(crate) mod llvc;
 pub mod opcodes;
+pub mod plane;
 mod preview;
 pub mod profile;
 mod saturation;
