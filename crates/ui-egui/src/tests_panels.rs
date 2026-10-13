@@ -1737,8 +1737,8 @@ fn a_folder_menu_locates_its_missing_tree_only() {
         std::fs::write(path, b"photo").unwrap();
     }
 
-    let root = base.to_string_lossy().replace('\\', "/");
-    let old = format!("{root}/old");
+    // (the missing tree is not on disk: a plain root, so the Folders section lists it the same on every platform)
+    let old = "/lc-locate-old".to_string();
     let old_trip = format!("{old}/trip");
     let paths = [format!("{old_trip}/a.jpg"), format!("{old_trip}/day2/b.jpg"), format!("{old}/other/c.jpg")];
     let picked = new_trip.to_string_lossy().to_string();
@@ -1766,7 +1766,7 @@ fn a_folder_menu_locates_its_missing_tree_only() {
         })
         .collect();
     assert!(sources.contains(&new_trip.join("a.jpg").to_string_lossy().to_string()), "{sources:?}");
-    assert!(sources.contains(&new_trip.join("day2/b.jpg").to_string_lossy().to_string()), "{sources:?}");
+    assert!(sources.contains(&new_trip.join("day2").join("b.jpg").to_string_lossy().to_string()), "{sources:?}");
     assert!(sources.contains(&format!("{old}/other/c.jpg")), "another missing folder stays untouched: {sources:?}");
 }
 

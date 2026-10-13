@@ -538,6 +538,12 @@ pub fn handle(app: &mut LightcraftApp, ctx: &egui::Context) {
             }
             // Up / Down in the grids go to the cell above / below (the filmstrip steps one photo)
             if matches!(f.as_str(), "library.up" | "library.down") {
+                // over a slider the arrows nudge it (widgets::slider takes the key)
+                let over_slider =
+                    ctx.pointer_hover_pos().is_some_and(|p| app.widgets.iter().any(|(id, r)| id.starts_with("slider:") && r.contains(p)));
+                if over_slider {
+                    continue;
+                }
                 match crate::panels::grid::row_distance(app, f == "library.down") {
                     Some(0) => {}
                     Some(rows) => {
