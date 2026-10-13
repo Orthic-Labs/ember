@@ -1423,4 +1423,231 @@ fn oversized_spots_render() {
             assert!(t.elapsed().as_secs_f64() < 60.0, "{size} {mode:?}: {:?}", t.elapsed());
         }
     }
+
+#[test]
+fn develop_paste_validates_groups_and_rejects_malformed_with_zero_mutations() {
+    let mut s = demo();
+    let ids: Vec<_> = s.visible().iter().copied().take(2).collect();
+    let photo_a = ids[0];
+    let photo_b = ids[1];
+
+    // Photo A has exposure = 1.0, vibrance = 30.0
+    s.execute("library.select", &json!({"ids": [photo_a.0]})).unwrap();
+    s.execute("develop.set", &json!({"values": {"light.exposure": 1.0, "color.vibrance": 30.0}})).unwrap();
+    s.execute("develop.copy", &json!({"groups": ["light", "color"]})).unwrap();
+
+    let initial_b_dev = (*s.develop_of(photo_b).unwrap()).clone();
+    let initial_b_hist_len = s.catalog.photo(photo_b).unwrap().history.len();
+
+    // 1. Invalid group names are rejected
+    for invalid_group in ["bogusGroup", "LIGHT", "Exposure", "unknown"] {
+        let err = s.execute("develop.paste", &json!({"ids": [photo_b.0], "groups": [invalid_group]})).unwrap_err();
+        assert!(matches!(err, crate::EngineError::BadParams { .. }));
+        assert_eq!(*s.develop_of(photo_b).unwrap(), initial_b_dev);
+        assert_eq!(s.catalog.photo(photo_b).unwrap().history.len(), initial_b_hist_len);
+    }
+
+    // 2. Incorrect JSON types are rejected
+    for invalid_param in [
+        json!("light"),           // string instead of sequence
+        json!(42),                // number
+        json!(true),              // boolean
+        json!({"name": "light"}), // object
+        json!([123]),             // array of non-string
+        json!(["light", 456]),    // mixed array with invalid type
+        json!([true]),            // array of bool
+    ] {
+        let err = s.execute("develop.paste", &json!({"ids": [photo_b.0], "groups": invalid_param})).unwrap_err();
+        assert!(matches!(err, crate::EngineError::BadParams { .. }));
+        assert_eq!(*s.develop_of(photo_b).unwrap(), initial_b_dev);
+        assert_eq!(s.catalog.photo(photo_b).unwrap().history.len(), initial_b_hist_len);
+    }
+
+    // 3. Valid groups remain supported: pasting only "light" does not paste "color"
+    s.execute("develop.paste", &json!({"ids": [photo_b.0], "groups": ["light"]})).unwrap();
+    let dev_after_light = (*s.develop_of(photo_b).unwrap()).clone();
+    assert_eq!(dev_after_light.light.exposure, 1.0);
+    assert_eq!(dev_after_light.color.vibrance, initial_b_dev.color.vibrance);
+
+    // Reset photo B
+    s.execute("library.select", &json!({"ids": [photo_b.0]})).unwrap();
+    s.execute("develop.reset", &json!({})).unwrap();
+    assert_eq!(s.develop_of(photo_b).unwrap().light.exposure, 0.0);
+
+    // 4. Omitted groups preserves default behavior (all copied groups pasted)
+    s.execute("develop.paste", &json!({"ids": [photo_b.0]})).unwrap();
+    let dev_after_omitted = (*s.develop_of(photo_b).unwrap()).clone();
+    assert_eq!(dev_after_omitted.light.exposure, 1.0);
+    assert_eq!(dev_after_omitted.color.vibrance, 30.0);
+
+    // Reset photo B
+    s.execute("develop.reset", &json!({})).unwrap();
+
+    // 5. Explicit null behaves as omitted
+    s.execute("develop.paste", &json!({"ids": [photo_b.0], "groups": null})).unwrap();
+    let dev_after_null = (*s.develop_of(photo_b).unwrap()).clone();
+    assert_eq!(dev_after_null.light.exposure, 1.0);
+    assert_eq!(dev_after_null.color.vibrance, 30.0);
+}
+
+#[test]
+fn develop_sync_validates_groups_and_rejects_malformed_with_zero_mutations() {
+    let mut s = demo();
+    let ids: Vec<_> = s.visible().iter().copied().take(2).collect();
+    let photo_a = ids[0];
+    let photo_b = ids[1];
+
+    // Setup: Photo A has exposure = 1.0, vibrance = 30.0
+    s.execute("library.select", &json!({"ids": [photo_a.0]})).unwrap();
+    s.execute("develop.set", &json!({"values": {"light.exposure": 1.0, "color.vibrance": 30.0}})).unwrap();
+
+    // Select Photo A (active) and Photo B
+    s.execute("library.select", &json!({"ids": [photo_a.0, photo_b.0], "active": photo_a.0})).unwrap();
+
+    let initial_b_dev = (*s.develop_of(photo_b).unwrap()).clone();
+    let initial_b_hist_len = s.catalog.photo(photo_b).unwrap().history.len();
+
+    // 1. Invalid group names are rejected
+    for invalid_group in ["bogusGroup", "LIGHT", "WhiteBalance", "invalid_name"] {
+        let err = s.execute("develop.sync", &json!({"groups": [invalid_group]})).unwrap_err();
+        assert!(matches!(err, crate::EngineError::BadParams { .. }));
+        assert_eq!(*s.develop_of(photo_b).unwrap(), initial_b_dev);
+        assert_eq!(s.catalog.photo(photo_b).unwrap().history.len(), initial_b_hist_len);
+    }
+
+    // 2. Incorrect JSON types are rejected
+    for invalid_param in [
+        json!("light"),             // string instead of sequence
+        json!(100),                 // number
+        json!(false),               // boolean
+        json!({"groups": "light"}), // object
+        json!([999]),               // array of non-string
+        json!(["color", false]),    // mixed array with invalid type
+        json!([null]),              // array with null
+    ] {
+        let err = s.execute("develop.sync", &json!({"groups": invalid_param})).unwrap_err();
+        assert!(matches!(err, crate::EngineError::BadParams { .. }));
+        assert_eq!(*s.develop_of(photo_b).unwrap(), initial_b_dev);
+        assert_eq!(s.catalog.photo(photo_b).unwrap().history.len(), initial_b_hist_len);
+    }
+
+    // 3. Valid groups remain supported: syncing only "light" does not sync "color"
+    s.execute("develop.sync", &json!({"groups": ["light"]})).unwrap();
+    let dev_after_light = (*s.develop_of(photo_b).unwrap()).clone();
+    assert_eq!(dev_after_light.light.exposure, 1.0);
+    assert_eq!(dev_after_light.color.vibrance, initial_b_dev.color.vibrance);
+
+    // Reset photo B
+    s.execute("library.select", &json!({"ids": [photo_b.0]})).unwrap();
+    s.execute("develop.reset", &json!({})).unwrap();
+    assert_eq!(s.develop_of(photo_b).unwrap().light.exposure, 0.0);
+
+    // Reselect Photo A (active) and Photo B
+    s.execute("library.select", &json!({"ids": [photo_a.0, photo_b.0], "active": photo_a.0})).unwrap();
+
+    // 4. Omitted groups preserves default behavior (all default copy groups synced)
+    s.execute("develop.sync", &json!({})).unwrap();
+    let dev_after_omitted = (*s.develop_of(photo_b).unwrap()).clone();
+    assert_eq!(dev_after_omitted.light.exposure, 1.0);
+    assert_eq!(dev_after_omitted.color.vibrance, 30.0);
+
+    // Reset photo B
+    s.execute("library.select", &json!({"ids": [photo_b.0]})).unwrap();
+    s.execute("develop.reset", &json!({})).unwrap();
+
+    // Reselect Photo A (active) and Photo B
+    s.execute("library.select", &json!({"ids": [photo_a.0, photo_b.0], "active": photo_a.0})).unwrap();
+
+    // 5. Explicit null behaves as omitted
+    s.execute("develop.sync", &json!({"groups": null})).unwrap();
+    let dev_after_null = (*s.develop_of(photo_b).unwrap()).clone();
+    assert_eq!(dev_after_null.light.exposure, 1.0);
+    assert_eq!(dev_after_null.color.vibrance, 30.0);
+}
+
+#[test]
+fn develop_copy_and_paste_previous_validate_groups() {
+    let mut s = demo();
+    let ids: Vec<_> = s.visible().iter().copied().take(2).collect();
+    let photo_a = ids[0];
+    let photo_b = ids[1];
+
+    s.execute("library.select", &json!({"ids": [photo_a.0]})).unwrap();
+    s.execute("develop.set", &json!({"values": {"light.exposure": 1.5}})).unwrap();
+
+    // develop.copy rejects invalid group
+    let copy_err = s.execute("develop.copy", &json!({"groups": ["notAGroup"]})).unwrap_err();
+    assert!(matches!(copy_err, crate::EngineError::BadParams { .. }));
+
+    // develop.copy accepts valid groups
+    s.execute("develop.copy", &json!({"groups": ["light"]})).unwrap();
+
+    // Switch active photo to photo_b so photo_a becomes previous_active
+    s.execute("library.select", &json!({"ids": [photo_b.0]})).unwrap();
+
+    let initial_b_dev = (*s.develop_of(photo_b).unwrap()).clone();
+
+    // develop.pastePrevious rejects invalid group
+    let prev_err = s.execute("develop.pastePrevious", &json!({"groups": ["badGroup"]})).unwrap_err();
+    assert!(matches!(prev_err, crate::EngineError::BadParams { .. }));
+    assert_eq!(*s.develop_of(photo_b).unwrap(), initial_b_dev);
+
+    // develop.pastePrevious accepts valid group
+    s.execute("develop.pastePrevious", &json!({"groups": ["light"]})).unwrap();
+    assert_eq!(s.develop_of(photo_b).unwrap().light.exposure, 1.5);
+}
+
+#[test]
+fn presets_validate_groups_on_create_and_update() {
+    let mut s = demo();
+    s.execute("develop.set", &json!({"values": {"light.exposure": 1.0, "color.vibrance": 25}})).unwrap();
+    let initial_preset_count = s.presets.len();
+
+    // 1. preset.create rejects invalid group names and incorrect JSON types without creating a preset
+    for invalid_groups in [json!(["bogusGroup"]), json!("light"), json!(123), json!([true]), json!(["light", 99])] {
+        let err = s.execute("preset.create", &json!({"name": "Test", "groups": invalid_groups})).unwrap_err();
+        assert!(matches!(err, crate::EngineError::BadParams { .. }));
+        assert_eq!(s.presets.len(), initial_preset_count);
+    }
+
+    // 2. preset.create with valid groups creates a preset with only those groups
+    let res = s.execute("preset.create", &json!({"name": "ValidPreset", "groups": ["light"]})).unwrap();
+    let pid = res["id"].as_str().unwrap().to_string();
+    assert_eq!(s.presets.len(), initial_preset_count + 1);
+    let p = s.presets.iter().find(|p| p.id == pid).unwrap();
+    assert!(p.settings.get("light").is_some());
+    assert!(p.settings.get("color").is_none());
+
+    // 3. preset.create with omitted groups uses default copy groups
+    let res_omitted = s.execute("preset.create", &json!({"name": "DefaultPreset"})).unwrap();
+    let pid_omitted = res_omitted["id"].as_str().unwrap().to_string();
+    let p_omitted = s.presets.iter().find(|p| p.id == pid_omitted).unwrap();
+    assert!(p_omitted.settings.get("light").is_some());
+    assert!(p_omitted.settings.get("color").is_some());
+
+    // Change develop settings
+    s.execute("develop.set", &json!({"values": {"light.exposure": 2.0, "color.vibrance": 50}})).unwrap();
+
+    let preset_before_update = s.presets.iter().find(|p| p.id == pid).unwrap().clone();
+
+    // 4. preset.update rejects invalid group names and incorrect JSON types without modifying the preset
+    for invalid_groups in [json!(["bogusGroup"]), json!("color"), json!(999), json!([false]), json!(["color", "bad"])] {
+        let err = s.execute("preset.update", &json!({"id": pid, "groups": invalid_groups})).unwrap_err();
+        assert!(matches!(err, crate::EngineError::BadParams { .. }));
+        let current = s.presets.iter().find(|p| p.id == pid).unwrap();
+        assert_eq!(*current, preset_before_update);
+    }
+
+    // 5. preset.update with valid groups updates specified groups
+    s.execute("preset.update", &json!({"id": pid, "groups": ["light", "color"]})).unwrap();
+    let p_after_valid = s.presets.iter().find(|p| p.id == pid).unwrap();
+    assert_eq!(p_after_valid.settings["light"]["exposure"], 2.0);
+    assert_eq!(p_after_valid.settings["color"]["vibrance"], 50.0);
+
+    // 6. preset.update with omitted groups updates existing preset keys
+    s.execute("develop.set", &json!({"values": {"light.exposure": -1.0, "color.vibrance": -20}})).unwrap();
+    s.execute("preset.update", &json!({"id": pid})).unwrap();
+    let p_after_omitted = s.presets.iter().find(|p| p.id == pid).unwrap();
+    assert_eq!(p_after_omitted.settings["light"]["exposure"], -1.0);
+    assert_eq!(p_after_omitted.settings["color"]["vibrance"], -20.0);
 }
