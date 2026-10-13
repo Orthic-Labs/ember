@@ -101,6 +101,9 @@ loupe render of a cold photo finished 174 s after the click, most of it spent be
 - `grid::skips_the_real_render(embedded_is_final, from_embedded)` is the decision, unit-tested:
   a **cached render** as the stand-in, an **edited photo** and a **raw with no embedded JPEG** all
   still render, because their thumbnail must show the pipeline's output rather than the camera's.
+- Whether the embedded JPEG can actually be read is only known when the quick job runs, so
+  `Session::quick_thumb_job` carries the real thumbnail job as its last resort: a raw whose preview
+  the loader can't read renders the raw instead of leaving the cell empty (issue #1448).
 - The thumbnail key still changes with the settings hash, so editing a photo re-renders its
   thumbnail through the ordinary background path.
 

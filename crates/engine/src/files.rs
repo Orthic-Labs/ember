@@ -2331,4 +2331,25 @@ mod tests {
         assert_eq!(s.quick_view_job(id, 1600, true).unwrap().run().quick, Some(QuickSource::Small));
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// Issue #1448: the grid renders nothing behind an unedited raw's quick thumbnail, so when the
+    /// embedded preview can't be read (and nothing is cached) the quick job itself must render the
+    /// raw, or the cell stays empty for good ("no quick preview").
+    #[test]
+    fn a_quick_thumbnail_without_an_embedded_preview_renders_the_raw() {
+        use crate::media::QuickSource;
+        let dir = std::env::temp_dir().join(format!("lc-quick-none-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("a.cr3");
+        std::fs::write(&path, cr3_with_preview(96, 64)).unwrap();
+        let mut s = crate::Session::new().with_fs();
+        let r = s.execute("library.import", &serde_json::json!({"paths": [path.to_string_lossy()]})).unwrap();
+        let id = lightcraft_catalog::PhotoId(r["imported"][0].as_u64().unwrap());
+        s.media.preview_loader = Some(std::sync::Arc::new(|_: &str, _| None));
+        let job = s.thumb_job(id, 128).unwrap();
+        let q = s.quick_thumb_job(&job).unwrap().run();
+        assert_eq!((q.quick, q.key), (Some(QuickSource::Small), job.key));
+        assert!(q.rendered.is_ok(), "{:?}", q.rendered.err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

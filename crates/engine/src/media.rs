@@ -1417,8 +1417,10 @@ impl crate::Session {
 
     /// A first grid thumbnail for an unedited raw: the cached render for `job` (the real
     /// thumbnail job, from [`Self::thumb_job`]) if there is one — then the result carries
-    /// [`QuickSource::Cached`] and `job.key` and is final — else its embedded preview. `None` for
-    /// other photos (render them directly).
+    /// [`QuickSource::Cached`] and `job.key` and is final — else its embedded preview, else `job`
+    /// itself: the grid queues no render behind an unedited raw's quick thumbnail
+    /// ([`Self::embedded_thumb_is_final`]), so a preview that can't be read must not leave the
+    /// cell empty (issue #1448). `None` for other photos (render them directly).
     pub fn quick_thumb_job(&mut self, job: &RenderJob) -> Option<QuickJob> {
         let p = self.catalog.photo(job.photo)?.clone();
         let (path, l) = self.embedded_of(&p)?;
@@ -1429,7 +1431,7 @@ impl crate::Session {
             key: job.key,
             cached: job.cache.clone().into_iter().collect(),
             embedded: Some((path, l, edge)),
-            small: None,
+            small: Some(Box::new(job.clone())),
         })
     }
 
