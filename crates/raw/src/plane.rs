@@ -230,7 +230,10 @@ mod tests {
         let bytes = TiffWriter::new(ByteOrder::Little, false).write(&[image]).unwrap();
         let plane = gray_tiff(&bytes).unwrap();
         assert_eq!((plane.width, plane.height, plane.bits), (13, 8, 8));
-        for (row, reference) in plane.samples.chunks_exact(13).zip(LOSSY_GRAY_REFERENCE.chunks_exact(8)) {
+        let (rows, remainder) = plane.samples.as_chunks::<13>();
+        assert!(remainder.is_empty());
+        assert_eq!(rows.len(), 8);
+        for (row, reference) in rows.iter().zip(LOSSY_GRAY_REFERENCE.as_chunks::<8>().0.iter()) {
             let expected = reference.iter().chain(reference.iter().take(5));
             assert!(row.iter().zip(expected).all(|(a, b)| a.abs_diff(u16::from(*b)) <= 1));
         }
