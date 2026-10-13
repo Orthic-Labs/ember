@@ -558,7 +558,7 @@ fn expanded(app: &LightcraftApp, name: &str) -> Option<Vec<MenuNode>> {
             v
         }
         "Open Recent Library" => {
-            let can = !crate::lightroom_import::is_running(app);
+            let can = crate::panels::settings::can_switch_library(app).is_ok();
             let open = app.session.library.as_ref().filter(|l| l.on_disk).map(|l| l.dir.clone());
             let mut v: Vec<MenuNode> = app
                 .ui
