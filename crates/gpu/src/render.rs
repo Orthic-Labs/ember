@@ -245,10 +245,9 @@ fn box_pass(cx: &mut Cx<'_>, horizontal: bool, src: &Buf, dst: &Buf, (w, h): (us
 /// Gaussian blur of a `w × h` image of `nc` interleaved channels: three box passes each way
 /// (`lightcraft_raster::blur::gaussian`).
 pub(crate) fn gaussian(cx: &mut Cx<'_>, src: &Buf, w: usize, h: usize, nc: usize, sigma: f32) -> Buf {
-    if sigma <= 0.3 || w * h == 0 {
+    let Some(radii) = lightcraft_raster::blur::radii_for(sigma, w, h) else {
         return cx.copy(src);
-    }
-    let radii = lightcraft_raster::blur::box_radii(sigma);
+    };
     let passes: Vec<(bool, usize)> = radii.iter().map(|r| (true, *r)).chain(radii.iter().map(|r| (false, *r))).filter(|p| p.1 > 0).collect();
     if passes.is_empty() {
         return cx.copy(src);
