@@ -52,6 +52,22 @@ not recovered historical reference-editor Auto previews. This distinction remain
 
 ## Label meaning
 
+`ai decision plane --input PRIVATE_TIFF --sha256 EXPECTED_SHA256 --out NEW_PGM` extracts
+one unsigned grayscale TIFF image through Rust, including tiled JPEG XL. It requires exact
+input SHA256 & create-new output, caps input at 32 MiB, image at 8 Mi pixels/8192 per edge,
+chunks at 256 & total nominal chunk samples at 16 Mi. Decoding uses one worker thread.
+Incomplete coverage, truncated extents, prediction, non-identity orientation, unsupported
+sample conventions & child IFDs fail explicitly. PGM retains original integer codes:
+8-bit bytes or 16-bit big-endian samples, without development, scaling or library imports.
+Receipt binds input/output hashes, dimensions & nominal bit depth. Failed new files have
+no successful receipt & must not become corpus objects.
+
+This generic raster decoder does not interpret private store envelopes. External private
+preparation must verify store record CRCs & hash its extracted TIFF bytes, bind digest
+references to immutable catalog states, account for all physical keys, & prove raster
+coordinates before using decoded planes as regional supervision. Raster decoding alone
+does not qualify mask semantics, currentness, human acceptance or a training-ready corpus.
+
 Rendered neutralizing-WB estimates & midtone chromaticities measure image colour. They do not
 recover a photographer's intended white point, historical Kelvin, or a unique set of edit controls.
 Subject/background/sky planes come from Ember heuristics. They are diagnostics, not annotated

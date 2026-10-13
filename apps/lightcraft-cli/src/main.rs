@@ -17,6 +17,7 @@
 //! lightcraft-cli ai personal evaluate --manifest FILE --model FILE [--out NEW_REPORT]
 //! lightcraft-cli ai decision manifest --lrcat FILE --raw-root DIR --export-root DIR --out NEW_FILE [--pairs PRIVATE_JSON]
 //! lightcraft-cli ai decision extract --manifest PRIVATE_JSON --out NEW_NUMERIC_JSON [--proxy-dir PRIVATE_CACHE]
+//! lightcraft-cli ai decision plane --input PRIVATE_TIFF --sha256 EXPECTED_SHA256 --out NEW_PGM
 //! lightcraft-cli ai denoise baseline --hardware LABEL --out NEW_REPORT
 //! lightcraft-cli calibrate [--max N] [--out DIR] FOLDERS/FILES…
 //! ```
@@ -28,6 +29,7 @@ mod cull_eval;
 mod cull_timing;
 mod decision_extract;
 mod decision_manifest;
+mod decision_plane;
 mod denoise_eval;
 mod personal_auto_eval;
 mod personal_auto_extract;
@@ -142,6 +144,8 @@ USAGE:
   lightcraft-cli ai decision extract --manifest PRIVATE_JSON --out NEW_NUMERIC_JSON [--proxy-dir PRIVATE_CACHE]
       Extract reusable pixels, colour/region diagnostics & numeric tone view; private inputs stay read-only.
       Use --source-manifest for unpaired inputs. See docs/reusable-auto-corpus.md for schemas & label meaning.
+  lightcraft-cli ai decision plane --input PRIVATE_TIFF --sha256 EXPECTED_SHA256 --out NEW_PGM
+      Bounded grayscale TIFF/JPEG XL extraction, preserving integer codes; no library import.
   lightcraft-cli ai denoise baseline --hardware LABEL --out NEW_REPORT [--size 64..512] [--repeats 2..10] [--source-revision LABEL]
       Record original procedural RGB guided-NR baseline harness results without model inference.
   lightcraft-cli ai compare --demo|FILES… --out NEW_DIR [--model ID]… [--repeat 1..3] [--budget-usd N] [--prepare-only]
@@ -218,6 +222,9 @@ fn main() -> ExitCode {
         }
         Some("ai") if args.get(1).map(String::as_str) == Some("decision") && args.get(2).map(String::as_str) == Some("extract") => {
             decision_extract::run(&args[3..])
+        }
+        Some("ai") if args.get(1).map(String::as_str) == Some("decision") && args.get(2).map(String::as_str) == Some("plane") => {
+            decision_plane::run(&args[3..])
         }
         Some("ai") if args.get(1).map(String::as_str) == Some("denoise") => denoise_eval::run(&args[1..]),
         Some("ai") => photo_ai::run(&args[1..]),

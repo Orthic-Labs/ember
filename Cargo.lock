@@ -4444,8 +4444,11 @@ dependencies = [
  "lightcraft-photo-ai",
  "lightcraft-pipeline",
  "lightcraft-raster",
+ "lightcraft-raw",
  "lightcraft-sysmem",
+ "lightcraft-tiff",
  "lightcraft-ui-egui",
+ "rayon",
  "serde_json",
 ]
 
