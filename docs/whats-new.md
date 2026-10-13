@@ -61,6 +61,13 @@
   default cache share (768 MB), so it was evicted as soon as it was stored. The original of the photo shown in Detail
   now stays, like its preview, until another photo or view is shown.
 
+## 2026-10-13
+
+### HDR merges keep the lens correction
+- An HDR made with Photo ▸ Photo Merge ▸ HDR now keeps the lens correction the photos carry (Sony's, Panasonic's
+  and Leica's, and the one some DNGs carry, e.g. from drones): Optics ▸ Enable Lens Corrections straightens it as it
+  does the photos it was made from. HDRs merged before this don't have it; merge them again.
+
 ## 2026-10-11
 
 ### HDR and panorama merges of CR2 keep their colour
