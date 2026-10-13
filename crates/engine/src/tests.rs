@@ -1403,3 +1403,24 @@ fn albums_list_survives_a_catalog_that_loops() {
     let r = s.execute("albums.list", &json!({})).unwrap();
     assert!(r.to_string().contains("\"F\""), "{r}");
 }
+
+/// A Heal or Remove spot whose size (from a sidecar, which isn't held to the slider's range) is far past the photo
+/// made the render's radius infinite: its heal blur and the source it reads went with it, overflowing the blur's box
+/// radii and the bilinear sampler (issue #1519). Such spots render, quickly, as a spot over the whole frame.
+#[test]
+fn oversized_spots_render() {
+    use lightcraft_develop::{Spot, SpotMode};
+    for size in [10.0, 1e30, f64::MAX, f64::INFINITY, f64::NAN] {
+        for mode in [SpotMode::Heal, SpotMode::Remove, SpotMode::Clone] {
+            let mut s = demo();
+            let id = s.active().unwrap();
+            let mut dd = (*s.develop_of(id).unwrap_or_default()).clone();
+            dd.spots.push(Spot { mode, points: vec![lightcraft_geom::Point::new(0.5, 0.5)], size, ..Default::default() });
+            s.set_develop(id, dd, "Remove").unwrap();
+            let t = std::time::Instant::now();
+            let r = s.render_now(id, 300, 200).unwrap();
+            assert!(r.image.width >= 1 && r.image.height >= 1, "{size} {mode:?}");
+            assert!(t.elapsed().as_secs_f64() < 60.0, "{size} {mode:?}: {:?}", t.elapsed());
+        }
+    }
+}
