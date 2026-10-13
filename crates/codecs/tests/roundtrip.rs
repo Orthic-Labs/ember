@@ -10,6 +10,28 @@ fn gradient(w: usize, h: usize) -> Rgba8 {
     Rgba8::from_fn(w, h, |x, y| [(x * 255 / w.max(2).saturating_sub(1).max(1)) as u8, (y * 255 / h.max(2)) as u8, ((x + y) % 256) as u8, 255])
 }
 
+#[test]
+fn tiff_deflate_rgb16_retains_prophoto_transfer_and_camera_raw_xmp() {
+    let pixels: Vec<u16> = (0..24).map(|index| (index * 2777).min(65535) as u16).collect();
+    let profile = write_named(NamedSpace::ProPhoto);
+    let xmp = "<x:xmpmeta xmlns:x='adobe:ns:meta/'><rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description xmlns:crs='http://ns.adobe.com/camera-raw-settings/1.0/' crs:AlreadyApplied='True' crs:Exposure2012='0.25'/></rdf:RDF></x:xmpmeta>";
+    let bytes = encode_tiff(
+        &EncodeImage::new(4, 2, 3, Samples::U16(&pixels)),
+        TiffCompression::Deflate,
+        &EncodeMeta { icc: Some(&profile), xmp: Some(xmp), ..Default::default() },
+    )
+    .expect("generated TIFF");
+    let decoded = decode(&bytes, DecodeOptions::default()).expect("generated ProPhoto TIFF");
+    assert_eq!((decoded.width, decoded.height, decoded.bit_depth), (4, 2, 16));
+    assert_eq!(decoded.space.named, Some(NamedSpace::ProPhoto));
+    assert_eq!(decoded.icc.as_deref(), Some(profile.as_slice()));
+    assert_eq!(decoded.xmp.as_deref(), Some(xmp));
+    for (actual, expected) in decoded.image.data.iter().flatten().zip(pixels) {
+        assert!((*actual - Trc::Gamma(1.8).to_linear(expected as f32 / 65535.0)).abs() < 1e-4);
+    }
+    assert!(to_working(&decoded).data.iter().flatten().all(|value| value.is_finite()));
+}
+
 fn smooth(w: usize, h: usize) -> Rgba8 {
     Rgba8::from_fn(w, h, |x, y| {
         let fx = x as f32 / w as f32;

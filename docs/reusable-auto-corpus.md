@@ -22,6 +22,21 @@ Preparation does not establish learned quality or authorize training, upload or 
 `ember.ai-source-extract-input.v1`, with `user_consented:true` & 1–64 records containing
 `photo_id`, `source_path`, `source_sha256`, `source_is_raw`.
 
+Extractor revision `rendered-pair.v5` distinguishes historical `user_selected_finished_export`
+from `latest_catalog_render`. Current renders require `target_state_binding` with schema
+`ember.current-catalog-render-binding.v1`, source/target media SHA256, frozen snapshot SHA256,
+actual develop-blob SHA256 & render-receipt SHA256. Media hashes must match pair input; every
+result retains supplied intent/binding, including quarantines. These digests bind supplied
+provenance; native state correspondence, colour qualification & human acceptance remain separate
+checks. Keep current targets in their own target set; historical numeric loaders must reject them.
+
+Settings-space views retain candidate Auto settings, actual saved develop settings, full history
+references, scalar differences & missingness. Candidate Auto precedes actual active history pointer
+chronologically; resets, rollback, paste & sync prevent treating chronology as edit ancestry or
+human authorship. A narrow Personal Auto adapter uses absolute mapped settings as weak labels;
+Rust subtracts its own baseline. Reference-editor Auto differences are not Ember residual labels.
+Adapter must retain existing shoot splits & explicit experimental confidence policy.
+
 Cache objects contain little-endian u64 width & height, then row-major interleaved f32 samples.
 RGB uses three channels; alpha planes use one. Filename includes SHA256 & channel count.
 Dimensions & samples participate in SHA256. Atomic publication never replaces an existing object;

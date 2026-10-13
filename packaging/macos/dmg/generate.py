@@ -19,7 +19,6 @@ from ds_store import DSStore
 from mac_alias import Alias, TargetInfo, VolumeInfo
 from PIL import Image, ImageCms, ImageDraw, ImageFont
 from pathlib import Path
-import importlib.util
 import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -38,10 +37,6 @@ FIXED_DATE = datetime.datetime(2026, 10, 8, tzinfo=datetime.timezone.utc)
 def render(svg, width, out):
     # Render our small SVG vocabulary using only repository Inter & original Ember artwork.
     root = Path(HERE).parents[2]
-    spec = importlib.util.spec_from_file_location("ember_icons", root / "packaging/render-icons.py")
-    icons = importlib.util.module_from_spec(spec)
-    sys.dont_write_bytecode = True
-    spec.loader.exec_module(icons)
     scale = width * 4 / WIDTH
     image = Image.new("RGB", (width * 4, int(HEIGHT * scale)))
     draw = ImageDraw.Draw(image)
@@ -54,9 +49,10 @@ def render(svg, width, out):
             draw.rectangle((x, y, x + coordinate(shape, "width") - 1, y + coordinate(shape, "height") - 1), fill=shape.attrib["fill"])
         elif tag == "image":
             source = (Path(svg).parent / shape.attrib["href"]).resolve()
-            if source != (root / "assets/app-icon/ember.svg").resolve():
+            if source != (root / "assets/app-icon/ember-reverse-1024.png").resolve():
                 raise ValueError("only original Ember artwork is supported")
-            mark = icons.render(round(coordinate(shape, "width")))
+            with Image.open(source) as original:
+                mark = original.convert("RGBA").resize((round(coordinate(shape, "width")), round(coordinate(shape, "height"))), Image.Resampling.LANCZOS)
             image.paste(mark, (round(coordinate(shape, "x")), round(coordinate(shape, "y"))), mark)
         elif tag == "line":
             draw.line((coordinate(shape, "x1"), coordinate(shape, "y1"), coordinate(shape, "x2"), coordinate(shape, "y2")), fill=shape.attrib["stroke"], width=round(coordinate(shape, "stroke-width", 1)))

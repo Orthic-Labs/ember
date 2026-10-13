@@ -1,4 +1,4 @@
-Ember flame icon (ember.svg & derived PNG/ICNS/ICO/SVG files).
+Ember aperture + single-flame icon (approved RGBA master & derived PNG/ICNS/ICO/embedded-raster SVG files).
 Copyright (c) 2026 Orthic Labs. Original artwork, no third-party material.
 
 Licensed under either Apache License, Version 2.0 or MIT licence, at your option.
