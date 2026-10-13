@@ -508,6 +508,45 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// Install from file… with a model the engine rejects says why in the AI Denoise section (#1381), instead of
+    /// leaving the button looking dead.
+    #[test]
+    fn a_rejected_model_file_says_why_in_settings() {
+        use crate::state::Dialog;
+        let mut h = demo([1400.0, 900.0]);
+        let t = Duration::from_secs(10);
+        let dir = std::env::temp_dir().join(format!("lc-ui-denoise-rejected-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        h.app.session.set_denoise_models_dir(Some(dir.join("denoise-models")));
+        // without the runtime the button is disabled (the workspace build turns it on through the desktop app)
+        if h.app.session.execute("denoise.models.list", &json!({})).unwrap()["runtime"] != true {
+            let _ = std::fs::remove_dir_all(&dir);
+            return;
+        }
+        // another app's model folder: the .onnx with that app's model.json, and no denoise-model.json
+        let onnx = dir.join("rawdenoise.onnx");
+        std::fs::write(&onnx, b"not a model").unwrap();
+        std::fs::write(dir.join("model.json"), br#"{"name": "rawdenoise", "scale": 2}"#).unwrap();
+        let picked = onnx.to_string_lossy().into_owned();
+        h.app.services.pick_denoise_model = Some(Box::new(move || vec![picked.clone()]));
+        h.app.ui.dialog = Some(Dialog::Settings { tab: "denoise".into() });
+        h.settle(SETTLE);
+        let r = h.request("ui.clickWidget", json!({"id": "denoise:installFile"}), t);
+        assert_eq!(r["ok"], true, "{r}");
+        h.step();
+        h.step();
+        assert_eq!(h.app.ui.dialog, Some(Dialog::Settings { tab: "denoise".into() }));
+        let painted = h.painted_text();
+        assert!(
+            painted
+                .iter()
+                .any(|s| s.starts_with("No denoise-model.json beside this .onnx file. The model.json there") && s.ends_with("(see docs/denoise.md)")),
+            "{painted:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     use super::*;
 
     /// The pretend host has a clipboard, as a desktop does: text the UI copies lands in it, and a
