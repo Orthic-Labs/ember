@@ -2321,21 +2321,28 @@ pub(crate) fn filmstrip(app: &mut LightcraftApp, ui: &mut egui::Ui, r: Rect) {
                     p.galley(pos2(br.min.x + 17.0, br.center().y - g.size().y / 2.0), g, Color32::WHITE);
                 }
             }
-            if resp.clicked() && app.ui.view == crate::state::ViewMode::Compare {
-                // Compare: the clicked photo replaces the active side (or swaps with the other one)
-                if let Err(e) = app.run("compare.set", json!({"id": id.0})) {
+            if resp.clicked() {
+                let m = ui.input(|i| i.modifiers);
+                let compare = app.ui.view == crate::state::ViewMode::Compare;
+                let r = if compare && !m.command && !m.shift {
+                    // Compare: the clicked photo replaces the active side (or swaps with the other one)
+                    app.run("compare.set", json!({"id": id.0}))
+                } else if compare {
+                    // ⌘/Ctrl- and Shift-clicks change the selection; the pair on screen stays (#187)
+                    super::compare::select_with_modifier(app, *id, !m.command)
+                } else {
+                    let mode = if m.command {
+                        "toggle"
+                    } else if m.shift {
+                        "range"
+                    } else {
+                        "replace"
+                    };
+                    app.run("library.select", json!({"ids": [id.0], "mode": mode}))
+                };
+                if compare && let Err(e) = r {
                     app.toast(ui.ctx(), e);
                 }
-            } else if resp.clicked() {
-                let m = ui.input(|i| i.modifiers);
-                let mode = if m.command {
-                    "toggle"
-                } else if m.shift {
-                    "range"
-                } else {
-                    "replace"
-                };
-                let _ = app.run("library.select", json!({"ids": [id.0], "mode": mode}));
             }
             // the same photo actions as the grid and loupe (Restore / Delete Permanently in Recently Deleted)
             resp.context_menu(|ui| super::grid::context_menu(app, ui, *id));
