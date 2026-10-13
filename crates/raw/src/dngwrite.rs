@@ -25,6 +25,10 @@ pub enum DngCompression {
     },
 }
 
+/// Software tag of the DNGs this writer makes. A bare "Ember" or "LightCraft" (the upstream name) marks older
+/// files, whose CFAPattern is anchored at the sensor origin instead of the ActiveArea (the reader keeps their reading).
+pub const SOFTWARE: &str = "Ember DNG 2";
+
 /// IEEE 754 binary32 → binary16 (round to nearest even; overflow → ±inf, NaN kept).
 pub fn f32_to_f16(v: f32) -> u16 {
     let b = v.to_bits();
@@ -119,7 +123,7 @@ pub fn write_dng(raw: &RawImage, opts: &DngWriteOptions) -> Result<Vec<u8>> {
     let unique = format!("{make} {model}").trim().to_string();
     ifd.set(t::UNIQUE_CAMERA_MODEL, Value::Ascii(if unique.is_empty() { "Ember".into() } else { unique }));
     ifd.set(t::ORIENTATION, Value::Short(vec![raw.orientation.to_exif()]));
-    ifd.set(t::SOFTWARE, Value::Ascii("Ember".into()));
+    ifd.set(t::SOFTWARE, Value::Ascii(SOFTWARE.into()));
     let xmp = opts.xmp.clone().unwrap_or_else(|| lightcraft_meta::write_xmp(&raw.metadata, None));
     ifd.set(t::XMP, Value::Byte(xmp.into_bytes()));
 

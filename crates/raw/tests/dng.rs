@@ -1073,3 +1073,24 @@ fn cfa_pattern_is_relative_to_the_active_area() {
         assert_eq!(back.normalized().unwrap().cfa.unwrap().name(), "GRBG");
     }
 }
+
+/// DNGs LightCraft wrote before the writer anchored the pattern at the ActiveArea carry a bare "LightCraft" Software
+/// tag and a sensor-origin pattern; they keep that reading, while the current writer marks its files differently.
+#[test]
+fn legacy_lightcraft_dng_keeps_the_sensor_anchored_pattern() {
+    let (w, h) = (20, 12);
+    let build = |software: &str| {
+        let mut raw = base_ifd(w, h, 16, 1, true);
+        raw.set_image(ImageData::Strips { rows_per_strip: h as u32, strips: vec![u16_bytes(&pattern(w, h, 1, 16), ByteOrder::Little)] });
+        raw.set(t::WHITE_LEVEL, Value::Short(vec![65535]));
+        raw.set(t::ACTIVE_AREA, Value::Long(vec![1, 0, h as u32 - 1, w as u32 - 1]));
+        raw.set(t::SOFTWARE, Value::Ascii(software.into()));
+        decode(&dng(raw, ByteOrder::Little)).unwrap()
+    };
+    assert_eq!(build("LightCraft").cfa.unwrap().name(), "GRBG");
+    assert_eq!(build("Ember").cfa.unwrap().name(), "GRBG", "Ember's own older DNGs");
+    assert_eq!(build("Adobe Photoshop Lightroom").cfa.unwrap().name(), "BGGR");
+    assert_ne!(lightcraft_raw::dngwrite::SOFTWARE, "LightCraft");
+    assert_ne!(lightcraft_raw::dngwrite::SOFTWARE, "Ember");
+    assert_eq!(build(lightcraft_raw::dngwrite::SOFTWARE).cfa.unwrap().name(), "BGGR", "the current writer follows the spec");
+}
