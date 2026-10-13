@@ -70,7 +70,7 @@ pub fn gray_tiff(bytes: &[u8]) -> Result<GrayPlane> {
     if count == 0 || count > MAX_CHUNKS || nominal_samples > MAX_PIXELS * 2 {
         return Err(RawError::Limit("plane exceeds chunk allocation budget"));
     }
-    if info.offsets.len() != count || info.byte_counts.len() != count {
+    if info.offsets.len() != count || info.byte_counts.len() != count || info.byte_counts.contains(&0) {
         return Err(RawError::Corrupt("plane chunk coverage is incomplete or ambiguous".into()));
     }
     for chunk in info.chunks(bytes.len() as u64) {
@@ -158,6 +158,25 @@ mod tests {
         let mut huge = ifd(1, 1, 8);
         huge.set_image(ImageData::Tiles { tile_width: u32::MAX, tile_height: u32::MAX, tiles: vec![vec![0]] });
         assert!(gray_tiff(&TiffWriter::new(ByteOrder::Little, false).write(&[huge]).unwrap()).is_err());
+    }
+
+    #[test]
+    fn refuses_zero_byte_counts_instead_of_inferring_pixel_extents() {
+        let mut image = ifd(2, 2, 8);
+        image.set_image(ImageData::Strips { rows_per_strip: 2, strips: vec![vec![17; 4]] });
+        let mut bytes = TiffWriter::new(ByteOrder::Little, false).write(&[image]).unwrap();
+        let offset = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
+        let entries = u16::from_le_bytes(bytes[offset..offset + 2].try_into().unwrap()) as usize;
+        let mut replaced = false;
+        for index in 0..entries {
+            let entry = offset + 2 + index * 12;
+            if u16::from_le_bytes(bytes[entry..entry + 2].try_into().unwrap()) == tags::STRIP_BYTE_COUNTS {
+                bytes[entry + 8..entry + 12].fill(0);
+                replaced = true;
+            }
+        }
+        assert!(replaced);
+        assert!(matches!(gray_tiff(&bytes), Err(RawError::Corrupt(message)) if message.contains("ambiguous")));
     }
 
     #[test]
