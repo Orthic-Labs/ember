@@ -22,6 +22,9 @@ it open, `--library` on the same folder fails with "This library is already open
 `--demo` starts the headless session with the procedurally generated demo library;
 `--compact` lists only the helper tools (see below). In connect mode the server starts even when
 the app is not running yet and connects on the first call (and reconnects if the app restarts).
+A request is sent again only when it never reached the app. If the connection drops after a request
+was sent but before its reply, the tool fails with "the outcome is unknown" and nothing is resent, so a
+command such as undo can't run twice: check the app's state before retrying.
 
 Logs go to stderr; stdout carries only protocol messages.
 
