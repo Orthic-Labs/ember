@@ -78,6 +78,12 @@
   and Leica's, and the one some DNGs carry, e.g. from drones): Optics ▸ Enable Lens Corrections straightens it as it
   does the photos it was made from. HDRs merged before this don't have it; merge them again.
 
+## 2026-10-12
+
+### Bold text in other scripts
+- Arabic names and other Arabic text in headings, chosen tabs and other bold places are now drawn bold, as Latin text
+  beside them is; they used to stay at regular weight.
+
 ## 2026-10-11
 
 ### HDR and panorama merges of CR2 keep their colour
