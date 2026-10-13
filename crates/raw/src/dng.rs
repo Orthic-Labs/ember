@@ -206,7 +206,8 @@ pub(crate) fn decode_as(bytes: &[u8], mode: Mode, format: RawFormat) -> Result<R
     }
     let info = raw.image()?;
     let (w, h, cpp) = (info.width as usize, info.height as usize, info.samples_per_pixel as usize);
-    if !(1..=4).contains(&cpp) {
+    // one sample (CFA or monochrome), RGB or four colours; two are neither and can't be developed (issue #1511)
+    if !matches!(cpp, 1 | 3 | 4) {
         return Err(RawError::Unsupported(format!("{cpp} samples per pixel")));
     }
     let mut data = read_image_in(mode, bytes, &info, tiff.order, Packing::Msb)?;

@@ -705,6 +705,10 @@ impl RawImage {
         if self.width == 0 || self.height == 0 || !(1..=4).contains(&self.cpp) {
             return Err(RawError::Corrupt("bad dimensions".into()));
         }
+        // two samples a pixel are neither one colour nor RGB: nothing downstream can develop them (issue #1511)
+        if self.cpp == 2 {
+            return Err(RawError::Unsupported("2 samples per pixel".into()));
+        }
         if samples && self.data.len() != self.width * self.height * self.cpp {
             return Err(RawError::Corrupt("data length mismatch".into()));
         }

@@ -1027,3 +1027,28 @@ fn baseline_sharpness_is_read_when_plausible() {
     assert_eq!(decode(&bytes).unwrap().color.baseline_sharpness, None);
     assert_eq!(decode(&profile_dng(ByteOrder::Big, |_| {})).unwrap().color.baseline_sharpness, None);
 }
+
+/// Two samples a pixel are neither one colour nor RGB. A DNG with them decoded, and developing it read a third sample
+/// past each pixel, a panic in release builds too (issue #1511). Such data is refused with a reason, and the demosaic
+/// itself no longer reads past a pixel; one, three and four samples develop as before.
+#[test]
+fn two_samples_per_pixel_are_refused_not_a_panic() {
+    let (w, h) = (8, 6);
+    let file = |cpp: usize| {
+        let mut raw = base_ifd(w, h, 16, cpp, false);
+        raw.set_image(ImageData::Strips { rows_per_strip: h as u32, strips: vec![u16_bytes(&pattern(w, h, cpp, 16), ByteOrder::Little)] });
+        dng(raw, ByteOrder::Little)
+    };
+    let err = decode(&file(2)).unwrap_err();
+    assert!(matches!(err, lightcraft_raw::RawError::Unsupported(ref m) if m.contains("2 samples")), "{err}");
+    for cpp in [1, 3, 4] {
+        decode(&file(cpp)).unwrap().develop(Method::Bilinear).unwrap();
+    }
+    // a raw image built with two samples is refused when it develops
+    let raw = synthetic(16, 12, None, 2);
+    let err = raw.develop(Method::Ahd).unwrap_err();
+    assert!(matches!(err, lightcraft_raw::RawError::Unsupported(_)), "{err}");
+    // the demosaic of such data repeats the last sample instead of reading past the pixel
+    let n = lightcraft_raw::Normalized { width: 2, height: 1, cpp: 2, data: vec![0.1, 0.2, 0.3, 0.4], cfa: None };
+    assert_eq!(lightcraft_raw::demosaic(&n, Method::Ahd).data, vec![[0.1, 0.2, 0.2], [0.3, 0.4, 0.4]]);
+}
