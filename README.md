@@ -1,8 +1,12 @@
-<p align="center"><img src="assets/app-icon/ember-1024.png" width="112" alt="Ember aperture &amp; flame icon"></p>
+<img src=".github/banner.svg" alt="Ember: photo library and non-destructive RAW editor" width="100%">
+
+<sub>Banner: a crop of Ansel Adams’ public-domain photograph, from a historical LightCraft capture. [Image provenance](assets/ATTRIBUTION.md).</sub>
 
 # Ember
 
 Photo library & non-destructive RAW editor, maintained by **Orthic Labs**. Ember is based on [LightCraft](https://github.com/storytold/lightcraft) by ArtCraft Team & contributors, with our React/Tauri desktop workspace & RightKit integrations.
+
+> **Development status:** no desktop artifact is qualified for release yet. React/Tauri targets macOS & Windows; [CI restoration](docs/ci-restoration.md) & [local AI delivery](docs/local-ai-delivery.md) track remaining qualification gates.
 
 ## Workspace
 
@@ -13,19 +17,28 @@ Photo library & non-destructive RAW editor, maintained by **Orthic Labs**. Ember
 
 React/Tauri targets **macOS & Windows**. Existing egui, Linux, web/WASM & CLI hosts remain in source. Format support & implementation gaps are tracked in [ROADMAP](ROADMAP.md) & [parity tracker](docs/parity.md); feature availability is not proof of reference editor parity.
 
+<details>
+<summary>Historical upstream editor screenshot</summary>
+
+This capture shows LightCraft before Ember branding, not Ember’s React/Tauri workspace. See [showcase provenance](docs/showcase/README.md).
+
+![Historical LightCraft Develop view showing Ansel Adams’ public-domain photograph, The Tetons and the Snake River](docs/images/hero-tetons.jpg)
+
+</details>
+
 ## Auto, masks & AI
 
-Local Auto is deterministic & closed-loop ([docs/auto-tone.md](docs/auto-tone.md)); Auto Noise Reduction measures each photo's noise ([docs/noise-reduction.md](docs/noise-reduction.md)); look targets apply the statistics of sample photos to others ([docs/look-targets.md](docs/look-targets.md)). Culling source adds cancellable background analysis, paged review & explicit undoable acceptance. [Culling evaluation](docs/culling-evaluation.md) defines shoot-level labels, CLI scoring & proposed qualification targets. Face detection runs a user-downloaded YuNet model on Ember's own CPU ONNX interpreter (`crates/faces`, no extra runtime); a Candle-based YuNet exists only as a qualification example in `crates/segment`. Face/eye & similarity weights and [Personal Auto](docs/personal-auto-evaluation.md) training/evaluation remain unqualified; a learned [Auto decision model](docs/auto-decision-model.md) is planned. Denoise in the React/Tauri app is classical processing; the egui app & CLI build an optional AI Denoise path (`denoise` feature, on by default) that ships no model & offers no downloads ([docs/denoise.md](docs/denoise.md)). Optional [SAM 3 masking](docs/ai-masks.md) requires separately acquired model weights under Meta’s licence.
+- **Local editing:** deterministic [Auto tone](docs/auto-tone.md), measured [noise reduction](docs/noise-reduction.md) & sample-photo [look targets](docs/look-targets.md).
+- **Culling & faces:** cancellable background analysis, paged review & explicit undoable acceptance. Face detection uses a separately downloaded YuNet model on Ember’s CPU ONNX interpreter. Face/eye & similarity weights remain unqualified; see [culling evaluation](docs/culling-evaluation.md) & [local AI delivery](docs/local-ai-delivery.md).
+- **Denoise & masks:** React/Tauri uses classical denoise. An optional AI path exists in egui & CLI, with no bundled model or downloads ([denoise](docs/denoise.md)). [SAM 3 masking](docs/ai-masks.md) requires separately acquired weights under Meta’s licence.
+- **Experiments:** CLI [OpenRouter assessment](crates/photo-ai/README.md) is opt-in & read-only; proposals never apply edits or delete/reject photos. No provider winner is validated. [Personal Auto](docs/personal-auto-evaluation.md) remains unqualified, a learned [Auto decision model](docs/auto-decision-model.md) is planned & ChatGPT-plan OAuth is deferred.
 
-[OpenRouter photo assessment](crates/photo-ai/README.md) is an opt-in experiment for bounded, read-only model comparisons, available from the CLI. It produces proposals, does not apply edits or delete/reject photos, & has no validated provider winner. Credentials & real-photo evaluation are separate from this branding change.
 
-[Local AI delivery](docs/local-ai-delivery.md) records current source work & remaining gates: local culling first, qualified face/eye/similarity weights next, then cloud comparison & Personal Auto. ChatGPT-plan OAuth remains deferred.
+## Development & qualification
 
-## Release status
+Ember’s React/Tauri workspace is maintained in this fork; no React/Tauri PR has been submitted to upstream LightCraft. Source integration targets upstream 0.7.0; see [integration record](docs/upstream-integration-2026-10-12.md) for the pinned revision & remaining work.
 
-This fork is under active development. Fork `main` includes merged [React/Tauri PR #1](https://github.com/Orthic-Labs/ember/pull/1), [OpenRouter PR #2](https://github.com/Orthic-Labs/ember/pull/2) & [Ember branding PR #3](https://github.com/Orthic-Labs/ember/pull/3). No React/Tauri PR has been submitted to upstream LightCraft.
-
-Source integration now targets upstream `25ef65c81eef81833a50ff5b61f8676d80611b06` (0.7.0); see [integration record](docs/upstream-integration-2026-10-12.md). Public builds, Rust tests & native qualification run through generated **RightKit GitHub Actions** (`.rightgit.json`). Local work is source/static-only. Only qualified green artifacts are promoted to desktop default, and none is qualified yet: the latest recorded hidden native QA runs failed on both targets ([CI restoration](docs/ci-restoration.md), [local AI delivery](docs/local-ai-delivery.md)). Source integration does not promote installed artifacts.
+Public builds, Rust tests & native qualification run through generated **RightKit GitHub Actions** (`.rightgit.json`). Local work is source/static-only. Only qualified green artifacts are promoted to desktop default; source integration alone does not promote an installed app.
 
 ## Quick start
 
@@ -58,3 +71,7 @@ Use generated `ci` & `release-candidate` Actions lanes for compilation, eight Ru
 Original upstream code is Copyright (c) 2026 ArtCraft Team & LightCraft contributors. Ember fork changes & original flame artwork are by Orthic Labs. Preserve [NOTICE](NOTICE), contributor provenance & [asset attribution](assets/ATTRIBUTION.md).
 
 Code is **MIT OR Apache-2.0**, except `crates/segment` & `crates/fetch`, which are **Apache-2.0 only**; SAM model weights have separate terms & are not distributed here. See [LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE) & [NOTICE](NOTICE). Inter uses SIL OFL 1.1. ArtCraft product marks have been removed; Ember is independently maintained.
+
+---
+
+<picture><source media="(prefers-color-scheme: dark)" srcset=".github/orthic-labs-mark.svg"><img src=".github/orthic-labs-mark-light.svg" alt="Orthic Labs" width="22" style="max-width:100%;height:auto"></picture> **[Orthic Labs](https://orthiclabs.com)** · [github.com/Orthic-Labs](https://github.com/Orthic-Labs) · More: [Legion](https://github.com/Orthic-Labs/legion) · [SellRight](https://github.com/Orthic-Labs/sellright) · [SwiftRight](https://github.com/Orthic-Labs/swiftright) · [Pulse](https://github.com/Orthic-Labs/pulse) · [RightKit](https://github.com/Orthic-Labs/rightkit) · [RustRight](https://github.com/Orthic-Labs/rustright)
