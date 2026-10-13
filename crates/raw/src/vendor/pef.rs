@@ -103,8 +103,10 @@ impl<'a> Bits<'a> {
     pub fn consumed_bits(&self) -> usize {
         self.pos * 8 - self.n as usize
     }
+    /// Whether more bits were handed out than the source holds (the zeros read past its end are lookahead padding,
+    /// not data; using them would fabricate samples).
     pub fn overrun(&self) -> bool {
-        self.pos > self.src.len() + 8
+        self.consumed_bits() > self.src.len() * 8
     }
 }
 
@@ -392,6 +394,21 @@ mod tests {
         // truncated data is reported, not a panic
         assert!(decode_huffman(&src[..src.len() / 3], &h, w, hgt, 14).is_err());
         assert!(table(&tb[..20], ByteOrder::Big).is_err());
+    }
+
+    /// Zero-padded lookahead past the end must not be decoded as samples: with no entropy at all, the zero bits
+    /// are a valid code (category 1) in this table, so a reader that only limits the refill position accepts them.
+    #[test]
+    fn symbols_decoded_from_padding_past_the_end_are_rejected() {
+        let (tb, codes) = test_table();
+        let h = table(&tb, ByteOrder::Big).unwrap();
+        assert!(decode_huffman(&[], &h, 2, 1, 14).is_err());
+        // the same image with its real entropy still decodes, including the last byte's padding bits
+        let px = [5u16, 9];
+        let src = encode(&px, 2, &codes);
+        assert_eq!(decode_huffman(&src, &h, 2, 1, 14).unwrap(), px);
+        // one byte short of the real entropy is rejected
+        assert!(decode_huffman(&src[..src.len() - 1], &h, 2, 1, 14).is_err());
     }
 
     /// A long run of the largest difference drove a predictor past i32: a panic in builds with overflow checks,
