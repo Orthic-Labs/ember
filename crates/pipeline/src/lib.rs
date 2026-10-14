@@ -35,6 +35,7 @@ pub mod local_tone;
 pub mod look;
 pub mod lut;
 pub mod masks;
+pub mod measure;
 pub mod noise;
 pub mod optics;
 pub mod output;
@@ -693,6 +694,8 @@ mod tests_geometry;
 mod tests_hdr;
 #[cfg(test)]
 mod tests_local;
+#[cfg(test)]
+mod tests_measure;
 #[cfg(test)]
 mod tests_tone;
 #[cfg(test)]
