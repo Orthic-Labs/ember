@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 lightcraft-geom = { workspace = true }
+lightcraft-sysmem = { workspace = true }
 lightcraft-color = { workspace = true }
 lightcraft-raster = { workspace = true }
 lightcraft-develop = { workspace = true }
