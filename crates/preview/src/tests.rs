@@ -391,7 +391,6 @@ fn disk_cache_never_touches_foreign_files() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-
 /// A shard directory that is a symlink to a folder outside the cache is neither listed, cleared,
 /// pruned, read nor written (issue #1504).
 #[cfg(unix)]

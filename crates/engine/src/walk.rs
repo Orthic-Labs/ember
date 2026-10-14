@@ -68,9 +68,7 @@ pub fn files_in(root: &Path, skip: Option<&Path>, limits: Limits, mut keep: impl
             }
             continue;
         }
-        if skip.is_some_and(|s| path == s)
-            || skip_canonical.as_ref().is_some_and(|s| std::fs::canonicalize(&path).is_ok_and(|p| p.starts_with(s)))
-        {
+        if skip.is_some_and(|s| path == s) || skip_canonical.as_ref().is_some_and(|s| std::fs::canonicalize(&path).is_ok_and(|p| p.starts_with(s))) {
             continue;
         }
         if depth >= limits.max_depth {
