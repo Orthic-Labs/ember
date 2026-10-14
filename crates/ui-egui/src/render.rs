@@ -188,6 +188,8 @@ pub struct Renderer {
     pending: HashMap<Slot, (u64, u32)>,
     /// Pool submission identity for native jobs; prevents stale failures clearing reused slots.
     pending_submission: HashMap<Slot, u64>,
+    /// The photo each slot's latest submission renders, so a worker failure names it ([`Self::failed`]).
+    submitted_photo: HashMap<Slot, PhotoId>,
     pub textures: HashMap<Slot, Tex>,
     pub last_main_ms: f64,
     /// Jobs finished since start (for inspect/perf).
@@ -265,6 +267,7 @@ impl Renderer {
             seq: 0,
             pending: HashMap::new(),
             pending_submission: HashMap::new(),
+            submitted_photo: HashMap::new(),
             textures: HashMap::new(),
             last_main_ms: 0.0,
             completed: 0,
@@ -438,6 +441,7 @@ impl Renderer {
             return;
         }
         let key = job.key;
+        let photo = job.photo;
         let background = matches!(slot, Slot::Thumb(_) | Slot::ThumbQuick(_) | Slot::Prefetch(_));
         let display = self.display.clone();
         let submission = match self.pool.submit(
@@ -448,13 +452,14 @@ impl Renderer {
         ) {
             Ok(submission) => submission,
             Err(error) => {
-                self.failed.insert(slot, (key, error, self.catalog_rev));
+                self.failed.insert(slot, (key, error, self.catalog_rev, photo));
                 self.request_ids.remove(&slot);
                 return;
             }
         };
         self.pending.insert(slot, (key, priority));
         self.pending_submission.insert(slot, submission);
+        self.submitted_photo.insert(slot, photo);
     }
 
     /// Request a stand-in for `slot` (once per job key).
@@ -466,17 +471,19 @@ impl Renderer {
         job.request_id = lightcraft_preview::next_tick();
         self.request_ids.insert(slot, job.request_id);
         let key = job.key;
+        let photo = job.photo;
         let display = self.display.clone();
         let submission = match self.pool.submit(slot, key, priority, Box::new(move || Self::run_for(|| job.run(), &display))) {
             Ok(submission) => submission,
             Err(error) => {
-                self.failed.insert(slot, (key, error, self.catalog_rev));
+                self.failed.insert(slot, (key, error, self.catalog_rev, photo));
                 self.request_ids.remove(&slot);
                 return;
             }
         };
         self.pending.insert(slot, (key, priority));
         self.pending_submission.insert(slot, submission);
+        self.submitted_photo.insert(slot, photo);
     }
 
     /// Prepare a photo in the background (a [`Slot::Prefetch`] job runs once per key; a newer one
@@ -489,16 +496,18 @@ impl Renderer {
         job.request_id = lightcraft_preview::next_tick();
         self.request_ids.insert(slot, job.request_id);
         let key = job.key;
+        let photo = job.photo;
         let submission = match self.pool.submit(slot, key, priority, Box::new(move || lightcraft_engine::memory::in_background(|| job.run()))) {
             Ok(submission) => submission,
             Err(error) => {
-                self.failed.insert(slot, (key, error, self.catalog_rev));
+                self.failed.insert(slot, (key, error, self.catalog_rev, photo));
                 self.request_ids.remove(&slot);
                 return;
             }
         };
         self.pending.insert(slot, (key, priority));
         self.pending_submission.insert(slot, submission);
+        self.submitted_photo.insert(slot, photo);
     }
 
     /// Is a request for `slot` queued or running?
@@ -699,7 +708,8 @@ impl Renderer {
                 self.pending_submission.remove(&failure.slot);
                 self.pending.remove(&failure.slot);
                 self.request_ids.remove(&failure.slot);
-                self.failed.insert(failure.slot, (failure.key, format!("preview worker failed: {}", failure.error), self.catalog_rev));
+                let photo = self.submitted_photo.get(&failure.slot).copied().unwrap_or(PhotoId(0));
+                self.failed.insert(failure.slot, (failure.key, format!("preview worker failed: {}", failure.error), self.catalog_rev, photo));
             }
         }
         while let Some(done) = self.pool.try_recv() {

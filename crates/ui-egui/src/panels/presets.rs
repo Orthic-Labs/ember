@@ -88,7 +88,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         // amount slider (applies to the last applied preset)
         let amt_id = egui::Id::new("preset-amount");
         let last: Option<AppliedPreset> = ui.data(|d| d.get_temp(amt_id));
-        if let Some(last) = last.filter(|last| last.is_current(&app.session)) {
+        if let Some(last) = last.clone().filter(|last| last.is_current(&app.session)) {
             let spec = ControlSpec {
                 id: "presetAmount",
                 label: "Amount",
@@ -165,7 +165,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                     let (pid, name, fav) = (pr.id.clone(), crate::i18n::builtin_label(&pr.name, pr.builtin).to_string(), pr.favorite);
                     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
                     register(ui.ctx(), format!("preset:{pid}"), r);
-                    let is_last = last.as_ref().is_some_and(|(l, _)| *l == pid);
+                    let is_last = last.as_ref().is_some_and(|l| l.id == pid);
                     if is_last {
                         ui.painter().rect_filled(r, 0.0, t.tool_active);
                     } else if resp.hovered() {
@@ -197,12 +197,10 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                             ui.data_mut(|d| d.insert_temp(egui::Id::new("last-preset-hover"), (id, pr.clone(), label)));
                         }
                     }
-                    if resp.clicked() {
-                        if app.run("preset.apply", json!({"id": pid, "amount": 100})).is_ok() {
-                            ui.data_mut(|d| d.insert_temp(amt_id, AppliedPreset::new(&app.session, pid.clone(), 100.0)));
-                            ui.data_mut(|d| d.remove::<(lightcraft_catalog::PhotoId, Preset, String)>(egui::Id::new("last-preset-hover")));
-                            app.toast(ui.ctx(), crate::i18n::tr_format!("Preset: {name}", name = name));
-                        }
+                    if resp.clicked() && app.run("preset.apply", json!({"id": pid, "amount": 100})).is_ok() {
+                        ui.data_mut(|d| d.insert_temp(amt_id, AppliedPreset::new(&app.session, pid.clone(), 100.0)));
+                        ui.data_mut(|d| d.remove::<(lightcraft_catalog::PhotoId, Preset, String)>(egui::Id::new("last-preset-hover")));
+                        app.toast(ui.ctx(), crate::i18n::tr_format!("Preset: {name}", name = name));
                     }
                     let (builtin, group) = (pr.builtin, pr.group.clone());
                     resp.context_menu(|ui| {
