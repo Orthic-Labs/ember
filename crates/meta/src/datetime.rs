@@ -28,7 +28,7 @@ impl DateTime {
         // A timestamp must represent a real Gregorian calendar day, not just
         // numbers in the range 1..=31. Invalid dates would otherwise be
         // accepted from EXIF/XMP and silently normalized during time arithmetic.
-        let leap = self.year % 4 == 0 && (self.year % 100 != 0 || self.year % 400 == 0);
+        let leap = self.year.is_multiple_of(4) && (!self.year.is_multiple_of(100) || self.year.is_multiple_of(400));
         let max_day = match self.month {
             1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
             4 | 6 | 9 | 11 => 30,
