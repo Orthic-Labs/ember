@@ -559,6 +559,14 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
           window.requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.lc-filter-search input')?.focus());
           return null;
         }
+        if (id === 'edit.selectOnlyActive') {
+          // Edit ▸ Select Only Active Photo: the selection shrinks to the active photo
+          const active = snapshotRef.current?.active;
+          if (active === null || active === undefined) return null;
+          const value = await runCommand('library.select', { ids: [active], active, mode: 'replace' });
+          await refresh();
+          return value;
+        }
         if (id === 'view.back' && dialogRef.current) { setDialog(null); return null; }
         if (id === 'dialog.export') { setDialog({ kind: 'export', params }); return null; }
         if (id === 'dialog.copySettings') { setDialog({ kind: 'copySettings', params }); return null; }
