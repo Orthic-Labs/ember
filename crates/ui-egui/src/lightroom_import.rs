@@ -534,7 +534,7 @@ mod tests {
     #[test]
     fn lightroom_cancel_is_the_flag_not_the_words() {
         let mut h = demo();
-        let (task, tx, cancel, _, _) = fake_import(&h);
+        let (task, tx, cancel, _) = fake_import(&h);
         h.app.lightroom = Some(task);
         cancel.store(true, Ordering::Relaxed);
         tx.send(Message::Prepared(Err("Lightroom-Import abgebrochen".into()))).unwrap();
@@ -544,7 +544,7 @@ mod tests {
         for message in
             [Message::Prepared(Err("the drive was ejected: copy cancelled by the system".into())), Message::Inspected(Err("cancelled".into()))]
         {
-            let (task, tx, _, _, _) = fake_import(&h);
+            let (task, tx, _, _) = fake_import(&h);
             h.app.lightroom = Some(task);
             tx.send(message).unwrap();
             h.step();
