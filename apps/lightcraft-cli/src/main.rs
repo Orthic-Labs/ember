@@ -18,6 +18,7 @@
 //! lightcraft-cli ai decision manifest --lrcat FILE --raw-root DIR --export-root DIR --out NEW_FILE [--pairs PRIVATE_JSON]
 //! lightcraft-cli ai decision extract --manifest PRIVATE_JSON --out NEW_NUMERIC_JSON [--proxy-dir PRIVATE_CACHE]
 //! lightcraft-cli ai decision plane --input PRIVATE_TIFF --sha256 EXPECTED_SHA256 --out NEW_PGM
+//! lightcraft-cli ai measure --manifest MANIFEST.jsonl --out NEW_OUT.jsonl
 //! lightcraft-cli ai denoise baseline --hardware LABEL --out NEW_REPORT
 //! lightcraft-cli calibrate [--max N] [--out DIR] FOLDERS/FILES…
 //! ```
@@ -31,6 +32,7 @@ mod decision_extract;
 mod decision_manifest;
 mod decision_plane;
 mod denoise_eval;
+mod measure_batch;
 mod personal_auto_eval;
 mod personal_auto_extract;
 mod photo_ai;
@@ -146,6 +148,15 @@ USAGE:
       Use --source-manifest for unpaired inputs. See docs/reusable-auto-corpus.md for schemas & label meaning.
   lightcraft-cli ai decision plane --input PRIVATE_TIFF --sha256 EXPECTED_SHA256 --out NEW_PGM
       Bounded grayscale TIFF/JPEG XL extraction, preserving integer codes; no library import.
+  lightcraft-cli ai measure --manifest MANIFEST.jsonl --out NEW_OUT.jsonl
+      Dense measurements (ember.dense-measure.v1: 202 numbers, names in the header line) for many images.
+      MANIFEST is JSON Lines, schema ember.measure-input.v1: id, image {path, sha256, format
+      f32-cache|file}, optional regions [{kind subject|sky|background|skin, path, sha256, format f32-cache}].
+      Every input must match its SHA256; file means a rendered JPEG/PNG/TIFF (raws are refused). Output is
+      create-new JSON Lines (ember.measure-output.v1), sequential and deterministic, one row per record in
+      manifest order: {id, image_sha256, values} or {id, error}. A failed record never stops the batch; stdout
+      prints {\"measured\":N,\"failed\":M} and the exit status is non-zero only for command-level failures.
+      Output holds ids and digests, never paths. See docs/dense-measurement.md (Batch command).
   lightcraft-cli ai denoise baseline --hardware LABEL --out NEW_REPORT [--size 64..512] [--repeats 2..10] [--source-revision LABEL]
       Record original procedural RGB guided-NR baseline harness results without model inference.
   lightcraft-cli ai compare --demo|FILES… --out NEW_DIR [--model ID]… [--repeat 1..3] [--budget-usd N] [--prepare-only]
@@ -226,6 +237,7 @@ fn main() -> ExitCode {
         Some("ai") if args.get(1).map(String::as_str) == Some("decision") && args.get(2).map(String::as_str) == Some("plane") => {
             decision_plane::run(&args[3..])
         }
+        Some("ai") if args.get(1).map(String::as_str) == Some("measure") => measure_batch::run(&args[2..]),
         Some("ai") if args.get(1).map(String::as_str) == Some("denoise") => denoise_eval::run(&args[1..]),
         Some("ai") => photo_ai::run(&args[1..]),
         Some("cull") => cull_eval::run(&args[1..]),

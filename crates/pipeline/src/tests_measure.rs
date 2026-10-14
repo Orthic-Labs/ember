@@ -2,7 +2,7 @@
 //! tone / colour / spatial behaviour on synthetic images, resolution independence and hostile input.
 
 use lightcraft_color::perceptual::{lch_to_lab, oklab_to_2020};
-use lightcraft_color::{REC2020, SRGB};
+use lightcraft_color::{REC2020, SRGB, luminance_2020};
 use lightcraft_raster::{Plane, Rgb32f};
 
 use crate::auto::fit::encode;
@@ -451,4 +451,61 @@ fn validate_and_json_refuse_what_measure_never_makes() {
     let mut bad = m.clone();
     bad.regions[1].l = f32::INFINITY;
     assert!(bad.validate().is_err());
+}
+
+/// A grey ramp from deep shadow (linear 0.01) to highlight (0.9), optionally with a blue cast on
+/// the darkest columns only (linear below 0.05, all inside the shadow range).
+fn shadow_ramp(cast: bool) -> Rgb32f {
+    Rgb32f::from_fn(64, 16, |x, _| {
+        let v = 0.01 + 0.89 * x as f32 / 63.0;
+        if cast && v < 0.05 { [v * 0.85, v, v * 1.25] } else { [v; 3] }
+    })
+}
+
+#[test]
+fn a_shadow_cast_moves_only_the_shadow_tint() {
+    let plain = measure(&shadow_ramp(false), &[]).unwrap();
+    let cast = measure(&shadow_ramp(true), &[]).unwrap();
+    let (before, after) = (value(&plain, "tint.shadows.b"), value(&cast, "tint.shadows.b"));
+    assert!(after < before - 0.005, "a blue shadow cast must pull tint.shadows.b down: {before} -> {after}");
+    for name in ["tint.highlights.a", "tint.highlights.b", "tint.highlights.share"] {
+        let (p, c) = (value(&plain, name), value(&cast, name));
+        assert!((p - c).abs() < 1e-6, "{name} must not move when only shadows change: {p} -> {c}");
+    }
+}
+
+#[test]
+fn desaturating_lowers_the_chroma_percentiles_not_the_brightness() {
+    let full = scene(128, 96);
+    let mut muted = full.clone();
+    for p in muted.data.iter_mut() {
+        let y = luminance_2020(*p);
+        *p = p.map(|c| y + 0.5 * (c - y));
+    }
+    let (a, b) = (measure(&full, &[]).unwrap(), measure(&muted, &[]).unwrap());
+    for p in ["p25", "p50", "p75", "p90"] {
+        let name = format!("chroma.{p}");
+        let (was, now) = (value(&a, &name), value(&b, &name));
+        assert!(now < 0.8 * was, "halving saturation must lower {name}: {was} -> {now}");
+    }
+    let (was, now) = (value(&a, "tone.lum.p50"), value(&b, "tone.lum.p50"));
+    assert!((was - now).abs() < 1e-3, "luminance is preserved, so tone.lum.p50 must hold: {was} -> {now}");
+}
+
+#[test]
+fn a_warm_cast_shows_in_the_neutral_estimate() {
+    let ramp = |cast: [f32; 3]| {
+        Rgb32f::from_fn(64, 16, |x, _| {
+            let v = 0.05 + 0.5 * x as f32 / 63.0;
+            [v * cast[0], v * cast[1], v * cast[2]]
+        })
+    };
+    let plain = measure(&ramp([1.0, 1.0, 1.0]), &[]).unwrap();
+    let warm = measure(&ramp([1.06, 1.0, 0.92]), &[]).unwrap();
+    for name in ["neutral.a", "neutral.b"] {
+        let v = value(&plain, name);
+        assert!(v.abs() < 0.002, "a grey ramp has no cast, {name} = {v}");
+    }
+    let b = value(&warm, "neutral.b");
+    assert!(b > 0.005, "a warm cast must push neutral.b towards yellow: {b}");
 }

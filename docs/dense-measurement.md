@@ -24,7 +24,7 @@ m.validate()?;                                                // schema + finite
 - **Encoded** means gamma 2.2: `encode(v) = clamp(v, 0, 1)^(1/2.2)` (`auto::fit::encode`, the scale Auto's targets live on). Encoded luminance is `encode(luminance_2020(rgb))`; encoded R, G, B encode each channel.
 - **Oklab** values are `oklab_from_2020` of the pixel with negative channels set to 0. Chroma is `hypot(a, b)`, hue is `atan2(b, a)` in radians.
 - **Percentile p** of n sorted values is element `floor((n - 1) * p / 100)` (the rank rule of `auto.rs` and `look.rs`, computed in integers per mille so rounding cannot move a rank). An empty set reports 0.
-- All sums are f64, taken in pixel order on one thread; sorts use `f32::total_cmp`. The same input gives bit-identical output.
+- All sums are f64, taken in pixel order on one thread; sorts use `f32::total_cmp`. The same input gives bit-identical output within one build on one platform. Transcendental functions (`powf`, `cbrt`, `atan2`, `log2`) come from the platform maths library, so another platform can differ by about one ulp, which can move a pixel across a hard threshold.
 - Everything is in normalized coordinates or relative radii, so a 256 px and a 512 px version of one image measure nearly the same.
 - "Zeros" below means the field reports 0 and the group still occupies its slots, so the layout never changes.
 
@@ -69,7 +69,7 @@ A band with summed weight under 1e-6 reports zeros (share 0 as well).
 
 ## Local contrast details
 
-Box means come from a summed-area table in f64 (exact, fixed order). The box is clipped at the frame edge: the mean is over the pixels inside it. A radius is a real number of pixels (share x long edge, at least 1); the boxes at the two neighbouring integer radii are blended by the fraction so the radius scales smoothly with resolution. A non-finite pixel is stood in for by the frame's mean log luminance inside the table and left out of the average. Scratch is one f64 per pixel (about 0.5 GB at the 64 MP cap, 2 MB at 512 px); allocation failure is an error, not an abort.
+Box means come from a summed-area table in f64 (exact, fixed order). The box is clipped at the frame edge: the mean is over the pixels inside it. A radius r is a real number of pixels chosen so the box width 2r + 1 equals 2 x share x long edge, so each box covers the same share of the frame at every resolution (at least 1 px); the boxes at the two neighbouring integer radii are blended by the fraction so the radius scales smoothly with resolution. A non-finite pixel is stood in for by the frame's mean log luminance inside the table and left out of the average. Scratch is one f64 per pixel plus one extra row and column (about 0.5 GB for a near-square 64 MP image, up to about 1 GB for a one-row image at the cap, 2 MB at 512 px); allocation failure is an error, not an abort.
 
 ## Errors
 
@@ -91,3 +91,51 @@ Box means come from a summed-area table in f64 (exact, fixed order). The box is 
 | radial rings | 0.02 |
 | local contrast | 0.015 |
 | region present / share / oklab / chroma / lum percentiles | exact / 0.01 / 0.01 / 0.01 / 0.03 |
+
+## Batch command
+
+```text
+lightcraft-cli ai measure --manifest MANIFEST.jsonl --out NEW_OUT.jsonl
+```
+
+Measures many images in one run (`apps/lightcraft-cli/src/measure_batch.rs`). It is read-only: no library import, development, provider call or source write. Records run sequentially in manifest order, so the same manifest over the same files gives byte-identical output.
+
+### Manifest: `ember.measure-input.v1`
+
+JSON Lines, one record per line; a line is at most 64 KiB and the manifest at most 1,000,000 lines (blank lines are skipped but count towards both numbering and the cap). Unknown fields are rejected.
+
+```json
+{"schema":"ember.measure-input.v1","id":"shoot7-0042","image":{"path":"proxy.3xf32le","sha256":"<64 lowercase hex>","format":"f32-cache"},"regions":[{"kind":"sky","path":"sky.1xf32le","sha256":"<64 lowercase hex>","format":"f32-cache"}]}
+```
+
+- `id`: 1 to 128 characters of `[A-Za-z0-9._:-]`.
+- `image`: `path`, `sha256`, `format`. `regions` is optional: 0 to 4 entries with distinct `kind` (`subject`, `sky`, `background`, `skin`), each with `path`, `sha256` and `format` (regions must be `f32-cache`).
+- `sha256`: the SHA-256 of the exact bytes of the file. It is checked before anything is decoded; a mismatch fails that record.
+
+### Formats
+
+- **`f32-cache`**: an Ember corpus cache object (`docs/reusable-auto-corpus.md`): little-endian u64 width, u64 height, then row-major interleaved little-endian f32 samples. The role fixes the channel count (image: 3, region alpha: 1) and the file length must equal exactly `16 + width * height * channels * 4`; any other length (truncated, extended, or the other channel count) is an error. Width and height are at least 1 and `width * height <= MAX_PIXELS` (64,000,000); all arithmetic is checked. The file is capped at `16 + MAX_PIXELS * channels * 4` bytes and read once. The region must have the image's exact size. Samples are used as stored: a pixel with a non-finite channel is skipped by `measure`, a region alpha is clamped to 0..=1 and a non-finite one reads as 0.
+- **`file`**: a rendered image (JPEG, PNG, TIFF, WebP, ...), decoded to display-linear Rec. 2020 the way `look extract` reads its samples (fitted within 1024 px, never upscaled), with the EXIF orientation applied as `ai decision extract` does for finished exports. Camera raw files are refused, because a raw has no rendered look. The file is capped at 512 MiB (the media cap of `ai decision extract`) and at 64 megapixels.
+
+### Output: `ember.measure-output.v1`
+
+Create-new JSON Lines: an existing output is refused and left untouched, before any image is read. The first line is the header:
+
+```json
+{"schema":"ember.measure-output.v1","measure_schema":"ember.dense-measure.v1","names":["tone.lum.p0_5", "...202 names, schema order..."]}
+```
+
+Then one row per manifest record, in manifest order:
+
+```json
+{"id":"shoot7-0042","image_sha256":"<digest of the image bytes>","values":[ "...202 numbers, the order of names..." ]}
+{"id":"shoot7-0043","error":"image: SHA256 does not match the manifest digest"}
+```
+
+Numbers are the shortest text that parses back to the same f32. A record failure (bad digest, malformed cache object, size or channel mismatch, duplicate region kind, raw file, unreadable file, decoder or measurement error) becomes an error row and never stops the batch. A line that is not valid JSON, is over-long or has no readable `id` becomes an error row with id `line:<n>` (`n` is the 1-based physical line number).
+
+Rows carry ids and digests only. Manifest paths and file names never appear in the output, and error text does not echo manifest values: it is fixed wording, the measurement error, or the codec's own message for an undecodable file (the codecs decode from memory, so none names a path).
+
+### Exit status and summary
+
+stdout prints one line when the run completes: `{"measured":N,"failed":M}`. The exit status is 0 for a completed run, including runs with failed records. It is non-zero only for command-level failures: bad arguments, an unreadable manifest or one over 1,000,000 lines (nothing is created in that case), an existing output, or an output write failure. The stdout summary is the completion receipt: an output without one is incomplete (a write failure leaves the partial file in place, as `ai decision plane` does) and must not be used.

@@ -11,7 +11,9 @@
 //!
 //! Determinism: statistics are exact order statistics (`f32::total_cmp` sorts, integer-ranked
 //! percentiles) or f64 sums taken in pixel order on one thread; there is no randomness and no hash
-//! iteration. The same input gives bit-identical output. Field list: `docs/dense-measurement.md`.
+//! iteration. The same input gives bit-identical output within one build on one platform. `powf`, `cbrt`, `atan2` and the other
+//! transcendental functions come from the platform maths library, so another platform can differ by about one ulp.
+//! Field list: `docs/dense-measurement.md`.
 //!
 //! Never-crash: pixels with a non-finite channel are skipped, every derived value is finite by
 //! construction, input sizes are checked (and capped at [`MAX_PIXELS`]) before anything is
@@ -64,7 +66,7 @@ const RINGS: usize = 5;
 const REGION_MIN_SHARE: f64 = 0.005;
 /// Alpha a pixel needs to join a region's percentile sets.
 const REGION_HARD_ALPHA: f32 = 0.5;
-/// Local-contrast box radii as shares of the long edge.
+/// Local-contrast box half-widths as shares of the long edge: the box spans twice the share.
 const LOCAL_RADII: [f64; 3] = [0.01, 0.04, 0.16];
 /// Luminance floor under the log of the local-contrast measure.
 const LOG_FLOOR: f32 = 1e-6;
@@ -602,7 +604,9 @@ fn local_contrast_means(img: &Rgb32f, finite: usize) -> Result<[f32; 3], Measure
     let long_edge = w.max(h) as f64;
     // (integer radius below, fraction towards the next)
     let radii: [(usize, f64); 3] = LOCAL_RADII.map(|share| {
-        let r = (share * long_edge).max(1.0);
+        // box width 2r + 1 equals 2 x share x long edge, so the box covers the same share of the
+        // frame at every resolution
+        let r = ((2.0 * share * long_edge - 1.0) / 2.0).max(1.0);
         let lo = r.floor();
         (lo as usize, r - lo)
     });
