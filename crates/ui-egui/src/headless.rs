@@ -3516,7 +3516,13 @@ mod tests {
         h.settle(SETTLE);
         assert!(h.app.import.is_none(), "finished");
         let active = h.app.session.selection.active.expect("a photo is active");
-        assert!(!before.contains(&active), "the active photo is a new one: {active:?}");
+        let added: Vec<_> = h.app.session.catalog.photos().map(|p| p.id).filter(|id| !before.contains(id)).collect();
+        assert!(
+            !before.contains(&active),
+            "the active photo is a new one: {active:?}; added {added:?}; source {:?}; toast {:?}",
+            h.app.session.source,
+            h.app.ui.toast.as_ref().map(|t| t.0.clone())
+        );
         assert_eq!(h.app.session.source, lightcraft_engine::LibrarySource::All);
         assert!(h.app.session.visible_cloned().contains(&active), "the grid shows the active photo");
         let _ = std::fs::remove_dir_all(&dir);
