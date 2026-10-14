@@ -1040,8 +1040,10 @@ fn filter_pill(app: &mut LightcraftApp, ui: &mut egui::Ui, canvas: Rect) {
     let label =
         chips.iter().map(|c| crate::panels::chips::display_label(c, &app.session.filter, &app.session.catalog)).collect::<Vec<_>>().join("  ·  ");
     let g = p.layout_no_wrap(crate::i18n::tr_format!("Filtered: {label}", label = label), t.font(12.0), Color32::from_gray(225));
-    let w = (g.size().x + 40.0).min((canvas.width() - 24.0).max(60.0));
-    let r = Rect::from_min_size(canvas.min + vec2(12.0, 3.0), vec2(w, 20.0));
+    // the same inset from the left as from the top, so the pill sits in the corner (#1645)
+    let inset = 3.0;
+    let w = (g.size().x + 40.0).min((canvas.width() - 2.0 * inset).max(60.0));
+    let r = Rect::from_min_size(canvas.min + vec2(inset, inset), vec2(w, 20.0));
     let resp = ui.interact(r, egui::Id::new("loupe-filter-pill"), Sense::click());
     register(ui.ctx(), "loupe:filters", r);
     p.rect_filled(r, 10.0, Color32::from_black_alpha(if resp.hovered() { 225 } else { 185 }));
@@ -2687,5 +2689,28 @@ mod wheel_zoom_tests {
         assert_eq!(wheel_notches(&[wheel(egui::MouseWheelUnit::Point, 40.0, m)]), 0.0);
         assert_eq!(wheel_notches(&[wheel(egui::MouseWheelUnit::Line, 1.0, egui::Modifiers::CTRL)]), 0.0);
         assert_eq!(wheel_notches(&[wheel(egui::MouseWheelUnit::Line, f32::NAN, m)]), 0.0);
+    }
+}
+
+#[cfg(test)]
+mod filter_pill_tests {
+    use super::*;
+
+    /// #1645: the filter pill sits in the loupe's top-left corner as far from the left edge as
+    /// from the top one.
+    #[test]
+    fn the_filter_pill_is_inset_equally_from_both_edges() {
+        let mut app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), crate::Services { png: None, ..Default::default() });
+        app.session.filter.text = "717".into();
+        let ctx = egui::Context::default();
+        let canvas = Rect::from_min_size(pos2(52.0, 82.0), vec2(800.0, 500.0));
+        let raw = crate::headless::HeadlessView::raw_input(vec2(1000.0, 700.0), 1.0, 0.0, vec![]);
+        let mut out = ctx.run_ui(raw, |ui| filter_pill(&mut app, ui, canvas));
+        out.textures_delta.clear();
+        let widgets = crate::widgets::take_registry(&ctx);
+        let pill = widgets.iter().find(|(w, _)| w == "loupe:filters").map(|(_, r)| *r).expect("the pill shows with a search");
+        let (left, top) = (pill.left() - canvas.left(), pill.top() - canvas.top());
+        assert!(top > 0.0, "inside the canvas: {pill:?}");
+        assert_eq!(left, top, "left and top insets: {pill:?} in {canvas:?}");
     }
 }
