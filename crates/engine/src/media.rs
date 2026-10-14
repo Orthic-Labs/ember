@@ -627,6 +627,21 @@ impl MediaCache {
         self.source_ref_with(p, level, false)
     }
 
+    /// [`Self::source_ref`] for a grid thumbnail render job only: a thumbnail of a photo whose preview is
+    /// decoded (the one in the loupe) is cut from it, not decoded again. Never with a denoised picture,
+    /// which the thumbnail would lose. Other readers (Auto, masks, [`crate::Session::source_now`]) keep
+    /// the plain source so their measurements don't depend on what the cache holds.
+    pub fn thumb_source_ref(&mut self, p: &Photo, level: SourceLevel) -> SourceRef {
+        if level == SourceLevel::Thumb
+            && self.get_source(p.id, level).is_none()
+            && self.denoise.spec(p.id).is_none()
+            && let Some(big) = self.get_source(p.id, SourceLevel::Preview)
+        {
+            return SourceRef::Fit { from: Box::new(big), max_edge: level.max_edge() };
+        }
+        self.source_ref(p, level)
+    }
+
     fn source_ref_with(&mut self, p: &Photo, level: SourceLevel, cached: bool) -> SourceRef {
         let mut r = self.source_ref_plain(p, level, cached);
         if let (SourceRef::File { denoise, .. }, Some((spec, loader))) = (&mut r, self.denoise.get(p.id)) {
@@ -638,15 +653,6 @@ impl MediaCache {
     fn source_ref_plain(&mut self, p: &Photo, level: SourceLevel, cached: bool) -> SourceRef {
         if cached && let Some(a) = self.get_source(p.id, level) {
             return SourceRef::Loaded(Box::new(a));
-        }
-        // a thumbnail of a photo whose preview is decoded (the one in the loupe) is cut from it; not
-        // with a denoised picture, which the thumbnail would lose
-        if cached
-            && level == SourceLevel::Thumb
-            && self.denoise.spec(p.id).is_none()
-            && let Some(big) = self.get_source(p.id, SourceLevel::Preview)
-        {
-            return SourceRef::Fit { from: Box::new(big), max_edge: level.max_edge() };
         }
         // Procedural scenes have a nominal size: "full" is that size, not unbounded.
         let max_edge = level.max_edge().min(match (&p.source, level) {
@@ -1161,7 +1167,7 @@ impl crate::Session {
         } else {
             source_edge_needed(&p, &settings, apply_crop, max_w.max(max_h))
         });
-        let source = self.media.source_ref(&p, level);
+        let source = if thumb_bucket.is_some() { self.media.thumb_source_ref(&p, level) } else { self.media.source_ref(&p, level) };
         let request = RenderRequest { apply_crop, ..RenderRequest::fit(max_w, max_h) };
         // the photo id is part of the key: two photos with the same settings and size must not
         // share a result (a view slot showing photo A would otherwise look current for photo B)
@@ -2063,6 +2069,20 @@ mod tests {
         s.accept(&r);
         let cached = s.media.get(p.id, SourceLevel::Thumb).unwrap();
         assert_eq!((cached.width, cached.height), (512, 341), "a thumbnail-sized source is kept, not the preview");
+    }
+
+    /// Only a grid thumbnail job is cut from the decoded preview: a thumbnail-level read for Auto or a
+    /// mask ([`crate::Session::source_now`]) and a view render keep the plain source, so what they measure
+    /// doesn't depend on what the cache holds.
+    #[test]
+    fn only_thumbnail_jobs_are_cut_from_the_preview() {
+        let mut s = crate::Session::new();
+        let p = Photo::new(PhotoId(1), Source::File { path: "/nowhere/a.ARW".into() }, "a.ARW", "ARW", 2400, 1600, "");
+        s.catalog.apply(lightcraft_catalog::Op::AddPhoto { photo: Box::new(p.clone()) }).unwrap();
+        s.media.insert(p.id, SourceLevel::Preview, Arc::new(Rgb32f::from_fn(2400, 1600, |x, _| [x as f32 / 2400.0, 0.5, 0.25])));
+        assert!(!matches!(s.media.source_ref(&p, SourceLevel::Thumb), SourceRef::Fit { .. }));
+        assert!(s.source_now(p.id, SourceLevel::Thumb).is_err(), "reads the (missing) file, not the cached preview");
+        assert!(matches!(s.media.thumb_source_ref(&p, SourceLevel::Thumb), SourceRef::Fit { .. }));
     }
 
     #[test]
