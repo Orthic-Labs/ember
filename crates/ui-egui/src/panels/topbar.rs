@@ -63,7 +63,9 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
             let search_left = full.center().x - sw / 2.0;
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                if icon_button(ui, "sidebar", Icon::Sidebar, vec2(30.0, 30.0), app.ui.left_panel, true, crate::i18n::tr("Show/hide My Photos panel")).clicked() {
+                if icon_button(ui, "sidebar", Icon::Sidebar, vec2(30.0, 30.0), app.ui.left_panel, true, crate::i18n::tr("Show/hide My Photos panel"))
+                    .clicked()
+                {
                     let _ = app.run("view.leftPanel", json!({}));
                 }
                 ui.add_space(8.0);

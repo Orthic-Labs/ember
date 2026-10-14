@@ -1423,6 +1423,7 @@ fn oversized_spots_render() {
             assert!(t.elapsed().as_secs_f64() < 60.0, "{size} {mode:?}: {:?}", t.elapsed());
         }
     }
+}
 
 #[test]
 fn develop_paste_validates_groups_and_rejects_malformed_with_zero_mutations() {

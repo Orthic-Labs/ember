@@ -1288,12 +1288,9 @@ mod tests {
     fn library_context_menu_labels_have_french_translations() {
         let saved = crate::i18n::language();
         crate::i18n::set_language(crate::i18n::Locale::Fr);
-        for (label, expected) in [
-            ("Pick", "Sélectionnée"),
-            ("Reject", "Rejeter"),
-            ("Group into Stack", "Regrouper en pile"),
-            ("HDR Panorama…", "Panorama HDR…"),
-        ] {
+        for (label, expected) in
+            [("Pick", "Sélectionnée"), ("Reject", "Rejeter"), ("Group into Stack", "Regrouper en pile"), ("HDR Panorama…", "Panorama HDR…")]
+        {
             assert_eq!(crate::i18n::tr(label), expected);
         }
         crate::i18n::set_language(saved);

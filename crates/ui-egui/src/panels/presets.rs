@@ -40,9 +40,10 @@ impl AppliedPreset {
             && self.commits == session.commits()
             && session.interaction.is_none()
             && session.redo.is_empty()
-            && session.undo.last().is_some_and(|entry| {
-                session.presets.iter().any(|preset| preset.id == self.id && entry.label == format!("Preset: {}", preset.name))
-            })
+            && session
+                .undo
+                .last()
+                .is_some_and(|entry| session.presets.iter().any(|preset| preset.id == self.id && entry.label == format!("Preset: {}", preset.name)))
     }
 }
 
@@ -57,7 +58,17 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                 .max_rect(Rect::from_min_max(pos2(hr.right() - 80.0, hr.top()), hr.right_bottom()))
                 .layout(egui::Layout::right_to_left(egui::Align::Center)),
         );
-        if icon_button(&mut hdr, "presetCreate", Icon::Plus, vec2(28.0, 28.0), false, app.session.active().is_some(), crate::i18n::tr("Create Preset…")).clicked() {
+        if icon_button(
+            &mut hdr,
+            "presetCreate",
+            Icon::Plus,
+            vec2(28.0, 28.0),
+            false,
+            app.session.active().is_some(),
+            crate::i18n::tr("Create Preset…"),
+        )
+        .clicked()
+        {
             app.ui.dialog = Some(crate::state::Dialog::create_preset());
         }
         let more = icon_button(&mut hdr, "presetMore", Icon::More, vec2(28.0, 28.0), false, true, crate::i18n::tr("More preset options"));
@@ -90,7 +101,9 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                 track: Track::Plain,
             };
             let out = slider(ui, &spec, last.amount, true, None);
-            if let Some(v) = out.value && app.run("edit.undo", json!({})).is_ok() {
+            if let Some(v) = out.value
+                && app.run("edit.undo", json!({})).is_ok()
+            {
                 // Only replace the most recent preset; never undo intervening edits.
                 if app.run("preset.apply", json!({"id": &last.id, "amount": v})).is_ok() {
                     ui.data_mut(|d| d.insert_temp(amt_id, AppliedPreset::new(&app.session, last.id, v)));

@@ -31,8 +31,7 @@ pub fn gpu_notice(reason: Option<&str>, enabled: bool) -> Option<String> {
         return None;
     }
     let mut text =
-        crate::i18n::tr("No graphics processor found: Ember renders on the CPU, which is much slower. Details in Help → System Info.")
-            .to_string();
+        crate::i18n::tr("No graphics processor found: Ember renders on the CPU, which is much slower. Details in Help → System Info.").to_string();
     if cfg!(target_os = "linux") {
         text.push(' ');
         text.push_str(crate::i18n::tr("On NixOS, start it from `nix develop`."));
