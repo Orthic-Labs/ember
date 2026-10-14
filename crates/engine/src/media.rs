@@ -474,6 +474,11 @@ impl MediaCache {
         }
     }
 
+    /// The photo whose original stays over budget ([`Self::set_on_screen`]).
+    pub fn on_screen(&self) -> Option<PhotoId> {
+        self.on_screen
+    }
+
     fn trim_full(&mut self) {
         while self.full.len() > self.full_capacity {
             let oldest = self.full.iter().enumerate().min_by_key(|(_, e)| e.2).map(|(i, _)| i).unwrap_or(0);
