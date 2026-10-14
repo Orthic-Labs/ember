@@ -519,7 +519,7 @@ fn checked_pixels(img: &Rgb32f) -> Result<usize, MeasureError> {
     if img.width == 0 || img.height == 0 {
         return Err(MeasureError::EmptyImage);
     }
-    let n = img.width.checked_mul(img.height).unwrap_or(usize::MAX);
+    let n = img.width.saturating_mul(img.height);
     if n > MAX_PIXELS {
         return Err(MeasureError::TooLarge { pixels: n });
     }
