@@ -13,7 +13,7 @@ const DEFAULT_UI: UiState = {
   slideshow: false, infoOverlay: 0, maskOverlay: false, maskOverlayMode: 'selected', maskPins: true,
   clipping: false, theme: 'system', locale: 'en', sections: { light: true, color: true, effects: false, detail: false, optics: false },
   autoAdvance: false, gridInfo: true, softProof: false, brushSize: 100, brushFeather: 50, cropOverlay: 'thirds', filterText: '',
-  startupView: 'last', confirmDelete: false, gpu: true, previewEdge: 2560, memoryMb: 0, externalEditor: '', filmNames: true, filmBadges: true,
+  startupView: 'last', confirmDelete: true, gpu: true, previewEdge: 2560, memoryMb: 0, externalEditor: '', filmNames: true, filmBadges: true,
 };
 
 const DesktopContext = createContext<DesktopContextValue | null>(null);
@@ -119,7 +119,9 @@ function migrateLegacyUi(value: JsonObject): Partial<UiState> {
   const gridBadges = settings?.gridBadges;
   if (gridBadges === 'never') next.gridInfo = false;
   else if (gridBadges === 'always' || gridBadges === 'auto') next.gridInfo = true;
-  if (typeof settings?.confirmDelete === 'boolean') next.confirmDelete = settings.confirmDelete;
+  // the engine's settings save it as `askBeforeDelete` (on by default); `confirmDelete` is the older key
+  const askBeforeDelete = settings?.askBeforeDelete ?? settings?.confirmDelete;
+  if (typeof askBeforeDelete === 'boolean') next.confirmDelete = askBeforeDelete;
   if (typeof settings?.gpu === 'boolean') next.gpu = settings.gpu;
   const previewEdge = finiteNumber(settings?.previewEdge);
   if (previewEdge !== null) next.previewEdge = Math.max(512, Math.min(16384, Math.round(previewEdge)));
@@ -165,7 +167,8 @@ function preferenceUi(preferences: JsonObject | undefined): Partial<UiState> {
     };
     if (general.theme === 'light' || general.theme === 'dark' || general.theme === 'system') setIfAbsent('theme', general.theme);
     if (typeof general.locale === 'string') setIfAbsent('locale', normalizeLocale(general.locale));
-    if (typeof nested.confirmDelete === 'boolean') setIfAbsent('confirmDelete', nested.confirmDelete);
+    const nestedAsk = nested.askBeforeDelete ?? nested.confirmDelete;
+    if (typeof nestedAsk === 'boolean') setIfAbsent('confirmDelete', nestedAsk);
     if (typeof nested.gpu === 'boolean') setIfAbsent('gpu', nested.gpu);
     const edge = finiteNumber(nested.previewEdge);
     if (edge !== null) setIfAbsent('previewEdge', Math.max(512, Math.min(16384, Math.round(edge))));
