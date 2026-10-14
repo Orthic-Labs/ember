@@ -371,3 +371,25 @@ fn the_same_manifest_twice_gives_identical_output_bytes() {
     assert_failed(&rows[4], "line:5", "JSON object");
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn a_byte_order_mark_is_ignored_and_duplicate_ids_fail() {
+    let dir = scratch();
+    let image = put(&dir, "image.f32", &image_bytes());
+    let lines = [
+        record("first", image.object("f32-cache"), vec![]).to_string(),
+        record("second", image.object("f32-cache"), vec![]).to_string(),
+        record("first", image.object("f32-cache"), vec![]).to_string(),
+    ];
+    let manifest = dir.join("manifest.jsonl");
+    std::fs::write(&manifest, [b"\xEF\xBB\xBF".as_slice(), (lines.join("\n") + "\n").as_bytes()].concat()).unwrap();
+    let out = dir.join("out.jsonl");
+    let output = run(&manifest, &out);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(summary(&output), json!({"measured": 2, "failed": 1}));
+    let (_, rows) = read_rows(&out);
+    assert_eq!(rows.len(), 3);
+    assert_measured(&rows[0], "first");
+    assert_measured(&rows[1], "second");
+    assert_failed(&rows[2], "first", "duplicate id");
+}

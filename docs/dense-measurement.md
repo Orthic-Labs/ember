@@ -115,7 +115,7 @@ JSON Lines, one record per line; a line is at most 64 KiB and the manifest at mo
 ### Formats
 
 - **`f32-cache`**: an Ember corpus cache object (`docs/reusable-auto-corpus.md`): little-endian u64 width, u64 height, then row-major interleaved little-endian f32 samples. The role fixes the channel count (image: 3, region alpha: 1) and the file length must equal exactly `16 + width * height * channels * 4`; any other length (truncated, extended, or the other channel count) is an error. Width and height are at least 1 and `width * height <= MAX_PIXELS` (64,000,000); all arithmetic is checked. The file is capped at `16 + MAX_PIXELS * channels * 4` bytes and read once. The region must have the image's exact size. Samples are used as stored: a pixel with a non-finite channel is skipped by `measure`, a region alpha is clamped to 0..=1 and a non-finite one reads as 0.
-- **`file`**: a rendered image (JPEG, PNG, TIFF, WebP, ...), decoded to display-linear Rec. 2020 the way `look extract` reads its samples (fitted within 1024 px, never upscaled), with the EXIF orientation applied as `ai decision extract` does for finished exports. Camera raw files are refused, because a raw has no rendered look. The file is capped at 512 MiB (the media cap of `ai decision extract`) and at 64 megapixels.
+- **`file`**: a rendered image (JPEG, PNG, TIFF, WebP, ...), decoded to display-linear Rec. 2020 the way `look extract` reads its samples, fitted within 512 px (the scale of the corpus cache and Ember's import proxy, so `file` and `f32-cache` rows are comparable; never upscaled), with the EXIF orientation applied as `ai decision extract` does for finished exports. Camera raw files are refused, because a raw has no rendered look. As in `ai decision extract`, CMYK renders and files whose colour profile cannot be applied are refused, since their colours are unknown; an alpha channel is ignored. The file is capped at 512 MiB (the media cap of `ai decision extract`) and at 64 megapixels.
 
 ### Output: `ember.measure-output.v1`
 
@@ -132,7 +132,7 @@ Then one row per manifest record, in manifest order:
 {"id":"shoot7-0043","error":"image: SHA256 does not match the manifest digest"}
 ```
 
-Numbers are the shortest text that parses back to the same f32. A record failure (bad digest, malformed cache object, size or channel mismatch, duplicate region kind, raw file, unreadable file, decoder or measurement error) becomes an error row and never stops the batch. A line that is not valid JSON, is over-long or has no readable `id` becomes an error row with id `line:<n>` (`n` is the 1-based physical line number).
+Numbers are the shortest text that parses back to the same f32. A record failure (bad digest, malformed cache object, size or channel mismatch, duplicate region kind, raw file, unreadable file, decoder or measurement error) becomes an error row and never stops the batch. A line that is not valid JSON, is over-long or has no readable `id` becomes an error row with id `line:<n>` (`n` is the 1-based physical line number). A record whose `id` repeats an earlier record's becomes an error row. A UTF-8 byte-order mark at the start of the manifest is ignored. Relative paths resolve against the working directory, not the manifest's folder.
 
 Rows carry ids and digests only. Manifest paths and file names never appear in the output, and error text does not echo manifest values: it is fixed wording, the measurement error, or the codec's own message for an undecodable file (the codecs decode from memory, so none names a path).
 

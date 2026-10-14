@@ -2,6 +2,7 @@
 //! Read-only: no library import, development, provider calls or source writes. Output carries
 //! record ids and content digests only; manifest paths never leave the manifest.
 
+use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -25,8 +26,9 @@ const MAX_PATH_BYTES: usize = 4096;
 const MAX_REGIONS: usize = 4;
 /// Largest rendered file read for `format: file` (the media cap `ai decision extract` uses).
 const MAX_FILE_BYTES: u64 = 512 * 1024 * 1024;
-/// Long edge a rendered file is fitted within, as `look extract` decodes its samples.
-const FILE_EDGE: u32 = 1024;
+/// Long edge a rendered file is fitted within: the 512 px of the corpus cache and Ember's import
+/// proxy, so `file` and `f32-cache` rows measure at the same scale.
+const FILE_EDGE: u32 = 512;
 const CACHE_HEADER_BYTES: u64 = 16;
 
 /// Size cap of a cache object with `channels` f32 samples per pixel: header plus the largest image.
@@ -103,6 +105,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let mut buffer = Vec::new();
     let mut number = 0u64;
     let (mut measured, mut failed) = (0u64, 0u64);
+    let mut seen = HashSet::new();
     loop {
         let line = next_line(&mut reader, &mut buffer).map_err(|e| format!("manifest read: {e}"))?;
         if line == Line::Eof {
@@ -115,7 +118,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         let (ok, row) = match line {
             Line::TooLong => failure_row(&line_id(number), &format!("manifest line exceeds {MAX_LINE_BYTES} bytes")),
             _ if buffer.iter().all(u8::is_ascii_whitespace) => continue,
-            _ => handle_line(&buffer, number),
+            _ => handle_line(strip_bom(&buffer, number), number, &mut seen),
         };
         if ok {
             measured = measured.saturating_add(1);
@@ -134,6 +137,11 @@ fn write_line(out: &mut impl Write, line: &str) -> Result<(), String> {
 }
 
 fn open_manifest(path: &Path) -> Result<File, String> {
+    // Checked before opening: opening a FIFO or device could block.
+    let before = std::fs::metadata(path).map_err(|e| format!("manifest input: {e}"))?;
+    if !before.is_file() {
+        return Err("manifest must be a regular file".into());
+    }
     let file = File::open(path).map_err(|e| format!("manifest input: {e}"))?;
     let info = file.metadata().map_err(|e| format!("manifest metadata: {e}"))?;
     if !info.is_file() {
@@ -202,11 +210,17 @@ fn skip_line(reader: &mut impl BufRead) -> std::io::Result<()> {
 }
 
 /// One manifest line to its output row: `(measured, JSON line)`.
-fn handle_line(bytes: &[u8], number: u64) -> (bool, String) {
+fn handle_line(bytes: &[u8], number: u64, seen: &mut HashSet<String>) -> (bool, String) {
     let Ok(value) = serde_json::from_slice::<Value>(bytes) else {
         return failure_row(&line_id(number), "manifest line is not valid JSON");
     };
-    let id = readable_id(&value).unwrap_or_else(|| line_id(number));
+    let readable = readable_id(&value);
+    if let Some(id) = &readable
+        && !seen.insert(id.clone())
+    {
+        return failure_row(id, "duplicate id: an earlier record already used it");
+    }
+    let id = readable.unwrap_or_else(|| line_id(number));
     let record = match parse_record(&value) {
         Ok(record) => record,
         Err(reason) => return failure_row(&id, &reason),
@@ -333,6 +347,11 @@ fn read_verified(object: &Object, limit: u64) -> Result<Vec<u8>, String> {
 }
 
 fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, String> {
+    // Checked before opening: opening a FIFO or device could block.
+    let before = std::fs::metadata(path).map_err(|e| format!("unreadable ({})", e.kind()))?;
+    if !before.is_file() {
+        return Err("not a regular file".into());
+    }
     let file = File::open(path).map_err(|e| format!("unreadable ({})", e.kind()))?;
     let info = file.metadata().map_err(|e| format!("metadata unreadable ({})", e.kind()))?;
     if !info.is_file() {
@@ -376,7 +395,7 @@ fn cache_layout(bytes: &[u8], channels: u64) -> Result<(usize, usize, &[u8]), St
 }
 
 fn samples(payload: &[u8]) -> impl Iterator<Item = f32> + '_ {
-    payload.chunks_exact(4).filter_map(|chunk| <[u8; 4]>::try_from(chunk).ok()).map(f32::from_le_bytes)
+    payload.as_chunks::<4>().0.iter().map(|chunk| f32::from_le_bytes(*chunk))
 }
 
 fn decode_cache_image(bytes: &[u8]) -> Result<Rgb32f, String> {
@@ -414,7 +433,22 @@ fn decode_file(bytes: &[u8]) -> Result<Rgb32f, String> {
     }
     let options = DecodeOptions { max_size: Some((FILE_EDGE, FILE_EDGE)), max_pixels: MAX_PIXELS as u64 };
     let decoded = lightcraft_codecs::decode(bytes, options).map_err(|e| format!("decode failed: {e}"))?;
+    // The colour refusals of `ai decision extract`: these renders' colours are not known.
+    if decoded.cmyk {
+        return Err("CMYK renders are not measured".into());
+    }
+    if matches!(decoded.space.origin, lightcraft_codecs::SpaceOrigin::IccUnsupported | lightcraft_codecs::SpaceOrigin::Naive) {
+        return Err("the render's colour profile could not be applied".into());
+    }
     Ok(decoded.to_working().into_oriented(Orientation::from_exif(decoded.orientation)))
+}
+
+/// Line 1 without a UTF-8 byte-order mark (PowerShell writes one); other lines unchanged.
+fn strip_bom(bytes: &[u8], number: u64) -> &[u8] {
+    match bytes.strip_prefix(b"\xEF\xBB\xBF") {
+        Some(rest) if number == 1 => rest,
+        _ => bytes,
+    }
 }
 
 fn header_line(names: &[String]) -> Result<String, String> {
