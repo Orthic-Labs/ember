@@ -36,6 +36,14 @@
 - An uncompressed Leaf Aptus 22 MOS no longer opens as a dark, colourless picture of its sensor mosaic: it imports
   as a raw and shows its embedded preview (preview only, with the reason), as the compressed MOS files do.
 
+## 2026-10-13
+
+### DNG camera identity
+- DNG export and Convert to DNG no longer duplicate the camera make when the model already
+  contains it: `Canon EOS R6` stays `Canon EOS R6`, rather than `Canon Canon EOS R6` (the camera
+  identity subissue in #840). The separate Make and Model tags keep their original values.
+  This does not change colour matrices, camera calibration or RAW noise rendering.
+
 ## 2026-10-11
 
 ### HDR and panorama merges of CR2 keep their colour

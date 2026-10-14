@@ -91,6 +91,47 @@ fn assert_same(a: &RawImage, b: &RawImage) {
 }
 
 #[test]
+fn writer_camera_identity_tags_roundtrip() {
+    let cases = [
+        (Some("Canon"), Some("Canon EOS R6"), "Canon EOS R6"),
+        (Some("CANON"), Some("cAnOn EOS R6"), "cAnOn EOS R6"),
+        (Some("Canon"), Some("Canon"), "Canon"),
+        (Some("Canon"), Some("Canon-EOS R6"), "Canon-EOS R6"),
+        (Some("Canon"), Some("Canon_EOS R6"), "Canon Canon_EOS R6"),
+        (Some("Canon"), Some("Canonic R6"), "Canon Canonic R6"),
+        (Some("Canon"), Some("Canon2 R6"), "Canon Canon2 R6"),
+        (Some("Canon"), Some("Canoné R6"), "Canon Canoné R6"),
+        (Some("Canon"), Some("EOS R6"), "Canon EOS R6"),
+        (Some("Eastman Kodak"), Some("eAsTmAn kOdAk DCS Pro"), "eAsTmAn kOdAk DCS Pro"),
+        (Some("Eastman Kodak"), Some("Eastman Kodakish DCS Pro"), "Eastman Kodak Eastman Kodakish DCS Pro"),
+        (Some("Eastman Kodak"), Some("Eastman DCS Pro"), "Eastman Kodak Eastman DCS Pro"),
+        (Some(""), Some("EOS R6"), "EOS R6"),
+        (Some("Canon"), Some(""), "Canon"),
+        (Some(""), Some(""), "Ember"),
+        (Some("  "), Some(" "), "Ember"),
+        (Some(" Canon "), Some("EOS R6 "), "Canon EOS R6"),
+        (None, Some("EOS R6"), "EOS R6"),
+        (Some("Canon"), None, "Canon"),
+        (None, None, "Ember"),
+    ];
+    for (make, model, unique) in cases {
+        let mut raw = synthetic(16, 16, Some(Cfa::bayer("RGGB").unwrap()), 1);
+        raw.metadata.make = make.map(str::to_owned);
+        raw.metadata.model = model.map(str::to_owned);
+        for order in [ByteOrder::Little, ByteOrder::Big] {
+            let bytes = write_dng(&raw, &DngWriteOptions { compression: DngCompression::Uncompressed, order, xmp: None }).unwrap();
+            let tiff = lightcraft_tiff::Tiff::parse(&bytes).unwrap();
+            let ifd = &tiff.ifds[0];
+            assert_eq!(ifd.value(t::UNIQUE_CAMERA_MODEL), Some(&Value::Ascii(unique.into())), "{make:?} / {model:?}, {order:?}");
+            for (tag, original) in [(t::MAKE, make), (t::MODEL, model)] {
+                let expected = original.map(str::trim).filter(|s| !s.is_empty()).map(|s| Value::Ascii(s.into()));
+                assert_eq!(ifd.value(tag), expected.as_ref(), "tag {tag}, {make:?} / {model:?}, {order:?}");
+            }
+        }
+    }
+}
+
+#[test]
 fn writer_roundtrip_all_layouts() {
     for (w, h) in [(64, 48), (70, 45), (33, 17)] {
         for cfa in [Some(Cfa::bayer("RGGB").unwrap()), Some(Cfa::bayer("GBRG").unwrap()), Some(Cfa::xtrans()), None] {

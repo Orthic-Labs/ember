@@ -112,15 +112,24 @@ pub fn write_dng(raw: &RawImage, opts: &DngWriteOptions) -> Result<Vec<u8>> {
     ifd.set(t::PHOTOMETRIC, Value::Short(vec![if raw.cfa.is_some() { photometric::CFA } else { photometric::LINEAR_RAW }]));
     ifd.set(t::DNG_VERSION, Value::Byte(vec![1, 4, 0, 0]));
     ifd.set(t::DNG_BACKWARD_VERSION, Value::Byte(vec![1, 3, 0, 0]));
-    let make = raw.metadata.make.clone().unwrap_or_default();
-    let model = raw.metadata.model.clone().unwrap_or_default();
+    let make = raw.metadata.make.as_deref().unwrap_or_default().trim();
+    let model = raw.metadata.model.as_deref().unwrap_or_default().trim();
     if !make.is_empty() {
-        ifd.set(t::MAKE, Value::Ascii(make.clone()));
+        ifd.set(t::MAKE, Value::Ascii(make.to_owned()));
     }
     if !model.is_empty() {
-        ifd.set(t::MODEL, Value::Ascii(model.clone()));
+        ifd.set(t::MODEL, Value::Ascii(model.to_owned()));
     }
-    let unique = format!("{make} {model}").trim().to_string();
+    let model_includes_make = !make.is_empty()
+        && model.get(..make.len()).is_some_and(|prefix| prefix.eq_ignore_ascii_case(make))
+        && model.get(make.len()..).is_some_and(|suffix| suffix.chars().next().is_none_or(|c| !c.is_alphanumeric() && c != '_'));
+    let unique = if model_includes_make || make.is_empty() {
+        model.to_owned()
+    } else if model.is_empty() {
+        make.to_owned()
+    } else {
+        format!("{make} {model}")
+    };
     ifd.set(t::UNIQUE_CAMERA_MODEL, Value::Ascii(if unique.is_empty() { "Ember".into() } else { unique }));
     ifd.set(t::ORIENTATION, Value::Short(vec![raw.orientation.to_exif()]));
     ifd.set(t::SOFTWARE, Value::Ascii(SOFTWARE.into()));
