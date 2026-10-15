@@ -25,6 +25,9 @@
 - Saving the catalog and resuming a model download no longer write through a link left at the temporary file's
   name (`catalog.snap.tmp`, `model.onnx.part`): the link is removed and a new file made in its place, so the file it
   pointed to is never changed (issue #1502).
+- An imported reference editor catalog with an image record whose file, folder or root record is gone no longer
+  fails with "missing file record" (upstream issue #1588). That image is left out with a warning (the first 20 are
+  named, then counted) and the rest of the catalog imports.
 
 ### Hard-edged Heal and Clone spots
 - A spot with Feather at 0 no longer draws black pixels exactly on its radius. This also fixes spots at 0% Opacity

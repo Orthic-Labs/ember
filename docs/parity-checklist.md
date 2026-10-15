@@ -843,6 +843,7 @@ Latin stays upright. Advanced Japanese composition remains open. Regression cove
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-14 | patch | LRC-LIB-CATALOG-IMPORT: an image record without its file, folder or root record is left out with a warning instead of failing the whole import (upstream #1588); status unchanged |
 | 2026-10-14 | patch | LR-REM-HEAL, LR-REM-CLONE: zero-feather edges preserve exact-radius pixels; zero-opacity regression covers all spot modes and image corners. Statuses and feature counts unchanged. |
 | 2026-10-13 | patch | LR-VIEW-COMPARE, LRC-LIB-COMPARE: ⌘/Ctrl- and Shift-clicks on the filmstrip in Compare change the selection as in the grid; the two photos shown stay selected and the active photo is unchanged (upstream #187); statuses unchanged |
 | 2026-10-13 | minor | LR-VER-HISTORY, LRC-DEV-HISTORY: History cursor (go to a step without adding one; Previous/Next History Step) |
