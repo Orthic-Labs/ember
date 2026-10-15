@@ -42,7 +42,8 @@ jobs:
         run: exit 1
   admission:
     needs: [private-repo-guard]
-    runs-on: ubuntu-24.04
+    # Temporary runner correction: published ownership approval supports macOS/Windows.
+    runs-on: macos-15
     permissions:
       contents: read
     outputs:
