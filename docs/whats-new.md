@@ -1,5 +1,13 @@
 # What's new in Ember
 
+## 2026-10-15
+
+### Imported radial masks on the right side
+- Radial masks brought over from the reference editor (catalog import, XMP sidecars, edits inside DNGs and presets) now
+  apply their effect inside the circle, as the reference editor does, instead of outside it (upstream issue #1815). A mask inverted in
+  the reference editor stays inverted, and older Radial Filters keep their Effect Outside / Invert Mask setting. Photos imported
+  before this keep the masks they got: Photo ▸ Read Metadata from File reads a sidecar's again.
+
 ## 2026-10-14
 
 ### Hard-edged Heal and Clone spots
