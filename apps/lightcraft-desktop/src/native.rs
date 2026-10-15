@@ -1069,6 +1069,12 @@ pub fn run() {
             let preferences = Preferences::load(config);
             let args: Vec<String> = std::env::args().collect();
             let (qa, _) = runtime_modes(&args);
+            // QA hosts run as accessory apps (no Dock icon or menu bar, no activation on launch), so
+            // a hidden run can't take the front from whoever is at the machine.
+            #[cfg(target_os = "macos")]
+            if qa || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref()) {
+                app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            }
             let primary = app.config().identifier == PRIMARY_IDENTIFIER;
             let preference_value = preferences.get().unwrap_or_else(|error| {
                 log::warn!("could not read startup preferences for GPU setup: {error}");
