@@ -15,7 +15,8 @@ if (head !== revision) fail(`checked-out source ${head} does not match admitted 
 const signed = process.env.RIGHT_GIT_SIGNED_QUALIFICATION === "true";
 const publish = process.env.RIGHT_GIT_PUBLISH === "true";
 const dryRun = process.env.RIGHT_GIT_DRY_RUN === "true";
-if (signed || publish) fail("this candidate lane qualifies unsigned development artifacts; protected signing/publication targets are not configured");
+// signing runs in the generated windows-sign/macos-sign jobs; publication stays with right-release
+if (publish) fail("this candidate lane does not publish; publish an exact build through right-release");
 if (publish && !signed) fail("publication requires signed qualification");
 if (publish && dryRun) fail("dry-run cannot publish");
 if (process.env.RIGHT_GIT_WORKFLOW_REF && !dryRun && process.env.RIGHT_GIT_WORKFLOW_REF !== "refs/heads/main") fail("release candidate must run from main");
