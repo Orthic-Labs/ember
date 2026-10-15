@@ -1,7 +1,7 @@
 import { APP_NAME } from '../branding';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type KeyboardEvent, type UIEvent } from 'react';
-import { navNeighborIndex } from '@rightkit/app-shell';
-import { AppearanceMenu, NavList, PaletteTrigger, useShell, type NavGroup } from '@rightkit/app-shell/react';
+import { navNeighborIndex } from '@rightkit/react-shell';
+import { AppearanceMenu, NavList, PaletteTrigger, useShell, type NavGroup } from '@rightkit/react-shell/react';
 import type { DesktopSnapshot, PhotoSummary } from '../types';
 import { useDesktop } from '../desktop';
 import { RetainedLayout } from '../layout/RetainedLayout';

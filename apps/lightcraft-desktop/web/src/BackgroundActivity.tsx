@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '@rightkit/app-shell/react';
+import { Button } from '@rightkit/react-shell/react';
 import { useDesktop } from './desktop';
 import './backgroundActivity.css';
 

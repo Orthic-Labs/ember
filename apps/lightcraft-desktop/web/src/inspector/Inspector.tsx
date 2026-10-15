@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ControlSpec, DesktopSnapshot, JsonObject, Panel, UiState } from '../types';
 import { useDesktop } from '../desktop';
 import { Icon, type IconName } from '../icons';
-import { FuseCurves } from '@rightkit/app-shell/react';
+import { FuseCurves } from '@rightkit/react-shell/react';
 import { SliderCommandQueue } from './sliderCommandQueue';
 import { fromRange, rangeProps } from './trackScale';
 import './Inspector.css';

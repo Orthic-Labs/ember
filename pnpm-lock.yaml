@@ -8,15 +8,15 @@ importers:
 
   .:
     dependencies:
-      '@rightkit/app-shell':
-        specifier: 0.2.1
-        version: 0.2.1(@rightkit/platform-ui@0.1.2(@tauri-apps/plugin-os@2.4.0)(react@19.3.0))(react@19.3.0)
       '@rightkit/platform-ui':
-        specifier: 0.1.2
-        version: 0.1.2(@tauri-apps/plugin-os@2.4.0)(react@19.3.0)
-      '@rightkit/shell':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: 0.2.8
+        version: 0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.0)
+      '@rightkit/react-shell':
+        specifier: 0.6.4
+        version: 0.6.4(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.0))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@rightkit/tauri-shell':
+        specifier: 0.1.1
+        version: 0.1.1
       '@tauri-apps/api':
         specifier: 2.12.1
         version: 2.12.1
@@ -27,9 +27,9 @@ importers:
         specifier: 19.3.0
         version: 19.3.0(react@19.3.0)
     devDependencies:
-      '@rightkit/git':
-        specifier: 0.2.26
-        version: 0.2.26
+      '@rightkit/ci':
+        specifier: 0.2.43
+        version: 0.2.43
       '@rightkit/qa-chrome':
         specifier: 0.1.0
         version: 0.1.0
@@ -63,31 +63,39 @@ packages:
   '@oxc-project/types@0.152.0':
     resolution: {integrity: sha512-oM/5rLBm2tPkg0iBgkH/FOeR3PCDpY19GTgAZjMFM8h9WI9VW7cLgzp6nwtarYKmovavIQZ+Fe/RKX/8C8O/Rw==}
 
-  '@rightkit/app-shell@0.2.1':
-    resolution: {integrity: sha512-ehttbwnmCUsAUZdJoBhXG2lW2zuinlOOiAKWSbv4qDxqXqJ7lhi8rqkGmtlUIeAhzDmoUAwtGK5rXgeRZzrQoQ==}
-    peerDependencies:
-      '@rightkit/platform-ui': '>=0.1.1 <1'
-      react: '>=18 <20'
-
-  '@rightkit/git@0.2.26':
-    resolution: {integrity: sha512-wwMGjfBOiQ0fbsoQr7iYb9wvkH5MvTeMvre73IKR9hVMsyjPIUlyQZl2Bks80PjS0JT2t8I8fj/AXjzsqP4cIA==}
+  '@rightkit/ci@0.2.43':
+    resolution: {integrity: sha512-Xca21Tl2/ERdp0uxbFsxFzXT7tHbF7Dkvo6uq8GdgJhhsQlPh4u3weiWXFZ4mkr2c0ts5Vof6z+oyT2aXIu/dg==}
     hasBin: true
 
-  '@rightkit/platform-ui@0.1.2':
-    resolution: {integrity: sha512-zSTGFBcy6cO+1vu7ORJ84WCH6RzkQTP4L0iSqnJ6kPzxKQhv4dtckeiQQ5i2Geeml4SIr+hrp80jjjAP8cN4yw==}
+  '@rightkit/platform-ui@0.2.8':
+    resolution: {integrity: sha512-gVzP23HVi6C8bl9Af9G5QlWUqhMxw5MrnxkvwnBi8ohJZm7MucHDQCof62i5vVSXecYgJvvhmi/29jA5q7sZPw==}
     peerDependencies:
       '@tauri-apps/plugin-os': '>=2 <3'
-      react: '>=18 <20'
+      react: '>=18 <21'
+    peerDependenciesMeta:
+      '@tauri-apps/plugin-os':
+        optional: true
 
   '@rightkit/qa-chrome@0.1.0':
     resolution: {integrity: sha512-g9MC05z4Ux6KVPTOi6OsokoNWsACbQKmWKpoVTWpwdQCEZG/uzpVRmMNObU0+PZk07COC0Bf4mKzU2EHqfjDBA==}
+
+  '@rightkit/react-shell@0.6.4':
+    resolution: {integrity: sha512-u74tjtXxEKZnZMrqVknEgPgYKZzcu+njsNbhKekLn+mClTx0qd+MUfRJy5zf+nWcL5kmecfwUJTDhsAHwErC2Q==}
+    peerDependencies:
+      '@rightkit/platform-ui': '>=0.2.8 <1'
+      '@tauri-apps/plugin-os': '>=2 <3'
+      react: '>=18 <21'
+      react-dom: '>=18 <21'
+    peerDependenciesMeta:
+      '@tauri-apps/plugin-os':
+        optional: true
 
   '@rightkit/release@0.2.124':
     resolution: {integrity: sha512-a7ijel+H6Z7vw92cpo5CaHpEEO/LfsUnEFSlGMHAC/shA7v0mScodygUPrvTjXmw4HZK9yI8kBcMm+NIlbh9zA==}
     hasBin: true
 
-  '@rightkit/shell@0.1.0':
-    resolution: {integrity: sha512-39pxogsqjcegcDoT/HpErBFKZfOKRfuv8ETadLxfSao35u5VoRgXamEc6bND2cHZXkQ5tcT81mGsIZZBTts63Q==}
+  '@rightkit/tauri-shell@0.1.1':
+    resolution: {integrity: sha512-pvneSdd+9zvT+Mw2nG1lOXqTkaZszEj9Y0hjqUC78EaLADlqmEMLL7CSK+A5syAR94P0UbBCqVEAOd5iOObR6g==}
 
   '@rightkit/theme@0.2.1':
     resolution: {integrity: sha512-tf9uGVf2zMraHBVSvqUw3/QZrr9H4uXxVu1oRnKdJK0FonN1x8MlaY/49/zWlY+8JZq6zkHB1X9UxhqISfe66g==}
@@ -490,25 +498,29 @@ snapshots:
 
   '@oxc-project/types@0.152.0': {}
 
-  '@rightkit/app-shell@0.2.1(@rightkit/platform-ui@0.1.2(@tauri-apps/plugin-os@2.4.0)(react@19.3.0))(react@19.3.0)':
+  '@rightkit/ci@0.2.43': {}
+
+  '@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.0)':
     dependencies:
-      '@rightkit/platform-ui': 0.1.2(@tauri-apps/plugin-os@2.4.0)(react@19.3.0)
       react: 19.3.0
-
-  '@rightkit/git@0.2.26': {}
-
-  '@rightkit/platform-ui@0.1.2(@tauri-apps/plugin-os@2.4.0)(react@19.3.0)':
-    dependencies:
+    optionalDependencies:
       '@tauri-apps/plugin-os': 2.4.0
-      react: 19.3.0
 
   '@rightkit/qa-chrome@0.1.0': {}
+
+  '@rightkit/react-shell@0.6.4(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.0))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      '@rightkit/platform-ui': 0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.0)
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+    optionalDependencies:
+      '@tauri-apps/plugin-os': 2.4.0
 
   '@rightkit/release@0.2.124':
     dependencies:
       smol-toml: 1.7.0
 
-  '@rightkit/shell@0.1.0': {}
+  '@rightkit/tauri-shell@0.1.1': {}
 
   '@rightkit/theme@0.2.1': {}
 
@@ -611,6 +623,7 @@ snapshots:
   '@tauri-apps/plugin-os@2.4.0':
     dependencies:
       '@tauri-apps/api': 2.12.1
+    optional: true
 
   '@types/react-dom@19.3.0(@types/react@19.3.0)':
     dependencies:
