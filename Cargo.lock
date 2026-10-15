@@ -7019,9 +7019,9 @@ dependencies = [
 
 [[package]]
 name = "rightkit-qa"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7a34570e39bca06c5016ae67d4f8e8715560c5c9ad0b450a355228d29cbdee9"
+checksum = "b1c82c2edd359746be7df7b56156490c1bb2e564c85c735fbded3270c7f16e6f"
 dependencies = [
  "getrandom 0.3.4",
  "png 0.18.1",
@@ -7038,9 +7038,9 @@ dependencies = [
 
 [[package]]
 name = "rightkit-qa-driver"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3e607235190197cc98827e8c24d013dab2adfb7916c914159146c3760a18886"
+checksum = "aa04b94dbf995e35dcfe8678404c7e62a4d798167d6b316cb696483b1f414f46"
 dependencies = [
  "rightkit-daemon",
  "serde_json",
