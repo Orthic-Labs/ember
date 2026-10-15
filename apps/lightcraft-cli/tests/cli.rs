@@ -214,6 +214,51 @@ fn render_subcommand() {
     assert!(String::from_utf8_lossy(&o.stderr).contains("unknown control"));
 }
 
+/// Issue #1730: `render --settings` took a `.lcpreset` from `preset.export`, ignored its wrapper
+/// and rendered the photo unedited.
+#[test]
+fn render_settings_applies_an_lcpreset_and_refuses_unknown_files() {
+    let input = tmp("lcpreset-in.png");
+    gradient_png(&input);
+    let preset = tmp("bright.lcpreset");
+    let (ok, lines, err) = run_cli(
+        &[
+            "--import",
+            input.to_str().unwrap(),
+            "develop.set",
+            "control=light.exposure",
+            "value=1",
+            "preset.create",
+            "name=Bright",
+            "preset.export",
+            &format!("path={}", preset.display()),
+        ],
+        None,
+    );
+    assert!(ok, "{err}: {lines:?}");
+    let plain = tmp("lcpreset-plain.png");
+    let st = Command::new(BIN).args(["render", input.to_str().unwrap(), "-o", plain.to_str().unwrap()]).status().unwrap();
+    assert!(st.success());
+    let bright = tmp("lcpreset-bright.png");
+    let o = Command::new(BIN)
+        .args(["render", input.to_str().unwrap(), "-o", bright.to_str().unwrap(), "--settings", preset.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(mean(&bright) > mean(&plain) + 10.0, "the preset's exposure was not applied");
+
+    let other = tmp("other.lcpreset");
+    std::fs::write(&other, r#"{"format": "other", "version": 1, "presets": []}"#).unwrap();
+    let out = tmp("lcpreset-other.png");
+    let o = Command::new(BIN)
+        .args(["render", input.to_str().unwrap(), "-o", out.to_str().unwrap(), "--settings", other.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(!o.status.success(), "an unreadable settings file was accepted");
+    assert!(String::from_utf8_lossy(&o.stderr).contains("other.lcpreset"), "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(!out.exists(), "nothing is written when the settings can't be read");
+}
+
 /// Issue #93: `render IMG -o IMG` replaced its own input with the render.
 #[test]
 fn render_refuses_to_overwrite_its_input() {
