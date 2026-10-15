@@ -381,6 +381,10 @@ impl Gpu {
             self.over_limit(size);
             return Buf { buf: Some(Tracked::new(self.placeholder())), len };
         }
+        if simulated_oom() {
+            fail(FailKind::OutOfMemory, "out of device memory (simulated)".into());
+            return Buf { buf: Some(Tracked::new(self.placeholder())), len };
+        }
         let recycled = {
             let mut f = self.free.lock().unwrap_or_else(|e| e.into_inner());
             // the smallest pooled buffer that holds `size` with at most 25 % to spare: photos of
@@ -397,14 +401,20 @@ impl Gpu {
             }
             b
         };
-        let buf = recycled.unwrap_or_else(|| {
-            Tracked::new(self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            }))
-        });
+        let buf = match recycled {
+            Some(b) => b,
+            None => {
+                let created = self.checked(size, || {
+                    self.device.create_buffer(&wgpu::BufferDescriptor {
+                        label: None,
+                        size,
+                        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    })
+                });
+                Tracked::new(created.unwrap_or_else(|| self.placeholder()))
+            }
+        };
         Buf { buf: Some(buf), len }
     }
 
@@ -461,12 +471,49 @@ impl Gpu {
             self.over_limit(bytes.len() as u64);
             return Buf { buf: Some(Tracked::new(self.placeholder())), len };
         }
-        let buf = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytes,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+        // created unmapped and filled through the queue: a buffer mapped at creation would hand
+        // back a mapping of nothing when the device has no memory for it
+        let size = (bytes.len() as u64).next_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT);
+        let buf = self.checked(size, || {
+            self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
         });
+        let Some(buf) = buf else {
+            return Buf { buf: Some(Tracked::new(self.placeholder())), len };
+        };
+        if bytes.len() as u64 == size {
+            self.queue.write_buffer(&buf, 0, bytes);
+        } else {
+            // the queue copies whole 4-byte words
+            let mut padded = bytes.to_vec();
+            padded.resize(size as usize, 0);
+            self.queue.write_buffer(&buf, 0, &padded);
+        }
         Buf { buf: Some(Tracked::new(buf)), len }
+    }
+
+    /// Create a buffer, or record [`FailKind::OutOfMemory`] and return `None` when the device has
+    /// no memory for it. wgpu hands back an invalid buffer on out of memory; caught here, it never
+    /// reaches the free pool or the shared source, where another thread's render would pick it up
+    /// and fail with "Buffer is invalid", a validation error that retired the GPU (upstream #1764).
+    fn checked(&self, size: u64, create: impl FnOnce() -> wgpu::Buffer) -> Option<wgpu::Buffer> {
+        if simulated_oom() {
+            fail(FailKind::OutOfMemory, "out of device memory (simulated)".into());
+            return None;
+        }
+        let scope = self.device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+        let buf = create();
+        match pollster::block_on(scope.pop()) {
+            None => Some(buf),
+            Some(e) => {
+                fail(FailKind::OutOfMemory, format!("out of device memory for a {} MiB buffer: {e}", size.div_ceil(1 << 20)));
+                None
+            }
+        }
     }
 
     fn over_limit(&self, size: u64) {
@@ -541,12 +588,17 @@ impl Gpu {
             return zeros();
         }
         let size = (len * 4) as u64;
-        let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("readback"),
-            size: size.max(4),
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        // out of memory here is the render's failure, not a broken readback
+        let Some(staging) = self.checked(size, || {
+            self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("readback"),
+                size: size.max(4),
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
+        }) else {
+            return zeros();
+        };
         enc.copy_buffer_to_buffer(src.raw(), 0, &staging, 0, size);
         self.submit([enc.finish()]);
         let slice = staging.slice(..size);
@@ -644,6 +696,31 @@ impl LimitOverride {
 impl Drop for LimitOverride {
     fn drop(&mut self) {
         let _ = LIMIT.try_with(|l| l.set(None));
+    }
+}
+
+thread_local! {
+    /// Every allocation of the render on this thread finds the device out of memory (tests).
+    static SIMULATED_OOM: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn simulated_oom() -> bool {
+    SIMULATED_OOM.try_with(|c| c.get()).unwrap_or(false)
+}
+
+/// Makes allocations on this thread run out of device memory while it lives ([`crate::Fault::OutOfMemory`]).
+pub(crate) struct SimulatedOom;
+
+impl SimulatedOom {
+    pub fn new() -> SimulatedOom {
+        SIMULATED_OOM.with(|c| c.set(true));
+        SimulatedOom
+    }
+}
+
+impl Drop for SimulatedOom {
+    fn drop(&mut self) {
+        let _ = SIMULATED_OOM.try_with(|c| c.set(false));
     }
 }
 
