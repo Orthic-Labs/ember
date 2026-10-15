@@ -566,7 +566,7 @@ fn strict_ids(s: &mut Session, p: &Value, cmd: &str) -> Result<Vec<PhotoId>> {
             .map(|v| v.as_u64().map(PhotoId).ok_or_else(|| super::bad(cmd, "`ids` must contain only unsigned photo ids")))
             .collect::<Result<Vec<_>>>()?
     } else if s.selection.ids.len() > 1 {
-        s.targets(p)
+        s.targets(p)?
     } else {
         s.visible_cloned()
     };

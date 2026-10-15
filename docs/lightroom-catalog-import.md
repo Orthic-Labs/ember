@@ -32,7 +32,7 @@ retained. Oldest managed archives are retired; legacy `.json` archives remain un
 `Interop/lightroom-index.json` records imported identities. Source catalogs and originals are
 never overwritten.
 
-Native import is bounded to a 1 GiB database/WAL, 16 MiB XMP packets and one million rows per
+Native import is bounded to a 4 GiB database/WAL (each file is read fully into memory), 16 MiB XMP packets and one million rows per
 table. The in-tree, read-only Rust SQLite B-tree reader follows SQLite’s public file-format
 specification; it introduces no dependency or C runtime. Table payloads are capped at 256 MiB.
 Optional history, keyword and collection tables that exceed limits are skipped with warnings;
@@ -52,7 +52,8 @@ RAF, CR3, CR2, PEF, SRW; reference editor names them all `RAW`) can't be taken a
 as-shot white for Custom photos, so the photo stays As Shot and `Temperature, Tint` are reported
 (issue #510; a DNG keeps the Kelvin value, and an XMP packet with `crs:AsShotTemperature` is
 shifted by the same mired difference, see [xmp-interop.md](xmp-interop.md)). A raw whose camera has
-measured colour matrices (`lightcraft_raw::spectral`: ILCE-7M3, D850, EOS 5D Mark III…) edits in Kelvin
+measured colour matrices (`lightcraft_raw::spectral`: ILCE-7M3, D850, EOS 5D Mark III…), or whose white-balance
+presets give a Kelvin scale (`lightcraft_raw::kelvin_presets`: ILCA-99M2, ILCA-77M2…), edits in Kelvin
 and keeps the Kelvin value too (issue #730) — when its file was found and probed, since the camera is
 read from the file, not from the reference editor catalog; a missing file is treated as a relative-scale raw
 until Reload reads it.

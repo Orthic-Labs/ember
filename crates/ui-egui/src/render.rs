@@ -188,6 +188,8 @@ pub struct Renderer {
     pending: HashMap<Slot, (u64, u32)>,
     /// Pool submission identity for native jobs; prevents stale failures clearing reused slots.
     pending_submission: HashMap<Slot, u64>,
+    /// The photo each slot's latest submission renders, so a worker failure names it ([`Self::failed`]).
+    submitted_photo: HashMap<Slot, PhotoId>,
     pub textures: HashMap<Slot, Tex>,
     pub last_main_ms: f64,
     /// Jobs finished since start (for inspect/perf).
@@ -199,9 +201,10 @@ pub struct Renderer {
     stages: HashMap<Slot, Arc<StageCache>>,
     /// Slot → key of the last quick job requested for it (each is tried once).
     quick_tried: HashMap<Slot, u64>,
-    /// Jobs that failed (unreadable or missing file…), by slot and job key, with the error: not
-    /// requested again until the key changes (an edit, another size) — the grid asks every frame.
-    failed: HashMap<Slot, (u64, String, u64)>,
+    /// Jobs that failed (unreadable or missing file…), by slot and job key, with the error and
+    /// the photo: not requested again until the key changes (an edit, another size) — the grid
+    /// asks every frame.
+    failed: HashMap<Slot, (u64, String, u64, PhotoId)>,
     /// The catalog revision seen at the last poll: a failure is retried once the catalog changes
     /// (a relinked or re-imported file).
     catalog_rev: u64,
@@ -264,6 +267,7 @@ impl Renderer {
             seq: 0,
             pending: HashMap::new(),
             pending_submission: HashMap::new(),
+            submitted_photo: HashMap::new(),
             textures: HashMap::new(),
             last_main_ms: 0.0,
             completed: 0,
@@ -437,6 +441,7 @@ impl Renderer {
             return;
         }
         let key = job.key;
+        let photo = job.photo;
         let background = matches!(slot, Slot::Thumb(_) | Slot::ThumbQuick(_) | Slot::Prefetch(_));
         let display = self.display.clone();
         let submission = match self.pool.submit(
@@ -447,13 +452,14 @@ impl Renderer {
         ) {
             Ok(submission) => submission,
             Err(error) => {
-                self.failed.insert(slot, (key, error, self.catalog_rev));
+                self.failed.insert(slot, (key, error, self.catalog_rev, photo));
                 self.request_ids.remove(&slot);
                 return;
             }
         };
         self.pending.insert(slot, (key, priority));
         self.pending_submission.insert(slot, submission);
+        self.submitted_photo.insert(slot, photo);
     }
 
     /// Request a stand-in for `slot` (once per job key).
@@ -465,17 +471,19 @@ impl Renderer {
         job.request_id = lightcraft_preview::next_tick();
         self.request_ids.insert(slot, job.request_id);
         let key = job.key;
+        let photo = job.photo;
         let display = self.display.clone();
         let submission = match self.pool.submit(slot, key, priority, Box::new(move || Self::run_for(|| job.run(), &display))) {
             Ok(submission) => submission,
             Err(error) => {
-                self.failed.insert(slot, (key, error, self.catalog_rev));
+                self.failed.insert(slot, (key, error, self.catalog_rev, photo));
                 self.request_ids.remove(&slot);
                 return;
             }
         };
         self.pending.insert(slot, (key, priority));
         self.pending_submission.insert(slot, submission);
+        self.submitted_photo.insert(slot, photo);
     }
 
     /// Prepare a photo in the background (a [`Slot::Prefetch`] job runs once per key; a newer one
@@ -488,16 +496,18 @@ impl Renderer {
         job.request_id = lightcraft_preview::next_tick();
         self.request_ids.insert(slot, job.request_id);
         let key = job.key;
+        let photo = job.photo;
         let submission = match self.pool.submit(slot, key, priority, Box::new(move || lightcraft_engine::memory::in_background(|| job.run()))) {
             Ok(submission) => submission,
             Err(error) => {
-                self.failed.insert(slot, (key, error, self.catalog_rev));
+                self.failed.insert(slot, (key, error, self.catalog_rev, photo));
                 self.request_ids.remove(&slot);
                 return;
             }
         };
         self.pending.insert(slot, (key, priority));
         self.pending_submission.insert(slot, submission);
+        self.submitted_photo.insert(slot, photo);
     }
 
     /// Is a request for `slot` queued or running?
@@ -567,6 +577,18 @@ impl Renderer {
     /// Why the last render for `slot` failed (until a render with another key succeeds).
     pub fn failure(&self, slot: Slot) -> Option<&str> {
         self.failed.get(&slot).map(|f| f.1.as_str())
+    }
+
+    /// Why the last render of `photo` for `slot` failed: a view slot shows one photo after
+    /// another, and another photo's error isn't this one's.
+    pub fn failure_of(&self, slot: Slot, photo: PhotoId) -> Option<&str> {
+        self.failed.get(&slot).filter(|f| f.3 == photo).map(|f| f.1.as_str())
+    }
+
+    /// Whether `slot`'s pending render asks again for the key that last failed (a library change
+    /// retries failures): what is on screen stays what the failure left until it answers.
+    pub fn retrying(&self, slot: Slot) -> bool {
+        self.pending.get(&slot).zip(self.failed.get(&slot)).is_some_and(|(p, f)| p.0 == f.0)
     }
 
     /// The slots with a render pending (diagnostics: `ui.inspect`).
@@ -686,7 +708,8 @@ impl Renderer {
                 self.pending_submission.remove(&failure.slot);
                 self.pending.remove(&failure.slot);
                 self.request_ids.remove(&failure.slot);
-                self.failed.insert(failure.slot, (failure.key, format!("preview worker failed: {}", failure.error), self.catalog_rev));
+                let photo = self.submitted_photo.get(&failure.slot).copied().unwrap_or(PhotoId(0));
+                self.failed.insert(failure.slot, (failure.key, format!("preview worker failed: {}", failure.error), self.catalog_rev, photo));
             }
         }
         while let Some(done) = self.pool.try_recv() {
@@ -740,7 +763,7 @@ impl Renderer {
                 Err(e) => {
                     if !matches!(slot, Slot::Prefetch(_)) {
                         log::warn!("render {slot:?}: {e}");
-                        self.failed.insert(slot, (r.key, e, self.catalog_rev));
+                        self.failed.insert(slot, (r.key, e, self.catalog_rev, r.photo));
                     }
                     continue;
                 }
@@ -807,10 +830,12 @@ impl Renderer {
     }
 
     /// Free the GPU renderer's recycled buffers once nothing has rendered for [`IDLE_TRIM`] (they
-    /// are reallocated by the next render; while working, renders reuse them).
+    /// are reallocated by the next render; while working, renders reuse them). A zoomed view
+    /// showing its windows is not idle: the device copy of the original they are cut from stays for
+    /// the next pan (a 64 MP raw is 800 MB to upload again, over a second).
     #[cfg(not(target_arch = "wasm32"))]
     fn trim_when_idle(&mut self, ctx: &egui::Context) {
-        if !self.pending.is_empty() {
+        if !self.pending.is_empty() || self.textures.contains_key(&Slot::Region) || self.textures.contains_key(&Slot::RegionBefore) {
             self.idle = None;
             return;
         }
@@ -991,8 +1016,10 @@ mod thumbnail_tests {
         r.remember_thumb(&p, 384, 77, false);
         r.pending.insert(Slot::ThumbQuick(p.id), (77, 11));
         assert!(!r.thumb_current(&p, 384, 10));
-        r.failed.insert(slot, (77, "no decoder".into(), 0));
+        r.failed.insert(slot, (77, "no decoder".into(), 0, p.id));
         assert!(r.thumb_current(&p, 384, 10));
+        assert_eq!(r.failure_of(slot, p.id), Some("no decoder"));
+        assert_eq!(r.failure_of(slot, PhotoId(p.id.0 + 1)), None, "another photo's error");
         r.catalog_rev = 1;
         assert!(!r.thumb_current(&p, 384, 10));
     }
@@ -1060,6 +1087,26 @@ mod thumbnail_tests {
     }
 
     #[test]
+    fn a_slider_drag_leaves_the_edited_photos_thumbnail_until_it_ends() {
+        let (mut app, work, ctx) = fixture();
+        request(&mut app);
+        let (slot, job) = take_job(&work);
+        finish(&mut app, &work, &ctx, slot, job.run());
+        app.session.execute("library.select", &serde_json::json!({"ids": [1], "active": 1})).unwrap();
+        app.session.execute("develop.beginInteraction", &serde_json::json!({"label": "Exposure"})).unwrap();
+        for v in [0.1, 0.2, 0.3] {
+            app.session.execute("develop.set", &serde_json::json!({"control": "light.exposure", "value": v})).unwrap();
+            app.renderer.poll(&ctx, &mut app.session);
+            request(&mut app);
+        }
+        assert_eq!(app.renderer.thumb_jobs_built, 1, "the drag's frames render no thumbnail of the photo");
+        assert!(work.borrow().jobs.is_empty());
+        app.session.execute("develop.endInteraction", &serde_json::json!({})).unwrap();
+        request(&mut app);
+        assert_eq!(app.renderer.thumb_jobs_built, 2, "the thumbnail follows once the drag ends");
+    }
+
+    #[test]
     fn unchanged_queued_frames_build_no_jobs() {
         let (mut app, _, _) = fixture();
         app.renderer.set_offload(Box::new(Blocked));
@@ -1099,6 +1146,39 @@ mod thumbnail_tests {
         assert!(app.renderer.thumb(PhotoId(1)).is_none());
         drop(app);
         let _ = std::fs::remove_dir_all(&lib);
+    }
+
+    /// A render that panics (a decoder bug) is a failure like any other: the slot stops waiting,
+    /// the error is kept (not retried every frame), and the pool's workers live on. Before, the
+    /// worker died without an answer and the slot stayed pending forever.
+    #[test]
+    fn a_panicking_render_is_a_failure_not_a_dead_worker() {
+        let (mut app, _, ctx) = fixture_with(Session::new(), (*photo()).clone());
+        app.session.media.file_loader = Some(Arc::new(|_, _| panic!("decoder bug")));
+        app.renderer.offload = None; // the real job pool
+        let slot = Slot::Thumb(PhotoId(1));
+        let ask = |app: &mut crate::LightcraftApp| {
+            if let Some(job) = app.session.thumb_job(PhotoId(1), 256) {
+                app.renderer.request(slot, job, 30);
+            }
+            app.renderer.poll(&ctx, &mut app.session);
+        };
+        ask(&mut app);
+        let t0 = std::time::Instant::now();
+        while app.renderer.is_pending(slot) {
+            assert!(t0.elapsed() < std::time::Duration::from_secs(20), "the render never answered");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            app.renderer.poll(&ctx, &mut app.session);
+        }
+        assert_eq!(app.renderer.failure(slot), Some("the render failed unexpectedly: decoder bug"));
+        let workers = app.renderer.live_workers();
+        assert!(workers > 0, "the worker that panicked is still there");
+        let done = app.renderer.completed;
+        for _ in 0..30 {
+            ask(&mut app);
+        }
+        assert!(!app.renderer.is_pending(slot) && app.renderer.completed == done, "no retry loop");
+        assert_eq!(app.renderer.live_workers(), workers);
     }
 
     #[test]
@@ -1334,6 +1414,25 @@ mod stage_budget_tests {
     use super::*;
 
     const MB: usize = 1 << 20;
+
+    // Given a zoomed view showing a window, the app idling does not free the GPU copy of the
+    // original the next window is cut from; once the windows are gone the idle trim runs again
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_zoomed_view_is_not_trimmed_while_idle() {
+        let ctx = egui::Context::default();
+        let mut r = Renderer::default();
+        let tex = ctx.load_texture("window", egui::ColorImage::new([1, 1], vec![egui::Color32::BLACK]), Default::default());
+        r.textures.insert(Slot::Region, Tex { key: 1, photo: PhotoId(1), tex, size: [1, 1], histogram: None, ms: 0.0, quick: None, pixels: None });
+        let long_ago = std::time::Instant::now().checked_sub(IDLE_TRIM * 2).unwrap();
+        r.idle = Some((long_ago, false));
+        r.trim_when_idle(&ctx);
+        assert_eq!(r.idle, None, "a zoomed view is not idle");
+        r.release(Slot::Region);
+        r.idle = Some((long_ago, false));
+        r.trim_when_idle(&ctx);
+        assert_eq!(r.idle, Some((long_ago, true)), "trimmed once the window is gone");
+    }
 
     // Given stage caches within the budget, nothing is cleared
     #[test]

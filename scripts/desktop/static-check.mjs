@@ -23,12 +23,12 @@ function checkPins() {
   const packageJson = readJson("package.json");
   const all = { ...packageJson.dependencies, ...packageJson.devDependencies };
   const pins = {
-    "@rightkit/app-shell": "0.2.1",
-    "@rightkit/platform-ui": "0.1.2",
-    "@rightkit/shell": "0.1.0",
+    "@rightkit/react-shell": "0.6.4",
+    "@rightkit/platform-ui": "0.2.8",
+    "@rightkit/tauri-shell": "0.1.1",
     "@rightkit/theme": "0.2.1",
     "@rightkit/qa-chrome": "0.1.0",
-    "@rightkit/git": "0.2.26",
+    "@rightkit/ci": "0.2.43",
     "@rightkit/release": "0.2.124",
   };
   for (const [name, version] of Object.entries(pins)) {
@@ -38,10 +38,10 @@ function checkPins() {
   for (const forbidden of [/path\s*=/, /git\s*=/, /EngineSupervisor/, /sidecar/]) {
     if (forbidden.test(cargo)) fail(`desktop Cargo.toml contains forbidden dependency form or sidecar reference: ${forbidden}`);
   }
-  if (!/rightkit-shell\s*=\s*\{[^}]*default-features\s*=\s*false/.test(cargo)) fail("rightkit-shell must disable default features");
-  if (!/rightkit-control\s*=\s*\{[^}]*version\s*=\s*\"=0\.1\.9\"/.test(cargo)) fail("rightkit-control must stay pinned to =0.1.9");
-  if (!/rightkit-control\s*=\s*\{[^}]*default-features\s*=\s*false[^}]*features\s*=\s*\[[^\]]*"wv2-0_39"/.test(cargo)) fail("rightkit-control must select WebView2 0.39 for Tauri 2.12");
-  if (!/rightkit-qa\s*=\s*\"=0\.2\.12\"/.test(cargo)) fail("rightkit-qa must stay pinned to =0.2.12");
+  if (!/rightkit-tauri-shell\s*=\s*\{[^}]*default-features\s*=\s*false/.test(cargo)) fail("rightkit-tauri-shell must disable default features");
+  if (!/rightkit-qa-driver\s*=\s*\{[^}]*version\s*=\s*\"=0\.3\.1\"/.test(cargo)) fail("rightkit-qa-driver must stay pinned to =0.3.1");
+  if (!/rightkit-qa-driver\s*=\s*\{[^}]*default-features\s*=\s*false[^}]*features\s*=\s*\[[^\]]*"wv2-0_39"/.test(cargo)) fail("rightkit-qa-driver must select WebView2 0.39 for Tauri 2.12");
+  if (!/rightkit-qa\s*=\s*\"=0\.3\.0\"/.test(cargo)) fail("rightkit-qa must stay pinned to =0.3.0");
 }
 
 function checkNativeConfig() {
@@ -90,7 +90,7 @@ function checkSourceContracts() {
   for (const token of ["rightkit_qa::control", "Mode::Hidden", "RIGHTKIT_QA_UI_BINARY", "stalePreview", "lightroomImport", "catalogRecovery"]) {
     if (!nativeQa.includes(token)) fail(`native qualification is missing executed control contract ${token}`);
   }
-  if (!nativeHost.includes("rightkit_control::embedded::Control") || !nativeHost.includes("build_if_enabled") || !nativeHost.includes("qa-native")) fail("native app must register debug-gated rightkit-control");
+  if (!nativeHost.includes("rightkit_qa_driver::embedded::Control") || !nativeHost.includes("build_if_enabled") || !nativeHost.includes("qa-native")) fail("native app must register debug-gated rightkit-qa-driver");
   const ownedScripts = `${candidate}\n${installed}`;
   if (ownedScripts.includes("candidate.targets") || ownedScripts.includes("qualification.targets")) fail("desktop scripts must not use invented candidate/qualification release config APIs");
   const preview = readFileSync(path.join(repoRoot, "apps/lightcraft-desktop/web/src/preview/usePreview.ts"), "utf8");

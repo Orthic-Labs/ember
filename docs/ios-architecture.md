@@ -97,9 +97,9 @@ Windows initially retains local catalog & portable transfer bundles with origina
 | Photo commands/catalog/develop/render/export | Ember Rust engine & desktop-host contracts | Factor portable host; mobile bridge |
 | Cloud delivery | `rightkit-sync`, `RightKitCloudSync` | Causal heads, compare-and-save, shared zones, file-backed assets |
 | Commerce/access | `RightKitPurchases`, `RightKitLicense`, `rightkit-license` | Unified explicit mobile/Mac/Windows policy |
-| Credentials | `RightKitAppleCredentials`, `rightkit-secrets` | Account-switch isolation; native adapters |
-| Settings | `rightkit-settings` & native owner adapter | Common schema, device/cloud distinction |
-| Jobs/files/storage | `rightkit-jobs`, `rightkit-fs`, `rightkit-db` where applicable | Mobile adapters; preserve Rust domain catalog |
+| Credentials | `RightKitAppleCredentials`, `rightkit-credentials` | Account-switch isolation; native adapters |
+| Settings | `rightkit-app-settings` & native owner adapter | Common schema, device/cloud distinction |
+| Jobs/files/storage | `rightkit-job-queue`, `rightkit-fs`, `rightkit-db` where applicable | Mobile adapters; preserve Rust domain catalog |
 | Diagnostics | `RightKitDiagnostics`, logs/crash owners | Native hooks, redaction, bounded retention |
 | Presentation | SwiftUI + qualified shared native UI owner | Navigation, accessibility & mobile frame |
 | Release/QA | Generated RightKit Actions/release/QA | Device/simulator/XCFramework/distribution qualification |

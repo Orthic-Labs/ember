@@ -521,7 +521,7 @@ fn control_json(value: Value) -> Result<String, String> {
 #[cfg(feature = "qa-native")]
 fn qa_window_state(app: &AppHandle<Wry>) -> Result<Value, String> {
     let window = app.get_webview_window("main").ok_or_else(|| "main window is unavailable".to_string())?;
-    let native = rightkit_shell::windows::readback(&window)?;
+    let native = rightkit_tauri_shell::windows::readback(&window)?;
     Ok(json!({"visible": native.visible, "focused": native.focused, "main": native.main, "level": native.level}))
 }
 
@@ -722,7 +722,7 @@ fn control_dispatch(app: &AppHandle<Wry>, name: &str, raw: &str) -> Result<Strin
 
 #[cfg(feature = "qa-native")]
 fn qa_control_plugin() -> Option<TauriPlugin<Wry>> {
-    let control = rightkit_control::embedded::Control::<Wry>::new()
+    let control = rightkit_qa_driver::embedded::Control::<Wry>::new()
         .window("main")
         .command("lc_run", |app, args| control_dispatch(app, "lc_run", args))
         .command("lc_snapshot", |app, args| control_dispatch(app, "lc_snapshot", args))
@@ -1001,16 +1001,16 @@ fn startup_options(app: &AppHandle<Wry>) -> (HostOptions, PathBuf, Option<String
     (HostOptions { library_path: Some(library.clone()), demo, demo_count, sam3_dir, sam3_mirrors_file }, library, migration_warning)
 }
 
-fn build_shell() -> rightkit_shell::Shell {
+fn build_shell() -> rightkit_tauri_shell::Shell {
     // Ember owns fit/fill/100% & wheel zoom controls in its stage.
-    let hardening = rightkit_shell::Hardening { block_zoom: false, ..Default::default() };
+    let hardening = rightkit_tauri_shell::Hardening { block_zoom: false, ..Default::default() };
     let args: Vec<String> = std::env::args().collect();
     let qa = args.iter().any(|arg| arg == "--qa")
         || std::env::var_os("LIGHTCRAFT_DESKTOP_QA").is_some()
         || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_HIDDEN").as_deref())
         || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref());
     let (_, qa_data_dir) = runtime_modes(&args);
-    let mut builder = rightkit_shell::Shell::builder("ember").app_name("Ember").main_label("main").hardening(hardening).show_on_ready(!qa);
+    let mut builder = rightkit_tauri_shell::Shell::builder("ember").app_name("Ember").main_label("main").hardening(hardening).show_on_ready(!qa);
     if let Some(data_dir) = qa_data_dir {
         builder = builder.state_dir(data_dir.join("shell"));
     }
@@ -1051,7 +1051,7 @@ pub fn run() {
             let app = ctx.app_handle().clone();
             responder.respond(preview_response(&app, request));
         })
-        .invoke_handler(rightkit_shell::handler![
+        .invoke_handler(rightkit_tauri_shell::handler![
             tauri_commands::lc_run,
             tauri_commands::lc_snapshot,
             tauri_commands::lc_view_slice,

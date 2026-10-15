@@ -1,0 +1,88 @@
+# Ember native iOS/iPad app shell (library + non-destructive photo editing).
+# Generated project is XcodeGen output (gitignored):
+#   cd ios && xcodegen generate
+# Build and test run in public CI only (local build is blocked for public repos).
+# RightKitSwift is the published git-URL pin; never a path dep.
+# RightKitDB (read-only library index) ships after tag 0.7.0; it is not in the
+# pin yet. Add the product to the Ember target when the pin moves to a tag that has it.
+name: Ember
+options:
+  bundleIdPrefix: com.orthiclabs
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    ALWAYS_SEARCH_USER_PATHS: "NO"
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: 6KLGD3LLKF
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  RightKitSwift:
+    url: https://github.com/Orthic-Labs/rightkit
+    exactVersion: 0.7.0
+targets:
+  Ember:
+    type: application
+    platform: iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.orthiclabs.ember
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # Empty until the licence endpoint is ratified; Settings shows "not configured".
+        EMBER_LICENSE_BASE_URL: ""
+    sources:
+      - path: Ember
+    dependencies:
+      - package: RightKitSwift
+        product: RightKitLicense
+      - package: RightKitSwift
+        product: RightKitAppleCredentials
+      - package: RightKitSwift
+        product: RightKitDiagnostics
+      - package: RightKitSwift
+        product: RightKitStore
+    info:
+      path: Ember/Info.plist
+      properties:
+        CFBundleDisplayName: Ember
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        EmberLicenseBaseURL: $(EMBER_LICENSE_BASE_URL)
+        NSPhotoLibraryUsageDescription: Ember reads photos you choose so you can browse and edit them in your library.
+        NSPhotoLibraryAddUsageDescription: Ember saves your exported photos to your photo library.
+  EmberTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: EmberTests
+    dependencies:
+      - target: Ember
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.orthiclabs.ember.tests
+schemes:
+  Ember:
+    build:
+      targets:
+        Ember: all
+    test:
+      targets:
+        - EmberTests

@@ -151,7 +151,7 @@ fn forget_local(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The browsed photos among `ids` (default: the selection) become library photos.
 fn add_to_library(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids: Vec<PhotoId> = s.targets(p).into_iter().filter(|id| s.catalog.photo(*id).is_some_and(|ph| ph.local)).collect();
+    let ids: Vec<PhotoId> = s.targets(p)?.into_iter().filter(|id| s.catalog.photo(*id).is_some_and(|ph| ph.local)).collect();
     if ids.is_empty() {
         return Ok(json!({"added": 0}));
     }
@@ -337,7 +337,7 @@ fn move_to_folder(s: &mut Session, p: &Value) -> Result<Value> {
     if !dir.is_dir() {
         return Err(bad(C, format!("{folder} is not a folder (create it first with folder.create)")));
     }
-    let ids = s.targets(p);
+    let ids = s.targets(p)?;
     if ids.is_empty() {
         return Err(bad(C, "no photos to move: select some or give ids"));
     }

@@ -33,8 +33,9 @@ pub fn default_budget() -> usize {
     }
 }
 
-/// Physical memory (bytes), when the platform tells us without native calls.
-fn total_ram() -> Option<usize> {
+/// Physical memory (bytes): read from the platform where it tells us without native calls, and
+/// through `lightcraft-sysmem` (the one crate allowed native calls) on Windows.
+pub(crate) fn total_ram() -> Option<usize> {
     #[cfg(target_os = "linux")]
     {
         let s = std::fs::read_to_string("/proc/meminfo").ok()?;
@@ -51,7 +52,11 @@ fn total_ram() -> Option<usize> {
         let out = std::process::Command::new("/sbin/sysctl").args(["-n", "hw.physmem"]).output().ok()?;
         String::from_utf8_lossy(&out.stdout).trim().parse().ok()
     }
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd")))]
+    #[cfg(windows)]
+    {
+        lightcraft_sysmem::total_physical_memory().and_then(|b| usize::try_from(b).ok())
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd", windows)))]
     {
         None
     }

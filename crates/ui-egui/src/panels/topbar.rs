@@ -63,14 +63,16 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
             let search_left = full.center().x - sw / 2.0;
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                if icon_button(ui, "sidebar", Icon::Sidebar, vec2(30.0, 30.0), app.ui.left_panel, true, "Show/hide My Photos panel").clicked() {
+                if icon_button(ui, "sidebar", Icon::Sidebar, vec2(30.0, 30.0), app.ui.left_panel, true, crate::i18n::tr("Show/hide My Photos panel"))
+                    .clicked()
+                {
                     let _ = app.run("view.leftPanel", json!({}));
                 }
                 ui.add_space(8.0);
-                if icon_button(ui, "back", Icon::Back, vec2(30.0, 30.0), false, true, "Back").clicked() {
+                if icon_button(ui, "back", Icon::Back, vec2(30.0, 30.0), false, true, crate::i18n::tr("Back")).clicked() {
                     let _ = app.run("view.back", json!({}));
                 }
-                icon_button(ui, "forward", Icon::Forward, vec2(30.0, 30.0), false, false, "Forward");
+                icon_button(ui, "forward", Icon::Forward, vec2(30.0, 30.0), false, false, crate::i18n::tr("Forward"));
                 if !app.native_menu {
                     // no native menu bar (web, Windows, Linux): menus in the top bar
                     ui.add_space(10.0);
@@ -140,7 +142,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
             let fresp = fresp.on_hover_text(if active > 0 {
                 crate::i18n::tr_format!("Filter bar — {active} active filter{}", if active == 1 { "" } else { "s" }, active = active)
             } else {
-                "Filter bar".into()
+                crate::i18n::tr("Filter bar").into()
             });
             if fresp.clicked() {
                 let _ = app.run("view.filterBar", json!({}));
@@ -166,7 +168,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                 ("bell", Icon::Bell, "Activity", "panel.activity"),
             ] {
                 let r = Rect::from_center_size(pos2(x, full.center().y), vec2(28.0, 28.0));
-                let resp = ui.interact(r, egui::Id::new(("top", id)), Sense::click()).on_hover_text(tip);
+                let resp = ui.interact(r, egui::Id::new(("top", id)), Sense::click()).on_hover_text(crate::i18n::tr(tip));
                 register(ui.ctx(), format!("icon:{id}"), r);
                 let warn = id == "cloud" && unsaved.is_some();
                 let colour = if warn {

@@ -703,6 +703,7 @@
   "In memory — nothing is saved": "Im Arbeitsspeicher — nichts wird gespeichert",
   "In use": "In Verwendung",
   "In-memory session: these settings last until Ember quits.": "Sitzung im Arbeitsspeicher: Diese Einstellungen gelten bis zum Beenden von Ember.",
+  "Include selected photos": "Ausgewählte Fotos einschließen",
   "Include subfolders": "Unterordner einbeziehen",
   "Increase Brush Feather": "Weiche Pinselkante vergrößern",
   "Increase Brush Size": "Pinselgröße vergrößern",
@@ -803,6 +804,7 @@
   "Local folders": "Lokale Ordner",
   "Local library — no cloud account needed": "Lokale Bibliothek — kein Cloud-Konto erforderlich",
   "Locate Missing File…": "Fehlende Datei suchen…",
+  "Locate Missing Files…": "Fehlende Dateien suchen…",
   "Locate Photo": "Foto suchen",
   "Location": "Ort",
   "Lock": "Sperren",
@@ -2115,5 +2117,8 @@
   "Ember Community…": "Upstream-Community…",
   "Largest long edge the Detail view renders at; larger is sharper on big displays but slower.": "Längste Kante beim Rendern der Detailansicht; größere Werte sind auf großen Bildschirmen schärfer, aber langsamer.",
   "Ember Project": "Ember-Website",
-  "Ember project": "Ember-Website"
+  "Ember project": "Ember-Website",
+  "Files with the same content as another file in this import: only the first is imported.": "Dateien mit demselben Inhalt wie eine andere Datei dieses Imports: Nur die erste wird importiert.",
+  "No graphics processor found: Ember renders on the CPU, which is much slower. Details in Help → System Info.": "Kein Grafikprozessor gefunden: Ember rendert auf der CPU, was viel langsamer ist. Details unter Hilfe → Systeminformationen.",
+  "On NixOS, start it from `nix develop`.": "Unter NixOS starten Sie es aus `nix develop`."
 }

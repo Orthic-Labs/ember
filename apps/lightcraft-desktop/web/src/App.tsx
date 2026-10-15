@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import { AppShell, SegmentedControl, ShellProvider, createThemeStore, useCommands, useShortcuts, type Command, type NavGroup } from '@rightkit/app-shell/react';
+import { AppShell, SegmentedControl, ShellProvider, createThemeStore, useCommands, useShortcuts, type Command, type NavGroup } from '@rightkit/react-shell/react';
 import { getPlatform } from '@rightkit/platform-ui';
-import { createShell } from '@rightkit/shell';
+import { createShell } from '@rightkit/tauri-shell';
 import { DesktopProvider, useDesktop } from './desktop';
 import { paletteCommands } from './commands';
 import { Icon } from './icons';

@@ -28,6 +28,8 @@ pub enum ExportFormat {
     Original,
     /// A DNG of the raw data (raw photos only), the edits embedded as XMP.
     Dng,
+    /// Render to DNG: a linear DNG (16-bit float) of the rendered photo, the edit baked in.
+    RenderedDng,
 }
 
 impl ExportFormat {
@@ -42,6 +44,7 @@ impl ExportFormat {
             "jxl" | "jpegxl" | "jpeg-xl" | "jpeg_xl" => Self::Jxl,
             "original" => Self::Original,
             "dng" => Self::Dng,
+            "rendereddng" | "renderdng" | "render-dng" | "lineardng" => Self::RenderedDng,
             _ => return None,
         })
     }
@@ -56,7 +59,7 @@ impl ExportFormat {
             Self::Jxl => "jxl",
             // the original keeps its own extension (see `ExportOptions::file_name_for`)
             Self::Original => "",
-            Self::Dng => "dng",
+            Self::Dng | Self::RenderedDng => "dng",
         }
     }
 
@@ -105,6 +108,10 @@ impl Default for Resize {
     }
 }
 
+/// The most pixels an export enlarged past its photo's own size can have: 512 megapixels, also
+/// Lightroom's ceiling. A full-size or smaller export is never held to it.
+pub const MAX_ENLARGED_PIXELS: f64 = 512e6;
+
 impl Resize {
     pub fn long_edge(px: u32) -> Self {
         Self { value: px as f32, ..Default::default() }
@@ -128,8 +135,12 @@ impl Resize {
             ResizeMode::Percent => v / 100.0,
         };
         let k = if self.dont_enlarge { k.min(1.0) } else { k };
-        // at least one pixel, at most the encoders' 65535 limit
-        k.clamp(1.0 / short, 65_535.0 / long)
+        // an enlargement stops at 512 megapixels: 20000 typed for 2000 with Don't Enlarge off asked
+        // for gigapixels, more memory than a computer has
+        let k = k.min((MAX_ENLARGED_PIXELS / (w * h)).sqrt().max(1.0));
+        // at least one pixel, at most the encoders' 65535 limit; the limit wins for a photo more
+        // than 65535 times as long as it is short (where `clamp` would panic: min above max)
+        k.max(1.0 / short).min(65_535.0 / long)
     }
 
     /// Output size for a `w × h` (cropped, full-resolution) photo.
@@ -149,6 +160,17 @@ pub enum Conflict {
     Overwrite,
     /// Leave the existing file and skip the photo.
     Skip,
+}
+
+impl Conflict {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "unique" => Some(Self::Unique),
+            "overwrite" => Some(Self::Overwrite),
+            "skip" => Some(Self::Skip),
+            _ => None,
+        }
+    }
 }
 
 /// A named set of `app.export` params.
@@ -180,6 +202,18 @@ pub enum SharpenFor {
     Glossy,
 }
 
+impl SharpenFor {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "none" => Some(Self::None),
+            "screen" => Some(Self::Screen),
+            "matte" => Some(Self::Matte),
+            "glossy" => Some(Self::Glossy),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SharpenAmount {
@@ -187,6 +221,17 @@ pub enum SharpenAmount {
     #[default]
     Standard,
     High,
+}
+
+impl SharpenAmount {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "low" => Some(Self::Low),
+            "standard" => Some(Self::Standard),
+            "high" => Some(Self::High),
+            _ => None,
+        }
+    }
 }
 
 /// Where a watermark sits.
@@ -623,6 +668,44 @@ pub enum MetadataPolicy {
     None,
 }
 
+impl MetadataPolicy {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "all" => Some(Self::All),
+            "allexceptcamera" => Some(Self::AllExceptCamera),
+            "copyright" => Some(Self::Copyright),
+            "none" => Some(Self::None),
+            _ => None,
+        }
+    }
+}
+
+/// Transfer curve of an HDR AVIF export (`hdrTransfer`): PQ (absolute, SDR white at 203 cd/m²) or
+/// HLG (relative to the display; BT.2100 with SDR white at signal 0.75).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HdrCurve {
+    #[default]
+    Pq,
+    Hlg,
+}
+
+impl HdrCurve {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "pq" => Some(Self::Pq),
+            "hlg" => Some(Self::Hlg),
+            _ => None,
+        }
+    }
+    fn codec(self) -> lightcraft_codecs::HdrTransfer {
+        match self {
+            Self::Pq => lightcraft_codecs::HdrTransfer::Pq,
+            Self::Hlg => lightcraft_codecs::HdrTransfer::Hlg,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ExportOptions {
@@ -681,6 +764,8 @@ pub struct ExportOptions {
     pub add_to_photos: bool,
     /// The Photos album they go into, made when missing (empty = none).
     pub photos_album: String,
+    /// The curve of an HDR AVIF: PQ (default) or HLG.
+    pub hdr_transfer: HdrCurve,
 }
 
 impl Default for ExportOptions {
@@ -710,6 +795,7 @@ impl Default for ExportOptions {
             jxl_progressive: false,
             add_to_photos: false,
             photos_album: String::new(),
+            hdr_transfer: HdrCurve::Pq,
         }
     }
 }
@@ -751,6 +837,7 @@ pub const OPTION_PARAMS: &[&str] = &[
     "jxlProgressive",
     "addToPhotos",
     "photosAlbum",
+    "hdrTransfer",
 ];
 
 /// Why an export can't add its files to Apple Photos on this platform (`None`: it can, when the
@@ -866,6 +953,10 @@ impl ExportOptions {
             let s = string(cmd, k, v)?;
             if options.iter().any(|o| o.eq_ignore_ascii_case(s)) { Ok(()) } else { Err(bad(format!("`{k}` must be one of {}", options.join("|")))) }
         };
+        // a choice `from_json` reads with the same `parse`, so what passes here is what gets exported
+        let parses = |k: &str, v: &Value, parse: fn(&str) -> bool, options: &[&str]| -> crate::Result<()> {
+            if parse(string(cmd, k, v)?) { Ok(()) } else { Err(bad(format!("`{k}` must be one of {}", options.join("|")))) }
+        };
         for (k, v) in obj {
             if v.is_null() {
                 continue;
@@ -921,16 +1012,17 @@ impl ExportOptions {
                 "naming" | "subfolder" | "path" | "dir" | "preset" => {
                     string(cmd, k, v)?;
                 }
-                "sharpen" => one_of(k, v, &["none", "screen", "matte", "glossy"])?,
-                "sharpenAmount" => one_of(k, v, &["low", "standard", "high"])?,
-                "conflict" => one_of(k, v, &["unique", "overwrite", "skip"])?,
+                "sharpen" => parses(k, v, |s| SharpenFor::parse(s).is_some(), &["none", "screen", "matte", "glossy"])?,
+                "sharpenAmount" => parses(k, v, |s| SharpenAmount::parse(s).is_some(), &["low", "standard", "high"])?,
+                "hdrTransfer" => one_of(k, v, &["pq", "hlg"])?,
+                "conflict" => parses(k, v, |s| Conflict::parse(s).is_some(), &["unique", "overwrite", "skip"])?,
                 "tiffCompression" => one_of(k, v, &["none", "lzw", "zip", "deflate"])?,
                 "jxlEffort" => one_of(k, v, &["fast", "normal"])?,
                 "dngCompression" => {
                     serde_json::from_value::<DngCompression>(v.clone())
                         .map_err(|_| bad(format!("`{k}` must be one of lossless|deflate|uncompressed")))?;
                 }
-                "metadata" => one_of(k, v, &["all", "allExceptCamera", "copyright", "none"])?,
+                "metadata" => parses(k, v, |s| MetadataPolicy::parse(s).is_some(), &["all", "allExceptCamera", "copyright", "none"])?,
                 "colorSpace" => {
                     if OutputSpace::parse(string(cmd, k, v)?).is_none() {
                         return Err(bad(format!("`{k}` must be one of srgb|displayP3|adobeRgb|proPhoto|rec2020")));
@@ -1032,12 +1124,12 @@ impl ExportOptions {
             resize: Self::resize_from_json(p),
             ppi: u("ppi").filter(|v| *v > 0).map_or(d.ppi, |v| v.min(u16::MAX as u64) as u16),
             limit_kb: u("limitKb").filter(|v| *v > 0).map(|v| v.min(u32::MAX as u64) as u32),
-            sharpen: enm(p, "sharpen").unwrap_or(d.sharpen),
-            sharpen_amount: enm(p, "sharpenAmount").unwrap_or(d.sharpen_amount),
+            sharpen: s("sharpen").and_then(SharpenFor::parse).unwrap_or(d.sharpen),
+            sharpen_amount: s("sharpenAmount").and_then(SharpenAmount::parse).unwrap_or(d.sharpen_amount),
             naming: s("naming").map_or(d.naming, str::to_string),
             start_number: u("startNumber").map_or(d.start_number, |v| v.min(999_999) as u32),
             subfolder: s("subfolder").map_or(d.subfolder, |v| v.trim().replace(['\\', ':', '\0'], "_")),
-            conflict: enm(p, "conflict").unwrap_or(d.conflict),
+            conflict: s("conflict").and_then(Conflict::parse).unwrap_or(d.conflict),
             tiff_compression: match s("tiffCompression").map(str::to_ascii_lowercase).as_deref() {
                 Some("none") => TiffCompression::None,
                 Some("lzw") => TiffCompression::Lzw,
@@ -1045,7 +1137,7 @@ impl ExportOptions {
                 _ => d.tiff_compression,
             },
             dng_compression: enm(p, "dngCompression").unwrap_or(d.dng_compression),
-            metadata: enm(p, "metadata").unwrap_or(d.metadata),
+            metadata: s("metadata").and_then(MetadataPolicy::parse).unwrap_or(d.metadata),
             remove_location: p.get("removeLocation").and_then(Value::as_bool).unwrap_or(d.remove_location),
             watermark: match p.get("watermark") {
                 Some(Value::String(t)) => Some(Watermark { text: t.clone(), ..Default::default() }),
@@ -1061,6 +1153,7 @@ impl ExportOptions {
             jxl_progressive: p.get("jxlProgressive").and_then(Value::as_bool).unwrap_or(d.jxl_progressive),
             add_to_photos: p.get("addToPhotos").and_then(Value::as_bool).unwrap_or(d.add_to_photos),
             photos_album: s("photosAlbum").map_or(d.photos_album, |a| a.trim().to_string()),
+            hdr_transfer: s("hdrTransfer").and_then(HdrCurve::parse).unwrap_or(d.hdr_transfer),
         }
     }
 
@@ -1133,6 +1226,8 @@ impl ExportOptions {
             (ExportFormat::Tiff, Some(32)) if self.hdr => OutputDepth::F32Hdr,
             (ExportFormat::Tiff, Some(32)) => OutputDepth::F32Linear,
             (ExportFormat::Tiff, _) => OutputDepth::U16,
+            (ExportFormat::RenderedDng, _) if self.hdr => OutputDepth::F32Hdr,
+            (ExportFormat::RenderedDng, _) => OutputDepth::F32Linear,
             (ExportFormat::Psd, Some(8)) => OutputDepth::U8,
             (ExportFormat::Psd, _) => OutputDepth::U16,
             (ExportFormat::Avif, _) if self.hdr => OutputDepth::F32Hdr,
@@ -1151,6 +1246,7 @@ impl ExportOptions {
             ExportFormat::Png => &[(8, "8-bit"), (16, "16-bit")],
             ExportFormat::Tiff => &[(16, "16-bit"), (8, "8-bit"), (32, "32-bit float")],
             ExportFormat::Psd => &[(16, "16-bit"), (8, "8-bit")],
+            ExportFormat::RenderedDng => &[(16, "16-bit float")],
             ExportFormat::Avif => &[(8, "8-bit"), (10, "10-bit")],
             ExportFormat::Jxl => &[(8, "8-bit"), (16, "16-bit")],
         }
@@ -1341,6 +1437,7 @@ pub fn encode_with_metadata(img: &Rgba8, o: &ExportOptions, meta: Option<&Metada
         ExportFormat::Avif => encode::encode_avif(&e, o.quality, 8, &meta),
         ExportFormat::Jxl => lightcraft_codecs::encode_jxl(&e, &o.jxl(space, false), &meta),
         f @ (ExportFormat::Original | ExportFormat::Dng) => return Err(format!("{f:?} export does not encode pixels")),
+        ExportFormat::RenderedDng => return Err("Render to DNG needs a float render".into()),
     };
     r.map_err(|e| e.to_string())
 }
@@ -1431,6 +1528,7 @@ pub fn encode_rendered(r: &lightcraft_pipeline::Rendered, o: &ExportOptions, met
 
 /// Encode a high-bit-depth image (see [`encode_rendered`]).
 pub fn encode_deep(img: &DeepImage, o: &ExportOptions, meta: Option<&Metadata>) -> Result<Vec<u8>, String> {
+    let meta_src = meta;
     let img = finish_deep(img, o);
     let profile = match img.samples {
         DeepSamples::F32(_) => icc::write_matrix_trc(&img.space.rgb_space(), &lightcraft_codecs::Trc::Linear),
@@ -1449,8 +1547,12 @@ pub fn encode_deep(img: &DeepImage, o: &ExportOptions, meta: Option<&Metadata>) 
         (ExportFormat::Png, _) => encode::encode_png(&e, &meta),
         (ExportFormat::Tiff, _) => encode::encode_tiff(&e, o.tiff_compression, &meta),
         (ExportFormat::Psd, _) => encode::encode_psd(&e, &meta),
+        (ExportFormat::RenderedDng, DeepSamples::F32(v)) => {
+            let m = meta_src.cloned().unwrap_or_default();
+            return lightcraft_raw::write_rendered_dng(img.width, img.height, v, &img.space.rgb_space(), &m, xmp.clone()).map_err(|e| e.to_string());
+        }
         (ExportFormat::Avif, DeepSamples::F32(v)) if img.space == OutputSpace::Rec2020 => {
-            lightcraft_codecs::encode_avif_pq(w, h, v, o.quality, 8, &meta)
+            lightcraft_codecs::encode_avif_hdr(w, h, v, o.quality, 8, &meta, o.hdr_transfer.codec())
         }
         (ExportFormat::Avif, _) => encode::encode_avif(&e, o.quality, 8, &meta),
         (ExportFormat::Jxl, DeepSamples::F32(_)) if img.space == OutputSpace::Rec2020 => {
@@ -1536,9 +1638,11 @@ pub struct Exported {
 /// Output size of photo `p` under `o` (its cropped full size when `o.resize` is `None`).
 pub fn output_size(p: &lightcraft_catalog::Photo, o: &ExportOptions) -> (usize, usize) {
     let (w, h) = lightcraft_pipeline::native_output_size(p.width.max(1) as usize, p.height.max(1) as usize, &p.develop);
+    // whole pixels first: a crop's float noise (5999.999… for 6000) must not decide a half-pixel tie
+    let (w, h) = (w.round().max(1.0), h.round().max(1.0));
     match &o.resize {
         Some(r) => r.apply(w, h),
-        None => ((w.round() as usize).max(1), (h.round() as usize).max(1)),
+        None => (w as usize, h as usize),
     }
 }
 
@@ -1624,10 +1728,16 @@ fn prepare_guarded(
     let (full_px, long) = ((p.width as usize).saturating_mul(p.height as usize), p.width.max(p.height) as usize);
     let (work, weight) = if o.format.is_rendered() {
         let (w, h) = output_size(p, o);
+        let (nw, nh) = lightcraft_pipeline::native_output_size(p.width.max(1) as usize, p.height.max(1) as usize, &p.develop);
+        let native_px = (nw.round().max(1.0) * nh.round().max(1.0)) as usize;
+        let label = p.file_name.clone();
         let meta = export_metadata(p, &session.catalog, o);
         let gain_map = o.hdr_output() && o.format == ExportFormat::Jpeg;
         let job = session.export_job(id, w, h, o.effective_space(), o.effective_depth())?;
         let weight = render_weight(full_px, long, job.level, w.saturating_mul(h));
+        if let Some(why) = too_big_for_memory((w, h), native_px, weight, crate::memory::total_ram()) {
+            return Err(format!("{label}: {why}"));
+        }
         let hdr_job = if gain_map { Some(session.export_job(id, w, h, o.effective_space(), OutputDepth::F32Hdr)?) } else { None };
         (Work::Render(Box::new(RenderWork { job, hdr_job, meta, opts: o.clone() })), weight)
     } else {
@@ -1649,6 +1759,26 @@ fn prepare_guarded(
         (work, weight)
     };
     Ok(PreparedExport { photo: id, file_name, work, guard, weight })
+}
+
+/// Why an export of `out` pixels (`w`, `h`), from a photo of `native_px` pixels at its own size,
+/// can't be made on a computer with `ram` bytes, given its working memory `weight`: an export
+/// enlarged past the photo's size that needs more memory than the computer has would fail to
+/// allocate, which ends the process rather than the export. Full-size and smaller exports, and
+/// computers whose memory isn't known, are never refused.
+fn too_big_for_memory(out: (usize, usize), native_px: usize, weight: usize, ram: Option<usize>) -> Option<String> {
+    let ram = ram?;
+    if out.0.saturating_mul(out.1) <= native_px || weight <= ram {
+        return None;
+    }
+    let gb = |b: usize| b as f64 / (1u64 << 30) as f64;
+    Some(format!(
+        "exporting at {} × {} needs about {:.0} GB of memory, more than this computer has ({:.0} GB); choose a smaller size",
+        out.0,
+        out.1,
+        gb(weight).ceil(),
+        gb(ram)
+    ))
 }
 
 /// Working memory of rendering a photo of `full_px` pixels (long edge `long`) from source level
@@ -2692,8 +2822,109 @@ mod tests {
         assert_eq!(ExportOptions::from_json(&ExportOptions::resize_json(None)).resize, None);
         assert_eq!(ExportOptions::from_json(&json!({"ppi": 300})).ppi, 300);
         // never larger than the encoders' limit, never empty
-        assert_eq!(size(json!({"percent": 10000, "dontEnlarge": false}), 6000.0, 4000.0), Some((65535, 43690)));
+        assert_eq!(size(json!({"percent": 10000, "dontEnlarge": false}), 6000.0, 4000.0), Some((27713, 18475)), "512 MP at most");
+        assert_eq!(size(json!({"width": 70000, "dontEnlarge": false}), 60000.0, 100.0), Some((65535, 109)), "65535 px an edge");
         assert_eq!(size(json!({"width": 1}), 6000.0, 40.0).map(|s| s.1), Some(1));
+    }
+
+    /// Typing 20000 for 2000 (or percent 10000) with Don't Enlarge off asked for gigapixels: the
+    /// render's first plane alone (34 GB at 65535 × 43690) failed to allocate, which aborts the
+    /// process. An enlargement stops at 512 megapixels; full-size and smaller exports of photos
+    /// larger than that are untouched.
+    #[test]
+    fn enlargements_stop_at_512_megapixels() {
+        let size = |p: serde_json::Value, w: f64, h: f64| ExportOptions::from_json(&p).resize.map(|r| r.apply(w, h)).unwrap();
+        for p in [json!({"longEdge": 60000, "dontEnlarge": false}), json!({"megapixels": 5000}), json!({"percent": 10000, "dontEnlarge": false})] {
+            let (w, h) = size(p.clone(), 6000.0, 4000.0);
+            assert!((w * h) as f64 <= MAX_ENLARGED_PIXELS * 1.001, "{p}: {w}×{h}");
+            assert!((w as f64 / h as f64 - 1.5).abs() < 0.001, "{p}: keeps the shape");
+        }
+        // below the ceiling an enlargement is as asked
+        assert_eq!(size(json!({"longEdge": 12000, "dontEnlarge": false}), 6000.0, 4000.0), (12000, 8000));
+        // a 600 MP panorama exports at full size, and smaller, as before; it is never enlarged
+        assert_eq!(size(json!({"percent": 100, "dontEnlarge": false}), 30000.0, 20000.0), (30000, 20000));
+        assert_eq!(size(json!({"percent": 50}), 30000.0, 20000.0), (15000, 10000));
+        assert_eq!(size(json!({"percent": 200, "dontEnlarge": false}), 30000.0, 20000.0), (30000, 20000));
+    }
+
+    /// An enlarged export that needs more memory than the computer has is refused with a message,
+    /// before it starts; everything else goes ahead.
+    #[test]
+    fn enlarged_exports_must_fit_the_computers_memory() {
+        let gb = 1usize << 30;
+        let why = too_big_for_memory((27713, 18475), 24_000_000, 20 * gb, Some(16 * gb)).unwrap();
+        assert!(why.contains("27713 × 18475") && why.contains("20 GB") && why.contains("16 GB") && why.contains("smaller size"), "{why}");
+        assert_eq!(too_big_for_memory((27713, 18475), 24_000_000, 20 * gb, Some(32 * gb)), None, "fits");
+        assert_eq!(too_big_for_memory((6000, 4000), 24_000_000, 20 * gb, Some(gb)), None, "full size is never refused");
+        assert_eq!(too_big_for_memory((3000, 2000), 24_000_000, 20 * gb, Some(gb)), None, "nor a smaller export");
+        assert_eq!(too_big_for_memory((27713, 18475), 24_000_000, 20 * gb, None), None, "unknown memory");
+    }
+
+    /// A photo more than 65535 times as long as it is short (a 70000 × 1 strip) made `scale`
+    /// clamp with its lower bound above its upper one, which panics, in the export and in the
+    /// Export dialog's preview on the UI thread. The encoders' limit wins, the short edge keeps a
+    /// pixel.
+    #[test]
+    fn resize_survives_photos_too_long_for_the_encoders() {
+        let modes = [
+            json!({"longEdge": 2000}),
+            json!({"shortEdge": 1}),
+            json!({"width": 500, "height": 500}),
+            json!({"megapixels": 1}),
+            json!({"percent": 50}),
+            json!({"percent": 1000, "dontEnlarge": false}),
+        ];
+        for p in modes {
+            for (w, h) in [(70_000.0, 1.0), (1.0, 70_000.0), (1e9, 3.0), (65_536.0, 1.0)] {
+                let r = ExportOptions::from_json(&p).resize.unwrap();
+                let (ow, oh) = r.apply(w, h);
+                assert!((1..=65_535).contains(&ow) && (1..=65_535).contains(&oh), "{p} on {w}×{h}: {ow}×{oh}");
+                assert!(r.scale(w, h).is_finite());
+            }
+        }
+        // (a short edge under a pixel would be scaled up to one, which the limit then caps)
+        assert_eq!(Resize::long_edge(2000).apply(70_000.0, 1.0), (65_535, 1));
+        assert_eq!(Resize::long_edge(2000).apply(1.0, 70_000.0), (1, 65_535));
+    }
+    #[test]
+    fn resize_size_survives_the_render() {
+        // the render fits the photo into the size `apply` gives; that must not cost a pixel (#1312)
+        let cropped = |r: Resize, w: u32, h: u32, x1: f64| {
+            let mut p = named("IMG.ARW");
+            (p.width, p.height) = (w, h);
+            std::sync::Arc::make_mut(&mut p.develop).crop.geometry.rect = lightcraft_geom::Rect::new(0.0, 0.0, x1, 1.0);
+            let (bw, bh) = output_size(&p, &ExportOptions { resize: Some(r), ..Default::default() });
+            lightcraft_pipeline::output_size(w as usize, h as usize, &p.develop, &lightcraft_pipeline::RenderRequest::fit(bw, bh))
+        };
+        let rendered = |r: Resize, w: u32, h: u32| cropped(r, w, h, 1.0);
+        let mode = |mode: ResizeMode, value: f32, height: u32| Resize { mode, value, height, dont_enlarge: true };
+        // a frame a hair narrower than 3:2 (a raw's default crop in floats) puts 1333 × 1.5 just under 1999.5
+        let hair = 1.0 - 1e-9;
+        assert_eq!(cropped(Resize::long_edge(2000), 6000, 4000, hair), (2000, 1333));
+        assert_eq!(cropped(Resize::long_edge(2048), 6000, 4000, hair), (2048, 1365));
+        assert_eq!(cropped(mode(ResizeMode::Width, 2000.0, 0), 6000, 4000, hair), (2000, 1333));
+        assert_eq!(cropped(mode(ResizeMode::ShortEdge, 1333.0, 0), 6000, 4000, hair), (2000, 1333));
+        assert_eq!(cropped(mode(ResizeMode::Height, 1333.0, 0), 6000, 4000, hair), (2000, 1333));
+        assert_eq!(rendered(Resize::long_edge(2000), 4000, 6000), (1333, 2000));
+        // 3:2, 4:3, 16:9, 1:1 and their portraits, every mode: the render keeps what `apply` says
+        for (w, h) in [(6000u32, 4000u32), (6240, 4160), (4032, 3024), (5184, 3888), (3840, 2160), (6000, 3375), (4000, 4000)] {
+            for (w, h) in [(w, h), (h, w)] {
+                for value in [1000.0, 1080.0, 1333.0, 2000.0, 2048.0, 2500.0, 3000.0] {
+                    for r in [
+                        Resize::long_edge(value as u32),
+                        mode(ResizeMode::ShortEdge, value, 0),
+                        mode(ResizeMode::Width, value, 0),
+                        mode(ResizeMode::Height, value, 0),
+                        mode(ResizeMode::Dimensions, value, 1365),
+                        mode(ResizeMode::Megapixels, value / 1000.0, 0),
+                        mode(ResizeMode::Percent, value / 100.0, 0),
+                    ] {
+                        let want = r.apply(w.into(), h.into());
+                        assert_eq!(rendered(r, w, h), want, "{r:?} on {w}×{h}");
+                    }
+                }
+            }
+        }
     }
 
     /// A flat field of a saturated green inside Display P3 but outside sRGB, rendered into `space`.
@@ -3008,6 +3239,58 @@ mod tests {
         ExportOptions::from_params(&json!({"quality": 92, "longEdge": null, "watermark": null})).unwrap();
     }
 
+    /// A choice the validation accepts is the one exported: `metadata: "NONE"` passed the
+    /// case-insensitive check, then failed the exact-case read and fell back to `all`, so GPS and
+    /// camera data went out in a file meant to carry none. `sharpen`, `sharpenAmount` and
+    /// `conflict` had the same gap.
+    #[test]
+    fn accepted_choices_are_the_ones_exported() {
+        use serde_json::json;
+        let read = |k: &str, v: &str| ExportOptions::from_params(&json!({ k: v })).map_err(|e| e.to_string());
+        let metadata = [
+            ("all", MetadataPolicy::All),
+            ("allExceptCamera", MetadataPolicy::AllExceptCamera),
+            ("copyright", MetadataPolicy::Copyright),
+            ("none", MetadataPolicy::None),
+        ];
+        for (name, want) in metadata {
+            for v in [name.to_string(), name.to_ascii_uppercase(), name.to_ascii_lowercase()] {
+                assert_eq!(read("metadata", &v).unwrap().metadata, want, "metadata: {v}");
+            }
+        }
+        for (name, want) in [("none", SharpenFor::None), ("screen", SharpenFor::Screen), ("matte", SharpenFor::Matte), ("glossy", SharpenFor::Glossy)]
+        {
+            assert_eq!(read("sharpen", &name.to_ascii_uppercase()).unwrap().sharpen, want);
+        }
+        for (name, want) in [("low", SharpenAmount::Low), ("standard", SharpenAmount::Standard), ("high", SharpenAmount::High)] {
+            assert_eq!(read("sharpenAmount", &name.to_ascii_uppercase()).unwrap().sharpen_amount, want);
+        }
+        for (name, want) in [("unique", Conflict::Unique), ("overwrite", Conflict::Overwrite), ("skip", Conflict::Skip)] {
+            assert_eq!(read("conflict", &name.to_ascii_uppercase()).unwrap().conflict, want);
+        }
+        // an explicit value nothing reads as is an error, never the permissive default
+        for v in ["", " none", "nothing", "all-except-camera"] {
+            let e = read("metadata", v).unwrap_err();
+            assert!(e.contains("`metadata` must be one of all|allExceptCamera|copyright|none"), "{v:?}: {e}");
+        }
+        assert!(read("sharpenAmount", "max").unwrap_err().contains("`sharpenAmount` must be one of low|standard|high"));
+        assert!(read("conflict", "replace").unwrap_err().contains("`conflict` must be one of unique|overwrite|skip"));
+        // absent (or null) keeps the defaults
+        let d = ExportOptions::from_params(&json!({"metadata": null})).unwrap();
+        assert_eq!(
+            (d.metadata, d.sharpen, d.sharpen_amount, d.conflict),
+            (MetadataPolicy::All, SharpenFor::None, SharpenAmount::Standard, Conflict::Unique)
+        );
+        // `removeLocation` stays independent of the policy's spelling
+        let o = ExportOptions::from_params(&json!({"metadata": "AllExceptCamera", "removeLocation": true})).unwrap();
+        assert_eq!((o.metadata, o.remove_location), (MetadataPolicy::AllExceptCamera, true));
+        // stored settings (lenient `from_json`) read the same spellings
+        assert_eq!(ExportOptions::from_json(&json!({"metadata": "None"})).metadata, MetadataPolicy::None);
+        // and `to_json` still writes what the MCP schema lists
+        let j = ExportOptions { metadata: MetadataPolicy::AllExceptCamera, conflict: Conflict::Skip, ..Default::default() }.to_json();
+        assert_eq!((j["metadata"].as_str(), j["conflict"].as_str()), (Some("allExceptCamera"), Some("skip")));
+    }
+
     /// Issue #183: the `watermark` object's keys, kinds and ranges are checked (and documented in
     /// the `app.export` param string), instead of unknown keys passing and sizes clamping silently.
     #[test]
@@ -3109,6 +3392,26 @@ mod tests {
     }
 
     // Issue #496: photos rendered side by side give the same files, names, order and progress as
+    // Render to DNG: the rendered photo as a linear float DNG that reads back as the same picture
+    #[test]
+    fn rendered_dng_matches_the_rendered_tiff() {
+        let mut s = crate::Session::with_demo();
+        let id = s.visible()[0];
+        let dng = export_photo(&mut s, id, &ExportOptions::from_json(&json!({"format": "rendereddng", "width": 64})), 1).unwrap();
+        assert!(dng.file_name.ends_with(".dng"), "{}", dng.file_name);
+        let png = export_photo(&mut s, id, &ExportOptions::from_json(&json!({"format": "png", "width": 64})), 1).unwrap();
+        let raw = lightcraft_raw::decode(&dng.bytes).unwrap();
+        assert_eq!((raw.width, raw.height, raw.cpp), (dng.width, dng.height, 3));
+        assert!(raw.color.profile.tone_curve.is_some(), "identity tone curve keeps converters from adding one");
+        let back = raw.develop(lightcraft_raw::Method::Bilinear).unwrap();
+        let reference = lightcraft_codecs::decode_thumbnail(&png.bytes, 4096).unwrap().image;
+        assert_eq!((reference.width, reference.height), (back.width, back.height));
+        // mean brightness: the PNG holds 8-bit sRGB, the DNG linear sRGB
+        let mean_dng: f32 = back.data.iter().map(|p| lightcraft_color::transfer::linear_to_srgb(p[1].min(1.0))).sum::<f32>() / back.data.len() as f32;
+        let mean_tif: f32 = reference.data.iter().map(|p| p[1] as f32 / 255.0).sum::<f32>() / reference.data.len() as f32;
+        assert!((mean_dng - mean_tif).abs() < 0.02, "{mean_dng} vs {mean_tif}");
+    }
+
     // one at a time, and a cancel stops at the same photo
     #[test]
     fn side_by_side_batches_match_one_at_a_time() {

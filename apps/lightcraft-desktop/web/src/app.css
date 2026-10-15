@@ -1,5 +1,5 @@
-@import '@rightkit/app-shell/shell.css';
-@import '@rightkit/app-shell/suite-aliases.css';
+@import '@rightkit/react-shell/shell.css';
+@import '@rightkit/react-shell/suite-aliases.css';
 
 @font-face{font-family:Inter;src:url('../../../../assets/fonts/Inter-Regular.ttf') format('truetype');font-weight:400;font-style:normal;font-display:swap}
 @font-face{font-family:Inter;src:url('../../../../assets/fonts/Inter-Medium.ttf') format('truetype');font-weight:500;font-style:normal;font-display:swap}

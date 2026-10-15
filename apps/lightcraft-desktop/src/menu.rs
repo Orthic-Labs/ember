@@ -2,7 +2,7 @@
 
 #![forbid(unsafe_code)]
 
-use rightkit_shell::{MenuEntry, MenuGroup, MenuSpec};
+use rightkit_tauri_shell::{MenuEntry, MenuGroup, MenuSpec};
 
 fn modifier() -> &'static str {
     #[cfg(target_os = "macos")]
@@ -65,7 +65,12 @@ pub fn spec() -> MenuSpec {
             ),
             group(
                 "Edit",
-                &[("edit.undo", "Undo", Some("Cmd+Z")), ("edit.redo", "Redo", Some("Cmd+Shift+Z")), ("view.focusSearch", "Find…", Some("Cmd+F"))],
+                &[
+                    ("edit.undo", "Undo", Some("Cmd+Z")),
+                    ("edit.redo", "Redo", Some("Cmd+Shift+Z")),
+                    ("edit.selectOnlyActive", "Select Only Active Photo", Some("Cmd+Shift+D")),
+                    ("view.focusSearch", "Find…", Some("Cmd+F")),
+                ],
             ),
             group(
                 "View",

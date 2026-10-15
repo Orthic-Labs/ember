@@ -30,7 +30,7 @@ pub fn view_switch(app: &mut LightcraftApp, ui: &mut egui::Ui) {
 /// exported files will carry. One only some of the photos have is marked with an asterisk.
 pub fn names_row(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
-    let selection = app.session.targets(&serde_json::Value::Null);
+    let selection = app.session.selected();
     let export = app.ui.keywording_view == crate::state::KeywordingView::WillExport;
     let names = app.caches.keyword_names(&app.session.catalog, &selection, export);
     if names.is_empty() {
@@ -120,7 +120,7 @@ fn menu(app: &mut LightcraftApp, ui: &mut egui::Ui, chip: &Chip) {
 /// The selection's keywords as chips: the name (right-click for its menu), and × to take it off
 /// every selected photo. One only some of them have is marked with an asterisk.
 pub fn chip_row(app: &mut LightcraftApp, ui: &mut egui::Ui) {
-    let selection = app.session.targets(&serde_json::Value::Null);
+    let selection = app.session.selected();
     let chips = app.caches.keyword_chips(&app.session.catalog, &selection);
     ui.horizontal_wrapped(|ui| {
         for c in chips.iter() {

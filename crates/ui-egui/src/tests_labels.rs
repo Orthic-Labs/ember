@@ -75,6 +75,8 @@ fn label_tints_grid_and_filmstrip_chrome_without_changing_photo_pixels() {
 fn label_toast_has_pale_colour_and_rating_restores_neutral_style() {
     let mut h = app(ViewMode::SquareGrid);
     h.app.run("photo.label", json!({"label": "red"})).unwrap();
+    // (two frames: the toast is an egui Area, sized in its first frame and painted from the second, #1262)
+    h.step();
     h.step();
     let at = egui::pos2(h.app.canvas_rect.unwrap().center().x, h.app.canvas_rect.unwrap().bottom() - 45.0);
     let red = pixel(&h.paint(), at);

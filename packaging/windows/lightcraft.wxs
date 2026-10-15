@@ -128,6 +128,11 @@
       <DialogRef Id="BrowseDlg" />
       <DialogRef Id="InvalidDirDlg" />
       <DialogRef Id="DiskCostDlg" />
+      <!-- Referenced by the Publish events below but never pulled in on its own: without this
+           ref the MSI ships without a completion page, so a successful install or remove ends
+           silently (upstream issues #790, #892). The UI extension's fragment shows it on
+           exit=success, which covers Remove from Apps & features too. -->
+      <DialogRef Id="ExitDialog" />
       <DialogRef Id="VerifyReadyDlg" />
       <DialogRef Id="MaintenanceWelcomeDlg" />
       <DialogRef Id="MaintenanceTypeDlg" />

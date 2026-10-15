@@ -31,6 +31,7 @@ pub mod demo;
 pub mod denoise;
 pub mod devices;
 pub mod display;
+mod errors;
 pub mod export;
 pub mod face_download;
 #[cfg(not(target_arch = "wasm32"))]
@@ -71,6 +72,7 @@ pub mod walk;
 use std::sync::Arc;
 
 pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
+pub use errors::{AiModel, ErrorKind};
 pub use fonts::{CRAFT_FONTS, CraftFont};
 use lightcraft_catalog::{Catalog, Filter, Op, PhotoId, Sort};
 use lightcraft_develop::DevelopSettings;
@@ -101,6 +103,13 @@ pub enum EngineError {
     /// to import with `library.importLightroom`, when one was found.
     #[error("{} is an LRCAT catalog; import it into an Ember library with File ▸ Import LRCAT Catalog…{}", path.display(), catalog.as_ref().map_or(String::new(), |c| format!(" ({})", c.display())))]
     LightroomCatalog { path: std::path::PathBuf, catalog: Option<std::path::PathBuf> },
+    /// The work was cancelled (by the person, an agent or a newer request): not a failure.
+    #[error("{0}")]
+    Cancelled(String),
+    /// The feature needs `model`, which is not installed (or still downloading): a frontend
+    /// offers its download (terms first) on [`ErrorKind::ModelMissing`], not on the message.
+    #[error("{msg}")]
+    ModelMissing { model: AiModel, msg: String },
     #[error("{0}")]
     Other(String),
 }
@@ -133,7 +142,8 @@ fn single_photo(op: &Op, depth: usize) -> Option<PhotoId> {
         | Op::SetMeta { id, .. }
         | Op::SetVersions { id, .. }
         | Op::SetHistory { id, .. }
-        | Op::PushHistory { id, .. } => Some(*id),
+        | Op::PushHistory { id, .. }
+        | Op::SetHistoryCursor { id, .. } => Some(*id),
         Op::Batch { ops } if depth < 8 => {
             let mut ids = ops.iter().map(|o| single_photo(o, depth + 1));
             let first = ids.next()??;
@@ -228,7 +238,8 @@ pub struct Session {
     pub previous_active: Option<PhotoId>,
     /// Groups last used for Copy (Lightroom remembers them).
     pub copy_groups: Vec<lightcraft_develop::SettingsGroup>,
-    pub presets: Vec<lightcraft_develop::Preset>,
+    /// Built-in then user presets; its generation tells savers and caches when it changed.
+    pub presets: presets::PresetList,
     /// Favourite profile ids (persisted with the library, like preset favourites).
     pub profile_favorites: Vec<String>,
     /// Recently applied profile ids, newest first (at most [`presets::RECENT_PROFILES`]).
@@ -361,7 +372,7 @@ impl Session {
             library_folder: None,
             previous_active: None,
             copy_groups: lightcraft_develop::SettingsGroup::default_copy(),
-            presets: presets::builtin(),
+            presets: presets::PresetList::new(presets::builtin()),
             profile_favorites: Vec::new(),
             profile_recent: Vec::new(),
             journal: Vec::new(),
@@ -423,7 +434,11 @@ impl Session {
         let empty = Value::Object(Default::default());
         let params = if params.is_null() { &empty } else { params };
         let read_only_cull = id == "photo.analyze" && params.get("dryRun").and_then(Value::as_bool) == Some(true);
-        self.run_command(id, (spec.journal && !read_only_cull).then_some(params), |s| (spec.run)(s, params))
+        self.run_command(id, (spec.journal && !read_only_cull).then_some(params), |s| (spec.run)(s, params)).map_err(|e| match e {
+            // a shared parameter check ([`Session::targets`]) names the command it ran for
+            EngineError::BadParams { cmd, msg } if cmd.is_empty() => EngineError::BadParams { cmd: id.to_string(), msg },
+            e => e,
+        })
     }
 
     /// Run `f` as command `id` with what [`Session::execute`] does around every command: the
@@ -917,11 +932,17 @@ impl Session {
                 }
             }
             if self.source == LibrarySource::RecentlyAdded {
-                // newest import first, whatever the sort (the grid groups by import day)
+                // newest import first, whatever the sort direction (the grid groups by import day);
+                // a batch stays in file order (name, then id)
                 let cat = &self.catalog;
                 visible.sort_by(|a, b| {
                     let key = |id: &PhotoId| cat.photo(*id).map(|p| p.imported.clone()).unwrap_or_default();
-                    key(b).cmp(&key(a)).then(a.cmp(b))
+                    let name = |id: &PhotoId| cat.photo(*id).map(|p| p.file_name.as_str());
+                    let by_name = match (name(a), name(b)) {
+                        (Some(x), Some(y)) => lightcraft_catalog::query::cmp_name(x, y),
+                        _ => std::cmp::Ordering::Equal,
+                    };
+                    key(b).cmp(&key(a)).then(by_name).then(a.cmp(b))
                 });
             }
             if self.source == LibrarySource::Missing {
@@ -981,14 +1002,24 @@ impl Session {
         (self.visible_gen, self.visible.clone())
     }
 
-    /// Targets of photo commands: explicit `ids`/`id` param, else the selection.
-    pub fn targets(&self, p: &Value) -> Vec<PhotoId> {
-        if let Some(a) = p.get("ids").and_then(Value::as_array) {
-            return a.iter().filter_map(Value::as_u64).map(PhotoId).collect();
+    /// Targets of photo commands: the explicit `ids` (photo ids) or `id` (a photo id) param, else [`Self::selected`].
+    /// An `ids` or `id` that is there but isn't photo ids is an error, never the selection or part of the list
+    /// (issue #1506): a mistyped target mustn't turn a command meant for one photo into one for every selected photo.
+    pub fn targets(&self, p: &Value) -> Result<Vec<PhotoId>> {
+        let invalid = |what: &str| EngineError::BadParams { cmd: String::new(), msg: format!("`{what}` must be photo ids (whole numbers)") };
+        match p.get("ids") {
+            None | Some(Value::Null) => {}
+            Some(Value::Array(a)) => return a.iter().map(|v| v.as_u64().map(PhotoId).ok_or_else(|| invalid("ids"))).collect(),
+            Some(_) => return Err(invalid("ids")),
         }
-        if let Some(id) = p.get("id").and_then(Value::as_u64) {
-            return vec![PhotoId(id)];
+        match p.get("id") {
+            None | Some(Value::Null) => Ok(self.selected()),
+            Some(v) => v.as_u64().map(|id| vec![PhotoId(id)]).ok_or_else(|| invalid("id")),
         }
+    }
+
+    /// The photos commands act on when a call names none: the selection, else the active photo.
+    pub fn selected(&self) -> Vec<PhotoId> {
         if self.selection.ids.is_empty() { self.selection.active.into_iter().collect() } else { self.selection.ids.clone() }
     }
 }
@@ -1039,6 +1070,8 @@ mod tests_folders;
 #[cfg(test)]
 mod tests_forget_local;
 #[cfg(test)]
+mod tests_history_cursor;
+#[cfg(test)]
 mod tests_import;
 #[cfg(test)]
 mod tests_import_move;
@@ -1058,6 +1091,8 @@ mod tests_organize;
 mod tests_persist;
 #[cfg(test)]
 mod tests_prefs;
+#[cfg(test)]
+mod tests_presets_scale;
 #[cfg(test)]
 mod tests_process;
 #[cfg(test)]

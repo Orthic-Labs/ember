@@ -455,6 +455,21 @@ fn hdr_avif_export_is_pq_rec2020() {
     assert!(nclx(&sdr.bytes).is_none_or(|c| c[3] != 16));
 }
 
+#[test]
+fn hdr_avif_export_hlg() {
+    let mut s = Session::with_demo();
+    let id = sunset(&mut s);
+    let o = ExportOptions::from_json(&json!({"longEdge": 160, "format": "avif", "hdr": true, "hdrTransfer": "hlg", "quality": 70}));
+    assert_eq!(o.hdr_transfer, crate::export::HdrCurve::Hlg);
+    assert_eq!(o.to_json()["hdrTransfer"], "hlg");
+    s.execute("develop.hdr", &json!({"enabled": true, "maxEv": 2})).unwrap();
+    let hdr = export_photo(&mut s, id, &o, 1).unwrap();
+    // nclx: BT.2020 primaries (9), HLG (18), BT.2020 NCL (9), full range; no content light level box
+    let i = hdr.bytes.windows(4).position(|w| w == b"nclx").expect("colr nclx box");
+    assert_eq!(hdr.bytes[i + 4..i + 11].to_vec(), vec![0, 9, 0, 18, 0, 9, 0x80]);
+    assert!(!hdr.bytes.windows(4).any(|w| w == b"clli"));
+}
+
 /// "Remove location info" holds for the file-copying formats too: the sidecar and the DNG's
 /// packet carry no location, and an original that embeds GPS is refused rather than copied.
 #[test]
@@ -499,6 +514,30 @@ fn remove_location_holds_for_original_and_dng_exports() {
     let err = export_photo(&mut s, jid, &opts("original", true), 1).err().unwrap();
     assert!(err.contains("can't remove the location") && err.contains("export as JPEG"), "{err}");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `metadata: "NONE"` as `app.export` sends it: the JPEG carries no location or camera data
+/// (it used to be read as `all` and carry both).
+#[test]
+fn metadata_none_in_any_case_exports_no_metadata() {
+    let mut s = Session::with_demo();
+    let id = s.active().unwrap();
+    s.execute("photo.setMeta", &json!({"ids": [id.0], "gps": [48.85, 2.35], "city": "Paris"})).unwrap();
+    let export = |s: &mut Session, extra: serde_json::Value| {
+        let mut p = json!({"format": "jpeg", "longEdge": 64});
+        for (k, v) in extra.as_object().unwrap() {
+            p[k] = v.clone();
+        }
+        lightcraft_meta::extract(&export_photo(s, id, &ExportOptions::from_params(&p).unwrap(), 1).unwrap().bytes)
+    };
+    let all = export(&mut s, json!({}));
+    assert!(all.gps.is_some() && all.city.is_some(), "the default keeps everything: {all:?}");
+    for v in ["none", "NONE", "None"] {
+        let m = export(&mut s, json!({"metadata": v}));
+        assert!(m.gps.is_none() && m.city.is_none() && m.model.is_none(), "{v}: {m:?}");
+    }
+    let m = export(&mut s, json!({"metadata": "ALL", "removeLocation": true}));
+    assert!(m.gps.is_none() && m.city.is_none(), "{m:?}");
 }
 
 /// An original raw whose own metadata holds GPS is refused under "Remove location info".

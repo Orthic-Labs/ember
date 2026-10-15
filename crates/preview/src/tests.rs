@@ -124,6 +124,34 @@ fn disk_cache_roundtrip_and_prune() {
 }
 
 #[test]
+fn disk_cache_overwrite_accounts_for_replaced_jpeg_only_once() {
+    let dir = temp_dir("overwrite");
+    let cache = DiskCache::new(&dir, 1 << 20);
+    let (a, b) = (hash_bytes(b"overwrite-a"), hash_bytes(b"overwrite-b"));
+    let first = gradient(80, 60, 4);
+    cache.put(a, &first);
+    cache.put(b, &gradient(80, 60, 7));
+    let initial = cache.size();
+
+    // Re-rendering the same key used to double-count bytes although the
+    // replacement occupied exactly the same pathname on disk.
+    cache.put(a, &first);
+    assert_eq!(cache.size(), initial);
+    assert!(cache.get(b).is_some());
+
+    // A replacement with a different encoded size must also update the total.
+    cache.put(a, &gradient(120, 90, 9));
+    let path = |key: Hash128| {
+        let hex = key.to_string();
+        dir.join(&hex[..2]).join(format!("{hex}.jpg"))
+    };
+    let actual = std::fs::metadata(path(a)).unwrap().len() + std::fs::metadata(path(b)).unwrap().len();
+    assert_eq!(cache.size(), actual);
+    cache.clear();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn preview_cache_memory_then_disk() {
     let dir = temp_dir("pc");
     let k = hash_bytes(b"x");
@@ -360,5 +388,137 @@ fn disk_cache_never_touches_foreign_files() {
     }
     assert!(disk::is_cache_file("01", "0123456789abcdef0123456789abcdef.jpg"));
     assert!(!disk::is_cache_file("01", "0123456789abcdef0123456789abcdef.jpg.bak"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A shard directory that is a symlink to a folder outside the cache is neither listed, cleared,
+/// pruned, read nor written (issue #1504).
+#[cfg(unix)]
+#[test]
+fn disk_cache_ignores_symlinked_shard_directories() {
+    let dir = temp_dir("symlink-shard");
+    let outside = temp_dir("symlink-outside");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let key = hash_bytes(&[9, 9]);
+    let hex = key.to_string();
+    let sentinel = outside.join(format!("{hex}.jpg"));
+    std::fs::write(&sentinel, vec![7u8; 50_000]).unwrap();
+    std::os::unix::fs::symlink(&outside, dir.join(&hex[..2])).unwrap();
+    let d = DiskCache::new(&dir, 10);
+    assert_eq!(d.size(), 0, "files behind the link are not the cache's");
+    d.prune();
+    assert!(sentinel.exists(), "prune followed the link");
+    assert!(d.get(key).is_none(), "get read through the link");
+    d.put(key, &gradient(16, 16, 1));
+    assert_eq!(std::fs::metadata(&sentinel).unwrap().len(), 50_000, "put wrote through the link");
+    d.clear();
+    assert!(sentinel.exists(), "clear followed the link");
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&outside);
+}
+
+/// Wait up to `secs` for `f` to hold.
+fn eventually(secs: u64, mut f: impl FnMut() -> bool) -> bool {
+    let t0 = std::time::Instant::now();
+    while t0.elapsed() < std::time::Duration::from_secs(secs) {
+        if f() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    false
+}
+
+/// A slider drag submits for a view faster than its renders finish. A newer job for a slot used
+/// to start beside the running one on another worker: one view's renders piled up on the GPU and
+/// most were thrown away. Now a slot runs one job at a time: the newer one waits (replacing an
+/// older one still queued), other slots keep going, and it starts when the slot's job ends.
+#[test]
+fn a_slot_runs_one_job_at_a_time() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let mut p: JobPool<u8, u32> = JobPool::new(4);
+    let (release, released) = std::sync::mpsc::channel::<()>();
+    let (started, has_started) = std::sync::mpsc::channel();
+    let running = Arc::new(AtomicUsize::new(0));
+    let most = Arc::new(AtomicUsize::new(0));
+    let job = |n: u32, wait: Option<std::sync::mpsc::Receiver<()>>| -> crate::pool::Job<u32> {
+        let (running, most, started) = (running.clone(), most.clone(), started.clone());
+        Box::new(move || {
+            let now = running.fetch_add(1, Ordering::SeqCst) + 1;
+            most.fetch_max(now, Ordering::SeqCst);
+            let _ = started.send(n);
+            if let Some(w) = wait {
+                let _ = w.recv_timeout(std::time::Duration::from_secs(30));
+            }
+            running.fetch_sub(1, Ordering::SeqCst);
+            n
+        })
+    };
+    p.submit(1, 1, 9, job(1, Some(released))).unwrap();
+    assert_eq!(has_started.recv().unwrap(), 1);
+    // two newer requests for the busy slot: the second replaces the first, neither starts
+    p.submit(1, 2, 9, job(2, None)).unwrap();
+    p.submit(1, 3, 9, job(3, None)).unwrap();
+    // another slot is not held up
+    p.submit(2, 9, 1, Box::new(|| 9)).unwrap();
+    let mut done = Vec::new();
+    assert!(eventually(10, || {
+        done.extend(std::iter::from_fn(|| p.try_recv()).map(|d| d.result));
+        done.contains(&9)
+    }));
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    assert!(has_started.try_recv().is_err(), "a second job of slot 1 started beside the first");
+    assert!(p.is_queued(1));
+    drop(release);
+    assert!(eventually(10, || {
+        done.extend(std::iter::from_fn(|| p.try_recv()).map(|d| d.result));
+        done.contains(&3)
+    }));
+    assert!(!done.contains(&2), "the replaced job never runs");
+    assert_eq!(most.load(Ordering::SeqCst), 1, "slot 1 ran two jobs at once");
+}
+
+/// A job that panics still frees its slot: the panic is reported as a worker failure, the worker
+/// lives on (Ember catches job panics) and the slot's next job runs.
+#[test]
+fn a_panicking_job_frees_its_slot() {
+    let mut p: JobPool<u8, u32> = JobPool::new(2);
+    p.submit(1, 1, 9, Box::new(|| panic!("simulated render panic"))).unwrap();
+    let mut failed = false;
+    assert!(eventually(10, || {
+        failed |= p.try_failure().is_some();
+        failed && !p.is_queued(1)
+    }));
+    p.submit(1, 2, 9, Box::new(|| 2)).unwrap();
+    let mut got = None;
+    assert!(eventually(10, || {
+        got = got.or_else(|| p.try_recv().map(|d| d.result));
+        got.is_some()
+    }));
+    assert_eq!(got, Some(2));
+    assert_eq!(p.live_workers(), 2, "the worker survived the panic");
+}
+
+/// Deferred disk writes go through one writer with a byte budget: a burst of big renders can't queue more than the
+/// budget (each used to start a thread of its own, holding its image; issue #1522), and what was queued reaches disk.
+#[test]
+fn deferred_writes_are_bounded_and_drain_to_disk() {
+    let dir = temp_dir("deferred-budget");
+    let cache = Arc::new(PreviewCache::with_disk(1 << 30, &dir, 1 << 31));
+    let big = Arc::new(gradient(4096, 2048, 3)); // 32 MiB each
+    let keys: Vec<Hash128> = (0..24u32).map(|i| hash_bytes(&i.to_le_bytes())).collect();
+    for key in &keys {
+        cache.put_deferred(*key, big.clone());
+        assert!(cache.queued_bytes() <= MAX_QUEUED_BYTES, "{} bytes queued", cache.queued_bytes());
+    }
+    let t = std::time::Instant::now();
+    while cache.queued_bytes() > 0 && t.elapsed() < std::time::Duration::from_secs(120) {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert_eq!(cache.queued_bytes(), 0, "the queue drains");
+    assert!(cache.disk().unwrap().get(keys[0]).is_some(), "the first write reached disk");
+    // every image is still in memory, written to disk or not
+    assert!(keys.iter().all(|k| cache.get(*k).is_some()));
     let _ = std::fs::remove_dir_all(&dir);
 }
