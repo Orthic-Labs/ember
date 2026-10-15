@@ -516,6 +516,30 @@ fn remove_location_holds_for_original_and_dng_exports() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// `metadata: "NONE"` as `app.export` sends it: the JPEG carries no location or camera data
+/// (it used to be read as `all` and carry both).
+#[test]
+fn metadata_none_in_any_case_exports_no_metadata() {
+    let mut s = Session::with_demo();
+    let id = s.active().unwrap();
+    s.execute("photo.setMeta", &json!({"ids": [id.0], "gps": [48.85, 2.35], "city": "Paris"})).unwrap();
+    let export = |s: &mut Session, extra: serde_json::Value| {
+        let mut p = json!({"format": "jpeg", "longEdge": 64});
+        for (k, v) in extra.as_object().unwrap() {
+            p[k] = v.clone();
+        }
+        lightcraft_meta::extract(&export_photo(s, id, &ExportOptions::from_params(&p).unwrap(), 1).unwrap().bytes)
+    };
+    let all = export(&mut s, json!({}));
+    assert!(all.gps.is_some() && all.city.is_some(), "the default keeps everything: {all:?}");
+    for v in ["none", "NONE", "None"] {
+        let m = export(&mut s, json!({"metadata": v}));
+        assert!(m.gps.is_none() && m.city.is_none() && m.model.is_none(), "{v}: {m:?}");
+    }
+    let m = export(&mut s, json!({"metadata": "ALL", "removeLocation": true}));
+    assert!(m.gps.is_none() && m.city.is_none(), "{m:?}");
+}
+
 /// An original raw whose own metadata holds GPS is refused under "Remove location info".
 #[test]
 fn remove_location_refuses_a_raw_that_embeds_gps() {

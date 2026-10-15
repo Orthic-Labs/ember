@@ -162,6 +162,17 @@ pub enum Conflict {
     Skip,
 }
 
+impl Conflict {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "unique" => Some(Self::Unique),
+            "overwrite" => Some(Self::Overwrite),
+            "skip" => Some(Self::Skip),
+            _ => None,
+        }
+    }
+}
+
 /// A named set of `app.export` params.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ExportPreset {
@@ -191,6 +202,18 @@ pub enum SharpenFor {
     Glossy,
 }
 
+impl SharpenFor {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "none" => Some(Self::None),
+            "screen" => Some(Self::Screen),
+            "matte" => Some(Self::Matte),
+            "glossy" => Some(Self::Glossy),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SharpenAmount {
@@ -198,6 +221,17 @@ pub enum SharpenAmount {
     #[default]
     Standard,
     High,
+}
+
+impl SharpenAmount {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "low" => Some(Self::Low),
+            "standard" => Some(Self::Standard),
+            "high" => Some(Self::High),
+            _ => None,
+        }
+    }
 }
 
 /// Where a watermark sits.
@@ -634,6 +668,18 @@ pub enum MetadataPolicy {
     None,
 }
 
+impl MetadataPolicy {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "all" => Some(Self::All),
+            "allexceptcamera" => Some(Self::AllExceptCamera),
+            "copyright" => Some(Self::Copyright),
+            "none" => Some(Self::None),
+            _ => None,
+        }
+    }
+}
+
 /// Transfer curve of an HDR AVIF export (`hdrTransfer`): PQ (absolute, SDR white at 203 cd/m²) or
 /// HLG (relative to the display; BT.2100 with SDR white at signal 0.75).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -907,6 +953,10 @@ impl ExportOptions {
             let s = string(cmd, k, v)?;
             if options.iter().any(|o| o.eq_ignore_ascii_case(s)) { Ok(()) } else { Err(bad(format!("`{k}` must be one of {}", options.join("|")))) }
         };
+        // a choice `from_json` reads with the same `parse`, so what passes here is what gets exported
+        let parses = |k: &str, v: &Value, parse: fn(&str) -> bool, options: &[&str]| -> crate::Result<()> {
+            if parse(string(cmd, k, v)?) { Ok(()) } else { Err(bad(format!("`{k}` must be one of {}", options.join("|")))) }
+        };
         for (k, v) in obj {
             if v.is_null() {
                 continue;
@@ -962,17 +1012,17 @@ impl ExportOptions {
                 "naming" | "subfolder" | "path" | "dir" | "preset" => {
                     string(cmd, k, v)?;
                 }
-                "sharpen" => one_of(k, v, &["none", "screen", "matte", "glossy"])?,
-                "sharpenAmount" => one_of(k, v, &["low", "standard", "high"])?,
+                "sharpen" => parses(k, v, |s| SharpenFor::parse(s).is_some(), &["none", "screen", "matte", "glossy"])?,
+                "sharpenAmount" => parses(k, v, |s| SharpenAmount::parse(s).is_some(), &["low", "standard", "high"])?,
                 "hdrTransfer" => one_of(k, v, &["pq", "hlg"])?,
-                "conflict" => one_of(k, v, &["unique", "overwrite", "skip"])?,
+                "conflict" => parses(k, v, |s| Conflict::parse(s).is_some(), &["unique", "overwrite", "skip"])?,
                 "tiffCompression" => one_of(k, v, &["none", "lzw", "zip", "deflate"])?,
                 "jxlEffort" => one_of(k, v, &["fast", "normal"])?,
                 "dngCompression" => {
                     serde_json::from_value::<DngCompression>(v.clone())
                         .map_err(|_| bad(format!("`{k}` must be one of lossless|deflate|uncompressed")))?;
                 }
-                "metadata" => one_of(k, v, &["all", "allExceptCamera", "copyright", "none"])?,
+                "metadata" => parses(k, v, |s| MetadataPolicy::parse(s).is_some(), &["all", "allExceptCamera", "copyright", "none"])?,
                 "colorSpace" => {
                     if OutputSpace::parse(string(cmd, k, v)?).is_none() {
                         return Err(bad(format!("`{k}` must be one of srgb|displayP3|adobeRgb|proPhoto|rec2020")));
@@ -1074,12 +1124,12 @@ impl ExportOptions {
             resize: Self::resize_from_json(p),
             ppi: u("ppi").filter(|v| *v > 0).map_or(d.ppi, |v| v.min(u16::MAX as u64) as u16),
             limit_kb: u("limitKb").filter(|v| *v > 0).map(|v| v.min(u32::MAX as u64) as u32),
-            sharpen: enm(p, "sharpen").unwrap_or(d.sharpen),
-            sharpen_amount: enm(p, "sharpenAmount").unwrap_or(d.sharpen_amount),
+            sharpen: s("sharpen").and_then(SharpenFor::parse).unwrap_or(d.sharpen),
+            sharpen_amount: s("sharpenAmount").and_then(SharpenAmount::parse).unwrap_or(d.sharpen_amount),
             naming: s("naming").map_or(d.naming, str::to_string),
             start_number: u("startNumber").map_or(d.start_number, |v| v.min(999_999) as u32),
             subfolder: s("subfolder").map_or(d.subfolder, |v| v.trim().replace(['\\', ':', '\0'], "_")),
-            conflict: enm(p, "conflict").unwrap_or(d.conflict),
+            conflict: s("conflict").and_then(Conflict::parse).unwrap_or(d.conflict),
             tiff_compression: match s("tiffCompression").map(str::to_ascii_lowercase).as_deref() {
                 Some("none") => TiffCompression::None,
                 Some("lzw") => TiffCompression::Lzw,
@@ -1087,7 +1137,7 @@ impl ExportOptions {
                 _ => d.tiff_compression,
             },
             dng_compression: enm(p, "dngCompression").unwrap_or(d.dng_compression),
-            metadata: enm(p, "metadata").unwrap_or(d.metadata),
+            metadata: s("metadata").and_then(MetadataPolicy::parse).unwrap_or(d.metadata),
             remove_location: p.get("removeLocation").and_then(Value::as_bool).unwrap_or(d.remove_location),
             watermark: match p.get("watermark") {
                 Some(Value::String(t)) => Some(Watermark { text: t.clone(), ..Default::default() }),
@@ -3187,6 +3237,58 @@ mod tests {
         assert_eq!(ExportOptions::from_params(&ExportOptions::default().to_json()).unwrap(), ExportOptions::default());
         // null is "not given", as a dropped key is
         ExportOptions::from_params(&json!({"quality": 92, "longEdge": null, "watermark": null})).unwrap();
+    }
+
+    /// A choice the validation accepts is the one exported: `metadata: "NONE"` passed the
+    /// case-insensitive check, then failed the exact-case read and fell back to `all`, so GPS and
+    /// camera data went out in a file meant to carry none. `sharpen`, `sharpenAmount` and
+    /// `conflict` had the same gap.
+    #[test]
+    fn accepted_choices_are_the_ones_exported() {
+        use serde_json::json;
+        let read = |k: &str, v: &str| ExportOptions::from_params(&json!({ k: v })).map_err(|e| e.to_string());
+        let metadata = [
+            ("all", MetadataPolicy::All),
+            ("allExceptCamera", MetadataPolicy::AllExceptCamera),
+            ("copyright", MetadataPolicy::Copyright),
+            ("none", MetadataPolicy::None),
+        ];
+        for (name, want) in metadata {
+            for v in [name.to_string(), name.to_ascii_uppercase(), name.to_ascii_lowercase()] {
+                assert_eq!(read("metadata", &v).unwrap().metadata, want, "metadata: {v}");
+            }
+        }
+        for (name, want) in [("none", SharpenFor::None), ("screen", SharpenFor::Screen), ("matte", SharpenFor::Matte), ("glossy", SharpenFor::Glossy)]
+        {
+            assert_eq!(read("sharpen", &name.to_ascii_uppercase()).unwrap().sharpen, want);
+        }
+        for (name, want) in [("low", SharpenAmount::Low), ("standard", SharpenAmount::Standard), ("high", SharpenAmount::High)] {
+            assert_eq!(read("sharpenAmount", &name.to_ascii_uppercase()).unwrap().sharpen_amount, want);
+        }
+        for (name, want) in [("unique", Conflict::Unique), ("overwrite", Conflict::Overwrite), ("skip", Conflict::Skip)] {
+            assert_eq!(read("conflict", &name.to_ascii_uppercase()).unwrap().conflict, want);
+        }
+        // an explicit value nothing reads as is an error, never the permissive default
+        for v in ["", " none", "nothing", "all-except-camera"] {
+            let e = read("metadata", v).unwrap_err();
+            assert!(e.contains("`metadata` must be one of all|allExceptCamera|copyright|none"), "{v:?}: {e}");
+        }
+        assert!(read("sharpenAmount", "max").unwrap_err().contains("`sharpenAmount` must be one of low|standard|high"));
+        assert!(read("conflict", "replace").unwrap_err().contains("`conflict` must be one of unique|overwrite|skip"));
+        // absent (or null) keeps the defaults
+        let d = ExportOptions::from_params(&json!({"metadata": null})).unwrap();
+        assert_eq!(
+            (d.metadata, d.sharpen, d.sharpen_amount, d.conflict),
+            (MetadataPolicy::All, SharpenFor::None, SharpenAmount::Standard, Conflict::Unique)
+        );
+        // `removeLocation` stays independent of the policy's spelling
+        let o = ExportOptions::from_params(&json!({"metadata": "AllExceptCamera", "removeLocation": true})).unwrap();
+        assert_eq!((o.metadata, o.remove_location), (MetadataPolicy::AllExceptCamera, true));
+        // stored settings (lenient `from_json`) read the same spellings
+        assert_eq!(ExportOptions::from_json(&json!({"metadata": "None"})).metadata, MetadataPolicy::None);
+        // and `to_json` still writes what the MCP schema lists
+        let j = ExportOptions { metadata: MetadataPolicy::AllExceptCamera, conflict: Conflict::Skip, ..Default::default() }.to_json();
+        assert_eq!((j["metadata"].as_str(), j["conflict"].as_str()), (Some("allExceptCamera"), Some("skip")));
     }
 
     /// Issue #183: the `watermark` object's keys, kinds and ranges are checked (and documented in
