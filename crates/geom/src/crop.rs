@@ -77,7 +77,14 @@ impl CropGeometry {
         let s = max_inscribed_scale(w, h, self.angle, r.width(), r.height());
         let nr = Rect::from_center(c, r.width() * s, r.height() * s);
         let _ = best;
-        CropGeometry { rect: nr.scale(1.0 / w, 1.0 / h), angle: self.angle }
+        let out = CropGeometry { rect: nr.scale(1.0 / w, 1.0 / h), angle: self.angle };
+        if [out.rect.x0, out.rect.y0, out.rect.x1, out.rect.y1].iter().all(|v| v.is_finite()) {
+            return out;
+        }
+        // A rect too large for pixel maths (`inf * 0` above): the largest crop of its aspect that
+        // fits, else of the image's own.
+        let aspect = Some(self.rect.width() / self.rect.height() * (w / h)).filter(|a| a.is_finite() && *a > 0.0);
+        crop_fit_angle(w, h, self.angle, aspect)
     }
 
     /// This crop turned to `angle_deg` on a `w × h` image: kept as it is when it still fits inside
@@ -210,5 +217,17 @@ mod tests {
         let t = c.output_to_source(100.0, 100.0, 50.0, 50.0);
         let p = t.apply(Point::new(0.0, 0.0));
         assert!((p.x - 25.0).abs() < 1e-9 && (p.y - 25.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn constrained_huge_rect_is_finite_and_inside() {
+        for rect in [Rect::new(0.0, 0.0, 1e308, 1e308), Rect::new(-1e308, -1e308, 1e308, 1e308), Rect::new(0.0, 0.0, 1e308, 0.5)] {
+            for angle in [0.0, 30.0] {
+                let c = CropGeometry { rect, angle }.constrained(400.0, 300.0);
+                let r = c.rect;
+                assert!([r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()), "{rect:?} {angle}: {r:?}");
+                assert!(c.is_within_image(400.0, 300.0), "{rect:?} {angle}: {r:?}");
+            }
+        }
     }
 }

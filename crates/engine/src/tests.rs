@@ -464,6 +464,17 @@ fn rotate_aspect_of_degenerate_crop_stays_finite() {
     }
 }
 
+/// `crop.set` with a huge rect shrank it by a scale of 0 (`inf * 0`) and stored a NaN crop.
+#[test]
+fn crop_set_huge_rect_stays_finite() {
+    for rect in [[0.0, 0.0, 1e308, 1e308], [-1e308, -1e308, 1e308, 1e308]] {
+        let mut s = demo();
+        let _ = s.execute("crop.set", &json!({"rect": rect}));
+        let r = active_dev(&s).crop.geometry.rect;
+        assert!([r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite() && (-1e-6..=1.0 + 1e-6).contains(v)), "{rect:?}: {r:?}");
+    }
+}
+
 /// `mask.move` with a delta near `i64::MAX` overflowed `index + delta` (a panic wherever overflow
 /// checks are on); extreme deltas and indices now move the mask to the bottom or the top.
 #[test]
