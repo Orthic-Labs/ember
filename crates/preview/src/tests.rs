@@ -499,3 +499,26 @@ fn a_panicking_job_frees_its_slot() {
     assert_eq!(got, Some(2));
     assert_eq!(p.live_workers(), 2, "the worker survived the panic");
 }
+
+/// Deferred disk writes go through one writer with a byte budget: a burst of big renders can't queue more than the
+/// budget (each used to start a thread of its own, holding its image; issue #1522), and what was queued reaches disk.
+#[test]
+fn deferred_writes_are_bounded_and_drain_to_disk() {
+    let dir = temp_dir("deferred-budget");
+    let cache = Arc::new(PreviewCache::with_disk(1 << 30, &dir, 1 << 31));
+    let big = Arc::new(gradient(4096, 2048, 3)); // 32 MiB each
+    let keys: Vec<Hash128> = (0..24u32).map(|i| hash_bytes(&i.to_le_bytes())).collect();
+    for key in &keys {
+        cache.put_deferred(*key, big.clone());
+        assert!(cache.queued_bytes() <= MAX_QUEUED_BYTES, "{} bytes queued", cache.queued_bytes());
+    }
+    let t = std::time::Instant::now();
+    while cache.queued_bytes() > 0 && t.elapsed() < std::time::Duration::from_secs(120) {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert_eq!(cache.queued_bytes(), 0, "the queue drains");
+    assert!(cache.disk().unwrap().get(keys[0]).is_some(), "the first write reached disk");
+    // every image is still in memory, written to disk or not
+    assert!(keys.iter().all(|k| cache.get(*k).is_some()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
