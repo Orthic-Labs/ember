@@ -6,7 +6,7 @@ use lightcraft_geom::{CropGeometry, CropHandle, Point, Rect, crop_fit_angle, dra
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-use super::{CommandSpec, always, bad, bool_or, cmd, f64_or, f64_req, has_active, has_clipboard, has_selection, ok, str_param};
+use super::{CommandSpec, always, bad, bool_or, cmd, f64_or, f64_req, has_active, has_clipboard, has_selection, index_req, ok, str_param};
 use crate::{Result, Session, media::SourceLevel};
 
 fn active(s: &Session, c: &str) -> Result<PhotoId> {
@@ -145,7 +145,7 @@ fn user_preset<'a>(s: &'a mut Session, p: &Value, c: &str) -> Result<&'a mut Pre
 /// Change version `p.index` of the active photo (`f` gets it and the current settings).
 fn edit_version(s: &mut Session, p: &Value, c: &str, label: &str, f: impl FnOnce(&mut Version, std::sync::Arc<DevelopSettings>)) -> Result<Value> {
     let id = active(s, c)?;
-    let i = f64_req(p, "index", c)? as usize;
+    let i = index_req(p, "index", c)?;
     let ph = s.catalog.photo(id).ok_or_else(|| bad(c, "no photo"))?;
     let mut versions = ph.versions.clone();
     let v = versions.get_mut(i).ok_or_else(|| bad(c, "no such version"))?;
@@ -1168,14 +1168,14 @@ pub fn specs() -> Vec<CommandSpec> {
         }),
         cmd!("version.restore", "Restore Version", [], None, "{index}", has_active, |s, p| {
             let id = active(s, "version.restore")?;
-            let i = f64_req(p, "index", "version.restore")? as usize;
+            let i = index_req(p, "index", "version.restore")?;
             let v = s.catalog.photo(id).and_then(|ph| ph.versions.get(i).cloned()).ok_or_else(|| bad("version.restore", "no such version"))?;
             s.set_develop(id, (*v.settings).clone(), &format!("Restore {}", v.name))?;
             ok()
         }),
         cmd!("version.delete", "Delete Version", [], None, "{index}", has_active, |s, p| {
             let id = active(s, "version.delete")?;
-            let i = f64_req(p, "index", "version.delete")? as usize;
+            let i = index_req(p, "index", "version.delete")?;
             let mut versions = s.catalog.photo(id).map(|ph| ph.versions.clone()).unwrap_or_default();
             if i >= versions.len() {
                 return Err(bad("version.delete", "no such version"));

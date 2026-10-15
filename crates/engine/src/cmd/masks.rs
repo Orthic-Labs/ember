@@ -941,7 +941,7 @@ pub fn specs() -> Vec<CommandSpec> {
             has_active,
             |s, p| {
                 let c = "redeye.catchlight";
-                let i = super::f64_req(p, "index", c)? as usize;
+                let i = super::index_req(p, "index", c)?;
                 let id = s.active().ok_or_else(|| bad(c, "no active photo"))?;
                 let mut dd = (*s.develop_of(id).unwrap_or_default()).clone();
                 let eye = dd.red_eye.get_mut(i).ok_or_else(|| bad(c, "no such eye"))?;
@@ -956,7 +956,7 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!("redeye.delete", "Delete Red Eye Correction", [], None, "{index}", has_active, |s, p| {
             let c = "redeye.delete";
-            let i = super::f64_req(p, "index", c)? as usize;
+            let i = super::index_req(p, "index", c)?;
             let id = s.active().ok_or_else(|| bad(c, "no active photo"))?;
             let mut dd = (*s.develop_of(id).unwrap_or_default()).clone();
             if i >= dd.red_eye.len() {
