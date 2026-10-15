@@ -205,3 +205,247 @@ jobs:
           name: lightcraft-desktop-workspace-${{ github.run_id }}-${{ github.run_attempt }}-summary-candidate-${{ matrix.platform }}-${{ matrix.architecture }}-${{ needs.admission.outputs.version }}-${{ needs.admission.outputs.source_revision }}${{ needs.admission.outputs.artifact_suffix }}
           path: ${{ runner.temp }}/right-git-stage-summary/stage-summary.json
           if-no-files-found: error
+
+  windows-sign:
+    needs: [admission, candidate]
+    if: ${{ needs.admission.outputs.signed_qualification == 'true' }}
+    environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: "windows-2025"
+            platform: "windows"
+            architecture: "x86_64"
+            targetTriple: "x86_64-pc-windows-msvc"
+            node: "26.8.1"
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admission.outputs.source_revision }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+          package-manager-cache: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.24.0
+      - uses: dtolnay/rust-toolchain@f8be11a05b1d4f3fcebe6410cc16743212b999b0
+        with:
+          targets: ${{ matrix.targetTriple }}
+      - run: pnpm install --frozen-lockfile
+      - name: Initialize Windows signing stage summary
+        run: pnpm run release:stage-summary
+        env:
+          RIGHT_GIT_STAGE_ACTION: init
+          RIGHT_GIT_STAGE_ROOT: ${{ runner.temp }}/right-git-stage-summary
+          RIGHT_GIT_STAGE_EVIDENCE_ROOT: ${{ runner.temp }}/finalized-windows
+          RIGHT_GIT_STAGE: windows-sign
+          RIGHT_GIT_STAGE_PRODUCER: windows-sign-${{ matrix.architecture }}
+          RIGHT_GIT_RELEASE_VERSION: ${{ needs.admission.outputs.version }}
+          RIGHT_GIT_SOURCE_REVISION: ${{ needs.admission.outputs.source_revision }}
+          RIGHT_GIT_RELEASE_PLATFORM: ${{ matrix.platform }}
+          RIGHT_GIT_RELEASE_ARCHITECTURE: ${{ matrix.architecture }}
+          RIGHT_GIT_RUN_ID: ${{ github.run_id }}
+          RIGHT_GIT_RUN_ATTEMPT: ${{ github.run_attempt }}
+      - name: Download exact unsigned Windows candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: lightcraft-desktop-workspace-${{ github.run_id }}-${{ github.run_attempt }}-candidate-${{ matrix.platform }}-${{ matrix.architecture }}-${{ needs.admission.outputs.version }}-${{ needs.admission.outputs.source_revision }}${{ needs.admission.outputs.artifact_suffix }}
+          path: ${{ runner.temp }}/unsigned-windows-candidate
+      - name: Authenticate to Azure with GitHub OIDC
+        uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Install pinned Artifact Signing client
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tools = Join-Path $env:RUNNER_TEMP 'artifact-signing-tools'
+          New-Item -ItemType Directory -Force -Path $tools | Out-Null
+          $client = Join-Path $tools 'client.zip'
+          $sdk = Join-Path $tools 'sdk.zip'
+          Invoke-WebRequest 'https://api.nuget.org/v3-flatcontainer/microsoft.artifactsigning.client/1.0.128/microsoft.artifactsigning.client.1.0.128.nupkg' -OutFile $client
+          Invoke-WebRequest 'https://api.nuget.org/v3-flatcontainer/microsoft.windows.sdk.buildtools/10.0.26100.4188/microsoft.windows.sdk.buildtools.10.0.26100.4188.nupkg' -OutFile $sdk
+          if ((Get-FileHash $client -Algorithm SHA256).Hash -ne '74BD7D27E6CE1051409C38D9B46BC8DF0400ECD643D51FFBF2AC00869061E40B') { throw 'Artifact Signing client hash mismatch' }
+          if ((Get-FileHash $sdk -Algorithm SHA256).Hash -ne '180DEB372659029864C10A0C04787833234D64AACD1D2C0661D2C00295D8E022') { throw 'Windows SDK Build Tools hash mismatch' }
+          Expand-Archive $client (Join-Path $tools 'client')
+          Expand-Archive $sdk (Join-Path $tools 'sdk')
+          "AZURE_ARTIFACT_SIGNING_DLIB_PATH=$tools\client\bin\x64\Azure.CodeSigning.Dlib.dll" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "AZURE_SIGNTOOL_PATH=$tools\sdk\bin\10.0.26100.0\x64\signtool.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Sign & finalize Windows candidate
+        run: pnpm exec right-release build --platform win --skip-checks
+        env:
+          LEGION_UNSIGNED_CANDIDATE_ROOT: ${{ runner.temp }}/unsigned-windows-candidate
+          RIGHT_GIT_SOURCE_REVISION: ${{ needs.admission.outputs.source_revision }}
+          LEGION_SOURCE_REVISION: ${{ needs.admission.outputs.source_revision }}
+          RIGHT_GIT_RELEASE_PLATFORM: ${{ matrix.platform }}
+          RIGHT_GIT_RELEASE_ARCHITECTURE: ${{ matrix.architecture }}
+          AZURE_ARTIFACT_SIGNING_ENDPOINT: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          AZURE_ARTIFACT_SIGNING_ACCOUNT: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          AZURE_ARTIFACT_SIGNING_PROFILE: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+      - name: Finalize Windows signing stage summary
+        if: ${{ always() }}
+        run: pnpm run release:stage-summary
+        env:
+          RIGHT_GIT_STAGE_ACTION: finalize
+          RIGHT_GIT_STAGE_ROOT: ${{ runner.temp }}/right-git-stage-summary
+          RIGHT_GIT_STAGE_EVIDENCE_ROOT: ${{ runner.temp }}/finalized-windows
+          RIGHT_GIT_STAGE: windows-sign
+          RIGHT_GIT_STAGE_PRODUCER: windows-sign-${{ matrix.architecture }}
+          RIGHT_GIT_STAGE_STATUS: ${{ job.status == 'success' && 'SUCCEEDED' || 'FAILED' }}
+          RIGHT_GIT_STAGE_EXIT_CODE: ${{ job.status == 'success' && '0' || '1' }}
+          RIGHT_GIT_RELEASE_VERSION: ${{ needs.admission.outputs.version }}
+          RIGHT_GIT_SOURCE_REVISION: ${{ needs.admission.outputs.source_revision }}
+          RIGHT_GIT_RELEASE_PLATFORM: ${{ matrix.platform }}
+          RIGHT_GIT_RELEASE_ARCHITECTURE: ${{ matrix.architecture }}
+          RIGHT_GIT_RUN_ID: ${{ github.run_id }}
+          RIGHT_GIT_RUN_ATTEMPT: ${{ github.run_attempt }}
+      - name: Upload signed Windows candidate
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lightcraft-desktop-workspace-${{ github.run_id }}-${{ github.run_attempt }}-signed-windows-${{ matrix.architecture }}-${{ needs.admission.outputs.version }}-${{ needs.admission.outputs.source_revision }}${{ needs.admission.outputs.artifact_suffix }}
+          path: |
+            dist/releases/windows/**
+            .right-release/receipts/windows-*.json
+          if-no-files-found: error
+      - name: Upload Windows signing stage summary
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lightcraft-desktop-workspace-${{ github.run_id }}-${{ github.run_attempt }}-summary-windows-sign-${{ matrix.architecture }}-${{ needs.admission.outputs.version }}-${{ needs.admission.outputs.source_revision }}${{ needs.admission.outputs.artifact_suffix }}
+          path: ${{ runner.temp }}/right-git-stage-summary/stage-summary.json
+          if-no-files-found: error
+
+  macos-sign:
+    needs: [admission, candidate]
+    if: ${{ needs.admission.outputs.signed_qualification == 'true' }}
+    environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: "macos-15"
+            platform: "macos"
+            architecture: "arm64"
+            targetTriple: "aarch64-apple-darwin"
+            node: "26.8.1"
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admission.outputs.source_revision }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+          package-manager-cache: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.24.0
+      - uses: dtolnay/rust-toolchain@f8be11a05b1d4f3fcebe6410cc16743212b999b0
+        with:
+          targets: ${{ matrix.targetTriple }}
+      - run: pnpm install --frozen-lockfile
+      - name: Initialize macOS signing stage summary
+        run: pnpm run release:stage-summary
+        env:
+          RIGHT_GIT_STAGE_ACTION: init
+          RIGHT_GIT_STAGE_ROOT: ${{ runner.temp }}/right-git-stage-summary
+          RIGHT_GIT_STAGE_EVIDENCE_ROOT: ${{ runner.temp }}/finalized-macos
+          RIGHT_GIT_STAGE: macos-sign
+          RIGHT_GIT_STAGE_PRODUCER: macos-sign-${{ matrix.architecture }}
+          RIGHT_GIT_RELEASE_VERSION: ${{ needs.admission.outputs.version }}
+          RIGHT_GIT_SOURCE_REVISION: ${{ needs.admission.outputs.source_revision }}
+          RIGHT_GIT_RELEASE_PLATFORM: ${{ matrix.platform }}
+          RIGHT_GIT_RELEASE_ARCHITECTURE: ${{ matrix.architecture }}
+          RIGHT_GIT_RUN_ID: ${{ github.run_id }}
+          RIGHT_GIT_RUN_ATTEMPT: ${{ github.run_attempt }}
+      - name: Download exact unsigned macOS candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: lightcraft-desktop-workspace-${{ github.run_id }}-${{ github.run_attempt }}-candidate-${{ matrix.platform }}-${{ matrix.architecture }}-${{ needs.admission.outputs.version }}-${{ needs.admission.outputs.source_revision }}${{ needs.admission.outputs.artifact_suffix }}
+          path: ${{ runner.temp }}/unsigned-macos-candidate
+      - name: Install Apple signing identity in temporary keychain
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          certificate_path="$RUNNER_TEMP/apple-signing.p12"
+          key_path="$RUNNER_TEMP/AuthKey.p8"
+          keychain_path="$RUNNER_TEMP/apple-signing.keychain-db"
+          printf '%s' "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$certificate_path"
+          printf '%s' "$APPLE_API_KEY_BASE64" | base64 --decode > "$key_path"
+          security create-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+          security import "$certificate_path" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+          security set-key-partition-list -S apple-tool:,apple: -k "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+          security list-keychain -d user -s "$keychain_path"
+          printf 'APPLE_API_KEY_PATH=%s\n' "$key_path" >> "$GITHUB_ENV"
+      - name: Sign, notarize & finalize macOS candidate
+        run: pnpm exec right-release build --platform mac --skip-checks
+        env:
+          LEGION_UNSIGNED_CANDIDATE_ROOT: ${{ runner.temp }}/unsigned-macos-candidate
+          RIGHT_GIT_SOURCE_REVISION: ${{ needs.admission.outputs.source_revision }}
+          LEGION_SOURCE_REVISION: ${{ needs.admission.outputs.source_revision }}
+          RIGHT_GIT_RELEASE_PLATFORM: ${{ matrix.platform }}
+          RIGHT_GIT_RELEASE_ARCHITECTURE: ${{ matrix.architecture }}
+          APPLE_DEVELOPER_ID: ${{ vars.APPLE_DEVELOPER_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      - name: Finalize macOS signing stage summary
+        if: ${{ always() }}
+        run: pnpm run release:stage-summary
+        env:
+          RIGHT_GIT_STAGE_ACTION: finalize
+          RIGHT_GIT_STAGE_ROOT: ${{ runner.temp }}/right-git-stage-summary
+          RIGHT_GIT_STAGE_EVIDENCE_ROOT: ${{ runner.temp }}/finalized-macos
+          RIGHT_GIT_STAGE: macos-sign
+          RIGHT_GIT_STAGE_PRODUCER: macos-sign-${{ matrix.architecture }}
+          RIGHT_GIT_STAGE_STATUS: ${{ job.status == 'success' && 'SUCCEEDED' || 'FAILED' }}
+          RIGHT_GIT_STAGE_EXIT_CODE: ${{ job.status == 'success' && '0' || '1' }}
+          RIGHT_GIT_RELEASE_VERSION: ${{ needs.admission.outputs.version }}
+          RIGHT_GIT_SOURCE_REVISION: ${{ needs.admission.outputs.source_revision }}
+          RIGHT_GIT_RELEASE_PLATFORM: ${{ matrix.platform }}
+          RIGHT_GIT_RELEASE_ARCHITECTURE: ${{ matrix.architecture }}
+          RIGHT_GIT_RUN_ID: ${{ github.run_id }}
+          RIGHT_GIT_RUN_ATTEMPT: ${{ github.run_attempt }}
+      - name: Upload signed & notarized macOS candidate
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lightcraft-desktop-workspace-${{ github.run_id }}-${{ github.run_attempt }}-signed-macos-${{ matrix.architecture }}-${{ needs.admission.outputs.version }}-${{ needs.admission.outputs.source_revision }}${{ needs.admission.outputs.artifact_suffix }}
+          path: |
+            dist/releases/mac/**
+            .right-release/receipts/macos-*.json
+          if-no-files-found: error
+      - name: Upload macOS signing stage summary
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lightcraft-desktop-workspace-${{ github.run_id }}-${{ github.run_attempt }}-summary-macos-sign-${{ matrix.architecture }}-${{ needs.admission.outputs.version }}-${{ needs.admission.outputs.source_revision }}${{ needs.admission.outputs.artifact_suffix }}
+          path: ${{ runner.temp }}/right-git-stage-summary/stage-summary.json
+          if-no-files-found: error
+      - name: Remove Apple signing material
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/apple-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/apple-signing.p12" "$RUNNER_TEMP/AuthKey.p8"

@@ -54,7 +54,7 @@
         "architecture": "x86_64"
       }
     ],
-    "signWindows": false,
-    "signMacos": false
+    "signWindows": true,
+    "signMacos": true
   }
 }
