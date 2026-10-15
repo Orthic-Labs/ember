@@ -2,6 +2,14 @@
 
 ## 2026-10-15
 
+### The GPU no longer runs out of memory and switches itself off
+- Renders now queue for the graphics card's memory instead of all starting at once (upstream issue #1764). Importing
+  or exporting many large raws used to start up to seven renders together; on a card with little memory they ran
+  out, and an unusable buffer left behind by one of them then switched the GPU off for the rest of the session.
+  Each render now waits its turn for room, in the order it asked. The room adapts to the card: it halves when the
+  card runs out and grows back as renders succeed. A render that still runs out is retried with the card to itself
+  before the CPU takes over, and running out of memory never switches the GPU off.
+
 ### Imported radial masks on the right side
 - Radial masks brought over from the reference editor (catalog import, XMP sidecars, edits inside DNGs and presets) now
   apply their effect inside the circle, as the reference editor does, instead of outside it (upstream issue #1815). A mask inverted in
