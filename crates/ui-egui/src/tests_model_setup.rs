@@ -69,14 +69,13 @@ fn accepting_a_local_model_installs_in_background_and_resumes_the_pending_action
     assert_eq!(result["started"], "local-install");
     assert_eq!(app.ui.dialog, Some(Dialog::Settings { tab: "denoise".into() }));
     let ctx = egui::Context::default();
-    for _ in 0..600 {
+    // Wait on the outcome, not a fixed count: loaded CI runners can take seconds to copy and verify the model.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while amount(&app, raw) != 50.0 && std::time::Instant::now() < deadline {
         crate::panels::denoise::pump(&mut app, &ctx);
-        if app.session.denoise_photo_state(raw) != lightcraft_engine::denoise::PhotoState::NoModel {
-            break;
-        }
+        resume(&mut app);
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
-    resume(&mut app);
     assert_eq!(amount(&app, raw), 50.0);
     assert!(dir.join("denoise/test-smoothing/model.onnx").is_file());
     assert!(path.is_file(), "a user-supplied original is preserved");
