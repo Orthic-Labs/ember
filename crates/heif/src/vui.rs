@@ -44,13 +44,14 @@ pub fn coded_sizes(parameter_sets: &[&[u8]]) -> Option<Vec<(u32, u32)>> {
         .map(|sps| {
             let rbsp = unescape(sps.get(2..)?);
             let r = &mut Bits { data: &rbsp, pos: 0 };
-            sps_size(r)
+            sps_size(r).map(|(w, h, _)| (w, h))
         })
         .collect()
 }
 
-/// Reads an SPS up to and including the picture size, leaving `r` after it.
-fn sps_size(r: &mut Bits) -> Option<(u32, u32)> {
+/// Reads an SPS up to and including the picture size, leaving `r` after it: width, height and
+/// `sps_max_sub_layers_minus1`.
+fn sps_size(r: &mut Bits) -> Option<(u32, u32, u32)> {
     r.skip(4)?; // sps_video_parameter_set_id
     let max_sub_layers_minus1 = r.u(3)?;
     if max_sub_layers_minus1 > 6 {
@@ -64,7 +65,7 @@ fn sps_size(r: &mut Bits) -> Option<(u32, u32)> {
     }
     let width = r.ue()?; // pic_width_in_luma_samples
     let height = r.ue()?; // pic_height_in_luma_samples
-    Some((width, height))
+    Some((width, height, max_sub_layers_minus1))
 }
 
 /// Removes emulation prevention bytes (`00 00 03` → `00 00`).
@@ -199,7 +200,7 @@ fn st_ref_pic_set(r: &mut Bits, idx: usize, num_delta_pocs: &[u32]) -> Option<u3
 
 fn parse_sps(rbsp: &[u8]) -> Option<Signal> {
     let r = &mut Bits { data: rbsp, pos: 0 };
-    sps_size(r)?;
+    let (_, _, max_sub_layers_minus1) = sps_size(r)?;
     if r.flag()? {
         for _ in 0..4 {
             r.ue()?; // conf_win_*_offset
