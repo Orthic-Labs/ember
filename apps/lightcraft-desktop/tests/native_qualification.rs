@@ -214,6 +214,15 @@ fn assert_library_header_contrast(control: &rightkit_qa::control::Control, mode:
     let title_ratio = colors["titleRatio"].as_f64().unwrap_or(0.0);
     let action_ratios = colors["actionRatios"].as_array().expect("library Import & Export colors must be reported");
     eprintln!("[qa] {mode} library header contrast: {colors}");
+    if colors["titleRatio"].as_f64().unwrap_or(0.0) < 4.5 {
+        // Tell a stale cascade (a product bug) from hidden WKWebView style invalidation lag:
+        // measure again a few frames later before failing on the first reading.
+        sleep(Duration::from_millis(250));
+        let later = control.eval(
+            "return (() => { const workspace = document.querySelector('.lc-library-workspace'); const title = document.querySelector('.lc-library-title h1'); const root = getComputedStyle(document.documentElement); return { theme: document.documentElement.getAttribute('data-theme'), rootInk: root.getPropertyValue('--rk-ink').trim(), rootText: root.getPropertyValue('--lc-text').trim(), workspaceText: workspace ? getComputedStyle(workspace).getPropertyValue('--lc-text').trim() : null, workspaceColor: workspace ? getComputedStyle(workspace).color : null, titleColor: title ? getComputedStyle(title).color : null }; })();",
+        );
+        eprintln!("[qa] {mode} library header contrast 250 ms later: {later:?}");
+    }
     assert!(title_ratio >= 4.5, "{mode} library title contrast must meet WCAG AA: {colors}");
     assert!(
         action_ratios.len() >= 2 && action_ratios.iter().all(|ratio| ratio.as_f64().is_some_and(|value| value >= 4.5)),

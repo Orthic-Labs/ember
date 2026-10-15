@@ -12,9 +12,10 @@ import { RetainedLayout } from './layout/RetainedLayout';
 import { DialogHost } from './dialogs';
 import { BackgroundActivity } from './BackgroundActivity';
 import { APP_NAME } from './branding';
+import { bootTheme } from './bootTheme';
 import './app.css';
 
-const themeStore = createThemeStore({ storageKey: 'lightcraft.theme', storage: null });
+const themeStore = createThemeStore({ storageKey: 'lightcraft.theme', storage: null, defaultChoice: bootTheme() });
 const shell = createShell();
 
 const sourceIcons: Record<string, 'library' | 'search' | 'import' | 'export' | 'chevron'> = {
