@@ -143,7 +143,13 @@ pub(crate) fn table(b: &[u8], order: ByteOrder) -> Result<Huffman> {
 
 /// Decode a `w × h` Huffman-coded image.
 pub(crate) fn decode_huffman(src: &[u8], h: &Huffman, w: usize, hgt: usize, bits_per: u32) -> Result<Vec<u16>> {
-    let mut out = vec![0u16; w * hgt];
+    // every sample takes at least one bit: a stream too short for the declared size is refused before its picture
+    // is allocated, so a few bytes can't ask for gigabytes (issue #1512)
+    let samples = w.checked_mul(hgt).ok_or(RawError::Limit("image too large"))?;
+    if (src.len() as u64).saturating_mul(8) < samples as u64 {
+        return Err(RawError::Corrupt(format!("PEF: {w} x {hgt} samples need more than the {} bytes of data there", src.len())));
+    }
+    let mut out = vec![0u16; samples];
     let mut bits = Bits::new(src);
     let mut vpred = [[0i32; 2]; 2];
     let max = (1i32 << bits_per.min(16)) - 1;
@@ -361,6 +367,18 @@ mod tests {
         }
         b.extend(codes.iter().map(|c| c.1));
         (b, codes)
+    }
+
+    /// A compressed PEF declaring far more samples than its data could hold (one bit each at least) is refused
+    /// before its picture is allocated (issue #1512).
+    #[test]
+    fn a_stream_too_short_for_its_size_is_refused_before_allocating() {
+        let (tb, _) = test_table();
+        let h = table(&tb, ByteOrder::Big).unwrap();
+        let t = std::time::Instant::now();
+        let r = decode_huffman(&[0x55; 4096], &h, 30_000, 30_000, 12);
+        assert!(matches!(r, Err(RawError::Corrupt(ref m)) if m.contains("need more")), "{r:?}");
+        assert!(t.elapsed() < std::time::Duration::from_secs(1));
     }
 
     fn encode(px: &[u16], w: usize, codes: &[(u16, u8)]) -> Vec<u8> {

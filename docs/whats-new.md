@@ -11,9 +11,16 @@
 ## 2026-10-14
 
 ### Reliability
+<<<<<<< ours
 - Import ▸ Move (and a move to another volume) now writes the new file's folder entry to disk before it removes the
   original, and keeps the original when that fails (issue #1501). The copy's contents were already synced, but not
   the name in its folder, so a crash right after the move could in principle keep the deletion and lose the copy.
+=======
+- A damaged or crafted raw can no longer make LightCraft set aside gigabytes of memory before finding out the file is
+  bad (issue #1512): a compressed PEF whose data is too short for the size it declares, an uncompressed TIFF-based
+  raw whose tile claims far more samples than it holds, and an ARW6 with a broken tile are refused first. All 74
+  files in the test corpus still decode.
+>>>>>>> theirs
 
 ### Hard-edged Heal and Clone spots
 - A spot with Feather at 0 no longer draws black pixels exactly on its radius. This also fixes spots at 0% Opacity
