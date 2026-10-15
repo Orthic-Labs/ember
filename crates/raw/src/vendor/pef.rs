@@ -243,7 +243,12 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         tiff.exif().and_then(|e| e.get(t::MAKER_NOTE)).and_then(|e| makernote::parse_makernote(bytes, e.offset, e.count() as u64, tiff.order, &make));
     let pair = |tag: u16| mn.as_ref().and_then(|m| m.ifd.u64s(tag)).filter(|v| v.len() == 2).map(|v| (v[0] as usize, v[1] as usize));
     let tagged = match (pair(CROP_ORIGIN), pair(CROP_SIZE)) {
-        (Some((x, y)), Some((cw, ch))) if cw > 0 && ch > 0 && x + cw <= w && y + ch <= hgt => Some(Rect::new(x, y, cw, ch)),
+        // checked: the tags are file data; `x + cw` on a hostile value would wrap past the bounds
+        (Some((x, y)), Some((cw, ch)))
+            if cw > 0 && ch > 0 && x.checked_add(cw).is_some_and(|end| end <= w) && y.checked_add(ch).is_some_and(|end| end <= hgt) =>
+        {
+            Some(Rect::new(x, y, cw, ch))
+        }
         _ => None,
     };
     // without crop tags the image area is found from the samples (dark borders)
