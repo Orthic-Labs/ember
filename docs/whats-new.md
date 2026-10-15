@@ -29,6 +29,13 @@
   fails with "missing file record" (upstream issue #1588). That image is left out with a warning (the first 20 are
   named, then counted) and the rest of the catalog imports.
 
+### Nikon D600, D610 and D5000
+- Raws from the Nikon D600, D610 and D5000 no longer show a bright line down the right edge (upstream issue #1627). Their
+  sensor data runs a few columns of filler past the picture, which stayed in the image; these bodies now develop
+  at the camera JPEG's size (6016 × 4016 for the D600 and D610, 4288 × 2848 for the D5000, as the D90 already
+  did). On the D600 and D610 the white level is also measured inside the picture, so the filler can't pass for
+  clipped highlights.
+
 ### Hard-edged Heal and Clone spots
 - A spot with Feather at 0 no longer draws black pixels exactly on its radius. This also fixes spots at 0% Opacity
   changing pixels along their edge. The hard edge now leaves pixels on the radius unchanged.
