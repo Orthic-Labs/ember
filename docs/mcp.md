@@ -24,7 +24,12 @@ it open, `--library` on the same folder fails with "This library is already open
 the app is not running yet and connects on the first call (and reconnects if the app restarts).
 A request is sent again only when it never reached the app. If the connection drops after a request
 was sent but before its reply, the tool fails with "the outcome is unknown" and nothing is resent, so a
-command such as undo can't run twice: check the app's state before retrying.
+command such as undo can't run twice: check the app's state before retrying. Replies must be
+newline-terminated, at most 64 MiB before the newline (including encoded previews/screenshots),
+and carry the request's integer `id`, a boolean `ok`, and either a `result` or a string `error`.
+A malformed, incomplete, oversized or mismatched reply also closes the connection and reports
+an unknown outcome without resending. An idless `ok: false` with a string `error` is preserved
+as a pre-dispatch refusal (for example, too many control connections); the next call reconnects.
 
 Logs go to stderr; stdout carries only protocol messages.
 
