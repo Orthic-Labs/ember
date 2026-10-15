@@ -7078,6 +7078,8 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-winrt-notification",
+ "webview2-com",
+ "windows 0.62.2",
 ]
 
 [[package]]
