@@ -257,6 +257,7 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
   const snapshotRef = useRef<DesktopSnapshot | null>(null);
   const dialogRef = useRef<DialogState | null>(null);
   const prefHydrated = useRef(false);
+  const savedUi = useRef<UiState | null>(null);
   const startupViewApplied = useRef(false);
   const enginePrefsApplied = useRef<{ gpu: boolean; memoryMb: number } | null>(null);
   const refreshInFlight = useRef<Promise<void> | null>(null);
@@ -346,7 +347,23 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isSecondary || !prefHydrated.current) return;
-    const timer = window.setTimeout(() => { void savePreferences({ ui: ui as unknown as JsonObject }).catch((reason: unknown) => setError(messageOf(reason))); }, 350);
+    // Save only the fields this window changed. Writing the whole UI state back would
+    // overwrite preferences patched from elsewhere (agents, the control channel) with
+    // the copy this window hydrated from.
+    const saved = savedUi.current;
+    if (!saved) {
+      savedUi.current = ui;
+      return;
+    }
+    const patch = Object.fromEntries(
+      Object.entries(ui).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(saved[key as keyof UiState])),
+    ) as Partial<UiState>;
+    if (Object.keys(patch).length === 0) return;
+    const timer = window.setTimeout(() => {
+      void savePreferences({ ui: patch as unknown as JsonObject })
+        .then(() => { savedUi.current = { ...(savedUi.current ?? saved), ...patch }; })
+        .catch((reason: unknown) => setError(messageOf(reason)));
+    }, 350);
     return () => window.clearTimeout(timer);
   }, [isSecondary, ui]);
 
