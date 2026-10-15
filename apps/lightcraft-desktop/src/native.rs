@@ -1197,10 +1197,25 @@ pub fn run() {
             builder
         }
     };
-    if let Err(error) = builder.run(context) {
-        startup_window_failed();
-        eprintln!("lightcraft desktop failed: {error}");
+    #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
+    let mut app = match builder.build(context) {
+        Ok(app) => app,
+        Err(error) => {
+            startup_window_failed();
+            eprintln!("lightcraft desktop failed: {error}");
+            return;
+        }
+    };
+    // `setup` runs only once the event loop is Ready, after launch, so QA hosts set the accessory
+    // policy here too: tao applies it as the app finishes launching, before it can take the front.
+    #[cfg(target_os = "macos")]
+    {
+        let args: Vec<String> = std::env::args().collect();
+        if runtime_modes(&args).0 || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref()) {
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+        }
     }
+    app.run(|_, _| {});
 }
 
 #[cfg(test)]
