@@ -786,10 +786,11 @@ pub fn specs() -> Vec<CommandSpec> {
             let (w, h) = crop_dims(s, id);
             edit(s, "crop.rotateAspect", "Rotate Crop", |d| {
                 let r = d.crop.geometry.rect_px(w, h);
-                let a = r.height() / r.width();
+                // a degenerate crop has no aspect to rotate: fall back to the image's own
+                let a = Some(r.height() / r.width()).filter(|a| a.is_finite() && *a > 0.0);
                 d.crop.aspect = d.crop.aspect.map(|(x, y)| (y, x));
                 let angle = d.crop.geometry.angle;
-                d.crop.geometry = crop_fit_angle(w, h, angle, Some(a));
+                d.crop.geometry = crop_fit_angle(w, h, angle, a);
                 Ok(())
             })
         }),

@@ -449,6 +449,21 @@ fn degenerate_crops_render_with_spots_and_masks() {
     }
 }
 
+/// `crop.rotateAspect` on a crop of no size took its aspect from 0/0 = NaN and stored a NaN crop
+/// rectangle; it now falls back to the image's own aspect, a finite crop inside the image.
+#[test]
+fn rotate_aspect_of_degenerate_crop_stays_finite() {
+    for rect in [[0.5, 0.5, 0.5, 0.5], [0.2, 0.2, 0.2, 0.8], [0.2, 0.2, 0.8, 0.2]] {
+        let mut s = demo();
+        s.execute("crop.set", &json!({"rect": rect})).unwrap();
+        s.execute("crop.rotateAspect", &json!({})).unwrap();
+        let r = active_dev(&s).crop.geometry.rect;
+        assert!([r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()), "{rect:?}: {r:?}");
+        assert!(r.width() > 0.0 && r.height() > 0.0, "{rect:?}: {r:?}");
+        assert!(r.x0 >= 0.0 && r.y0 >= 0.0 && r.x1 <= 1.0 && r.y1 <= 1.0, "{rect:?}: {r:?}");
+    }
+}
+
 /// `mask.move` with a delta near `i64::MAX` overflowed `index + delta` (a panic wherever overflow
 /// checks are on); extreme deltas and indices now move the mask to the bottom or the top.
 #[test]
