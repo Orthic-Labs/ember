@@ -348,6 +348,24 @@ fn snapshot_script_failure_exits_non_zero() {
     assert_eq!((d.width, d.height), (320, 200));
 }
 
+/// A script line whose `params` is not an object must be an error, never a panic: the
+/// `ui.screenshot`-without-a-path branch used to index (`params["path"] = …`) an array and abort
+/// the whole script.
+#[test]
+fn snapshot_script_with_non_object_params_is_an_error() {
+    let script = tmp("snap-bad-params.jsonl");
+    let out = tmp("snap-bad-params.png");
+    std::fs::write(&script, format!("{}\n", json!({"method": "ui.screenshot", "params": [1]}))).unwrap();
+    let o = Command::new(BIN)
+        .args(["snapshot", "--demo", "--script", script.to_str().unwrap(), "-o", out.to_str().unwrap(), "--size", "320x200"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&o.stderr);
+    assert!(!o.status.success(), "{stderr}");
+    assert!(!stderr.contains("panicked"), "a bad `params` must be an error, not a panic: {stderr}");
+    assert!(stderr.contains("`params` must be a JSON object"), "{stderr}");
+}
+
 #[test]
 fn snapshot_ui_zoom_keeps_requested_pixel_dimensions() {
     let script = tmp("snap-ui-zoom.jsonl");

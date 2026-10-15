@@ -957,7 +957,17 @@ fn snapshot(args: &[String]) -> Result<(), String> {
                         match next_path(&mut shots) {
                             Some(p) => {
                                 wrote_output = true;
-                                params["path"] = json!(p);
+                                // `params` is untrusted script JSON: `params["path"] = …` panics on
+                                // an array or a string. Only an object (or null, like an absent
+                                // `params`) may take the path.
+                                if params.is_null() {
+                                    params = json!({});
+                                }
+                                if let Some(o) = params.as_object_mut() {
+                                    o.insert("path".into(), json!(p));
+                                } else {
+                                    return Err(format!("{script}:{}: ui.screenshot: `params` must be a JSON object", n + 1));
+                                }
                             }
                             None => return Err(format!("{script}:{}: ui.screenshot needs a `path` (or give -o)", n + 1)),
                         }
