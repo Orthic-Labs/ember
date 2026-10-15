@@ -20,7 +20,7 @@ fn can_merge(s: &Session) -> std::result::Result<(), String> {
 
 fn run(s: &mut Session, id: &str, p: &Value) -> Result<Value> {
     let (kind, finish) = crate::merge::parse(id, p)?;
-    let ids: Vec<PhotoId> = s.targets(p);
+    let ids: Vec<PhotoId> = s.targets(p)?;
     if !bool_or(p, "preview", false) {
         return s.merge_now(kind, finish, &ids);
     }

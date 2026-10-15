@@ -1678,3 +1678,35 @@ fn presets_validate_groups_on_create_and_update() {
     assert_eq!(p_after_omitted.settings["light"]["exposure"], -1.0);
     assert_eq!(p_after_omitted.settings["color"]["vibrance"], -20.0);
 }
+
+/// A call that names its photos with a malformed `id` or `ids` (a string, a mixed list) is refused and changes
+/// nothing; it used to act on the selection, or on the valid part of the list (issue #1506). Leaving the targets
+/// out still means the selection.
+#[test]
+fn malformed_photo_targets_are_refused_not_widened() {
+    use lightcraft_catalog::PhotoId;
+    let mut s = Session::with_demo();
+    let ids: Vec<u64> = s.catalog.photos().take(3).map(|p| p.id.0).collect();
+    s.execute("library.select", &json!({"ids": [ids[0], ids[1]]})).unwrap();
+    let rating = |s: &Session, i: u64| s.catalog.photo(PhotoId(i)).unwrap().rating;
+    let before: Vec<u8> = ids.iter().map(|i| rating(&s, *i)).collect();
+    for bad in [
+        json!({"rating": 5, "id": "5"}),
+        json!({"rating": 5, "ids": [ids[2], "x"]}),
+        json!({"rating": 5, "ids": ids[2].to_string()}),
+        json!({"rating": 5, "id": -1}),
+    ] {
+        let err = s.execute("photo.rate", &bad).unwrap_err();
+        assert!(matches!(&err, crate::EngineError::BadParams { cmd, .. } if cmd == "photo.rate"), "{bad}: {err}");
+        assert_eq!(ids.iter().map(|i| rating(&s, *i)).collect::<Vec<_>>(), before, "{bad} changed a rating");
+    }
+    let snapshot = s.catalog.to_snapshot();
+    assert!(s.execute("photo.deletePermanently", &json!({"id": "5"})).is_err());
+    assert_eq!(s.catalog.to_snapshot(), snapshot, "nothing deleted");
+    // no targets, or a null one: the selection
+    s.execute("photo.rate", &json!({"rating": 4, "id": null})).unwrap();
+    assert_eq!((rating(&s, ids[0]), rating(&s, ids[1]), rating(&s, ids[2])), (4, 4, before[2]));
+    // a preset's id is not a photo target
+    let preset = s.presets.first().unwrap().id.clone();
+    s.execute("preset.apply", &json!({"id": preset})).unwrap();
+}

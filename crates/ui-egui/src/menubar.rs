@@ -643,7 +643,7 @@ fn expanded(app: &LightcraftApp, name: &str) -> Option<Vec<MenuNode>> {
             v
         }
         "Add to Album" => {
-            let targets = app.session.targets(&Value::Null);
+            let targets = app.session.selected();
             let sel = !targets.is_empty();
             // albums hold library photos (issue #684): a Local-only selection is told what to do first
             let local_only = crate::panels::grid::local_only(app, &targets);

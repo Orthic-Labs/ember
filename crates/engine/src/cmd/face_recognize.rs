@@ -751,7 +751,7 @@ mod imp {
         const C: &str = "faces.suggest";
         let embedder = current(s, C)?;
         collect(s);
-        let targets = s.targets(p);
+        let targets = s.targets(p)?;
         let model_threshold = embedder.manifest().thresholds.match_cosine;
         let num = |k: &str| p.get(k).and_then(Value::as_f64).filter(|v| v.is_finite()).map(|v| v as f32);
         let threshold = num("threshold").or(model_threshold).unwrap_or(DEFAULT_THRESHOLD);

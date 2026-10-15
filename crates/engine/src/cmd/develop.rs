@@ -281,7 +281,7 @@ pub fn specs() -> Vec<CommandSpec> {
             })
         }),
         cmd!("develop.reset", "Reset Edits", ["Photo"], Some("Cmd+Shift+R"), "{ids?}", has_selection, |s, p| {
-            let ids = s.targets(p);
+            let ids = s.targets(p)?;
             let ops = ids
                 .iter()
                 .filter_map(|id| s.develop_of(*id).map(|d| (*id, d)))
@@ -331,7 +331,7 @@ pub fn specs() -> Vec<CommandSpec> {
                     let targets = match named_photos(s, p, C)? {
                         Some(ids) if !ids.iter().any(|id| outdated(s, *id)) => return Err(crate::EngineError::Disabled(C.into(), already_current())),
                         Some(ids) => ids,
-                        None => s.targets(p),
+                        None => s.targets(p)?,
                     };
                     let ops: Vec<Op> = targets
                         .into_iter()
@@ -919,7 +919,7 @@ pub fn specs() -> Vec<CommandSpec> {
                     s.previous_active.filter(|id| s.catalog.photo(*id).is_some_and(|ph| !ph.deleted)).ok_or_else(|| bad(c, "no previous photo"))?;
                 let groups = groups_param(p, c)?.unwrap_or_else(|| s.copy_groups.clone());
                 let partial = lightcraft_develop::extract_groups(&s.develop_of(prev).unwrap_or_default(), &groups);
-                let ids: Vec<PhotoId> = s.targets(p).into_iter().filter(|id| *id != prev).collect();
+                let ids: Vec<PhotoId> = s.targets(p)?.into_iter().filter(|id| *id != prev).collect();
                 let ops = ids
                     .iter()
                     .filter_map(|id| s.develop_of(*id).map(|d| (*id, d)))
@@ -946,7 +946,7 @@ pub fn specs() -> Vec<CommandSpec> {
                     let full = lightcraft_develop::apply_partial(&DevelopSettings::default(), &clip, 1.0);
                     clip = lightcraft_develop::extract_groups(&full, &only);
                 }
-                let ids = s.targets(p);
+                let ids = s.targets(p)?;
                 let ops = ids
                     .iter()
                     .filter_map(|id| s.develop_of(*id).map(|d| (*id, d)))
@@ -998,7 +998,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 let delta = f64_req(p, "delta", c)?;
                 let label = format!("Quick Develop: {}", spec.label);
                 let ops: Vec<Op> = s
-                    .targets(p)
+                    .targets(p)?
                     .into_iter()
                     .filter_map(|id| s.develop_of(id).map(|d| (id, d)))
                     .filter_map(|(id, d)| {
@@ -1051,7 +1051,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 };
                 let r_ev = gathered(s, reference).ok_or_else(|| bad(c, "the active photo has no shutter / aperture / ISO"))?;
                 let r_slider = s.develop_of(reference).map(|d| d.light.exposure).unwrap_or(0.0);
-                let ids: Vec<PhotoId> = s.targets(p).into_iter().filter(|x| *x != reference).collect();
+                let ids: Vec<PhotoId> = s.targets(p)?.into_iter().filter(|x| *x != reference).collect();
                 let (mut ops, mut skipped) = (Vec::new(), Vec::new());
                 for id in ids {
                     let (Some(ev), Some(d)) = (gathered(s, id), s.develop_of(id)) else {
@@ -1086,7 +1086,8 @@ pub fn specs() -> Vec<CommandSpec> {
             let pid = str_param(p, "id").ok_or_else(|| bad("preset.apply", "missing id"))?;
             let preset = s.presets.iter().find(|x| x.id == pid).cloned().ok_or_else(|| bad("preset.apply", format!("unknown preset `{pid}`")))?;
             let amount = f64_or(p, "amount", 100.0).clamp(0.0, 200.0) / 100.0;
-            let ids = s.targets(p);
+            // `id` names the preset here: the photos are `ids`, else the selection
+            let ids = s.targets(&json!({"ids": p.get("ids")}))?;
             let ops = ids
                 .iter()
                 .filter_map(|id| s.develop_of(*id).map(|d| (*id, d)))

@@ -119,7 +119,7 @@ impl MergePreviews {
         }
         values.insert("preview".into(), Value::Bool(true));
         let (kind, finish) = lightcraft_engine::merge::parse(&request.command, &params).map_err(|error| error.to_string())?;
-        let ids = session.targets(&params);
+        let ids = session.targets(&params).map_err(|error| error.to_string())?;
         if ids.len() > MAX_IDS {
             return Err(format!("merge preview accepts at most {MAX_IDS} photos"));
         }

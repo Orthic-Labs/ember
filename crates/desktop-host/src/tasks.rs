@@ -266,7 +266,7 @@ impl Tasks {
             }
             ids
         } else if session.selection.ids.len() > 1 {
-            session.targets(params)
+            session.targets(params).map_err(|error| error.to_string())?
         } else {
             session.visible_cloned()
         };
@@ -834,7 +834,7 @@ impl Tasks {
             }
         }
         let (kind, finish) = lightcraft_engine::merge::parse(command, params).map_err(|error| error.to_string())?;
-        let ids = session.targets(params);
+        let ids = session.targets(params).map_err(|error| error.to_string())?;
         for id in &ids {
             crate::validate_id(id.0)?;
         }

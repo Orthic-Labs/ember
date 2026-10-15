@@ -22,7 +22,7 @@ pub(crate) fn rename_preview(
 ) -> (Option<Vec<lightcraft_engine::rename::RenamePlan>>, usize) {
     use std::hash::{Hash, Hasher};
     type Rows = std::sync::Arc<std::sync::Mutex<Option<Vec<lightcraft_engine::rename::RenamePlan>>>>;
-    let ids = app.session.targets(&json!({}));
+    let ids = app.session.selected();
     let photos = lightcraft_engine::rename::rename_photos(&app.session.catalog, &ids);
     let total = photos.len();
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -71,7 +71,7 @@ fn watermark_preview(
     type Base = std::sync::Arc<std::sync::Mutex<(u8, Option<Result<lightcraft_raster::Rgba8, String>>)>>;
     type Shown = (u64, u8, lightcraft_engine::export::Watermark, usize, egui::TextureHandle);
     let t = Tokens::get(ui.ctx());
-    let Some(&id) = app.session.targets(&json!({})).first() else { return };
+    let Some(&id) = app.session.selected().first() else { return };
     let Some(photo) = app.session.catalog.photo(id).cloned() else { return };
     let (out_w, out_h) = lightcraft_engine::export::output_size(&photo, &lightcraft_engine::export::ExportOptions { resize, ..Default::default() });
     let export_short = out_w.min(out_h);
@@ -438,7 +438,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     );
                 }
                 Dialog::CaptureTime { mode, time, days, hours, minutes, zone } => {
-                    let n = app.session.targets(&json!({})).len();
+                    let n = app.session.selected().len();
                     field(ui, "Change", |ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
                         for (i, (label, m)) in [("Set date & time", "set"), ("Shift by", "shift"), ("Time zone", "zone")].iter().enumerate() {
@@ -522,7 +522,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     );
                 }
                 Dialog::Rename { template, start } => {
-                    let n = app.session.targets(&json!({})).len();
+                    let n = app.session.selected().len();
                     ui.label(egui::RichText::new(crate::i18n::tr_format!("{n} photo{}", if n == 1 { "" } else { "s" }, n = n)).color(t.text_dim));
                     let template_id = egui::Id::new("rename-template");
                     let tags_open = field(ui, "Template", |ui| {
@@ -613,7 +613,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                         confirm = true;
                     }
                     // as in Lightroom, the option is only there when something is selected
-                    if !*folder && !app.session.targets(&json!({})).is_empty() {
+                    if !*folder && !app.session.selected().is_empty() {
                         ui.add_space(6.0);
                         let r = ui.checkbox(include_selected, crate::i18n::tr("Include selected photos"));
                         crate::widgets::register(ui.ctx(), "check:albumIncludeSelected", r.rect);
@@ -632,7 +632,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 }
                 Dialog::CopySettings { groups } => group_checklist(ui, "copyGroup", groups),
                 Dialog::PasteSettings { groups } => {
-                    let n = app.session.targets(&json!({})).len();
+                    let n = app.session.selected().len();
                     ui.label(
                         egui::RichText::new(crate::i18n::tr_format!("Paste into {n} photo{} — only settings that were copied are pasted", if n == 1 { "" } else { "s" }, n = n))
                             .color(t.text_dim),
@@ -642,7 +642,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 Dialog::ContactSheet { options } => {
                     options.columns = options.columns.clamp(1, 8);
                     options.rows = options.rows.clamp(1, 10);
-                    let n = app.session.targets(&json!({})).len();
+                    let n = app.session.selected().len();
                     ui.label(format!("{n} selected photos · {} pages", n.div_ceil(options.columns * options.rows)));
                     field(ui, "Paper", |ui| {
                         egui::ComboBox::from_id_salt("contactSheetPaper").selected_text(&options.paper).show_ui(ui, |ui| {

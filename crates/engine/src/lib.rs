@@ -434,7 +434,11 @@ impl Session {
         let empty = Value::Object(Default::default());
         let params = if params.is_null() { &empty } else { params };
         let read_only_cull = id == "photo.analyze" && params.get("dryRun").and_then(Value::as_bool) == Some(true);
-        self.run_command(id, (spec.journal && !read_only_cull).then_some(params), |s| (spec.run)(s, params))
+        self.run_command(id, (spec.journal && !read_only_cull).then_some(params), |s| (spec.run)(s, params)).map_err(|e| match e {
+            // a shared parameter check ([`Session::targets`]) names the command it ran for
+            EngineError::BadParams { cmd, msg } if cmd.is_empty() => EngineError::BadParams { cmd: id.to_string(), msg },
+            e => e,
+        })
     }
 
     /// Run `f` as command `id` with what [`Session::execute`] does around every command: the
@@ -998,14 +1002,24 @@ impl Session {
         (self.visible_gen, self.visible.clone())
     }
 
-    /// Targets of photo commands: explicit `ids`/`id` param, else the selection.
-    pub fn targets(&self, p: &Value) -> Vec<PhotoId> {
-        if let Some(a) = p.get("ids").and_then(Value::as_array) {
-            return a.iter().filter_map(Value::as_u64).map(PhotoId).collect();
+    /// Targets of photo commands: the explicit `ids` (photo ids) or `id` (a photo id) param, else [`Self::selected`].
+    /// An `ids` or `id` that is there but isn't photo ids is an error, never the selection or part of the list
+    /// (issue #1506): a mistyped target mustn't turn a command meant for one photo into one for every selected photo.
+    pub fn targets(&self, p: &Value) -> Result<Vec<PhotoId>> {
+        let invalid = |what: &str| EngineError::BadParams { cmd: String::new(), msg: format!("`{what}` must be photo ids (whole numbers)") };
+        match p.get("ids") {
+            None | Some(Value::Null) => {}
+            Some(Value::Array(a)) => return a.iter().map(|v| v.as_u64().map(PhotoId).ok_or_else(|| invalid("ids"))).collect(),
+            Some(_) => return Err(invalid("ids")),
         }
-        if let Some(id) = p.get("id").and_then(Value::as_u64) {
-            return vec![PhotoId(id)];
+        match p.get("id") {
+            None | Some(Value::Null) => Ok(self.selected()),
+            Some(v) => v.as_u64().map(|id| vec![PhotoId(id)]).ok_or_else(|| invalid("id")),
         }
+    }
+
+    /// The photos commands act on when a call names none: the selection, else the active photo.
+    pub fn selected(&self) -> Vec<PhotoId> {
         if self.selection.ids.is_empty() { self.selection.active.into_iter().collect() } else { self.selection.ids.clone() }
     }
 }

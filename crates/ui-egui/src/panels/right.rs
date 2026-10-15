@@ -873,7 +873,7 @@ fn keywords(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
         let typed = ui.data(|d| d.get_temp::<String>(kid).unwrap_or_default());
         let last = typed.rsplit(',').next().unwrap_or("").trim().to_string();
         // the keywords every selected photo has: those only some have are still suggested
-        let selection = app.session.targets(&serde_json::Value::Null);
+        let selection = app.session.selected();
         let have: Vec<String> =
             app.caches.keyword_chips(&app.session.catalog, &selection).iter().filter(|c| c.on_all()).map(|c| c.path.clone()).collect();
         let suggestions = (*app.caches.suggestions(&app.session.catalog, &have, &last, 12)).clone();
@@ -901,7 +901,7 @@ fn keywords(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
 /// selected photos; "Save as Set…" keeps the current nine under a name.
 fn keyword_set(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     // on: every selected photo has it (⌥1–⌥9 then take it off them); partly on: only some do
-    let selection = app.session.targets(&serde_json::Value::Null);
+    let selection = app.session.selected();
     let chips = app.caches.keyword_chips(&app.session.catalog, &selection);
     let t = Tokens::get(ui.ctx());
     let sets = lightcraft_engine::cmd::keywords::keyword_sets_json(&app.session);

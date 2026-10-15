@@ -72,7 +72,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
             ui.label(egui::RichText::new(crate::i18n::tr(none)).color(t.text_dim));
         });
     }
-    let selection = app.session.targets(&serde_json::Value::Null);
+    let selection = app.session.selected();
     let ticks = app.caches.keyword_ticks(&app.session.catalog, &selection);
     for r in &rows {
         row(app, ui, r, &selection, &ticks, filter.trim().is_empty());

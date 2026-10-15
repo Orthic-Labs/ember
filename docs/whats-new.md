@@ -28,6 +28,9 @@
 - An imported reference editor catalog with an image record whose file, folder or root record is gone no longer
   fails with "missing file record" (upstream issue #1588). That image is left out with a warning (the first 20 are
   named, then counted) and the rest of the catalog imports.
+- A command given photos it can't read as photo ids (`"id": "5"`, or a list with something else in it) from a
+  script, the control channel or MCP is now refused (upstream issue #1506). It used to act on the selected photos
+  instead, or on the part of the list it could read, so a mistyped id could rate, move or delete the wrong photos.
 
 ### Nikon D600, D610 and D5000
 - Raws from the Nikon D600, D610 and D5000 no longer show a bright line down the right edge (upstream issue #1627). Their

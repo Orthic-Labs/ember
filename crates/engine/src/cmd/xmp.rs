@@ -12,7 +12,7 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
     let mut merged = Vec::new();
     let mut backups = Vec::new();
     let mut failed = Vec::new();
-    let ids = s.targets(p);
+    let ids = s.targets(p)?;
     let owners = crate::sidecar::StemOwners::among(&s.catalog, &ids);
     for id in ids {
         match s.save_sidecar_with(id, &owners) {
@@ -37,7 +37,7 @@ fn read(s: &mut Session, p: &Value) -> Result<Value> {
     let mut read = Vec::new();
     let mut failed = Vec::new();
     let mut warnings = Vec::new();
-    for id in s.targets(p) {
+    for id in s.targets(p)? {
         match s.read_sidecar_op_with_warnings(id) {
             Ok(Some((op, from, mut photo_warnings))) => {
                 ops.push(op);
