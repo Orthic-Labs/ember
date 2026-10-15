@@ -397,10 +397,13 @@ impl Catalog {
         let mut years: BTreeMap<&str, (BTreeMap<&str, usize>, BTreeMap<&str, usize>)> = BTreeMap::new();
         for p in self.photos().filter(|p| p.in_library()) {
             let Some(d) = p.captured.as_deref() else { continue };
-            if d.len() >= 10 {
-                let (months, days) = years.entry(&d[..4]).or_default();
-                *months.entry(&d[..7]).or_default() += 1;
-                *days.entry(&d[..10]).or_default() += 1;
+            // `get`, not `[..]`: a corrupt or foreign `captured` (a Lightroom catalog's
+            // captureTime is copied verbatim) may not be ASCII, and slicing it on a byte index
+            // would panic — the same rule as `dates::group_label`.
+            if let (Some(year), Some(month), Some(day)) = (d.get(..4), d.get(..7), d.get(..10)) {
+                let (months, days) = years.entry(year).or_default();
+                *months.entry(month).or_default() += 1;
+                *days.entry(day).or_default() += 1;
             }
         }
         let newest_first = |m: BTreeMap<&str, usize>| m.into_iter().rev().map(|(k, n)| (k.to_string(), n)).collect::<Vec<_>>();

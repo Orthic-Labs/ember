@@ -123,6 +123,23 @@ fn filter_search_sort() {
     assert_eq!(c.keywords(), vec![("ocean".to_string(), 1), ("summer".to_string(), 1)]);
 }
 
+/// A `captured` string that is not ASCII (the Lightroom importer copies `captureTime` into an
+/// `AddPhoto` op verbatim, and a JSON snapshot is valid UTF-8 whatever it holds) must not be
+/// sliced on a byte index in `date_groups`: grouping counts the well-formed dates and ignores
+/// the rest instead of panicking on a char boundary.
+#[test]
+fn date_groups_ignores_a_non_ascii_captured() {
+    let mut c = Catalog::new();
+    let ok = photo(&mut c, "ok.jpg", "2026-05-01T10:00:00");
+    // `AddPhoto` takes the field as it is, like `library.importLightroom` building the op
+    let bad = photo(&mut c, "bad.jpg", "日本語日本語");
+    assert_ne!(ok, bad);
+    let g = c.date_groups();
+    assert_eq!(g.len(), 1, "the one well-formed date still groups");
+    assert_eq!((g[0].year.as_str(), g[0].count), ("2026", 1));
+    assert_eq!(g[0].days.iter().map(|d| d.1).sum::<usize>(), 1);
+}
+
 #[test]
 fn snapshot_and_log_replay() {
     let mut c = Catalog::new();
