@@ -478,14 +478,29 @@ impl Gpu {
             self.over_limit(bytes.len() as u64);
             return Buf { buf: Some(Tracked::new(self.placeholder())), len };
         }
-        let buf = self.checked(bytes.len() as u64, || {
-            self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        // created unmapped and filled through the queue: a buffer mapped at creation would hand
+        // back a mapping of nothing when the device has no memory for it
+        let size = (bytes.len() as u64).next_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT);
+        let buf = self.checked(size, || {
+            self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
-                contents: bytes,
+                size,
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
             })
         });
-        Buf { buf: Some(Tracked::new(buf.unwrap_or_else(|| self.placeholder()))), len }
+        let Some(buf) = buf else {
+            return Buf { buf: Some(Tracked::new(self.placeholder())), len };
+        };
+        if bytes.len() as u64 == size {
+            self.queue.write_buffer(&buf, 0, bytes);
+        } else {
+            // the queue copies whole 4-byte words
+            let mut padded = bytes.to_vec();
+            padded.resize(size as usize, 0);
+            self.queue.write_buffer(&buf, 0, &padded);
+        }
+        Buf { buf: Some(Tracked::new(buf)), len }
     }
 
     /// Create a buffer, or record [`FailKind::OutOfMemory`] and return `None` when the device has
