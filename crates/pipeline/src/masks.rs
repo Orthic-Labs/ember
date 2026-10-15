@@ -446,6 +446,11 @@ pub struct BrushDabs {
 /// pointer is held still (the same screen position mapped again, up to float rounding).
 const STATIONARY_PX: f64 = 1e-6;
 
+/// Most dabs one stroke holds (32 MiB of centres). A segment is capped on its own, but a stroke of
+/// many hostile segments (an agent, a crafted XMP or catalog) would otherwise add up without
+/// bound; past this the rest of the stroke lays nothing (upstream #1520).
+pub const MAX_STROKE_DABS: usize = 2_000_000;
+
 /// The dabs of stroke `s` in a `w × h` output.
 pub fn brush_dabs(s: &BrushStroke, frame: &Frame, w: usize, h: usize) -> BrushDabs {
     let to_out = frame.norm_to_out(w, h);
@@ -487,9 +492,10 @@ pub fn dab_spacing(r: f64) -> f64 {
 /// their dabs with this, so they cover the same pixels (issue #517). A sample where the pointer
 /// hasn't moved (a stationary hold records one per frame) or that is not a finite point lays
 /// nothing, so holding the brush still adds no coverage (#518). Returns whether `q` was stamped;
-/// callers move `prev` on only then.
+/// callers move `prev` on only then. A stroke holding [`MAX_STROKE_DABS`] takes no more.
 pub fn push_dabs(dabs: &mut Vec<Point>, prev: Option<Point>, q: Point, r: f64) -> bool {
-    if !(q.x.is_finite() && q.y.is_finite()) {
+    let room = MAX_STROKE_DABS.saturating_sub(dabs.len());
+    if room == 0 || !(q.x.is_finite() && q.y.is_finite()) {
         return false;
     }
     if let Some(prev) = prev {
@@ -501,6 +507,8 @@ pub fn push_dabs(dabs: &mut Vec<Point>, prev: Option<Point>, q: Point, r: f64) -
         // a hostile or degenerate segment (huge) gets no in-between dabs rather than a huge
         // allocation: 1 M dabs is far more than any on-screen stroke needs
         let n = if n.is_finite() { n.clamp(0.0, 1_000_000.0) as usize } else { 0 };
+        // the in-between dabs and `q` together fit what is left of the stroke's budget
+        let n = n.min(room);
         for k in 1..n {
             dabs.push(prev.lerp(q, k as f64 / n as f64));
         }
@@ -786,6 +794,17 @@ mod tests {
         }
         assert_eq!(committed.dabs, again);
         assert!(committed.dabs.windows(2).all(|w| w[0].dist(w[1]) <= dab_spacing(committed.r) + 1e-9));
+        // many huge segments stop at the stroke budget instead of adding up without bound
+        let mut big = Vec::new();
+        let mut at = Point::new(0.0, 0.0);
+        for i in 0..5 {
+            let q = Point::new(if i % 2 == 0 { 1e12 } else { 0.0 }, 0.0);
+            if push_dabs(&mut big, Some(at), q, 1.0) {
+                at = q;
+            }
+        }
+        assert!(big.len() <= MAX_STROKE_DABS, "{} dabs", big.len());
+        assert!(!push_dabs(&mut big, Some(at), Point::new(5.0, 5.0), 1.0), "a full stroke takes no more");
         // a hostile segment places no in-between dabs
         let mut v = Vec::new();
         assert!(!push_dabs(&mut v, Some(Point::new(f64::NAN, 0.0)), Point::new(1.0, 1.0), r));
