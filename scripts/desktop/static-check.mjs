@@ -39,9 +39,9 @@ function checkPins() {
     if (forbidden.test(cargo)) fail(`desktop Cargo.toml contains forbidden dependency form or sidecar reference: ${forbidden}`);
   }
   if (!/rightkit-tauri-shell\s*=\s*\{[^}]*default-features\s*=\s*false/.test(cargo)) fail("rightkit-tauri-shell must disable default features");
-  if (!/rightkit-qa-driver\s*=\s*\{[^}]*version\s*=\s*\"=0\.3\.1\"/.test(cargo)) fail("rightkit-qa-driver must stay pinned to =0.3.1");
+  if (!/rightkit-qa-driver\s*=\s*\{[^}]*version\s*=\s*\"=0\.4\.0\"/.test(cargo)) fail("rightkit-qa-driver must stay pinned to =0.4.0");
   if (!/rightkit-qa-driver\s*=\s*\{[^}]*default-features\s*=\s*false[^}]*features\s*=\s*\[[^\]]*"wv2-0_39"/.test(cargo)) fail("rightkit-qa-driver must select WebView2 0.39 for Tauri 2.12");
-  if (!/rightkit-qa\s*=\s*\"=0\.3\.0\"/.test(cargo)) fail("rightkit-qa must stay pinned to =0.3.0");
+  if (!/rightkit-qa\s*=\s*\"=0\.4\.0\"/.test(cargo)) fail("rightkit-qa must stay pinned to =0.4.0");
 }
 
 function checkNativeConfig() {
