@@ -1,5 +1,5 @@
 //! Bounded unsigned grayscale TIFF extraction without RAW development or rescaling.
-//! A plane carries stored code values; it does not establish mask meaning or image registration.
+//! A plane carries codec-reconstructed values; it does not establish mask meaning or registration.
 
 use lightcraft_tiff::{Tiff, image::Layout, tags};
 
@@ -10,13 +10,39 @@ const MAX_PIXELS: u64 = 8 * 1024 * 1024;
 const MAX_EDGE: u32 = 8192;
 const MAX_CHUNKS: usize = 256;
 
-/// Row-major, unsigned integer samples in their original nominal code range.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Actual JPEG XL header metadata, independent of TIFF's nominal layout.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct JxlCoding {
+    pub width: u32,
+    pub height: u32,
+    pub bits: u32,
+    pub frame_encoding: String,
+    pub xyb_encoded: bool,
+    pub colour_encoding: String,
+    pub intensity_target: f32,
+}
+
+/// One chunk's nominal coordinates plus actual coding metadata.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct PlaneChunk {
+    pub index: usize,
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+    pub compression: u16,
+    pub jxl: Option<JxlCoding>,
+}
+
+/// Row-major, codec-reconstructed unsigned samples in the nominal code range.
+/// Lossy encoding does not preserve original pre-encoding integers.
+#[derive(Debug, Clone, PartialEq)]
 pub struct GrayPlane {
     pub width: u32,
     pub height: u32,
     pub bits: u16,
     pub samples: Vec<u16>,
+    pub chunks: Vec<PlaneChunk>,
 }
 
 /// Read one identity-oriented, 8/16-bit BlackIsZero TIFF image. Supports uncompressed
@@ -73,6 +99,7 @@ pub fn gray_tiff(bytes: &[u8]) -> Result<GrayPlane> {
     if info.offsets.len() != count || info.byte_counts.len() != count || info.byte_counts.contains(&0) {
         return Err(RawError::Corrupt("plane chunk coverage is incomplete or ambiguous".into()));
     }
+    let mut coding = Vec::with_capacity(count);
     for chunk in info.chunks(bytes.len() as u64) {
         let end = chunk.offset.checked_add(chunk.len).ok_or(RawError::Limit("plane chunk extent"))?;
         if chunk.len == 0 || chunk.offset >= bytes.len() as u64 || end > bytes.len() as u64 {
@@ -87,6 +114,37 @@ pub fn gray_tiff(bytes: &[u8]) -> Result<GrayPlane> {
                 return Err(RawError::Corrupt("uncompressed plane chunk length mismatch".into()));
             }
         }
+        let jxl = if info.compression == tags::compression::JPEG_XL {
+            #[cfg(feature = "jxl")]
+            {
+                let start = usize::try_from(chunk.offset).map_err(|_| RawError::Limit("plane chunk offset"))?;
+                let end = usize::try_from(end).map_err(|_| RawError::Limit("plane chunk end"))?;
+                let source = bytes.get(start..end).ok_or_else(|| RawError::Corrupt("plane chunk bytes".into()))?;
+                Some(crate::jxl::coding(
+                    source,
+                    chunk.width as usize,
+                    chunk.height as usize,
+                    info.width.saturating_sub(chunk.x).min(chunk.width) as usize,
+                    info.height.saturating_sub(chunk.y).min(chunk.height) as usize,
+                    u32::from(bits),
+                )?)
+            }
+            #[cfg(not(feature = "jxl"))]
+            {
+                return Err(RawError::Unsupported("JPEG XL support disabled".into()));
+            }
+        } else {
+            None
+        };
+        coding.push(PlaneChunk {
+            index: chunk.index,
+            x: chunk.x,
+            y: chunk.y,
+            width: chunk.width,
+            height: chunk.height,
+            compression: info.compression,
+            jxl,
+        });
     }
     let RawData::U16(samples) = tiffraw::read_image(bytes, &info, tiff.order, tiffraw::Packing::Msb)? else {
         return Err(RawError::Corrupt("grayscale decoder returned floating samples".into()));
@@ -94,8 +152,24 @@ pub fn gray_tiff(bytes: &[u8]) -> Result<GrayPlane> {
     if samples.len() as u64 != pixels || (bits == 8 && samples.iter().any(|&s| s > 255)) {
         return Err(RawError::Corrupt("grayscale decoder sample range or count mismatch".into()));
     }
-    Ok(GrayPlane { width: info.width, height: info.height, bits, samples })
+    Ok(GrayPlane { width: info.width, height: info.height, bits, samples, chunks: coding })
 }
+
+// Original 8x8 horizontal ramp [0,32,64,96,128,160,192,255], repeated eight rows.
+// Encoded with libjxl0.12.0 cjxl -d1 -m0 -e3 --num_threads=0 -x color_space=Gra_D65_Rel_Lin.
+// Embedded79-byte synthetic fixture; no real photo, catalog or third-party imagery.
+#[cfg(all(test, feature = "jxl"))]
+pub(crate) const LOSSY_GRAY_8X8: &[u8] = &[
+    255, 10, 65, 64, 82, 180, 8, 0, 19, 8, 1, 0, 4, 1, 103, 19, 40, 1, 0, 80, 161, 50, 202, 184, 193, 203, 185, 158, 47, 63, 116, 88, 76, 219, 184,
+    206, 208, 86, 219, 22, 150, 36, 138, 140, 99, 147, 116, 2, 135, 36, 177, 74, 3, 136, 82, 102, 174, 102, 176, 42, 73, 36, 71, 220, 141, 36, 128,
+    131, 2, 26, 255, 46, 96, 147, 1, 164, 6, 0, 5,
+];
+// Independent libjxl0.12.0 djxl reconstruction, same linear-gray output,8bit,one thread.
+#[cfg(all(test, feature = "jxl"))]
+pub(crate) const LOSSY_GRAY_REFERENCE: &[u8] = &[
+    0, 31, 65, 95, 128, 160, 193, 252, 0, 31, 64, 95, 127, 160, 192, 253, 0, 31, 65, 94, 128, 160, 193, 252, 0, 31, 64, 95, 128, 160, 192, 252, 0,
+    31, 65, 95, 127, 160, 192, 253, 0, 31, 64, 95, 128, 160, 193, 253, 1, 31, 64, 95, 128, 160, 192, 252, 0, 31, 65, 95, 127, 160, 192, 253,
+];
 
 #[cfg(test)]
 mod tests {
@@ -145,6 +219,32 @@ mod tests {
         let mut corrupt = image.clone();
         corrupt.set_image(ImageData::Tiles { tile_width: 3, tile_height: 2, tiles: vec![vec![0; 8], vec![0; 8]] });
         assert!(gray_tiff(&TiffWriter::new(ByteOrder::Little, false).write(&[corrupt]).unwrap()).is_err());
+    }
+
+    #[cfg(feature = "jxl")]
+    #[test]
+    fn tiled_lossy_linear_gray_reconstructs_codes_and_retains_cropped_chunk_metadata() {
+        let mut image = ifd(13, 8, 8);
+        image.set(tags::COMPRESSION, Value::Short(vec![tags::compression::JPEG_XL]));
+        image.set_image(ImageData::Tiles { tile_width: 8, tile_height: 8, tiles: vec![LOSSY_GRAY_8X8.to_vec(), LOSSY_GRAY_8X8.to_vec()] });
+        let bytes = TiffWriter::new(ByteOrder::Little, false).write(&[image]).unwrap();
+        let plane = gray_tiff(&bytes).unwrap();
+        assert_eq!((plane.width, plane.height, plane.bits), (13, 8, 8));
+        let (rows, remainder) = plane.samples.as_chunks::<13>();
+        assert!(remainder.is_empty());
+        assert_eq!(rows.len(), 8);
+        for (row, reference) in rows.iter().zip(LOSSY_GRAY_REFERENCE.as_chunks::<8>().0.iter()) {
+            let expected = reference.iter().chain(reference.iter().take(5));
+            assert!(row.iter().zip(expected).all(|(a, b)| a.abs_diff(u16::from(*b)) <= 1));
+        }
+        assert_eq!(plane.chunks.len(), 2);
+        assert_eq!(plane.chunks[1].x, 8);
+        for chunk in &plane.chunks {
+            let coding = chunk.jxl.as_ref().unwrap();
+            assert_eq!((coding.width, coding.height, coding.bits), (8, 8, 8));
+            assert_eq!(coding.frame_encoding, "vardct");
+            assert!(coding.xyb_encoded);
+        }
     }
 
     #[test]
