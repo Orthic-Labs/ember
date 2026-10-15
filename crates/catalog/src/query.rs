@@ -1,5 +1,7 @@
 //! Filtering, search and sorting.
 
+use std::cmp::Ordering::Equal;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{AlbumId, Catalog, ColorLabel, Flag, MediaKind, Photo, PhotoId};
@@ -251,8 +253,8 @@ impl Filter {
             return false;
         }
         match &self.folder {
-            // browsed photos only show in folder views
-            None if p.local => return false,
+            // browsed photos only show in folder views, and in Recently Deleted once deleted (#1430)
+            None if p.local && !p.deleted => return false,
             None => {}
             Some(dir) => {
                 let crate::Source::File { path } = &p.source else { return false };
@@ -359,8 +361,13 @@ impl Filter {
     }
 }
 
+/// Case-insensitive file name order without allocating (compares per-character lowercase via `char::to_lowercase`).
+pub fn cmp_name(a: &str, b: &str) -> std::cmp::Ordering {
+    a.chars().flat_map(char::to_lowercase).cmp(b.chars().flat_map(char::to_lowercase))
+}
+
 impl Catalog {
-    /// Photos matching `filter`, in `sort` order (ties broken by id for stability).
+    /// Photos matching `filter`, in `sort` order (ties broken by file name, then id).
     pub fn query(&self, filter: &Filter, sort: &Sort) -> Vec<PhotoId> {
         let root = filter.library_root();
         let mut v: Vec<&Photo> = self.photos().map(|p| p.as_ref()).filter(|p| filter.matches_in(p, self, root.as_deref())).collect();
@@ -369,11 +376,15 @@ impl Catalog {
                 SortKey::CaptureDate => a.captured.cmp(&b.captured).then_with(|| a.imported.cmp(&b.imported)),
                 SortKey::ImportDate => a.imported.cmp(&b.imported),
                 SortKey::EditDate => a.edited.cmp(&b.edited),
-                SortKey::FileName => a.file_name.to_lowercase().cmp(&b.file_name.to_lowercase()),
+                SortKey::FileName => cmp_name(&a.file_name, &b.file_name),
                 SortKey::Rating => a.rating.cmp(&b.rating),
                 SortKey::FileSize => a.file_size.cmp(&b.file_size),
                 SortKey::Random => shuffle_rank(sort.seed, a.id).cmp(&shuffle_rank(sort.seed, b.id)),
             }
+            // Ties (one import batch, a burst within a second, equal ratings) sort by file name, the
+            // order cameras number frames, so the order doesn't depend on how ids were allocated;
+            // the id only keeps it stable.
+            .then_with(|| if sort.key == SortKey::FileName { Equal } else { cmp_name(&a.file_name, &b.file_name) })
             .then(a.id.cmp(&b.id));
             if sort.ascending { o } else { o.reverse() }
         });
@@ -386,10 +397,13 @@ impl Catalog {
         let mut years: BTreeMap<&str, (BTreeMap<&str, usize>, BTreeMap<&str, usize>)> = BTreeMap::new();
         for p in self.photos().filter(|p| p.in_library()) {
             let Some(d) = p.captured.as_deref() else { continue };
-            if d.len() >= 10 {
-                let (months, days) = years.entry(&d[..4]).or_default();
-                *months.entry(&d[..7]).or_default() += 1;
-                *days.entry(&d[..10]).or_default() += 1;
+            // `get`, not `[..]`: a corrupt or foreign `captured` (a Lightroom catalog's
+            // captureTime is copied verbatim) may not be ASCII, and slicing it on a byte index
+            // would panic — the same rule as `dates::group_label`.
+            if let (Some(year), Some(month), Some(day)) = (d.get(..4), d.get(..7), d.get(..10)) {
+                let (months, days) = years.entry(year).or_default();
+                *months.entry(month).or_default() += 1;
+                *days.entry(day).or_default() += 1;
             }
         }
         let newest_first = |m: BTreeMap<&str, usize>| m.into_iter().rev().map(|(k, n)| (k.to_string(), n)).collect::<Vec<_>>();

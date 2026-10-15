@@ -1,6 +1,220 @@
 # What's new in Ember
 
+## 2026-10-15
+
+### Imported radial masks on the right side
+- Radial masks brought over from the reference editor (catalog import, XMP sidecars, edits inside DNGs and presets) now
+  apply their effect inside the circle, as the reference editor does, instead of outside it (upstream issue #1815). A mask inverted in
+  the reference editor stays inverted, and older Radial Filters keep their Effect Outside / Invert Mask setting. Photos imported
+  before this keep the masks they got: Photo ▸ Read Metadata from File reads a sidecar's again.
+
+## 2026-10-14
+
+### Reliability
+- Import ▸ Move (and a move to another volume) now writes the new file's folder entry to disk before it removes the
+  original, and keeps the original when that fails (issue #1501). The copy's contents were already synced, but not
+  the name in its folder, so a crash right after the move could in principle keep the deletion and lose the copy.
+- A damaged or crafted raw can no longer make Ember set aside gigabytes of memory before finding out the file is
+  bad (issue #1512): a compressed PEF whose data is too short for the size it declares, an uncompressed TIFF-based
+  raw whose tile claims far more samples than it holds, and an ARW6 with a broken tile are refused first. All 74
+  files in the test corpus still decode.
+- Thumbnails and previews are written to the cache on disk by one background writer instead of a new thread for
+  each image (issue #1522). When renders come in faster than the disk takes them, at most 128 MB of images wait;
+  past that a write is skipped (the image stays in memory and is written by a later render), so a slow disk can't
+  pile up threads and memory.
+- Saving the catalog and resuming a model download no longer write through a link left at the temporary file's
+  name (`catalog.snap.tmp`, `model.onnx.part`): the link is removed and a new file made in its place, so the file it
+  pointed to is never changed (issue #1502).
+- An imported reference editor catalog with an image record whose file, folder or root record is gone no longer
+  fails with "missing file record" (upstream issue #1588). That image is left out with a warning (the first 20 are
+  named, then counted) and the rest of the catalog imports.
+- A command given photos it can't read as photo ids (`"id": "5"`, or a list with something else in it) from a
+  script, the control channel or MCP is now refused (upstream issue #1506). It used to act on the selected photos
+  instead, or on the part of the list it could read, so a mistyped id could rate, move or delete the wrong photos.
+
+### Nikon D600, D610 and D5000
+- Raws from the Nikon D600, D610 and D5000 no longer show a bright line down the right edge (upstream issue #1627). Their
+  sensor data runs a few columns of filler past the picture, which stayed in the image; these bodies now develop
+  at the camera JPEG's size (6016 × 4016 for the D600 and D610, 4288 × 2848 for the D5000, as the D90 already
+  did). On the D600 and D610 the white level is also measured inside the picture, so the filler can't pass for
+  clipped highlights.
+
+### Hard-edged Heal and Clone spots
+- A spot with Feather at 0 no longer draws black pixels exactly on its radius. This also fixes spots at 0% Opacity
+  changing pixels along their edge. The hard edge now leaves pixels on the radius unchanged.
+
+## 2026-10-12
+
+### Camera-look deep shadows
+
+- The starting look fitted from a raw's camera JPEG now uses its darkest tones too (issue #1307).
+  Photos with deep shadows no longer have to extend the first measured tone in a straight line to black.
+  Existing smart previews are refreshed when their originals are online, and cached renders are redrawn.
+
+## 2026-10-12
+
+### Kelvin white balance for more Sony cameras
+- Sony ILCA-99M2, ILCA-77M2, SLT-A33, DSC-RX10, ILCE-3500 and ILCE-7S raws now show white balance in Kelvin too,
+  read from the white-balance presets the camera stores in every ARW: a photo shot at 3400 K on the camera reads
+  3396 K, one on the Shade preset 7493 K. As for #730, only the numbers change: edits made on the old relative
+  scale keep their look, and As Shot shows the real temperature once the file is opened.
+
+## 2026-10-12
+
+### Older raw cameras
+- Canon PowerShot G9 raws open with the camera's white balance (White Balance ▸ As Shot); it used to start from a
+  neutral default.
+
+## 2026-10-12
+
+### Older raw cameras
+- Olympus E-10 raws open with the camera's white balance (White Balance ▸ As Shot) and without the grey haze in
+  the shadows: the black level recorded in the file is now subtracted.
+
+## 2026-10-12
+
+### Leaf and Hasselblad raws
+- The Hasselblad Lunar's raws (a Sony NEX-7 inside) now develop from their sensor data with every editing tool,
+  instead of opening as their embedded preview. Photos imported earlier switch over with Photo ▸ Reload from Disk.
+- An uncompressed Leaf Aptus 22 MOS no longer opens as a dark, colourless picture of its sensor mosaic: it imports
+  as a raw and shows its embedded preview (preview only, with the reason), as the compressed MOS files do.
+
+## 2026-10-13
+
+### Lightroom catalog import
+- A Lightroom Classic catalog whose changes are all still in its `.lrcat-wal` file (a new catalog Lightroom has
+  open and hasn't written back yet) imports instead of failing with "unsupported SQLite schema format".
+
+### Thumbnails of raw files appear sooner
+- Grid thumbnails and the first picture in the loupe of an unedited raw now come from the smallest JPEG the camera
+  stored that is big enough, not always from the largest one. On a Sony A7R VI file a 512 px thumbnail decodes
+  0.3 MB of JPEG instead of 5.6 MB and is ready several times sooner; Nikon and Panasonic raws with a mid-sized
+  JPEG get faster too.
+
+### Dehaze while zoomed in
+- With Dehaze on, panning a photo zoomed to 1:1 or moving a slider while zoomed no longer samples the whole
+  original again to find the haze colour. On a 64 MP raw (Sony A7R VI) that took ~0.2 s of CPU per pan and per
+  slider step; a slider step now takes ~5 ms on the GPU.
+
+### Nikon lens corrections
+- Raws from the Nikon Z 6II, Z 8 and Z f now open with the camera's own distortion correction, as Lightroom applies a
+  built-in profile: straight lines near the edges stay straight and the framing matches the camera's JPEG. It works
+  with Z lenses and with F-mount lenses on the FTZ adapter, follows the in-body stabilisation's shift of the optical
+  centre, and can be turned off under Lens Corrections. Vignetting correction from the file comes later.
+
+### Thumbnail cache stays in its folder
+- The thumbnail cache no longer follows a shard folder (`thumbs/ab/`) that is a symlink or junction to somewhere
+  else (upstream issue #1504): trimming or clearing the cache can't delete files outside it, and thumbnails are never read
+  from or written through such a link.
+
+### Reliability
+- A raw file whose black level is stored as "not a number" (or infinity), or a floating-point DNG with such
+  samples, no longer crashes Ember at 1:1 or on export: the bad values read as black.
+- Exporting a photo more than 65,535 times as long as it is wide (a one-pixel strip), or opening the Export dialog's
+  watermark preview for it, no longer crashes Ember; the export is capped at the encoders' 65,535 pixels.
+- A demo photo whose stored size was damaged (a width of 4294967295) is rendered at its own size instead of
+  one that overflows.
+- A crop a hair wide (or of no size), set by an agent or read from a sidecar, no longer crashes or hangs the
+  render with Clarity, Dehaze, Texture or Highlights / Shadows on: their blurs are held to the picture's size.
+- Dragging a Tone Curve point that sits very close to its neighbours (two clicks side by side, or a curve from a
+  sidecar, a preset or an agent) no longer crashes Ember; the point stays between them. Curve points sent to
+  `develop.curve` are kept in order, and a sidecar curve with a "NaN" or "inf" point is ignored.
+- An export enlarged far past the photo's size (20000 typed for 2000 with Don't Enlarge off) no longer ends
+  Ember: an enlargement stops at 512 megapixels, as in Lightroom, and one that needs more memory than the
+  computer has is refused with the size it would take, before it starts.
+- A photo whose Defringe amount was stored far past the sliders' 20 (in a damaged catalog or sidecar) no longer
+  crashes Ember each time it renders: the amount acts as 20.
+- Importing a preset zip that unpacks to far more than any preset (a "zip bomb") is refused with a message naming
+  the file, instead of asking for gigabytes of memory, which could end Ember.
+- A crop of no size (from an agent or a sidecar) no longer gives the Detail view a photo of no size to lay out
+  (its width over its height was 0 / 0, which stopped debug builds); it shows as a single pixel's colour.
+- A crop of no size with healing spots or masks no longer crashes the render: samples outside the picture read its
+  edge.
+- A library whose catalog file was damaged (or edited by hand) in a way that still reads no longer crashes
+  Ember when it shows a stack, or hangs it when a folder is moved: on opening, records are put back under
+  their own ids, stacks keep only photos that exist (at least two), folders inside themselves move to the top,
+  and new photos never reuse an id in use. What was repaired is written to the log.
+
+### DNG camera identity
+- DNG export and Convert to DNG no longer duplicate the camera make when the model already
+  contains it: `Canon EOS R6` stays `Canon EOS R6`, rather than `Canon Canon EOS R6` (the camera
+  identity subissue in #840). The separate Make and Model tags keep their original values.
+  This does not change colour matrices, camera calibration or RAW noise rendering.
+
+## 2026-10-13
+
+### Large libraries: Synchronize Folder, import and sidecars start sooner
+- Opening Synchronize Folder, an import review or an import no longer makes a table of every photo in the library
+  before it looks at the first file. In a library of 3.5 million photos that held the window for about 6 s before
+  a Synchronize scan began (now under 1 s), 2.6 s before an import review (now 0.05 s) and 1.7 s before an import
+  (now 0.05 s). The scan looks up only the files it finds and the contents it reads, on its own thread.
+- Writing one photo's XMP sidecar (Save Metadata to File, or automatically after an edit) no longer works out who
+  owns every shared sidecar name in the library: 2.4 s a write in that library, now under 1 s.
+- Nothing else changes: the same files are found new, already there, moved or missing, and sidecars get the same
+  names.
+
+### Slider drags on large raws
+- Dragging a slider no longer re-renders the edited photo's filmstrip thumbnail on every frame; it follows once you
+  let go. On a 64 MP raw the first of those renders decoded the whole file again, which held up the loupe's
+  previews for up to a second.
+- A thumbnail of the photo open in Detail is made from its already decoded preview instead of decoding the file
+  again.
+
+## 2026-10-12
+
+### Zoomed 64 MP raws stay decoded
+- Panning a photo zoomed to 1:1, or moving a slider while zoomed, no longer decodes the whole raw again each time on
+  high-resolution cameras such as the Sony A7R VI (64 MP). Their decoded original (~800 MB) is bigger than the
+  default cache share (768 MB), so it was evicted as soon as it was stored. The original of the photo shown in Detail
+  now stays, like its preview, until another photo or view is shown.
+- The kept original no longer pushes everything else out of the cache: on a 64 MP raw it filled the cache share
+  alone, so the photo's preview and thumbnail sources and its neighbours' were decoded from the raw again on every
+  edit at 1:1, every zoom out and every step to the next photo.
+- A zoomed view keeps the GPU copy of the original while it is on screen: pausing for a few seconds between pans no
+  longer frees it, which cost a re-upload of about a second on the next pan (800 MB for a 64 MP raw). It is freed
+  once you zoom out or move on.
+
+## 2026-10-13
+
+### HDR merges keep the lens correction
+- An HDR made with Photo ▸ Photo Merge ▸ HDR now keeps the lens correction the photos carry (Sony's, Panasonic's
+  and Leica's, and the one some DNGs carry, e.g. from drones): Optics ▸ Enable Lens Corrections straightens it as it
+  does the photos it was made from. HDRs merged before this don't have it; merge them again.
+
+## 2026-10-12
+
+### Bold text in other scripts
+- Arabic names and other Arabic text in headings, chosen tabs and other bold places are now drawn bold, as Latin text
+  beside them is; they used to stay at regular weight.
+
+## 2026-10-13
+
+### Told when there is no GPU
+- When GPU rendering is on but no graphics processor can be found, Ember now says so once at start-up instead
+  of quietly rendering everything on the CPU, much more slowly. Help ▸ System Info says why. On NixOS this happens
+  when a `cargo` build runs outside `nix develop` (no Vulkan loader); start it from there.
+
 ## 2026-10-11
+
+### "Rendering…" on the photo
+- The loupe says "Rendering…" at the bottom of the photo when what it shows isn't the finished photo yet: the
+  camera's embedded JPEG while a raw decodes, the previous render while an edit renders, or the magnified frame
+  while the 1:1 detail is on its way. It appears once that has lasted half a second, so quick renders never show it.
+- If Ember can't open a photo (its original is on a drive that isn't connected, or the file is damaged) but has
+  its embedded JPEG or a thumbnail to show, the loupe now says so at the bottom of the photo ("Original offline · no
+  smart preview" or "This photo can't be opened", the reason on hover) instead of showing that preview as if it were
+  the photo.
+- Compare and Reference View panes say "Rendering…" (or that the photo can't be opened) the same way, so a
+  magnified preview isn't taken for the photo when checking focus at 1:1.
+
+### `--import <folder>` takes HEIC
+- `lightcraft-cli run --import <folder>` (and the MCP tools that take folders) now picks up HEIC, HEIF and Nikon NRW
+  files, the same files as `library.import` (upstream issue #1080). They used to be skipped without a word.
+
+### HDR and panorama merges of CR2 keep their colour
+- Photo Merge of Canon CR2 (and other raws whose colour Ember fits from the camera's own JPEG, such as NEF and
+  ARW) gives the merged DNG the colour each photo has when opened alone (issue #965). An HDR merge of CR2s used to come
+  out green and dark.
 
 ### JPEG XL export
 - Export as JPEG XL (issue #247): Format ▸ JPEG XL in the Export dialog, `format: "jxl"` for agents and the CLI
@@ -41,10 +255,32 @@
   the other editor (Edit in Other Editor, now ⌥⌘E), and where PhotoCraft is if you use a portable copy.
 - Export can write PSD too (flat, 8- or 16-bit).
 
+### Faster GPU exports
+- Exports with noise reduction, Texture, Clarity, Dehaze or Highlights and Shadows can be much faster on the GPU,
+  depending on the graphics card. On a Windows laptop with an AMD Radeon 780M, a full-size export of a 24 MP raw
+  with those edits went from about 3.7 s to 1.9 s. Photos look the same as before.
+
 ### Reliability
 - Upgrading from a Windows installer older than 0.6 (such as 0.5.0) keeps Ember in the folder it was installed
   in, instead of moving it back to Program Files (issue #399). If that folder has been deleted since, the upgrade
   installs to Program Files.
+- A photo that runs into a bug in Ember while it renders (in a raw decoder or the editing pipeline) now fails
+  like a photo that can't be opened, with the reason, instead of rendering forever; its thumbnail stops waiting too.
+  Each such bug used to take one of the render threads with it, so after a few of them no photo rendered until
+  Ember was restarted. The bug is still written to the log (Help ▸ Open Log Folder) for a report.
+
+### Library sorting
+- Photos that tie on the sort key (equal ratings, one import batch, a burst shot within the same second) now sort by
+  file name, then id, instead of import order. Recently Added keeps a batch in file name order, and Auto-Stack orders a
+  burst by file name, so the first file is the cover.
+
+### Large preset collections
+- A library holding thousands of presets (a Lightroom collection imported whole: 11 000 presets, a 42 MB
+  presets.json) stays responsive. Every command used to re-serialize the whole list to see whether it had changed
+  (~0.6 s per slider tick); now the list is saved only after it changes, and a slider tick takes ~2 ms.
+- The Presets panel builds only the rows in view (and their thumbnails) instead of every preset on every frame; the
+  preset pickers in Import and Settings ▸ Import scroll the same way.
+- Importing a large collection and opening its library no longer compare every preset with every other.
 
 ## 2026-10-10
 

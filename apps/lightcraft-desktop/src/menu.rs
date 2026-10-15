@@ -65,7 +65,12 @@ pub fn spec() -> MenuSpec {
             ),
             group(
                 "Edit",
-                &[("edit.undo", "Undo", Some("Cmd+Z")), ("edit.redo", "Redo", Some("Cmd+Shift+Z")), ("view.focusSearch", "Find…", Some("Cmd+F"))],
+                &[
+                    ("edit.undo", "Undo", Some("Cmd+Z")),
+                    ("edit.redo", "Redo", Some("Cmd+Shift+Z")),
+                    ("edit.selectOnlyActive", "Select Only Active Photo", Some("Cmd+Shift+D")),
+                    ("view.focusSearch", "Find…", Some("Cmd+F")),
+                ],
             ),
             group(
                 "View",

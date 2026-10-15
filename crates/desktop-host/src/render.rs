@@ -187,6 +187,9 @@ impl Renderer {
         {
             job = if uses_draft_quality(request.quality, interactive) { loupe.draft() } else { loupe };
         }
+        if !request.before && self.is_loupe_slot(&request.slot) {
+            pin_zoomed_original(session, photo, job.level);
+        }
         let key = job.key;
         if let Some(previous) = self.pending.remove(&slot) {
             let _ = previous.reply.send(Err("preview superseded".to_string()));
@@ -633,6 +636,14 @@ impl Renderer {
     }
 }
 
+/// The loupe's photo keeps its original over the memory budget while it is shown zoomed in (its
+/// render reads the full-size source), as the egui Detail view does: evicting a 64 MP original made
+/// every pan decode the raw again. A fitted loupe or another photo lets it go.
+fn pin_zoomed_original(session: &mut Session, photo: PhotoId, level: lightcraft_engine::media::SourceLevel) {
+    let zoomed = level == lightcraft_engine::media::SourceLevel::Full;
+    session.media.set_on_screen(zoomed.then_some(photo));
+}
+
 fn encode_result(result: &RenderResult) -> Result<EncodedPreview, String> {
     let rendered = result.rendered.as_ref().map_err(|error| error.clone())?;
     let bytes = encode_png(&rendered.image)?;
@@ -736,6 +747,20 @@ mod tests {
         assert!(forced_draft(PreviewQuality::Full, true));
         assert!(!forced_draft(PreviewQuality::Draft, true));
         assert!(!forced_draft(PreviewQuality::Full, false));
+    }
+
+    #[test]
+    fn a_zoomed_loupe_pins_its_original_and_a_fitted_one_lets_it_go() {
+        let mut session = Session::with_demo();
+        let photo = session.active().unwrap();
+        let zoomed = session.loupe_job(photo, 6000, 4000, true).unwrap();
+        pin_zoomed_original(&mut session, photo, zoomed.level);
+        assert_eq!(session.media.on_screen(), (zoomed.level == lightcraft_engine::media::SourceLevel::Full).then_some(photo));
+        pin_zoomed_original(&mut session, photo, lightcraft_engine::media::SourceLevel::Full);
+        assert_eq!(session.media.on_screen(), Some(photo));
+        let fitted = session.loupe_job(photo, 640, 480, true).unwrap();
+        pin_zoomed_original(&mut session, photo, fitted.level);
+        assert_eq!(session.media.on_screen(), None);
     }
 
     #[test]

@@ -58,6 +58,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("view.squareGrid", "Square Grid", None, "View"),
     // G: Photo Grid ↔ Square Grid (from other views: the photo grid)
     ("view.gridToggle", "Grid", Some("G"), ""),
+    ("library.selectOnlyActive", "Select Only Active Photo", Some("Cmd+Shift+D"), "Edit"),
     ("tool.guidedUpright", "Guided Upright", Some("Shift+G"), "Window>Tools"),
     ("view.detail", "Detail", Some("D"), "View"),
     ("view.compare", "Compare", Some("Shift+C"), "View"),
@@ -212,6 +213,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("app.resetShortcuts", "Reset All Keyboard Shortcuts", None, ""),
     ("app.export", "Export Now", None, ""),
     ("app.showInFinder", "Show in Finder", Some("Cmd+R"), "Photo"),
+    ("app.openSamModelFolder", "Show in File Manager", None, ""),
     ("dialog.rename", "Rename Photos…", Some("F2"), "Photo"),
     ("dialog.labelNames", "Edit Color Label Names…", None, ""),
     ("dialog.captureTime", "Edit Capture Time…", None, "Photo"),
@@ -263,6 +265,18 @@ fn adjust_brush(app: &mut LightcraftApp, k: f32, df: f32) -> Value {
 /// The `parent` folder id of a `dialog.new*` command (none: the top level).
 fn parent_param(p: &Value) -> Option<u64> {
     p.get("parent").and_then(Value::as_u64)
+}
+
+/// `file.addPhotos` / `file.addFolder` / `file.addFromDevice` `{album?}`: the review of the scan
+/// just started opens with that album chosen (an album's context menu ▸ Import ▸ …). An error
+/// means another scan is running.
+fn import_into_album(app: &mut LightcraftApp, p: &Value, r: Result<Value, String>) -> Result<Value, String> {
+    if r.is_ok()
+        && let Some(t) = &mut app.scan
+    {
+        t.album = p.get("album").and_then(Value::as_u64);
+    }
+    r
 }
 
 /// An sRGB colour from `"#rrggbb"` or `[r, g, b]` (0..255).
@@ -379,6 +393,10 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             };
             app.ui.grid_info = next;
             app.ui.show_filenames = true;
+            // the caption is drawn on Square Grid cells only: from Photo Grid, show it there
+            if app.ui.view == ViewMode::PhotoGrid {
+                app.ui.view = ViewMode::SquareGrid;
+            }
             Ok(json!({"info": app.ui.grid_info}))
         }
         "tool.keywordPainter" => {
@@ -456,6 +474,10 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         }
         "view.appearance" => appearance_command(app, p),
         "view.theme" => theme_command(app, p),
+        "library.selectOnlyActive" => {
+            let Some(active) = app.session.active() else { return Some(Err("no active photo".into())) };
+            app.run("library.select", json!({"ids": [active.0], "active": active.0}))
+        }
         "view.gridToggle" => {
             app.ui.view = if app.ui.view == ViewMode::PhotoGrid { ViewMode::SquareGrid } else { ViewMode::PhotoGrid };
             Ok(Value::Null)
@@ -1069,13 +1091,22 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             Ok(Value::Null)
         }
         "dialog.newFolder" => {
-            app.ui.dialog =
-                Some(Dialog::NewAlbum { name: p.get("name").and_then(Value::as_str).unwrap_or("").into(), folder: true, parent: parent_param(p) });
+            app.ui.dialog = Some(Dialog::NewAlbum {
+                name: p.get("name").and_then(Value::as_str).unwrap_or("").into(),
+                folder: true,
+                parent: parent_param(p),
+                include_selected: false,
+            });
             Ok(Value::Null)
         }
         "dialog.newAlbum" => {
-            app.ui.dialog =
-                Some(Dialog::NewAlbum { name: p.get("name").and_then(Value::as_str).unwrap_or("").into(), folder: false, parent: parent_param(p) });
+            // {name?, parent?, includeSelected? (true)}
+            app.ui.dialog = Some(Dialog::NewAlbum {
+                name: p.get("name").and_then(Value::as_str).unwrap_or("").into(),
+                folder: false,
+                parent: parent_param(p),
+                include_selected: p.get("includeSelected").and_then(Value::as_bool).unwrap_or(true),
+            });
             Ok(Value::Null)
         }
         "dialog.autoStack" => {
@@ -1213,6 +1244,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         }
         "dialog.mergePanorama" => crate::merge::open(app, "merge.panorama"),
         "dialog.mergeHdrPanorama" => crate::merge::open(app, "merge.hdrPanorama"),
+        "app.openSamModelFolder" => crate::panels::dialogs::show_model_folder(app),
         "app.about" => {
             app.ui.dialog = Some(Dialog::About);
             Ok(Value::Null)
@@ -1307,7 +1339,8 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 return Some(Ok(Value::Null));
             }
             // review first: the import dialog lists what was found
-            crate::import::open(app, paths)
+            let r = crate::import::open(app, paths);
+            import_into_album(app, p, r)
         }
         "file.importLightroom" => {
             let path = match p.get("path").and_then(Value::as_str).map(str::to_string) {
@@ -1335,9 +1368,35 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             Ok(Value::Null)
         }
         "file.findMissing" => {
+            let within = match p.get("within") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(path)) if !path.is_empty() => Some(path.clone()),
+                Some(Value::String(_)) => return Some(Err("file.findMissing: `within` must not be empty".into())),
+                Some(value) => return Some(Err(format!("file.findMissing: `within` must be a folder path, not {value}"))),
+            };
+            let wait = p.get("wait").and_then(Value::as_bool).unwrap_or(false);
+            let timeout = match p.get("timeout") {
+                None | Some(Value::Null) => std::time::Duration::from_secs(600),
+                Some(Value::Number(n)) => {
+                    if let Some(s) = n.as_f64() {
+                        if s.is_finite() && s >= 0.0 {
+                            match std::time::Duration::try_from_secs_f64(s) {
+                                Ok(d) => d,
+                                Err(_) => return Some(Err("file.findMissing: `timeout` is too large".into())),
+                            }
+                        } else {
+                            return Some(Err("file.findMissing: `timeout` must be a non-negative number of seconds".into()));
+                        }
+                    } else {
+                        return Some(Err("file.findMissing: `timeout` must be a number of seconds".into()));
+                    }
+                }
+                Some(other) => return Some(Err(format!("file.findMissing: `timeout` must be a number of seconds, not {other}"))),
+            };
+            let title = if within.is_some() { "Locate Missing Files…" } else { "Find Missing Photos…" };
             let folder = match p.get("folder").and_then(Value::as_str) {
                 Some(f) => Some(f.to_string()),
-                None => match crate::pick::ask(app, id, p, "folder", PickRequest::folder(crate::i18n::tr("Find Missing Photos…")), |s| {
+                None => match crate::pick::ask(app, id, p, "folder", PickRequest::folder(crate::i18n::tr(title)), |s| {
                     s.pick_folder.as_mut().and_then(|f| f()).map(|x| vec![x])
                 }) {
                     Picked::Now(v) => v.into_iter().next(),
@@ -1351,8 +1410,19 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             if app.tasks.is_running(LABEL) {
                 return Some(Err("Find Missing Photos is already searching".into()));
             }
-            let candidates = lightcraft_engine::cmd::missing::find_candidates(&app.session.catalog);
-            let work = move || lightcraft_engine::cmd::missing::plan_find_missing(&candidates, &folder);
+            let mut candidates = lightcraft_engine::cmd::missing::find_candidates(&app.session.catalog);
+            if let Some(within) = within {
+                candidates.retain(|candidate| lightcraft_catalog::query::folder_within(&candidate.path, &within));
+            }
+            #[cfg(test)]
+            let test_delay = app.ui.find_missing_test_delay;
+            let work = move || {
+                #[cfg(test)]
+                if let Some(d) = test_delay {
+                    std::thread::sleep(d);
+                }
+                lightcraft_engine::cmd::missing::plan_find_missing(&candidates, &folder)
+            };
             let done = |app: &mut LightcraftApp, ctx: &egui::Context, plan: Result<lightcraft_engine::cmd::missing::FindPlan, String>| {
                 // relinked under the session as it is now: photos relinked meanwhile and files
                 // now in use are skipped
@@ -1377,19 +1447,31 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                                 unsure = unsure
                             ),
                         );
-                        app.ui.last_find_missing = Some(v);
+                        app.ui.last_find_missing = Some(v.clone());
+                        app.ui.last_find_missing_result = Some(Ok(v));
                     }
-                    Err(e) => app.toast(ctx, e),
+                    Err(e) => {
+                        app.toast(ctx, e.clone());
+                        app.ui.last_find_missing_result = Some(Err(e));
+                    }
                 }
             };
             app.ui.last_find_missing = None;
+            app.ui.last_find_missing_result = None;
             if let Err(e) = crate::tasks::spawn(app, LABEL, Some("findMissing"), work, done) {
                 return Some(Err(e));
             }
-            if p.get("wait").and_then(Value::as_bool).unwrap_or(false) {
+            if wait {
                 let ctx = app.tasks.repaint.clone().unwrap_or_default();
-                crate::tasks::wait(app, &ctx, std::time::Duration::from_secs(600));
-                return Some(Ok(app.ui.last_find_missing.clone().unwrap_or(Value::Null)));
+                let completed = crate::tasks::wait_for(app, &ctx, LABEL, timeout);
+                if !completed {
+                    return Some(Err("Find Missing Photos: search timed out (search continues in the background)".into()));
+                }
+                return match app.ui.last_find_missing_result.take() {
+                    Some(Ok(v)) => Some(Ok(v)),
+                    Some(Err(e)) => Some(Err(e)),
+                    None => Some(Err("Find Missing Photos: worker terminated unexpectedly".into())),
+                };
             }
             Ok(json!({"background": true}))
         }
@@ -1475,7 +1557,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             {
                 t.copy = true;
             }
-            r
+            import_into_album(app, p, r)
         }
         "file.addFolder" => {
             // a folder (searched recursively) into the import review
@@ -1489,7 +1571,10 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 },
             };
             match path {
-                Some(path) => crate::import::open(app, vec![path]),
+                Some(path) => {
+                    let r = crate::import::open(app, vec![path]);
+                    import_into_album(app, p, r)
+                }
                 None => Ok(Value::Null),
             }
         }
@@ -1797,6 +1882,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
 
 pub fn ui_enabled(app: &LightcraftApp, id: &str) -> bool {
     match id {
+        "library.selectOnlyActive" => app.session.active().is_some(),
         "dialog.contactSheet" | "app.contactSheet" => !cfg!(target_arch = "wasm32") && app.session.active().is_some() && app.export.is_none(),
         s if s.starts_with("panel.") || s.starts_with("tool.") || s.starts_with("section.") => app.session.active().is_some() || s == "panel.close",
         "app.export" | "dialog.export" | "dialog.createPreset" | "dialog.rename" | "dialog.captureTime" | "dialog.copySettings" => {
@@ -1814,18 +1900,20 @@ pub fn ui_enabled(app: &LightcraftApp, id: &str) -> bool {
                     .and_then(|id| app.session.catalog.photo(id))
                     .is_some_and(|p| matches!(p.source, lightcraft_engine::catalog::Source::File { .. }))
         }
+        "app.openSamModelFolder" => app.session.segmenter.dir.is_some() && app.services.open_with.is_some(),
         "file.exportPresets" => app.session.presets.iter().any(|p| !p.builtin),
         "file.exportCurvePresets" => !app.session.curve_presets.is_empty(),
         "view.compare" => app.session.catalog.len() > 1,
         "view.fullScreenPreview" | "view.infoOverlay" | "view.navigator" => app.session.active().is_some() || app.ui.fullscreen,
-        "app.openLibrary" | "app.newLibrary" | "file.addFolder" => app.services.pick_folder.is_some() && !crate::lightroom_import::is_running(app),
+        "app.openLibrary" | "app.newLibrary" => app.services.pick_folder.is_some() && crate::panels::settings::can_switch_library(app).is_ok(),
+        "file.addFolder" => app.services.pick_folder.is_some() && !crate::lightroom_import::is_running(app),
         "file.backupLibrary" => app.services.backup_library.is_some(),
         "app.openLogFolder" => app.services.reveal.is_some() && app.services.log_file.is_some(),
         "file.restoreLibrary" => app.services.restore_library.is_some(),
         "app.clearRecentLibraries" => !app.ui.settings.recent_libraries.is_empty(),
         "compare.swap" | "compare.makeSelect" | "compare.set" => app.ui.view == ViewMode::Compare,
         s if s.starts_with("dialog.merge") || (s.starts_with("merge.") && s.ends_with("Last")) => {
-            app.session.targets(&serde_json::json!({})).len() >= 2 && app.merge.final_task.is_none()
+            app.session.selected().len() >= 2 && app.merge.final_task.is_none()
         }
         _ => true,
     }
@@ -1872,7 +1960,7 @@ pub fn confirm_delete(app: &mut LightcraftApp) -> bool {
     if !app.ui.settings.confirm_delete {
         return false;
     }
-    let count = app.session.targets(&json!({})).len();
+    let count = app.session.selected().len();
     if count == 0 {
         return false;
     }

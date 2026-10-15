@@ -22,7 +22,7 @@ pub(crate) fn rename_preview(
 ) -> (Option<Vec<lightcraft_engine::rename::RenamePlan>>, usize) {
     use std::hash::{Hash, Hasher};
     type Rows = std::sync::Arc<std::sync::Mutex<Option<Vec<lightcraft_engine::rename::RenamePlan>>>>;
-    let ids = app.session.targets(&json!({}));
+    let ids = app.session.selected();
     let photos = lightcraft_engine::rename::rename_photos(&app.session.catalog, &ids);
     let total = photos.len();
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -71,7 +71,7 @@ fn watermark_preview(
     type Base = std::sync::Arc<std::sync::Mutex<(u8, Option<Result<lightcraft_raster::Rgba8, String>>)>>;
     type Shown = (u64, u8, lightcraft_engine::export::Watermark, usize, egui::TextureHandle);
     let t = Tokens::get(ui.ctx());
-    let Some(&id) = app.session.targets(&json!({})).first() else { return };
+    let Some(&id) = app.session.selected().first() else { return };
     let Some(photo) = app.session.catalog.photo(id).cloned() else { return };
     let (out_w, out_h) = lightcraft_engine::export::output_size(&photo, &lightcraft_engine::export::ExportOptions { resize, ..Default::default() });
     let export_short = out_w.min(out_h);
@@ -98,8 +98,8 @@ fn watermark_preview(
                 let (out, repaint) = (base.clone(), ctx.clone());
                 let work = move || {
                     for job in jobs {
-                        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job.run().rendered.map(|r| r.image)))
-                            .unwrap_or_else(|_| Err("the preview failed unexpectedly".into()));
+                        // (a panic in the render is its failure: `RenderJob::run`)
+                        let r = job.run().rendered.map(|r| r.image);
                         let mut got = out.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                         // a failed sharp render keeps the thumbnail
                         if r.is_ok() || !matches!(got.1, Some(Ok(_))) {
@@ -438,7 +438,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     );
                 }
                 Dialog::CaptureTime { mode, time, days, hours, minutes, zone } => {
-                    let n = app.session.targets(&json!({})).len();
+                    let n = app.session.selected().len();
                     field(ui, "Change", |ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
                         for (i, (label, m)) in [("Set date & time", "set"), ("Shift by", "shift"), ("Time zone", "zone")].iter().enumerate() {
@@ -522,7 +522,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     );
                 }
                 Dialog::Rename { template, start } => {
-                    let n = app.session.targets(&json!({})).len();
+                    let n = app.session.selected().len();
                     ui.label(egui::RichText::new(crate::i18n::tr_format!("{n} photo{}", if n == 1 { "" } else { "s" }, n = n)).color(t.text_dim));
                     let template_id = egui::Id::new("rename-template");
                     let tags_open = field(ui, "Template", |ui| {
@@ -608,7 +608,18 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                         confirm = true;
                     }
                 }
-                Dialog::NewAlbum { name, .. } | Dialog::RenameAlbum { name, .. } => {
+                Dialog::NewAlbum { name, folder, include_selected, .. } => {
+                    if dialog_field(ui, "field:albumName", name, "Name") {
+                        confirm = true;
+                    }
+                    // as in Lightroom, the option is only there when something is selected
+                    if !*folder && !app.session.selected().is_empty() {
+                        ui.add_space(6.0);
+                        let r = ui.checkbox(include_selected, crate::i18n::tr("Include selected photos"));
+                        crate::widgets::register(ui.ctx(), "check:albumIncludeSelected", r.rect);
+                    }
+                }
+                Dialog::RenameAlbum { name, .. } => {
                     if dialog_field(ui, "field:albumName", name, "Name") {
                         confirm = true;
                     }
@@ -621,7 +632,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 }
                 Dialog::CopySettings { groups } => group_checklist(ui, "copyGroup", groups),
                 Dialog::PasteSettings { groups } => {
-                    let n = app.session.targets(&json!({})).len();
+                    let n = app.session.selected().len();
                     ui.label(
                         egui::RichText::new(crate::i18n::tr_format!("Paste into {n} photo{} — only settings that were copied are pasted", if n == 1 { "" } else { "s" }, n = n))
                             .color(t.text_dim),
@@ -631,7 +642,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 Dialog::ContactSheet { options } => {
                     options.columns = options.columns.clamp(1, 8);
                     options.rows = options.rows.clamp(1, 10);
-                    let n = app.session.targets(&json!({})).len();
+                    let n = app.session.selected().len();
                     ui.label(format!("{n} selected photos · {} pages", n.div_ceil(options.columns * options.rows)));
                     field(ui, "Paper", |ui| {
                         egui::ComboBox::from_id_salt("contactSheetPaper").selected_text(&options.paper).show_ui(ui, |ui| {
@@ -678,13 +689,21 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     });
                     ui.add_space(4.0);
                     let before = opts.format;
+                    // "Rendered DNG" is a DNG option (below), not a format of its own in this list
+                    let mut shown = if opts.format == F::RenderedDng { F::Dng } else { opts.format };
                     choices(
                         ui,
                         "Format",
                         "exportFormat",
                         &[(F::Jpeg, "JPEG"), (F::Png, "PNG"), (F::Tiff, "TIFF"), (F::Psd, "PSD"), (F::Webp, "WebP"), (F::Avif, "AVIF"), (F::Jxl, "JPEG XL"), (F::Dng, "DNG"), (F::Original, "Original files")],
-                        &mut opts.format,
+                        &mut shown,
                     );
+                    if shown != opts.format && !(shown == F::Dng && opts.format == F::RenderedDng) {
+                        opts.format = shown;
+                    }
+                    if matches!(opts.format, F::Dng | F::RenderedDng) {
+                        choices(ui, "DNG of", "exportDngKind", &[(F::Dng, "Raw data"), (F::RenderedDng, "Rendered photo")], &mut opts.format);
+                    }
                     if !opts.format.is_rendered() {
                         let note = if opts.format == F::Dng {
                             "Raw photos as DNG, with the edits embedded. Size, color and output options don't apply."
@@ -710,10 +729,15 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                         if opts.hdr && !opts.hdr_output() {
                             ui.label(egui::RichText::new("HDR TIFF needs 32-bit float.").color(t.text_dim));
                         }
+                        if opts.hdr && opts.format == F::Avif {
+                            use lightcraft_engine::export::HdrCurve as H;
+                            choices(ui, "HDR curve", "exportHdrCurve", &[(H::Pq, "PQ"), (H::Hlg, "HLG")], &mut opts.hdr_transfer);
+                        }
                     }
                     if !rendered {
                     } else if opts.format == F::Avif && opts.hdr {
-                        ui.label(egui::RichText::new("Color space: Rec. 2020 PQ (HDR AVIF)").color(t.text_dim));
+                        let curve = if opts.hdr_transfer == lightcraft_engine::export::HdrCurve::Hlg { "HLG" } else { "PQ" };
+                        ui.label(egui::RichText::new(format!("Color space: Rec. 2020 {curve} (HDR AVIF)")).color(t.text_dim));
                     } else if opts.format == F::Png && opts.hdr {
                         ui.label(egui::RichText::new("Color space: Rec. 2020 PQ, 16-bit (HDR PNG)").color(t.text_dim))
                             .on_hover_text("Viewers that don't read the PNG cICP chunk show PQ values as sRGB: flat and washed out. For a picture that looks right everywhere, use JPEG (gain map).");
@@ -1400,11 +1424,32 @@ fn sam_by_hand(sam: &lightcraft_engine::segment::Segmenter) -> bool {
 
 const SAM_HELP: &str = "https://github.com/storytold/lightcraft/blob/main/docs/ai-masks.md#getting-the-model";
 
-/// Show SAM 3 model folder in file manager, creating it first when needed.
-fn show_model_folder(app: &mut LightcraftApp, dir: &std::path::Path) -> Result<(), String> {
+/// Open the configured SAM 3 folder itself; revealing a file opens its parent instead.
+pub(crate) fn show_model_folder(app: &mut LightcraftApp) -> Result<serde_json::Value, String> {
+    let dir = app.session.segmenter.dir.as_ref().ok_or("no folder is set for the SAM 3 model")?;
+    let path = dir.to_str().ok_or("the model folder path is not valid UTF-8")?;
+    let open = app.services.open_with.as_mut().ok_or("opening model folders is not available here")?;
+    // Create only after the host action is available. Existing model files are left alone.
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let reveal = app.services.reveal.as_mut().ok_or("not available here")?;
-    reveal(&dir.to_string_lossy())
+    #[cfg(target_os = "linux")]
+    if let Some(open_folder) = app.services.open_model_folder.clone() {
+        let path = path.to_string();
+        let folder = path.clone();
+        crate::tasks::spawn(
+            app,
+            "Show in File Manager",
+            Some("openModelFolder"),
+            move || open_folder(&folder),
+            |app, ctx, result| {
+                if let Err(e) = result {
+                    app.toast_error(ctx, e);
+                }
+            },
+        )?;
+        return Ok(json!({"path": path, "background": true}));
+    }
+    open(path, "")?;
+    Ok(json!({"path": path}))
 }
 
 /// The SAM 3 dialog: what the model is, its size and licence, and the download's progress.
@@ -1472,11 +1517,11 @@ fn sam_model_body(app: &mut LightcraftApp, ui: &mut egui::Ui, error: Option<&str
                 }
             }
         }
-        if !dir.is_empty() && app.services.reveal.is_some() {
+        if !dir.is_empty() && crate::menus::ui_enabled(app, "app.openSamModelFolder") {
             let r = ui.button(crate::i18n::tr(crate::menus::reveal_label()));
             crate::widgets::register(ui.ctx(), "button:samFolder", r.rect);
             if r.clicked()
-                && let Err(e) = show_model_folder(app, std::path::Path::new(&dir))
+                && let Err(e) = app.run("app.openSamModelFolder", json!({}))
             {
                 app.toast_error(ui.ctx(), e);
             }
@@ -1489,6 +1534,16 @@ fn sam_model_body(app: &mut LightcraftApp, ui: &mut egui::Ui, error: Option<&str
             ))
             .color(t.text_dim),
         );
+        ui.horizontal_wrapped(|ui| {
+            // (the folder's Show in File Manager button is in the row above)
+            let r = ui.link(crate::i18n::tr("How to install the model")).on_hover_text(SAM_HELP);
+            crate::widgets::register(ui.ctx(), "link:samHelp", r.rect);
+            if r.clicked()
+                && let Err(e) = crate::links::open(app, SAM_HELP)
+            {
+                app.toast(ui.ctx(), e);
+            }
+        });
     }
     if let Some(e) = error.map(str::to_string).or(d.error) {
         ui.label(egui::RichText::new(format!("{} {e}", crate::i18n::tr("The download didn't work:"))).color(egui::Color32::from_rgb(230, 90, 80)));
@@ -1529,8 +1584,8 @@ pub fn confirm_dialog(app: &mut LightcraftApp, dlg: &Dialog) -> Result<serde_jso
             }
             r
         }
-        Dialog::NewAlbum { name, folder, parent } => {
-            created_in(app, "album.create", json!({"name": name, "folder": folder, "addSelected": !folder, "parent": parent}))
+        Dialog::NewAlbum { name, folder, parent, include_selected } => {
+            created_in(app, "album.create", json!({"name": name, "folder": folder, "addSelected": !folder && *include_selected, "parent": parent}))
         }
         Dialog::RenameAlbum { id, name } => app.run("album.rename", json!({"id": id, "name": name})),
         Dialog::TextPrompt { value, command, params, key, .. } => {

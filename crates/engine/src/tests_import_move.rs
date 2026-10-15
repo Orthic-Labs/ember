@@ -22,6 +22,9 @@ fn write_png(path: &Path, seed: u8) {
     let bytes = lightcraft_codecs::encode_png(&lightcraft_codecs::EncodeImage::rgba8(&img), &lightcraft_codecs::EncodeMeta::default()).unwrap();
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, bytes).unwrap();
+    // undated files take the file's date: the tests' clock time (2026-01-14T05:58:48)
+    let t = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_768_370_328);
+    std::fs::File::options().write(true).open(path).unwrap().set_modified(t).unwrap();
 }
 
 fn xmp(rating: u8) -> String {
@@ -288,6 +291,31 @@ fn a_source_that_cannot_be_removed_is_kept_and_reported() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
+/// The copy's folder is synced to disk before the original is removed; when that sync fails the original stays
+/// and is reported, and the photo is imported from its copy (issue #1501).
+#[test]
+fn the_original_stays_when_the_copys_folder_cannot_be_synced() {
+    let base = temp_dir("dirsync");
+    let (card, dest) = (base.join("card"), base.join("out"));
+    write_png(&card.join("a.png"), 1);
+    std::fs::create_dir_all(&dest).unwrap();
+    let mut s = session();
+    inject(Fault::FailDirSync);
+    let r = import_move(&mut s, &[&card], &dest, json!({"organize": "flat"}));
+    inject(Fault::None);
+    assert_eq!(len(&r, "imported"), 1, "{r}");
+    assert_eq!(len(&r, "moved"), 0, "{r}");
+    assert!(r["kept"][0]["reason"].as_str().unwrap().contains("durable"), "{r}");
+    assert!(card.join("a.png").is_file() && dest.join("a.png").is_file());
+    // and with the sync working, nested new folders are made and the original moves
+    write_png(&card.join("b.png"), 2);
+    let deep = base.join("out2");
+    let r = import_move(&mut s, &[&card.join("b.png")], &deep, json!({"organize": "day"}));
+    assert_eq!(len(&r, "moved"), 1, "{r}");
+    assert!(!card.join("b.png").exists());
+    let _ = std::fs::remove_dir_all(&base);
+}
+
 /// Duplicates, unreadable files and files that fail (here: a different sidecar already at the
 /// destination) keep their sources; the rest of the batch still moves.
 #[test]
@@ -498,5 +526,32 @@ fn copies_run_side_by_side_with_the_same_outcome() {
     assert_eq!(r["duplicates"][0]["existing"], ids[8], "{r}");
     let first = s.catalog.photo(lightcraft_catalog::PhotoId(ids[0])).unwrap();
     assert_eq!(first.file_name, "IMG_1.png");
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[test]
+fn finish_keeps_the_original_when_the_copy_changed_to_the_same_length() {
+    use crate::import_move::{finish, place};
+    let base = temp_dir("finish-recheck");
+    let (src, dest) = (base.join("card/IMG_1.jpg"), base.join("dest"));
+    std::fs::create_dir_all(src.parent().unwrap()).unwrap();
+    std::fs::write(&src, b"original bytes").unwrap();
+    inject(Fault::NoLink);
+    let placed = place(&src, &dest, "IMG_1.jpg").unwrap();
+    // unchanged copy: the original goes
+    assert!(finish(&placed).is_ok());
+    assert!(!src.exists());
+    // a copy replaced by other bytes of the same length: the original stays
+    std::fs::write(&src, b"original bytes").unwrap();
+    let placed = place(&src, &dest, "IMG_1.jpg").unwrap();
+    std::fs::write(&placed.dst, b"different byte").unwrap();
+    assert!(finish(&placed).is_err());
+    assert_eq!(std::fs::read(&src).unwrap(), b"original bytes");
+    // an original edited meanwhile to other bytes of the same length: it stays too
+    let placed = place(&src, &dest, "IMG_1.jpg").unwrap();
+    std::fs::write(&src, b"edited  bytes!").unwrap();
+    assert!(finish(&placed).is_err());
+    assert_eq!(std::fs::read(&src).unwrap(), b"edited  bytes!");
+    inject(Fault::None);
     let _ = std::fs::remove_dir_all(&base);
 }

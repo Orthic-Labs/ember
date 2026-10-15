@@ -3,7 +3,7 @@
 //! ```text
 //! lightcraft-cli run [--demo | --library DIR | --connect [ADDR]] [--import PATH]… CMD [key=value…]…
 //! lightcraft-cli mcp [--connect [ADDR]] [--demo] [--compact] [FILES/FOLDERS…]
-//! lightcraft-cli render <in> -o <out> [--set control=value]… [--settings FILE.json] [--preset ID] [--size N] [--quality Q]
+//! lightcraft-cli render <in> -o <out> [--set control=value]… [--settings FILE.json|FILE.lcpreset] [--preset ID] [--size N] [--quality Q]
 //! lightcraft-cli snapshot [--library DIR | --demo] [--script FILE.jsonl] [-o OUT.png] [--size WxH] [--scale S] [FILES…]
 //! lightcraft-cli merge hdr|panorama|hdr-panorama [OPTIONS] FILES…
 //! lightcraft-cli synth-merge hdr|panorama -o DIR
@@ -80,7 +80,8 @@ USAGE:
       Develop one file and export it (.jpg, .png, .tif, .webp, .avif, .jxl, .psd or .dng by extension) with the
       same encoder as the app's Export dialog. Options:
         --set CONTROL=VALUE  set a develop slider, repeatable (e.g. --set light.exposure=0.5)
-        --settings FILE      merge a partial develop-settings JSON file
+        --settings FILE      merge a partial develop-settings JSON file, or apply the one preset of a
+                             .lcpreset (preset.export) or XMP preset
         --preset ID          apply a preset (see `commands`/presets.list)
         --size N             long edge in pixels (default: full size, cropped)
         --quality Q          JPEG/AVIF/JPEG XL quality 1..100 (default 92)
@@ -382,10 +383,14 @@ fn mcp(args: &[String]) -> Result<(), String> {
     while i < args.len() {
         match args[i].as_str() {
             "--connect" => {
-                // Optional address argument.
-                match args.get(i + 1).filter(|a| !a.starts_with("--") && a.contains(':')) {
+                // Optional address argument. A bare port (all digits) is taken as a port on the
+                // loopback default — matches the help's `--connect [ADDR]` hint alongside the
+                // `--control 7980` example. A non-numeric, non-`--`-prefixed token (e.g. a
+                // command id like `ui.inspect`) leaves the address at its default so the
+                // command is still consumed next. (#1178)
+                match args.get(i + 1).filter(|a| a.contains(':') || a.chars().all(|c| c.is_ascii_digit())) {
                     Some(a) => {
-                        connect = Some(a.clone());
+                        connect = Some(if a.contains(':') { a.clone() } else { format!("127.0.0.1:{a}") });
                         i += 1;
                     }
                     None => connect = Some(DEFAULT_ADDR.to_string()),
@@ -650,9 +655,9 @@ fn run(args: &[String]) -> Result<(), String> {
                 i += 1;
                 break;
             }
-            "--connect" => match args.get(i + 1).filter(|a| a.contains(':') && !a.contains('=')) {
+            "--connect" => match args.get(i + 1).filter(|a| !a.contains('=') && (a.contains(':') || a.chars().all(|c| c.is_ascii_digit()))) {
                 Some(a) => {
-                    connect = Some(a.clone());
+                    connect = Some(if a.contains(':') { a.clone() } else { format!("127.0.0.1:{a}") });
                     i += 1;
                 }
                 None => connect = Some(DEFAULT_ADDR.to_string()),
@@ -756,11 +761,41 @@ fn connect_port(addr: &str) -> &str {
     addr.rsplit_once(':').map_or(addr, |(_, port)| port)
 }
 
+/// What `render --settings FILE` applies: a partial develop-settings object, or the one preset of
+/// a preset file (`.lcpreset` from `preset.export`, XMP), applied as the app applies it. Merging a
+/// `.lcpreset` as settings dropped its wrapper and applied nothing (#1730).
+enum SettingsFile {
+    Partial(Value),
+    Preset(lightcraft_engine::develop::Preset),
+}
+
+fn read_settings(p: &str) -> Result<SettingsFile, String> {
+    use lightcraft_engine::presets::{LCPRESET_EXT, parse_preset_file};
+    let bytes = std::fs::read(p).map_err(|e| format!("{p}: {e}"))?;
+    let ext = Path::new(p).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    let json = serde_json::from_slice::<Value>(&bytes);
+    // a settings object never has a top-level `presets` or `settings` key; a preset file always does
+    let preset_file =
+        ext == LCPRESET_EXT || ext == "xmp" || json.as_ref().is_ok_and(|v| v.is_array() || v.get("presets").is_some() || v.get("settings").is_some());
+    if preset_file {
+        let mut list = parse_preset_file(p, &bytes).map_err(|e| format!("{p}: {e}"))?;
+        return match (list.pop(), list.len()) {
+            (Some(preset), 0) => Ok(SettingsFile::Preset(preset)),
+            (None, _) => Err(format!("{p}: no presets in this file")),
+            (Some(_), n) => Err(format!("{p}: {} presets in this file; --settings applies one, export it on its own", n + 1)),
+        };
+    }
+    match json.map_err(|e| format!("{p}: {e}"))? {
+        v @ Value::Object(_) => Ok(SettingsFile::Partial(v)),
+        _ => Err(format!("{p}: not a develop-settings object or a preset file")),
+    }
+}
+
 fn render(args: &[String]) -> Result<(), String> {
     let mut input = None;
     let mut output = None;
     let mut values = serde_json::Map::new();
-    let mut settings: Option<Value> = None;
+    let mut settings = None;
     let mut preset = None;
     let mut size: Option<u64> = None;
     let mut quality = 92u8;
@@ -775,11 +810,7 @@ fn render(args: &[String]) -> Result<(), String> {
                 let v: f64 = v.trim().parse().map_err(|_| format!("--set {k}: `{v}` is not a number"))?;
                 values.insert(k.trim().to_string(), json!(v));
             }
-            "--settings" => {
-                let p = take_value(args, &mut i, "--settings")?;
-                let text = std::fs::read_to_string(p).map_err(|e| format!("{p}: {e}"))?;
-                settings = Some(serde_json::from_str(&text).map_err(|e| format!("{p}: {e}"))?);
-            }
+            "--settings" => settings = Some(read_settings(take_value(args, &mut i, "--settings")?)?),
             "--preset" => preset = Some(take_value(args, &mut i, "--preset")?.to_string()),
             "--size" => size = Some(take_value(args, &mut i, "--size")?.parse().map_err(|_| "--size expects a number")?),
             "--quality" => quality = take_value(args, &mut i, "--quality")?.parse().map_err(|_| "--quality expects 1..100")?,
@@ -805,8 +836,14 @@ fn render(args: &[String]) -> Result<(), String> {
     if let Some(p) = preset {
         run(&mut s, "preset.apply", json!({"id": p}))?;
     }
-    if let Some(st) = settings {
-        run(&mut s, "develop.merge", json!({"settings": st}))?;
+    match settings {
+        Some(SettingsFile::Partial(st)) => run(&mut s, "develop.merge", json!({"settings": st}))?,
+        Some(SettingsFile::Preset(mut p)) => {
+            p.id = "cli.settings".into();
+            s.presets.push(p);
+            run(&mut s, "preset.apply", json!({"id": "cli.settings"}))?;
+        }
+        None => {}
     }
     if !values.is_empty() {
         run(&mut s, "develop.set", json!({"values": values}))?;
@@ -953,7 +990,17 @@ fn snapshot(args: &[String]) -> Result<(), String> {
                         match next_path(&mut shots) {
                             Some(p) => {
                                 wrote_output = true;
-                                params["path"] = json!(p);
+                                // `params` is untrusted script JSON: `params["path"] = …` panics on
+                                // an array or a string. Only an object (or null, like an absent
+                                // `params`) may take the path.
+                                if params.is_null() {
+                                    params = json!({});
+                                }
+                                if let Some(o) = params.as_object_mut() {
+                                    o.insert("path".into(), json!(p));
+                                } else {
+                                    return Err(format!("{script}:{}: ui.screenshot: `params` must be a JSON object", n + 1));
+                                }
                             }
                             None => return Err(format!("{script}:{}: ui.screenshot needs a `path` (or give -o)", n + 1)),
                         }

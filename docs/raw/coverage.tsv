@@ -521,7 +521,7 @@ Hasselblad	H5D-50c	3FR	2013	preview	3FR is opened from its embedded JPEG only
 Hasselblad	H5D-60	3FR	2013	preview	3FR is opened from its embedded JPEG only
 Hasselblad	H6D-100c	3FR	2015	preview	3FR is opened from its embedded JPEG only
 Hasselblad	HV	ARW	2013	unverified	ARW decoder (uncompressed, cRAW, packed 12-bit, lossless, downsized YCbCr)
-Hasselblad	Lunar	3FR	2012	preview	3FR is opened from its embedded JPEG only
+Hasselblad	Lunar	3FR	2012	verified	issue #1275: raw.pixls.us 4051 (a Sony NEX-7 ARW under Make HASSELBLAD) decodes from sensor data; black 512 and SR2SubIFD WB as on a NEX-7
 Hasselblad	Stellar II	3FR	2015	preview	3FR is opened from its embedded JPEG only
 Hasselblad	X1D	3FR	2015	preview	3FR is opened from its embedded JPEG only
 Hasselblad	X2D II 100C (**)	3FR	2024	preview	3FR is opened from its embedded JPEG only

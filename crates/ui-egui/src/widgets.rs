@@ -45,6 +45,12 @@ pub fn preview_only_variant(reason: &str) -> &str {
 
 /// What a preview-only raw means for the user (see `Photo::preview_only`).
 pub fn preview_only_explanation(reason: &str) -> String {
+    if reason.starts_with("Nikon High Efficiency NEF (") {
+        return crate::i18n::tr(
+            "Nikon High Efficiency NEF (HE / HE★) uses intoPIX TicoRAW compression. Ember does not currently have a license for this codec, so only the camera's embedded JPEG preview is available, not the raw sensor data. To edit raw data, shoot Lossless compressed NEF or convert existing HE files to DNG using a licensed converter.",
+        )
+        .to_string();
+    }
     crate::i18n::tr_format!(
         "Ember can't decode this raw variant yet ({}). You're editing the camera's embedded JPEG preview, which already includes the camera's picture style (e.g. Monochrome) and white balance.",
         preview_only_variant(reason)
@@ -216,13 +222,16 @@ pub fn slider(ui: &mut Ui, spec: &ControlSpec, value: f64, enabled: bool, label_
         ui.memory_mut(|m| m.surrender_focus(crate::text_field::id(&format!("sliderField:{}", spec.id))));
     }
     let mut out = SliderOut::default();
-    let span = (spec.max - spec.min).max(1e-9);
-    let to_x = |v: f64| track_rect.left() + ((v - spec.min) / span).clamp(0.0, 1.0) as f32 * track_rect.width();
-    let from_x = |x: f32| spec.min + ((x - track_rect.left()) / track_rect.width()).clamp(0.0, 1.0) as f64 * span;
+    // value ↔ track position: linear, except for the Kelvin temperature (`ControlSpec::position`)
+    let to_x = |v: f64| track_rect.left() + spec.position(v) as f32 * track_rect.width();
+    let from_x = |x: f32| spec.value_at(f64::from((x - track_rect.left()) / track_rect.width()));
     let mut v = value;
     if let Some((mut text, frames, pressed)) = typing.take() {
         // Keep the owned opening release focused without restarting its draft or selection.
-        if pressed && value_released {
+        // egui gives that release's click to the readout, so the field under it gives up the focus
+        // whatever frame it lands on (issue #1362): the field takes it back after drawing too.
+        let opening_release = pressed && value_released;
+        if opening_release {
             ui.memory_mut(|m| m.request_focus(crate::text_field::id(&format!("sliderField:{}", spec.id))));
         }
         let pressed = pressed && !value_released;
@@ -237,10 +246,11 @@ pub fn slider(ui: &mut Ui, spec: &ControlSpec, value: f64, enabled: bool, label_
             .select_on_focus(true)
             .begin_edit(frames == 0)
             .show(&mut child);
-        if frames < 2 && !matches!(field.ending, Some(crate::text_field::Ending::Return | crate::text_field::Ending::Escape)) {
+        if (frames < 2 || opening_release) && !matches!(field.ending, Some(crate::text_field::Ending::Return | crate::text_field::Ending::Escape)) {
             field.response.request_focus();
-            typing = Some((text.clone(), frames + 1, pressed));
-            ui.data_mut(|m| m.insert_temp(typing_id, (text, frames + 1, pressed)));
+            let frames = frames.saturating_add(1);
+            typing = Some((text.clone(), frames, pressed));
+            ui.data_mut(|m| m.insert_temp(typing_id, (text, frames, pressed)));
         } else if field.ending.is_some() || !field.editing || !enabled {
             // Esc (or the slider turning off) keeps the old value; Return or clicking away applies
             let cancelled = !enabled || field.cancelled();
@@ -267,13 +277,19 @@ pub fn slider(ui: &mut Ui, spec: &ControlSpec, value: f64, enabled: bool, label_
             && let Some(p) = resp.interact_pointer_pos()
         {
             let fine = ui.input(|i| i.modifiers.shift);
+            let step = spec.step.max(1e-9);
             let nv = if fine {
+                // a tenth of the pointer's movement along the track; the unrounded position is kept, so a
+                // slow drag adds up instead of rounding back to the same step every frame
+                let fine_id = id.with("fine-pos");
                 let dx = ui.input(|i| i.pointer.delta().x);
-                value + dx as f64 * span / track_rect.width() as f64 * 0.1
+                let kept = ui.data(|m| m.get_temp::<f64>(fine_id)).filter(|&p| ((spec.value_at(p) / step).round() * step - value).abs() < step / 2.0);
+                let pos = (kept.unwrap_or_else(|| spec.position(value)) + f64::from(dx / track_rect.width()) * 0.1).clamp(0.0, 1.0);
+                ui.data_mut(|m| m.insert_temp(fine_id, pos));
+                spec.value_at(pos)
             } else {
                 from_x(p.x)
             };
-            let step = spec.step.max(1e-9);
             let nv = ((nv / step).round() * step).clamp(spec.min, spec.max);
             if (nv - value).abs() > 1e-12 {
                 out.value = Some(nv);
@@ -369,10 +385,11 @@ pub fn slider(ui: &mut Ui, spec: &ControlSpec, value: f64, enabled: bool, label_
 }
 
 /// Convert vertical wheel movement to bounded slider steps, keeping sub-notch
-/// trackpad movement between frames without amplifying a single large event.
+/// trackpad movement between frames without amplifying a single large event. One mouse-wheel
+/// notch ([`crate::theme::WHEEL_LINE_POINTS`]) is one step.
 fn wheel_nudges(remainder: &mut f32, delta: f32) -> f64 {
-    const POINTS_PER_STEP: f32 = 40.0;
-    let total = (*remainder + delta).clamp(-400.0, 400.0);
+    const POINTS_PER_STEP: f32 = crate::theme::WHEEL_LINE_POINTS;
+    let total = (*remainder + delta).clamp(-10.0 * POINTS_PER_STEP, 10.0 * POINTS_PER_STEP);
     let steps = (total / POINTS_PER_STEP).trunc();
     *remainder = total - steps * POINTS_PER_STEP;
     f64::from(steps)
@@ -594,6 +611,19 @@ pub fn dropdown(ui: &mut Ui, id: &str, text: &str, font: egui::FontId, color: Co
 mod tests {
     use super::*;
 
+    #[test]
+    fn high_efficiency_nef_explains_the_codec_limit_and_workarounds() {
+        let reason = "Nikon High Efficiency NEF (HE / HE★, a JPEG XS-based codec with no public specification; shoot RAW Lossless compressed to edit the raw data)";
+        let explanation = preview_only_explanation(reason);
+        assert!(explanation.contains("TicoRAW"), "{explanation}");
+        assert!(explanation.contains("does not currently have a license"), "{explanation}");
+        assert!(!explanation.contains("cannot decode"), "{explanation}");
+        assert!(explanation.contains("Lossless compressed NEF"), "{explanation}");
+        assert!(explanation.contains("DNG"), "{explanation}");
+        assert!(!explanation.contains("yet"), "{explanation}");
+        assert!(preview_only_explanation("unsupported CR3").contains("unsupported CR3"));
+    }
+
     /// Issue #647: hovering a star previews the rating a click would set.
     #[test]
     fn hovered_star_previews_its_rating() {
@@ -625,13 +655,56 @@ mod tests {
 
     #[test]
     fn wheel_steps_accumulate_small_movements_and_preserve_direction() {
+        // one mouse-wheel notch is one step, whatever a notch scrolls
+        let notch = crate::theme::WHEEL_LINE_POINTS;
         let mut remainder = 0.0;
-        assert_eq!(wheel_nudges(&mut remainder, 15.0), 0.0);
-        assert_eq!(wheel_nudges(&mut remainder, 25.0), 1.0);
+        assert_eq!(wheel_nudges(&mut remainder, notch * 0.375), 0.0);
+        assert_eq!(wheel_nudges(&mut remainder, notch * 0.625), 1.0);
         assert_eq!(remainder, 0.0);
-        assert_eq!(wheel_nudges(&mut remainder, -100.0), -2.0);
-        assert_eq!(wheel_nudges(&mut remainder, -20.0), -1.0);
+        assert_eq!(wheel_nudges(&mut remainder, -notch * 2.5), -2.0);
+        assert_eq!(wheel_nudges(&mut remainder, -notch * 0.5), -1.0);
         assert_eq!(remainder, 0.0);
+        assert_eq!(wheel_nudges(&mut remainder, notch), 1.0, "a single notch is a single nudge");
+        assert_eq!(remainder, 0.0);
+        assert_eq!(wheel_nudges(&mut remainder, notch * 50.0), 10.0, "a single huge event is capped");
+    }
+
+    /// Shift-drag moves a tenth of the pointer's way along the track, also on the Kelvin track (where a pixel of
+    /// fine drag near the centre is about 4 K): a pointer creeping a pixel a frame still adds up to steps.
+    #[test]
+    fn a_slow_shift_drag_adds_up() {
+        let ctx = egui::Context::default();
+        let temp = lightcraft_develop::controls::find("wb.temp").unwrap();
+        let mut value = 7000.0;
+        let frame = |time: f64, events: Vec<egui::Event>, value: f64| {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(320.0, 120.0))),
+                time: Some(time),
+                events,
+                ..Default::default()
+            };
+            let mut out = SliderOut::default();
+            ctx.run_ui(input, |ui| out = slider(ui, temp, value, true, None)).textures_delta.clear();
+            let track = take_registry(&ctx).into_iter().find(|(id, _)| id == "slider:wb.temp").unwrap().1;
+            (out, track)
+        };
+        // Shift is held from the start (the modifiers stay until they change)
+        let (_, track) = frame(0.0, vec![egui::Event::ModifiersChanged(egui::Modifiers::SHIFT)], value);
+        let mut at = pos2(track.left() + temp.position(value) as f32 * track.width(), track.center().y);
+        let press =
+            |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::SHIFT };
+        frame(0.1, vec![egui::Event::PointerMoved(at), press(at, true)], value);
+        let moves = 60;
+        for i in 0..moves {
+            at.x += 1.0;
+            let (out, _) = frame(0.2 + f64::from(i) * 0.02, vec![egui::Event::PointerMoved(at)], value);
+            value = out.value.unwrap_or(value);
+        }
+        frame(2.0, vec![press(at, false)], value);
+        // the drag starts once the pointer has moved a few pixels; every pixel after that counts
+        let lo = temp.value_at(temp.position(7000.0) + f64::from(moves - 10) / f64::from(track.width()) * 0.1);
+        let hi = temp.value_at(temp.position(7000.0) + f64::from(moves) / f64::from(track.width()) * 0.1);
+        assert!(value >= lo - 50.0 && value <= hi + 50.0 && value > 7000.0, "{value} K, expected {lo:.0}–{hi:.0} K");
     }
 
     /// Typed values (issue #322): signs, a decimal comma, units; on the control's steps, in range.

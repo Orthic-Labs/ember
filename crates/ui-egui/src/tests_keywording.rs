@@ -191,7 +191,7 @@ fn the_active_photo_alone_is_the_selection() {
     assert_eq!(h.app.session.selection.active.map(|p| p.0), Some(ids[0]));
     assert!(h.app.session.selection.ids.is_empty());
     assert!(has(&h, "keywordChip:Weddings") && !has(&h, "keywordChipPartial:Weddings"), "the active photo's keywords");
-    let ticks = crate::panels::keyword_list::Ticks::of(&h.app.session.catalog, &h.app.session.targets(&json!({})));
+    let ticks = crate::panels::keyword_list::Ticks::of(&h.app.session.catalog, &h.app.session.selected());
     assert_eq!(ticks.tick("Weddings"), crate::panels::keyword_list::Tick::All);
     assert!(has(&h, "keywordCheck:beach"));
 }

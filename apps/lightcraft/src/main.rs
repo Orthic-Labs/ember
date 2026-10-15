@@ -27,6 +27,7 @@ mod appearance;
 mod control_server;
 mod dialog_filter;
 mod editors;
+mod hdr_display;
 mod logging;
 #[cfg(target_os = "macos")]
 mod native_menu;
@@ -490,6 +491,14 @@ fn services(cc: &eframe::CreationContext<'_>, log_file: Option<&std::path::Path>
         pick_folder: Some(Box::new(|| {
             file_dialog().set_title(lightcraft_ui_egui::i18n::tr("Open Library")).pick_folder().map(|p| p.to_string_lossy().to_string())
         })),
+        #[cfg(target_os = "linux")]
+        open_model_folder: Some(std::sync::Arc::new(|path: &str| {
+            std::process::Command::new("xdg-open")
+                .arg(path)
+                .status()
+                .map_err(|e| e.to_string())
+                .and_then(|s| if s.success() { Ok(()) } else { Err(format!("opening folder failed: {s}")) })
+        })),
         open_with: Some(Box::new(editors::open_with)),
         check_editor: Some(Box::new(editors::check)),
         open_url: Some(Box::new(|url: &str| {
@@ -873,6 +882,8 @@ fn main() -> eframe::Result {
                 // (never required: without it, AI masks offer to download it; see docs/ai-masks.md)
                 // and the user's own download locations, one base URL per line (LIGHTCRAFT_SAM3_MIRRORS too)
                 session = session.with_default_sam3_model();
+                // HDR display: SDR unless the surface, platform and display all allow HDR
+                hdr_display::report(cc.wgpu_render_state.as_ref().map(|r| r.target_format));
                 let mut app = LightcraftApp::new(session, services(cc, app_log_file.as_deref()));
                 if let Some(ui) = prefs {
                     app.ui = ui;
@@ -882,6 +893,7 @@ fn main() -> eframe::Result {
                 app.notices.extend(prefs_warning);
                 app.notices.extend(launch_notices);
                 app.notices.extend(window_notice);
+                app.gpu_notice = true;
                 // what's on disk now: only changes are written
                 let writer = PrefsWriter {
                     path: if in_memory { None } else { prefs_path() },
