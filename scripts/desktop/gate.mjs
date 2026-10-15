@@ -22,7 +22,7 @@ function BunlessSpawn(command, args, env) {
 function lockfileReady(lockfile) {
   if (!existsSync(lockfile)) return false;
   const text = readFileSync(lockfile, "utf8");
-  return text.includes('name = "rightkit-control"') && text.includes('name = "rightkit-qa"');
+  return text.includes('name = "rightkit-qa-driver"') && text.includes('name = "rightkit-qa"');
 }
 
 function bootstrapLockfile(lockfile) {
@@ -34,7 +34,7 @@ function bootstrapLockfile(lockfile) {
     console.log("desktop gate: dependency changes require verified Cargo.lock refresh");
   }
   run("cargo", ["generate-lockfile"], "Cargo.lock bootstrap via @rightkit/release");
-  if (!lockfileReady(lockfile)) fail("Cargo.lock bootstrap did not resolve pinned rightkit-control & rightkit-qa");
+  if (!lockfileReady(lockfile)) fail("Cargo.lock bootstrap did not resolve pinned rightkit-qa-driver & rightkit-qa");
   const bytes = readFileSync(lockfile);
   const encoded = bytes.toString("base64");
   const digest = sha256(lockfile);

@@ -26,9 +26,9 @@
     "release:evidence:verify": "node scripts/desktop/evidence-verify.mjs"
   },
   "dependencies": {
-    "@rightkit/app-shell": "0.2.1",
-    "@rightkit/platform-ui": "0.1.2",
-    "@rightkit/shell": "0.1.0",
+    "@rightkit/react-shell": "0.6.4",
+    "@rightkit/platform-ui": "0.2.8",
+    "@rightkit/tauri-shell": "0.1.1",
     "@tauri-apps/api": "2.12.1",
     "react": "19.3.0",
     "react-dom": "19.3.0"
@@ -36,7 +36,7 @@
   "devDependencies": {
     "@rightkit/theme": "0.2.1",
     "@rightkit/qa-chrome": "0.1.0",
-    "@rightkit/git": "0.2.26",
+    "@rightkit/ci": "0.2.43",
     "@rightkit/release": "0.2.124",
     "@tauri-apps/cli": "2.12.1",
     "@vitejs/plugin-react": "6.1.2",

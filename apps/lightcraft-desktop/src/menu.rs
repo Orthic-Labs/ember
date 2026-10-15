@@ -2,7 +2,7 @@
 
 #![forbid(unsafe_code)]
 
-use rightkit_shell::{MenuEntry, MenuGroup, MenuSpec};
+use rightkit_tauri_shell::{MenuEntry, MenuGroup, MenuSpec};
 
 fn modifier() -> &'static str {
     #[cfg(target_os = "macos")]

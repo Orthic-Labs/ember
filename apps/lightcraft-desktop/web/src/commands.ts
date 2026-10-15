@@ -1,5 +1,5 @@
 import { toggledSection } from './controlSections';
-import type { Command } from '@rightkit/app-shell';
+import type { Command } from '@rightkit/react-shell';
 import type { CommandInfo, JsonObject, UiState } from './types';
 import { translate, type LocaleCode } from './i18n';
 

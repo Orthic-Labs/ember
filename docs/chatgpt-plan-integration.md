@@ -33,7 +33,7 @@ flowchart LR
 
 React receives redacted account status, models, progress & validated assessments. It never receives bearer/refresh/ID tokens. Engine remains sole authority for originals, render settings & later edit application. Local proxies contain no source paths, GPS or embedded metadata.
 
-Shared ownership: `rightkit-oauth` for authorization, `rightkit-secrets` for credentials, `rightkit-http` for transport & `rightkit-jobs` for job lifecycle. Registry-recorded availability is not proof of integration. First implementation task audits published APIs & dependency graphs against Ember's pure-Rust policy. Verify dynamic client IDs, arbitrary resource/scope parameters, callback decoding, OIDC/JWKS validation, atomic rotating credentials & bounded cancellable SSE. Extend shared owners where needed; retain current fetch transport until HTTP owner qualifies. Do not add Node/Electron/Codex CLI runtime solely for this flow.
+Shared ownership: `rightkit-oauth` for authorization, `rightkit-credentials` for credentials, `rightkit-http` for transport & `rightkit-job-queue` for job lifecycle. Registry-recorded availability is not proof of integration. First implementation task audits published APIs & dependency graphs against Ember's pure-Rust policy. Verify dynamic client IDs, arbitrary resource/scope parameters, callback decoding, OIDC/JWKS validation, atomic rotating credentials & bounded cancellable SSE. Extend shared owners where needed; retain current fetch transport until HTTP owner qualifies. Do not add Node/Electron/Codex CLI runtime solely for this flow.
 
 ## Authorization contract
 

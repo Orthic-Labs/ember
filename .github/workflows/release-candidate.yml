@@ -42,8 +42,7 @@ jobs:
         run: exit 1
   admission:
     needs: [private-repo-guard]
-    # Temporary runner correction: published ownership approval supports macOS/Windows.
-    runs-on: macos-15
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -84,7 +83,7 @@ jobs:
 
       - name: RightKit ownership (protected registry roots)
         shell: bash
-        run: test "$(git rev-parse HEAD)" = "${{ inputs.source_revision }}" && pnpm exec right-release ownership --app .
+        run: test "$(git rev-parse HEAD)" = "${{ inputs.source_revision }}" && pnpm exec right-release ownership --app . --advisory-when-pending
       - name: Admit exact main revision & version
         id: admit
         run: pnpm run release:admit
@@ -196,13 +195,13 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: lightcraft-desktop-workspace-${{ github.run_id }}-${{ github.run_attempt }}-candidate-${{ matrix.platform }}-${{ matrix.architecture }}-${{ needs.admission.outputs.version }}-${{ needs.admission.outputs.source_revision }}
+          name: lightcraft-desktop-workspace-${{ github.run_id }}-${{ github.run_attempt }}-candidate-${{ matrix.platform }}-${{ matrix.architecture }}-${{ needs.admission.outputs.version }}-${{ needs.admission.outputs.source_revision }}${{ needs.admission.outputs.artifact_suffix }}
           path: ${{ runner.temp }}/lightcraft-candidate/**
           if-no-files-found: error
       - name: Upload candidate stage summary
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: lightcraft-desktop-workspace-${{ github.run_id }}-${{ github.run_attempt }}-summary-candidate-${{ matrix.platform }}-${{ matrix.architecture }}-${{ needs.admission.outputs.version }}-${{ needs.admission.outputs.source_revision }}
+          name: lightcraft-desktop-workspace-${{ github.run_id }}-${{ github.run_attempt }}-summary-candidate-${{ matrix.platform }}-${{ matrix.architecture }}-${{ needs.admission.outputs.version }}-${{ needs.admission.outputs.source_revision }}${{ needs.admission.outputs.artifact_suffix }}
           path: ${{ runner.temp }}/right-git-stage-summary/stage-summary.json
           if-no-files-found: error
