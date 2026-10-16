@@ -1,6 +1,7 @@
 //! TIFF decode via the `tiff` crate: 1/2/4/8/16/32/64-bit integer, 16/32/64-bit float, gray/RGB/CMYK,
 //! alpha (associated or not), ICC (34675), XMP (700), orientation (274). First image only. Palette
-//! (indexed-colour) images are refused by the `tiff` crate itself, on every read path.
+//! (indexed-colour) images: the `tiff` crate refuses RGBPalette on every read path, so their first IFD is
+//! read from a copy that says BlackIsZero, and the indices are mapped through the ColorMap here.
 
 use crate::convert::{Buf, Meta, Model, Raw, check_size, finish};
 use crate::{DecodeOptions, Decoded, Error, Format, Result};
@@ -15,6 +16,9 @@ fn err(e: impl std::fmt::Display) -> Error {
 }
 
 pub(crate) fn decode(bytes: &[u8], opts: &DecodeOptions) -> Result<Decoded> {
+    let indexed = palette_as_gray(bytes);
+    let palette = indexed.is_some();
+    let bytes = indexed.as_deref().unwrap_or(bytes);
     let mut d = Decoder::new(std::io::Cursor::new(bytes)).map_err(err)?.with_limits(limits(opts));
     let (w, h) = d.dimensions().map_err(err)?;
     check_size(F, w as u64, h as u64, opts)?;
@@ -36,7 +40,7 @@ pub(crate) fn decode(bytes: &[u8], opts: &DecodeOptions) -> Result<Decoded> {
     let (wu, hu) = (w as usize, h as usize);
     let n = wu * hu;
     let mut buf = match res {
-        DecodingResult::U8(v) if bits < 8 => Buf::U8(unpack(&v, wu, hu, n_samples, bits)?),
+        DecodingResult::U8(v) if bits < 8 => Buf::U8(unpack(&v, wu, hu, n_samples, bits, palette)?),
         DecodingResult::U8(v) => Buf::U8(v),
         DecodingResult::U16(v) => Buf::U16(v),
         // Rare integer widths: keep 16 significant bits (plenty for display-referred data).
@@ -57,9 +61,9 @@ pub(crate) fn decode(bytes: &[u8], opts: &DecodeOptions) -> Result<Decoded> {
     }
 
     // Palette → 16-bit RGB.
-    if let ColorType::Palette(b) = ct {
+    if palette {
         let map = colormap.ok_or_else(|| err("palette image without ColorMap"))?;
-        let entries = 1usize << b.min(16);
+        let entries = 1usize << bits.min(16);
         if map.len() < 3 * entries {
             return Err(err("short ColorMap"));
         }
@@ -126,13 +130,19 @@ fn layout(ct: ColorType, compression: Option<u32>, planar: bool) -> Result<(Mode
 /// as a decode would refuse it: a layout or compression we can't decode, or strips/tiles that
 /// start past the end of the file (truncated). The compressed data itself is not checked.
 pub(crate) fn header(bytes: &[u8]) -> Result<(u32, u32, u16)> {
+    let indexed = palette_as_gray(bytes);
+    let palette = indexed.is_some();
+    let bytes = indexed.as_deref().unwrap_or(bytes);
     let mut d = Decoder::new(std::io::Cursor::new(bytes)).map_err(err)?.with_limits(limits(&DecodeOptions::default()));
     let (w, h) = d.dimensions().map_err(err)?;
     check_size(F, w as u64, h as u64, &DecodeOptions::default())?;
     let ct = d.colortype().map_err(err)?;
     let compression = d.get_tag_u32(Tag::Compression).ok();
     let planar = d.get_tag_u32(Tag::PlanarConfiguration).ok() == Some(2);
-    layout(ct, compression, planar)?;
+    let (_, _, _, bits) = layout(ct, compression, planar)?;
+    if palette {
+        check_palette(&mut d, bits)?;
+    }
     // what this build of the `tiff` crate decompresses: none, CCITT G4, LZW, JPEG, Deflate, PackBits
     if !matches!(compression.unwrap_or(1), 1 | 4 | 5 | 7 | 8 | 32773 | 32946) {
         return Err(Error::Unsupported(F, "compression method"));
@@ -151,6 +161,52 @@ pub(crate) fn header(bytes: &[u8]) -> Result<(u32, u32, u16)> {
     }
     let orientation = d.get_tag_u32(Tag::Orientation).ok().map(|v| v as u16).filter(|o| (1..=8).contains(o)).unwrap_or(1);
     Ok((w, h, orientation))
+}
+
+/// A copy of a palette (indexed-colour) file whose first IFD says BlackIsZero (photometric 1) instead of
+/// RGBPalette (3). Only that value changes: the samples are the same indices, which the `tiff` crate
+/// reads as gray. `None` when the first IFD is not a palette image.
+fn palette_as_gray(bytes: &[u8]) -> Option<Vec<u8>> {
+    let little = match bytes.get(0..2)? {
+        b"II" => true,
+        b"MM" => false,
+        _ => return None,
+    };
+    let u16_at = |at: usize| -> Option<u16> {
+        let b: [u8; 2] = bytes.get(at..at.checked_add(2)?)?.try_into().ok()?;
+        Some(if little { u16::from_le_bytes(b) } else { u16::from_be_bytes(b) })
+    };
+    let u32_at = |at: usize| -> Option<u32> {
+        let b: [u8; 4] = bytes.get(at..at.checked_add(4)?)?.try_into().ok()?;
+        Some(if little { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
+    };
+    let ifd = usize::try_from(u32_at(4)?).ok()?;
+    let count = usize::from(u16_at(ifd)?);
+    for i in 0..count {
+        let entry = ifd.checked_add(2 + 12 * i)?;
+        if u16_at(entry)? != 262 {
+            continue;
+        }
+        // one SHORT value that is RGBPalette; anything else is left to the decoder to refuse
+        let (kind, n, value) = (u16_at(entry.checked_add(2)?)?, u32_at(entry.checked_add(4)?)?, entry.checked_add(8)?);
+        if kind != 3 || n != 1 || u16_at(value)? != 3 {
+            return None;
+        }
+        let mut out = bytes.to_vec();
+        let one = if little { 1u16.to_le_bytes() } else { 1u16.to_be_bytes() };
+        out.get_mut(value..value.checked_add(2)?)?.copy_from_slice(&one);
+        return Some(out);
+    }
+    None
+}
+
+/// A palette image needs a ColorMap of three channels with 2^bits entries each.
+fn check_palette(d: &mut Decoder<std::io::Cursor<&[u8]>>, bits: u8) -> Result<()> {
+    let map = d.get_tag_u16_vec(Tag::ColorMap).map_err(|_| err("palette image without ColorMap"))?;
+    if map.len() < 3 * (1usize << bits.min(16)) {
+        return Err(err("short ColorMap"));
+    }
+    Ok(())
 }
 
 /// A BYTE/UNDEFINED tag as bytes (the decoder may surface unknown byte tags as unsigned values).
@@ -182,8 +238,8 @@ fn unsupported_name(ct: ColorType) -> &'static str {
 
 /// Samples narrower than a byte (1-bit bilevel and fax scans, 2- and 4-bit gray) arrive packed, most
 /// significant bits first, each row padded to a whole byte. Spread them out one per byte, scaled to
-/// 0–255 like any 8-bit sample.
-fn unpack(packed: &[u8], width: usize, height: usize, samples: usize, bits: u8) -> Result<Vec<u8>> {
+/// 0–255 like any 8-bit sample, unless they are palette indices, which stay as they are.
+fn unpack(packed: &[u8], width: usize, height: usize, samples: usize, bits: u8, indices: bool) -> Result<Vec<u8>> {
     if !matches!(bits, 1 | 2 | 4) {
         return Err(Error::Unsupported(F, "TIFF samples of 3, 5, 6 or 7 bits"));
     }
@@ -198,7 +254,7 @@ fn unpack(packed: &[u8], width: usize, height: usize, samples: usize, bits: u8) 
     let mut out = Vec::with_capacity(per_row.saturating_mul(height));
     for row in packed.chunks_exact(row_bytes).take(height) {
         let values = row.iter().flat_map(|&b| (1..=8 / bits).map(move |i| (b >> (8 - bits * i)) & max));
-        out.extend(values.take(per_row).map(|v| v * scale));
+        out.extend(values.take(per_row).map(|v| if indices { v } else { v * scale }));
     }
     Ok(out)
 }

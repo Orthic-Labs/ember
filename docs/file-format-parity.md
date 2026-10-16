@@ -16,7 +16,7 @@ import and export formats. Ours come from `crates/codecs/src/sniff.rs`, `crates/
 | Format | Target reads | Target writes | Ember reads | Ember writes | Notes / tests |
 |---|---|---|---|---|---|
 | JPEG | ✅ | ✅ | ✅ (parallel decoder, ICC, EXIF orientation) | ✅ quality, size limit, ICC, metadata | `crates/codecs/src/jpeg.rs`, export tests |
-| TIFF | ✅ 8/16/32-bit | ✅ 8/16-bit, LZW/ZIP | ✅ 1–64-bit integer, 16–64-bit float, bilevel, CCITT fax, WhiteIsZero | ✅ 8/16-bit, 32-bit float linear, none / LZW / ZIP | `crates/tiff`, `crates/codecs/src/tiff_codec.rs` |
+| TIFF | ✅ 8/16/32-bit | ✅ 8/16-bit, LZW/ZIP | ✅ 1–64-bit integer, 16–64-bit float, bilevel, CCITT fax, WhiteIsZero, palette (1–8-bit indices through the ColorMap) | ✅ 8/16-bit, 32-bit float linear, none / LZW / ZIP | `crates/tiff`, `crates/codecs/src/tiff_codec.rs` |
 | PNG | ✅ | ✅ | ✅ | ✅ | |
 | PSD / PSB | ✅ (maximized-compatibility composite) | ✅ (Classic: PSD export, edit-in round trip) | ✅ merged composite | ⬜ (external-editor round trip writes 16-bit TIFF) | `crates/codecs/src/psd.rs` |
 | HEIC / HEIF | ✅ | ⬜ (Classic) / HDR only | ✅ in every release build (`crates/heif`, heic-rs) | ⬜ | `heif` feature on by packaging scripts |
@@ -79,4 +79,5 @@ Remaining: **26–47 h** (AVIF decode 8–15 h if a permissive decoder is writte
 | 2026-10-10 | minor | JPEG XL export (#247): JXL write ✅ (native only), PQ JPEG XL HDR |
 | 2026-10-12 | minor | Render to DNG: "Rendered DNG" export format (linear 16-bit float DNG of the rendered photo) |
 | 2026-10-16 | minor | Render to DNG: `photo.renderToDng` catalog command; AVIF decode still blocked (no permissive pure-Rust AV1 decoder in the lockfile: rav1e/ravif are encoders); lossy DNG output not started |
+| 2026-10-16 | minor | Palette (indexed-colour) TIFF decodes through its ColorMap (1–8-bit indices; `crates/codecs/src/tiff_codec.rs`). Audit: GIF, BMP, WebP and JPEG XL already decode and sniff by magic; no new crate was added. Still missing: AVIF decode, HEIC in default builds |
 | 2026-10-16 | minor | Lossy JPEG XL DNG for Render to DNG (`dngCompression: lossy`, DNG 1.7 tags JXLDistance/Effort/DecodeSpeed); raw (CFA) lossy DNG still open |

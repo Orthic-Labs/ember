@@ -396,6 +396,71 @@ fn gif_and_bmp_decode() {
     let d = decode(&gif, DecodeOptions::default()).unwrap();
     let p = d.to_srgb8().get(3, 3);
     assert!((p[0] as i32 - 10).abs() <= 2 && (p[1] as i32 - 200).abs() <= 2, "{p:?}");
+
+    // a file cut short inside its colour table or image data is an error, not a partial image
+    assert!(decode(&bmp[..bmp.len() - 4], DecodeOptions::default()).is_err());
+    assert!(decode(&gif[..gif.len() / 2], DecodeOptions::default()).is_err());
+}
+
+/// A 4 × 2 palette TIFF (little-endian, one uncompressed strip) with 4-bit indices packed `strip`
+/// row by row. Its ColorMap entry i is (i × 4096, 32768, 65535 − i × 4096).
+fn palette_tiff(strip: &[u8]) -> Vec<u8> {
+    const N_TAGS: u32 = 10;
+    let map_at = 8 + 2 + 12 * N_TAGS + 4;
+    let strip_at = map_at + 3 * 2 * 16;
+    let short = |tag: u16, v: u16| [&tag.to_le_bytes()[..], &3u16.to_le_bytes(), &1u32.to_le_bytes(), &v.to_le_bytes(), &[0, 0]].concat();
+    let long = |tag: u16, v: u32| [&tag.to_le_bytes()[..], &4u16.to_le_bytes(), &1u32.to_le_bytes(), &v.to_le_bytes()].concat();
+    let mut b = b"II*\0".to_vec();
+    b.extend(8u32.to_le_bytes());
+    b.extend((N_TAGS as u16).to_le_bytes());
+    b.extend(short(256, 4));
+    b.extend(short(257, 2));
+    b.extend(short(258, 4));
+    b.extend(short(259, 1));
+    b.extend(short(262, 3));
+    b.extend(long(273, strip_at));
+    b.extend(short(277, 1));
+    b.extend(short(278, 2));
+    b.extend(long(279, strip.len() as u32));
+    b.extend([&320u16.to_le_bytes()[..], &3u16.to_le_bytes(), &48u32.to_le_bytes(), &map_at.to_le_bytes()].concat());
+    b.extend(0u32.to_le_bytes());
+    assert_eq!(b.len(), map_at as usize);
+    for channel in 0..3u16 {
+        for i in 0..16u16 {
+            let v = match channel {
+                0 => i * 4096,
+                1 => 32768,
+                _ => 65535 - i * 4096,
+            };
+            b.extend(v.to_le_bytes());
+        }
+    }
+    b.extend_from_slice(strip);
+    b
+}
+
+/// Palette (indexed-colour) TIFFs decode through their ColorMap: the `tiff` crate refuses them as
+/// RGBPalette, so the first IFD is read as gray indices and mapped here.
+#[test]
+fn palette_tiff_maps_indices_through_colormap() {
+    // row 0: indices 0..3, row 1: indices 15, 14, 13, 12 (one byte per two pixels, rows byte-aligned)
+    let bytes = palette_tiff(&[0x01, 0x23, 0xFE, 0xDC]);
+    let header = read_header(&bytes).unwrap();
+    assert_eq!((header.width, header.height), (4, 2));
+    let d = decode(&bytes, DecodeOptions::default()).unwrap();
+    let s = d.to_srgb8();
+    // red rises with the index: entry i is i × 4096 of 65535
+    for (x, want) in [0.0, 16.0, 32.0, 48.0].into_iter().enumerate() {
+        assert!((s.get(x, 0)[0] as f32 - want).abs() <= 2.0, "row 0, x {x}: {:?}", s.get(x, 0));
+    }
+    for (x, index) in [15.0, 14.0, 13.0, 12.0].into_iter().enumerate() {
+        let want = index * 4096.0 / 65535.0 * 255.0;
+        assert!((s.get(x, 1)[0] as f32 - want).abs() <= 2.0, "row 1, x {x}: {:?}", s.get(x, 1));
+    }
+    // cut short: inside the image data, inside the ColorMap, or before both
+    assert!(decode(&bytes[..bytes.len() - 1], DecodeOptions::default()).is_err());
+    assert!(decode(&bytes[..200], DecodeOptions::default()).is_err());
+    assert!(read_header(&bytes[..200]).is_err());
 }
 
 /// Hand-built PSD: RGB 8-bit, raw and RLE merged data, ICC resource, negative layer count (alpha).
