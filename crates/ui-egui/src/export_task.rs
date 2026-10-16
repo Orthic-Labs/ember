@@ -5,10 +5,13 @@
 //! activity stack shows the count, the file in progress and ✕ (issue #345).
 //!
 //! Needs [`crate::Services::write_shared`] (a thread-safe writer); without it (web) the batch runs
-//! synchronously as before.
+//! synchronously as before, unless the host renders elsewhere: [`LightcraftApp::export_offload`]
+//! (the web's Web Workers, #192) takes the batch, reports through its [`ExportReport`] and leaves
+//! the row, the cancel flag and the toast to this module.
 
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, channel};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 
 use lightcraft_engine::activity::{Cancel, TaskGuard};
@@ -24,7 +27,7 @@ pub struct ExportTask {
     pub cancel: Arc<AtomicBool>,
     /// The files (per-photo results), what [`AfterExport`] did with them (`applePhotos`) and
     /// whether the export was cancelled (as the worker saw it when the batch ended).
-    rx: Receiver<Result<(Vec<Value>, Option<Value>, bool), String>>,
+    rx: Receiver<Outcome>,
     /// The export's row in the activity stack (`activity.cancel` sets `cancel`).
     guard: TaskGuard,
 }
@@ -35,6 +38,84 @@ impl ExportTask {
         let (done, current) = self.progress.lock().map(|g| g.clone()).unwrap_or_default();
         json!({"total": self.total, "done": done, "current": current})
     }
+}
+
+/// What a finished batch sends back to [`poll`]: the files (per-photo results), what [`AfterExport`]
+/// did with them and whether the batch was cancelled.
+type Outcome = Result<(Vec<Value>, Option<Value>, bool), String>;
+
+/// A batch handed to the host's [`ExportOffload`]: the prepared photos and where their files go,
+/// and the [`ExportReport`] the host answers through.
+pub struct ExportBatch {
+    pub items: Vec<PreparedExport>,
+    pub opts: ExportOptions,
+    pub to: Destination,
+    pub report: ExportReport,
+}
+
+/// The host's side of an export row: progress and the cancel flag in, the outcome out. Dropped
+/// without [`ExportReport::finish`] or [`ExportReport::fail`], the app reports that the export
+/// stopped unexpectedly and removes the row.
+pub struct ExportReport {
+    progress: Arc<Mutex<(usize, String)>>,
+    cancel: Arc<AtomicBool>,
+    tx: Sender<Outcome>,
+}
+
+impl ExportReport {
+    /// `done` photos are placed; `current` is the file being made.
+    pub fn progress(&self, done: usize, current: &str) {
+        if let Ok(mut g) = self.progress.lock() {
+            *g = (done, current.to_string());
+        }
+    }
+
+    /// The row's cross or `activity.cancel` was used.
+    pub fn is_cancelled(&self) -> bool {
+        self.cancel.load(Ordering::Relaxed)
+    }
+
+    /// The batch ended: one JSON object per photo ([`lightcraft_engine::export::BatchPlacer::finish`]).
+    pub fn finish(self, files: Vec<Value>, cancelled: bool) {
+        let _ = self.tx.send(Ok((files, None, cancelled)));
+    }
+
+    /// The batch could not run; `error` is shown as it is.
+    pub fn fail(self, error: String) {
+        let _ = self.tx.send(Err(error));
+    }
+}
+
+/// Runs a batch somewhere that doesn't block the UI thread: `Ok` when the host took it, `Err`
+/// with the batch when it can't (no worker came up), which then runs in the foreground.
+pub type ExportOffload = Rc<dyn Fn(ExportBatch) -> Result<(), ExportBatch>>;
+
+/// What [`start_offloaded`] did with a batch.
+pub enum Offloaded {
+    /// The host runs it; the value is the command's answer.
+    Started(Value),
+    /// The host has none to run it: the photos, back, for the foreground.
+    Declined(Vec<PreparedExport>),
+}
+
+/// Hand `items` to the host's [`LightcraftApp::export_offload`], with a row in the activity stack.
+pub fn start_offloaded(app: &mut LightcraftApp, items: Vec<PreparedExport>, opts: &ExportOptions, to: &Destination) -> Result<Offloaded, String> {
+    if app.export.is_some() {
+        return Err("an export is already running".into());
+    }
+    let Some(offload) = app.export_offload.clone() else { return Ok(Offloaded::Declined(items)) };
+    let total = items.len();
+    let progress = Arc::new(Mutex::new((0, String::new())));
+    let cancel = Arc::new(AtomicBool::new(false));
+    let (tx, rx) = channel();
+    let report = ExportReport { progress: progress.clone(), cancel: cancel.clone(), tx };
+    if let Err(batch) = offload(ExportBatch { items, opts: opts.clone(), to: to.clone(), report }) {
+        return Ok(Offloaded::Declined(batch.items));
+    }
+    let guard = app.session.activity.start("export", "Exporting", Cancel::Flag(cancel.clone()));
+    guard.progress(0, total as u64);
+    app.export = Some(ExportTask { total, progress, cancel, rx, guard });
+    Ok(Offloaded::Started(json!({"background": true, "total": total})))
 }
 
 /// Start exporting `items` in the background, then do `after` with the files written (Add to Apple
@@ -323,6 +404,85 @@ mod contact_sheet_tests {
         app.export.as_ref().unwrap().cancel.store(true, Ordering::Relaxed);
         let task = app.export.take().unwrap();
         assert!(task.rx.recv_timeout(Duration::from_secs(20)).unwrap().is_err());
+    }
+}
+
+#[cfg(test)]
+mod offload_tests {
+    use super::*;
+    use std::cell::RefCell;
+    use std::time::Duration;
+
+    fn first_photo(app: &LightcraftApp) -> u64 {
+        app.session.catalog.photos().next().map(|p| p.id.0).unwrap_or(0)
+    }
+
+    // Issue #192: a host that renders elsewhere takes the batch; the row, its cross and the
+    // outcome still belong to the export task
+    #[test]
+    fn an_offloaded_export_has_a_row_and_answers_through_its_report() {
+        let mut app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), crate::Services::default());
+        let taken: Rc<RefCell<Option<ExportBatch>>> = Rc::default();
+        let hand_over = taken.clone();
+        app.export_offload = Some(Rc::new(move |batch: ExportBatch| -> Result<(), ExportBatch> {
+            *hand_over.borrow_mut() = Some(batch);
+            Ok(())
+        }));
+        let id = first_photo(&app);
+        let out = crate::control::export_active(&mut app, &json!({"ids": [id], "dir": "out", "format": "png"})).unwrap();
+        assert_eq!(out, json!({"background": true, "total": 1}));
+        let batch = taken.borrow_mut().take().expect("the host was handed the batch");
+        assert_eq!(batch.items.len(), 1);
+        let rows = app.session.activity.list();
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!((rows[0].kind, rows[0].total, rows[0].cancellable), ("export", 1, true));
+        assert!(!batch.report.is_cancelled());
+        app.session.activity.cancel(rows[0].id).unwrap();
+        assert!(batch.report.is_cancelled(), "the stack's cross reaches the host");
+        batch.report.progress(0, "a.png");
+        assert_eq!(app.export.as_ref().unwrap().status()["current"], "a.png");
+        batch.report.finish(vec![json!({"path": "out/a.png"})], true);
+        let task = app.export.take().unwrap();
+        let (files, photos, cancelled) = task.rx.recv_timeout(Duration::from_secs(1)).unwrap().unwrap();
+        assert_eq!((files.len(), photos, cancelled), (1, None, true));
+        drop(task);
+        assert!(app.session.activity.list().is_empty(), "the row goes with the export");
+    }
+
+    // a host that can't run it (no worker came up) gives the photos back: they export here, and
+    // the answer is the files, as without a host
+    #[test]
+    fn a_declined_export_runs_in_the_foreground() {
+        let written: Rc<RefCell<Vec<String>>> = Rc::default();
+        let log = written.clone();
+        let services = crate::Services {
+            write: Some(Box::new(move |path: &str, _: &[u8]| {
+                log.borrow_mut().push(path.to_string());
+                Ok(())
+            })),
+            ..Default::default()
+        };
+        let mut app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), services);
+        app.export_offload = Some(Rc::new(|batch: ExportBatch| -> Result<(), ExportBatch> { Err(batch) }));
+        let id = first_photo(&app);
+        let out = crate::control::export_active(&mut app, &json!({"ids": [id], "dir": "out", "format": "png"})).unwrap();
+        assert_eq!(out["files"].as_array().map(Vec::len), Some(1), "{out}");
+        assert_eq!(written.borrow().len(), 1);
+        assert!(app.export.is_none() && app.session.activity.list().is_empty(), "no row for work that ran and ended");
+    }
+
+    // a batch dropped by its host without an answer ends the row with a message, not a stuck bar
+    #[test]
+    fn a_host_that_drops_its_batch_ends_the_row() {
+        let mut app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), crate::Services::default());
+        app.export_offload = Some(Rc::new(|batch: ExportBatch| -> Result<(), ExportBatch> {
+            drop(batch);
+            Ok(())
+        }));
+        let id = first_photo(&app);
+        crate::control::export_active(&mut app, &json!({"ids": [id], "dir": "out"})).unwrap();
+        let task = app.export.take().unwrap();
+        assert!(matches!(task.rx.try_recv(), Err(std::sync::mpsc::TryRecvError::Disconnected)));
     }
 }
 

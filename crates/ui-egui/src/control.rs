@@ -457,7 +457,7 @@ pub fn default_export_dir() -> String {
 /// [`lightcraft_engine::export::ExportOptions::from_json`], plus `dir` (output folder) or `path`
 /// (exact output file, single photo), `ids` (default: the selection, else the active photo).
 pub fn export_active(app: &mut LightcraftApp, p: &Value) -> Result<Value, String> {
-    use lightcraft_engine::export::{Destination, ExportOptions, export_batch};
+    use lightcraft_engine::export::{Destination, ExportOptions, export_batch, run_batch};
     let p = &app.session.export_params(p)?;
     let mut opts = ExportOptions::from_params(p).map_err(|e| e.to_string())?;
     if let (Some(path), None) = (p.get("path").and_then(Value::as_str), p.get("format")) {
@@ -503,16 +503,36 @@ pub fn export_active(app: &mut LightcraftApp, p: &Value) -> Result<Value, String
         let items = lightcraft_engine::export::prepare_batch(&mut app.session, &ids, &opts)?;
         crate::export_task::start(app, items, opts, to, after)?
     } else {
-        let w = app.services.write.as_mut().ok_or("no writer")?;
-        let files = export_batch(&mut app.session, &ids, &opts, &to, &mut |path, bytes| w(path, bytes), &|path| std::path::Path::new(path).exists())?;
-        let mut out = json!({"files": files});
-        // Photos may take minutes (and waits for the permission prompt): in the desktop app on a
-        // worker, never on this (UI) thread; the app announces the outcome and
-        // `export.photosImports` reports it. A window-less run (snapshot scripts) waits.
-        if let Some(photos) = after.finish(&app.session, &files) {
-            out["applePhotos"] = photos;
+        // A host that renders elsewhere (the web's workers, #192) takes the batch; the foreground
+        // below is where it goes when the host has no way to run it.
+        let mut foreground = None;
+        let mut started = None;
+        if app.export_offload.is_some() {
+            let items = lightcraft_engine::export::prepare_batch(&mut app.session, &ids, &opts)?;
+            match crate::export_task::start_offloaded(app, items, &opts, &to)? {
+                crate::export_task::Offloaded::Started(v) => started = Some(v),
+                crate::export_task::Offloaded::Declined(items) => foreground = Some(items),
+            }
         }
-        out
+        match started {
+            Some(v) => v,
+            None => {
+                let w = app.services.write.as_mut().ok_or("no writer")?;
+                let exists = |path: &str| std::path::Path::new(path).exists();
+                let files = match foreground {
+                    Some(items) => run_batch(items, &opts, &to, &mut |path, bytes| w(path, bytes), &exists, true, &mut |_, _| true)?,
+                    None => export_batch(&mut app.session, &ids, &opts, &to, &mut |path, bytes| w(path, bytes), &exists)?,
+                };
+                let mut out = json!({"files": files});
+                // Photos may take minutes (and waits for the permission prompt): in the desktop app on a
+                // worker, never on this (UI) thread; the app announces the outcome and
+                // `export.photosImports` reports it. A window-less run (snapshot scripts) waits.
+                if let Some(photos) = after.finish(&app.session, &files) {
+                    out["applePhotos"] = photos;
+                }
+                out
+            }
+        }
     };
     // remember for Export with Previous (and to prefill the dialog)
     let mut last = p.clone();

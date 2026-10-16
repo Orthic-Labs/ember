@@ -6,6 +6,11 @@
 //! module workers: the main thread posts a [`WireJob`] as JSON, the worker renders it and
 //! transfers the RGBA bytes back (no copy across the boundary).
 //!
+//! Exports use the same workers (#192): the main thread posts a [`WireExport`] (and the original's
+//! bytes when the page has no storage to read them from), the worker decodes, renders and encodes,
+//! and transfers the file back. [`Workers::offer_export`] is the main side; `exports.rs` runs a
+//! batch on top of it.
+//!
 //! Main side: [`Workers`] implements the UI's [`RenderOffload`]: one job per worker at a time,
 //! with affinity (a photo goes back to the worker that already decoded it), the rendered-
 //! thumbnail memory cache checked before dispatch, and the thumbnail storage index
@@ -27,7 +32,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
 use crate::backend::Backend;
-use crate::wire::{CacheWatch, ThumbIndex, WireJob, WorkerCore, WorkerSlots, thumb_storage_key};
+use crate::wire::{CacheWatch, ThumbIndex, WireExport, WireJob, WorkerCore, WorkerSlots, thumb_storage_key};
 
 /// Storage key of the thumbnail index.
 pub const THUMB_INDEX: &str = "thumbs/index.json";
@@ -78,8 +83,53 @@ pub fn worker_main(store: String) {
     });
 }
 
+/// Run one export message and post the file (or the error) back.
+async fn handle_export(scope: &web_sys::DedicatedWorkerGlobalScope, backend: Option<Backend>, msg: JsValue) {
+    let t0 = now();
+    let out = Object::new();
+    set(&out, "id", &get(&msg, "id"));
+    set(&out, "kind", &"export".into());
+    let result: Result<lightcraft_engine::export::Exported, String> = async {
+        let text = get(&msg, "export").as_string().ok_or("no export job")?;
+        let job: WireExport = serde_json::from_str(&text).map_err(|e| format!("bad export job: {e}"))?;
+        let sent = get(&msg, "original");
+        let original = if sent.is_undefined() || sent.is_null() {
+            match (job.original_hash(), &backend) {
+                (Some(hash), Some(b)) => b.read(&crate::store::storage_key(&hash)).await?,
+                _ => None,
+            }
+        } else {
+            Some(Uint8Array::new(&sent).to_vec())
+        };
+        CORE.with(|c| c.borrow_mut().export(&job, original.as_deref()))
+    }
+    .await;
+    let mut transfer = Array::new();
+    match result {
+        Ok(file) => {
+            let bytes = Uint8Array::from(file.bytes.as_slice());
+            set(&out, "ok", &true.into());
+            set(&out, "w", &(file.width as u32).into());
+            set(&out, "h", &(file.height as u32).into());
+            set(&out, "bytes", &bytes);
+            transfer = Array::of1(&bytes.buffer());
+        }
+        Err(e) => {
+            set(&out, "ok", &false.into());
+            set(&out, "err", &e.into());
+        }
+    }
+    set(&out, "ms", &(now() - t0).into());
+    if let Err(e) = scope.post_message_with_transfer(&out, &transfer) {
+        log::error!("render worker: post: {e:?}");
+    }
+}
+
 /// Run one job message and post the result.
 async fn handle(scope: &web_sys::DedicatedWorkerGlobalScope, backend: Option<Backend>, msg: JsValue) {
+    if get(&msg, "export").is_string() {
+        return handle_export(scope, backend, msg).await;
+    }
     let id = get(&msg, "id");
     let t0 = now();
     let out = Object::new();
@@ -168,6 +218,40 @@ struct W {
     ready: bool,
     dead: bool,
     busy: Option<Busy>,
+    /// The export this worker is making: its message id and who to tell.
+    export: Option<(u32, ExportDone)>,
+}
+
+impl W {
+    fn free(&self) -> bool {
+        self.ready && !self.dead && self.busy.is_none() && self.export.is_none()
+    }
+}
+
+/// An export a worker finished: the encoded file.
+pub struct ExportFile {
+    pub bytes: Vec<u8>,
+    pub width: usize,
+    pub height: usize,
+}
+
+/// Why an export did not come back.
+pub struct ExportFailure {
+    pub message: String,
+    /// The worker itself failed (not this photo): the batch makes the photo itself instead.
+    pub worker_lost: bool,
+}
+
+/// Told once, on the main thread, when the worker answers (or fails).
+pub type ExportDone = Box<dyn FnOnce(Result<ExportFile, ExportFailure>)>;
+
+/// The answer to [`Workers::offer_export`]; `Busy` and `NoWorkers` hand `done` back.
+pub enum ExportOffer {
+    Started,
+    /// Every worker is busy for now: offer it again soon.
+    Busy(ExportDone),
+    /// No worker is left (none started, or all failed): make it on this thread.
+    NoWorkers(ExportDone),
 }
 
 struct Inner {
@@ -274,7 +358,7 @@ impl Workers {
                 worker.terminate();
                 continue;
             }
-            w.0.borrow_mut().workers.push(W { worker, ready: false, dead: false, busy: None });
+            w.0.borrow_mut().workers.push(W { worker, ready: false, dead: false, busy: None, export: None });
             slots.commit();
         }
         w
@@ -283,10 +367,12 @@ impl Workers {
     fn on_error(&self, i: usize, e: JsValue) {
         let msg = get(&e, "message").as_string().unwrap_or_else(|| format!("{e:?}"));
         log::error!("render worker {i} failed: {msg}");
+        let mut lost = None;
         let mut g = self.0.borrow_mut();
         if let Some(w) = g.workers.get_mut(i) {
             w.dead = true;
             w.worker.terminate();
+            lost = w.export.take();
             if let Some(b) = w.busy.take() {
                 let r = RenderResult {
                     request_id: b.request_id,
@@ -304,9 +390,78 @@ impl Workers {
             }
         }
         g.ctx.request_repaint();
+        drop(g);
+        // outside the borrow: the batch answers by offering its next photo
+        if let Some((_, done)) = lost {
+            done(Err(ExportFailure { message: msg, worker_lost: true }));
+        }
+    }
+
+    /// A worker's answer to an export job.
+    fn on_export_message(&self, i: usize, data: JsValue) {
+        let id = get(&data, "id").as_f64().unwrap_or(-1.0) as u32;
+        let pending = {
+            let mut g = self.0.borrow_mut();
+            g.ctx.request_repaint();
+            g.workers.get_mut(i).and_then(|w| w.export.take_if(|(job, _)| *job == id))
+        };
+        let Some((_, done)) = pending else { return };
+        let result = if get(&data, "ok").is_truthy() {
+            let bytes = Uint8Array::new(&get(&data, "bytes")).to_vec();
+            let (width, height) = (get(&data, "w").as_f64().unwrap_or(0.0) as usize, get(&data, "h").as_f64().unwrap_or(0.0) as usize);
+            Ok(ExportFile { bytes, width, height })
+        } else {
+            let message = get(&data, "err").as_string().unwrap_or_else(|| "the export failed in its worker".into());
+            Err(ExportFailure { message, worker_lost: false })
+        };
+        self.0.borrow_mut().remote_done += 1;
+        done(result);
+    }
+
+    /// Whether any worker is alive (or still starting).
+    pub fn any_alive(&self) -> bool {
+        self.0.borrow().workers.iter().any(|w| !w.dead)
+    }
+
+    /// Give a free worker one export: `text` is a [`WireExport`] as JSON, `original` the file's
+    /// bytes when the worker has no storage to read them from (copied to the worker). With more
+    /// than one worker the first is left to the views (their decoded sources live there), so a
+    /// long export doesn't hold up the loupe.
+    pub fn offer_export(&self, text: &str, original: Option<&[u8]>, done: ExportDone) -> ExportOffer {
+        let mut g = self.0.borrow_mut();
+        let g = &mut *g;
+        let alive: Vec<usize> = g.workers.iter().enumerate().filter(|(_, w)| !w.dead).map(|(i, _)| i).collect();
+        if alive.is_empty() {
+            return ExportOffer::NoWorkers(done);
+        }
+        let skip = if alive.len() > 1 { alive.first().copied() } else { None };
+        let Some(i) = alive.into_iter().filter(|i| Some(*i) != skip).find(|i| g.workers.get(*i).is_some_and(W::free)) else {
+            return ExportOffer::Busy(done);
+        };
+        g.next_id = g.next_id.wrapping_add(1);
+        let id = g.next_id;
+        let msg = Object::new();
+        set(&msg, "id", &id.into());
+        set(&msg, "export", &text.into());
+        let transfer = Array::new();
+        if let Some(bytes) = original {
+            let arr = Uint8Array::from(bytes);
+            set(&msg, "original", &arr);
+            transfer.push(&arr.buffer());
+        }
+        let w = &mut g.workers[i];
+        if let Err(e) = w.worker.post_message_with_transfer(&msg, &transfer) {
+            log::warn!("render worker {i}: {e:?}");
+            return ExportOffer::Busy(done);
+        }
+        w.export = Some((id, done));
+        ExportOffer::Started
     }
 
     fn on_message(&self, i: usize, data: JsValue) {
+        if get(&data, "kind").as_string().as_deref() == Some("export") {
+            return self.on_export_message(i, data);
+        }
         let mut g = self.0.borrow_mut();
         let g = &mut *g;
         g.ctx.request_repaint();
@@ -453,7 +608,7 @@ impl RenderOffload for Workers {
             g.done.push((slot, r, now() - t0));
             return None;
         }
-        let free = |w: &W| w.ready && !w.dead && w.busy.is_none();
+        let free = W::free;
         let pick = match g.affinity.get(&(job.photo, job.level)) {
             // a decoded preview-level source, or the loupe's stage cache, is worth waiting for; a
             // thumbnail isn't

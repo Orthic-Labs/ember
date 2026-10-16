@@ -383,6 +383,9 @@ pub struct LightcraftApp {
     pub shown_library: Option<u64>,
     /// A background export in progress.
     pub export: Option<export_task::ExportTask>,
+    /// Where the host renders and encodes exports instead of this thread (the web's workers,
+    /// #192); `None`: in the foreground, or on a thread of [`Services::write_shared`].
+    pub export_offload: Option<export_task::ExportOffload>,
     /// Background file-system work of other commands (Find Missing Photos, auto import…).
     pub tasks: tasks::Tasks,
     /// The files of the last finished background export (`ui.inspect` → `export.last`).
@@ -474,6 +477,7 @@ impl LightcraftApp {
             lightroom_last: None,
             shown_library: None,
             export: None,
+            export_offload: None,
             tasks: Default::default(),
             last_export_result: None,
             hover_preview: None,

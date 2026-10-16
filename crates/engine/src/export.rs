@@ -1858,6 +1858,90 @@ impl PreparedExport {
     }
 }
 
+/// The render half of a [`PreparedExport`], for a host that runs it on another thread of its own
+/// (the web build's Web Workers; #192). Borrowed from the prepared photo: the host sends what it
+/// needs, and the photo keeps its place in the batch.
+pub struct RenderParts<'a> {
+    pub job: &'a crate::media::RenderJob,
+    /// The HDR rendition of a gain map JPEG (`job` renders its SDR base).
+    pub hdr_job: Option<&'a crate::media::RenderJob>,
+    pub meta: Option<&'a Metadata>,
+    /// The options this photo is encoded with (HDR dropped for a photo not edited in HDR).
+    pub opts: &'a ExportOptions,
+}
+
+impl PreparedExport {
+    /// The render and encode of a rendered format ([`ExportFormat::is_rendered`]); `None` for an
+    /// original copy or a DNG, which only read the file ([`PreparedExport::run`] does them).
+    pub fn render_parts(&self) -> Option<RenderParts<'_>> {
+        match &self.work {
+            Work::Render(w) => Some(RenderParts { job: &w.job, hdr_job: w.hdr_job.as_ref(), meta: w.meta.as_ref(), opts: &w.opts }),
+            Work::File { .. } => None,
+        }
+    }
+
+    /// This photo's place in its batch, to keep while the photo itself is made elsewhere
+    /// ([`PreparedExport::run`] consumes it).
+    pub fn head(&self) -> BatchHead {
+        BatchHead { photo: self.photo, file_name: self.file_name.clone(), guard: self.guard.clone() }
+    }
+}
+
+/// A prepared photo's place in its batch ([`PreparedExport::head`]).
+pub struct BatchHead {
+    photo: lightcraft_catalog::PhotoId,
+    file_name: String,
+    guard: std::sync::Arc<crate::originals::OriginalGuard>,
+}
+
+impl BatchHead {
+    /// The file name the photo was prepared with.
+    pub fn file_name(&self) -> &str {
+        &self.file_name
+    }
+}
+
+/// [`run_batch`]'s placement of files (names, conflicts, sidecars, never an original) for a host
+/// whose photos finish one at a time and later, as the web's workers do: the batch's state lives
+/// here between results, and the writer comes with each one.
+pub struct BatchPlacer {
+    o: ExportOptions,
+    to: Destination,
+    single: bool,
+    taken: std::collections::HashSet<String>,
+    out: Vec<serde_json::Value>,
+}
+
+impl BatchPlacer {
+    /// A batch of `photos` photos to `to`.
+    pub fn new(o: &ExportOptions, to: &Destination, photos: usize) -> BatchPlacer {
+        BatchPlacer { o: o.clone(), to: to.clone(), single: photos == 1, taken: Default::default(), out: Vec::new() }
+    }
+
+    /// Write a photo's result (or record its failure; the rest of the batch goes on), in batch order.
+    pub fn place(
+        &mut self,
+        item: &BatchHead,
+        result: Result<Exported, String>,
+        write: &mut dyn FnMut(&str, &[u8]) -> Result<(), String>,
+        exists: &dyn Fn(&str) -> bool,
+    ) {
+        let mut p = Placer::new(&self.o, &self.to, write, exists, false);
+        p.single = self.single;
+        p.taken = std::mem::take(&mut self.taken);
+        p.out = std::mem::take(&mut self.out);
+        // never `Err`: only a batch that stops on its first error returns one
+        let _ = p.place(item.photo, item.file_name.clone(), &item.guard, result);
+        self.taken = p.taken;
+        self.out = p.out;
+    }
+
+    /// One JSON object per photo placed, as [`run_batch`] returns them.
+    pub fn finish(self) -> Vec<serde_json::Value> {
+        self.out
+    }
+}
+
 /// How an exported DNG stores its raw data.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

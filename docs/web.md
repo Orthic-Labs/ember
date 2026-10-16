@@ -148,6 +148,20 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
 - **Export downloads the file.** *Export…* (<kbd>⌘⇧E</kbd>) runs the same `app.export` path as
   the desktop app (`lightcraft_engine::export`: JPEG/PNG/TIFF/WebP, sizing, naming). The host's
   `write` service hands each file to the browser as a download instead of writing it to disk.
+- **Exports run in the render workers** ([#192](https://github.com/Orthic-Labs/ember/issues/192)).
+  The main thread prepares each photo (`prepare_batch`), posts a `WireExport` (the render job
+  sized for the output, develop settings, export options, metadata, file name) to a worker, and
+  the worker reads the original from storage (the page sends the bytes only with `?store=memory`),
+  decodes, renders, encodes and transfers the file back. The main thread then places it with the
+  engine's `BatchPlacer` (naming, conflicts) and starts the download, which only it can do. One
+  photo is in flight at a time, so a batch holds one decoded original; with several workers the
+  first is left to the views. The batch has its row in the activity stack, and its ✕ takes effect
+  at once (a photo already in a worker finishes there and its file is dropped). `app.export`
+  returns `{"background": true, "total": n}`; the result arrives as the toast and in `ui.inspect`
+  → `export.last`. If no worker starts (or `?workers=0`), exports run on the main thread as
+  before, and a worker that fails mid-photo hands that photo back to the main thread. Photos a
+  worker can't make also run on the main thread, one per timer tick: *Original* copies and DNGs
+  (they only read the file) and photos with a Denoise edit.
 - **Preset files.** *File ▸ Import Profiles & Presets…* opens the browser's file picker for
   `.lcpreset`, `.xmp`, `.lrtemplate`, `.zip`, `.dng`, Luminar `.lmp` / `.mplumpack`; the bytes are
   read and imported by the same reader as the desktop (`Session::import_preset_bytes`), and a
@@ -163,9 +177,11 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
 
 ## Not yet
 
-- **Exports and auto-adjustments run on the main thread** (they need the original's pixels
-  there). Right after a reload, the first such command on a photo whose original isn't in memory
-  yet fails with "still loading" and works a moment later. [#192](https://github.com/Orthic-Labs/ember/issues/192)
+- **Auto-adjustments run on the main thread** (they need the original's pixels there). Right
+  after a reload, the first such command on a photo whose original isn't in memory yet fails with
+  "still loading" and works a moment later. Exports no longer do (see *Exports run in the render
+  workers*), except the *Original*/DNG and Denoise cases above, which still read the original on
+  the main thread. [#192](https://github.com/Orthic-Labs/ember/issues/192)
 - **Durability is "a frame later" for user actions:** a click or key command is written to browser
   storage a few milliseconds after it runs (one flush), so a crash or tab kill in that window loses
   it. The automation API is durable before it returns: `command()` (see *Automation*) resolves only

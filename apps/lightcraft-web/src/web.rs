@@ -17,6 +17,7 @@ use wasm_bindgen::prelude::*;
 use crate::backend::Backend;
 use crate::backup::{ACTIVE_LIBRARY, DEFAULT_LIBRARY_DIR, valid_library_dir};
 use crate::bench::Bench;
+use crate::exports::ExportHost;
 use crate::files::{Files, FlushOp, LIBRARY_FILES};
 use crate::safety::{self, notice};
 use crate::store::{Originals, content_hash, download_name, storage_key};
@@ -262,7 +263,8 @@ fn services(originals: Originals, backend: Option<Backend>, files: Files, frozen
         pick_curve_preset_files: None,
         save_curve_preset_file: None,
         write: Some(Box::new(download)),
-        // downloads happen on the main thread: exports run in the foreground on the web
+        // downloads happen on the main thread; exports are made in the render workers
+        // (`exports.rs`) and only placed here, or run in the foreground without a worker
         write_shared: None,
         png: Some(Box::new(|img: &lightcraft_raster::Rgba8| {
             lightcraft_codecs::encode_png(&lightcraft_codecs::EncodeImage::rgba8(img), &lightcraft_codecs::EncodeMeta::default()).unwrap_or_default()
@@ -500,6 +502,9 @@ impl WebApp {
         });
         if let Some(w) = &workers {
             app.renderer.set_offload(Box::new(w.clone()));
+            // exports render and encode in the workers too (#192); the downloads stay here
+            let host = ExportHost::new(w.clone(), originals.clone(), backend.is_some(), download, cc.egui_ctx.clone());
+            app.export_offload = Some(host.offload());
         }
         log::info!("lightcraft: {n} render workers");
         CTX.with(|c| *c.borrow_mut() = Some(cc.egui_ctx.clone()));
