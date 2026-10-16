@@ -15,7 +15,12 @@ import { APP_NAME } from './branding';
 import { bootTheme } from './bootTheme';
 import './app.css';
 
-const themeStore = createThemeStore({ storageKey: 'lightcraft.theme', storage: null, defaultChoice: bootTheme() });
+let themeStoreInstance: ReturnType<typeof createThemeStore> | null = null;
+/** Created on first use, after main.tsx has read the saved theme. */
+function themeStore() {
+  themeStoreInstance ??= createThemeStore({ storageKey: 'lightcraft.theme', storage: null, defaultChoice: bootTheme() });
+  return themeStoreInstance;
+}
 const shell = createShell();
 
 const sourceIcons: Record<string, 'library' | 'search' | 'import' | 'export' | 'chevron'> = {
@@ -88,7 +93,7 @@ function Workspace() {
   const desktop = useDesktop();
   const { snapshot, ui, locale, t, setUi, run, native, error, notice } = desktop;
   // Rust preferences own persisted choice; RightKit applies matching CSS tokens.
-  useEffect(() => { themeStore.save(ui.theme); }, [ui.theme]);
+  useEffect(() => { themeStore().save(ui.theme); }, [ui.theme]);
   const groups = useMemo(() => libraryGroups(snapshot), [snapshot]);
   const navGroups = useMemo(() => sourceNav(groups, t), [groups, t]);
   const navItems = useMemo(() => groups.flatMap((group) => group.items), [groups]);
@@ -186,7 +191,7 @@ function LocalizedShell({ children }: { children: ReactNode }) {
   const { t } = useDesktop();
   return <ShellProvider
     bridge={shell.bridge()}
-    themeStore={themeStore}
+    themeStore={themeStore()}
     platform={getPlatform()}
     paletteLabels={{ placeholder: t('Search or run a command…'), title: t('Command palette'), empty: t('No matches.'), results: t('Results') }}
     helpTitle={t('Keyboard shortcuts')}
