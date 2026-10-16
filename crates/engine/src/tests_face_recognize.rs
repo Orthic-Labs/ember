@@ -523,3 +523,28 @@ fn face_scan_row_follows_pending_photos() {
     assert!(faces_rows(&s).is_empty(), "the row goes when the scan is done");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+#[test]
+fn naming_faces_tags_their_photos_and_the_person_filter_shows_just_them() {
+    let d = temp("person-filter");
+    let (mut s, _) = setup(&d, 64);
+    let (a, b) = two_photos(&s);
+    set_regions(&mut s, a, vec![region(0.1, None), region(0.5, Some("Bob"))]);
+    set_regions(&mut s, b, vec![region(0.1, None)]);
+    let all = s.visible_cloned();
+    // naming the two unnamed faces tags both photos with Ann
+    s.execute("faces.nameFaces", &json!({"faces": [{"photo": a.0, "index": 0}, {"photo": b.0, "index": 0}], "name": "Ann"})).unwrap();
+    s.execute("library.filter", &json!({"person": "ANN"})).unwrap();
+    let mut shown = s.visible_cloned();
+    shown.sort();
+    assert_eq!(shown, vec![a, b], "the person filter shows the photos with a face named Ann, in any case");
+    // the filter's chip names the person and clears just that filter
+    let chips = crate::view::filter_chips(&s.filter, &s.catalog);
+    let chip = chips.iter().find(|c| c.label.starts_with("Person:")).expect("a chip for the person filter");
+    s.execute("library.filter", &chip.clear).unwrap();
+    assert_eq!(s.visible_cloned().len(), all.len(), "the chip clears the filter");
+    // someone nobody named shows no photos
+    s.execute("library.filter", &json!({"person": "Nobody"})).unwrap();
+    assert!(s.visible_cloned().is_empty());
+    let _ = std::fs::remove_dir_all(&d);
+}
