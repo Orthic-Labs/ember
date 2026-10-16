@@ -578,7 +578,7 @@ mod tests {
     #[test]
     fn text_templates_expand_from_metadata() {
         let fields = slideshow::Fields { file: "IMG_1.jpg".into(), city: "Oslo".into(), rating: 4, ..Default::default() };
-        assert_eq!(slideshow::expand("{city}, {date} · {rating}/5 {unknown}", &fields), ", · 4/5 {unknown}");
+        assert_eq!(slideshow::expand("{city}, {date} · {rating}/5 {unknown}", &fields), "Oslo,  · 4/5 {unknown}");
         assert_eq!(slideshow::expand("Our trip", &fields), "Our trip");
     }
 
