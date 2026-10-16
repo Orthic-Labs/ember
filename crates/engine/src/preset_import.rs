@@ -509,7 +509,7 @@ pub(crate) fn build(props: &Props, values: &crate::crs_masks::Values, name: Stri
         .unwrap_or_else(|| "Imported Presets".into());
     let uuid = props.get("crs:UUID").and_then(|v| v.first()).map(|u| u.to_ascii_lowercase());
     let id = format!("user.xmp.{}", uuid.unwrap_or_else(|| crate::presets::slug(&format!("{group}-{name}"))));
-    Some(Imported { preset: Preset { id, name, group, settings, favorite: false, builtin: false, auto: false }, unmapped })
+    Some(Imported { preset: Preset { id, name, group, settings, favorite: false, builtin: false, auto: false, adaptive: false }, unmapped })
 }
 
 /// Read the presets in file `name` (`bytes`); `group` names the group when the file doesn't

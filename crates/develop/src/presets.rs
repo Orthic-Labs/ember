@@ -11,7 +11,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::DevelopSettings;
+use crate::{DevelopSettings, Mask, geometry_stamp};
 
 /// Groups shown in "Choose settings to copy" / "Create preset" (Lightroom's checklist).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -212,22 +212,72 @@ pub struct Preset {
     /// Apply Auto Settings to the photo first, then this preset's settings on top ("apply Auto").
     #[serde(default)]
     pub auto: bool,
+    /// Holds semantic masks (Subject, Sky, Background, People, Landscape) and no pixel masks: each photo it is
+    /// applied to computes those masks for itself. See [`settle_masks`].
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub adaptive: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
+}
+
+/// Whether a mask is defined by semantic kinds alone (every component is one): it stores no pixel data.
+pub fn is_semantic_mask(m: &Mask) -> bool {
+    !m.components.is_empty() && m.components.iter().all(|c| c.shape.is_semantic())
+}
+
+/// Whether the `masks` of a settings object include a semantic one.
+fn has_semantic_mask(settings: &Value) -> bool {
+    settings.get("masks").and_then(Value::as_array).is_some_and(|ms| {
+        ms.iter().any(|m| serde_json::from_value::<Mask>(m.clone()).is_ok_and(|m| is_semantic_mask(&m)))
+    })
+}
+
+/// Settle the masks of a preset's settings. A settings object with a semantic mask is an adaptive preset: only
+/// its semantic masks are kept (pixel brush and shape masks hold pixels of one photo, so they are not saved).
+/// Settings without one keep their masks as they are. Returns how many masks were left out.
+pub fn settle_masks(settings: &mut Value) -> usize {
+    if !has_semantic_mask(settings) {
+        return 0;
+    }
+    let Some(masks) = settings.get_mut("masks").and_then(Value::as_array_mut) else { return 0 };
+    let before = masks.len();
+    masks.retain(|m| serde_json::from_value::<Mask>(m.clone()).is_ok_and(|m| is_semantic_mask(&m)));
+    before - masks.len()
 }
 
 impl Preset {
     pub fn from_settings(id: &str, name: &str, group: &str, s: &DevelopSettings, groups: &[SettingsGroup]) -> Preset {
-        Preset {
+        Preset::from_settings_counted(id, name, group, s, groups).0
+    }
+
+    /// As [`Preset::from_settings`], also returning how many masks were left out (see [`settle_masks`]).
+    pub fn from_settings_counted(id: &str, name: &str, group: &str, s: &DevelopSettings, groups: &[SettingsGroup]) -> (Preset, usize) {
+        let mut settings = extract_groups(s, groups);
+        let dropped = settle_masks(&mut settings);
+        let adaptive = has_semantic_mask(&settings);
+        let preset = Preset {
             id: id.into(),
             name: name.into(),
             group: group.into(),
-            settings: extract_groups(s, groups),
+            settings,
             favorite: false,
             builtin: false,
             auto: false,
-        }
+            adaptive,
+        };
+        (preset, dropped)
     }
+
+    /// Whether the preset is adaptive: it holds semantic masks, so applying it computes them for each photo.
+    pub fn is_adaptive(&self) -> bool {
+        self.adaptive || has_semantic_mask(&self.settings)
+    }
+
     /// Apply at `amount` (1.0 = 100 %). Masks in the preset are added to the photo's own (ones it
-    /// already has are skipped), their effect scaled by the amount.
+    /// already has are skipped), their effect scaled by the amount. A semantic mask is stamped as computed for
+    /// this photo's geometry now, so it is not stale the moment it is added.
     pub fn apply(&self, s: &DevelopSettings, amount: f64) -> DevelopSettings {
         let Some(masks) = self.settings.get("masks").and_then(Value::as_array).filter(|m| !m.is_empty()) else {
             return apply_partial(s, &self.settings, amount);
@@ -237,15 +287,19 @@ impl Preset {
             o.remove("masks");
         }
         let mut out = apply_partial(s, &rest, amount);
+        let stamp = geometry_stamp(&out);
         let mut next = out.masks.iter().map(|m| m.id).max().unwrap_or(0);
         for m in masks {
-            let Ok(mut m) = serde_json::from_value::<crate::Mask>(m.clone()) else { continue };
+            let Ok(mut m) = serde_json::from_value::<Mask>(m.clone()) else { continue };
             if out.masks.iter().any(|q| q.name == m.name && q.components == m.components) {
                 continue;
             }
             next += 1;
             m.id = next;
             m.adjust.amount = (m.adjust.amount * amount).clamp(0.0, 200.0);
+            if is_semantic_mask(&m) {
+                m.restamp(stamp);
+            }
             out.masks.push(m);
         }
         out
@@ -255,6 +309,7 @@ impl Preset {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{AI_MASK_VERSION, LocalAdjustments, MaskComponent, MaskOp, MaskShape};
     use serde_json::json;
 
     #[test]
@@ -309,5 +364,63 @@ mod tests {
         let mut a = json!({"x": {"a": 1, "b": 2}, "y": [1]});
         deep_merge(&mut a, &json!({"x": {"b": 3}, "y": [2, 3]}));
         assert_eq!(a, json!({"x": {"a": 1, "b": 3}, "y": [2, 3]}));
+    }
+
+    fn local_mask(shape: MaskShape, name: &str) -> Mask {
+        Mask {
+            id: 1,
+            name: name.into(),
+            components: vec![MaskComponent { name: None, op: MaskOp::Add, invert: false, shape }],
+            adjust: LocalAdjustments { exposure: 0.5, ..LocalAdjustments::default() },
+            ..Mask::default()
+        }
+    }
+
+    /// An adaptive preset stores its semantic mask by kind (no pixels), marks itself adaptive, and each photo it is
+    /// applied to computes the mask with its own geometry stamp. Pixel brush masks are left out.
+    #[test]
+    fn adaptive_preset_keeps_semantic_masks_and_stamps_each_photo() {
+        let mut a = DevelopSettings::default();
+        a.masks = vec![local_mask(MaskShape::Subject, "Subject"), local_mask(MaskShape::Brush { strokes: Vec::new() }, "Brush")];
+        let (p, dropped) = Preset::from_settings_counted("p", "Adaptive", "User", &a, &[SettingsGroup::Masks]);
+        assert!(p.adaptive && p.is_adaptive());
+        assert_eq!(dropped, 1, "the brush mask holds one photo's pixels and is not saved");
+        assert_eq!(serde_json::to_value(&p).unwrap()["adaptive"], json!(true));
+        let kept: Vec<Mask> = serde_json::from_value(p.settings["masks"].clone()).unwrap();
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].components[0].shape, MaskShape::Subject);
+
+        let plain = DevelopSettings::default();
+        let mut cropped = DevelopSettings::default();
+        cropped.crop.geometry.angle = 5.0;
+        let on_plain = p.apply(&plain, 1.0);
+        let on_cropped = p.apply(&cropped, 1.0);
+        let (m1, m2) = (&on_plain.masks[0], &on_cropped.masks[0]);
+        assert_eq!(m1.components[0].shape, MaskShape::Subject);
+        assert_eq!(m1.adjust.exposure, 0.5, "the preset's adjustments travel with the mask");
+        assert_eq!(m1.ai_version, AI_MASK_VERSION);
+        assert_eq!(m1.ai_geometry, Some(geometry_stamp(&on_plain)));
+        assert_eq!(m2.ai_geometry, Some(geometry_stamp(&on_cropped)));
+        assert_ne!(m1.ai_geometry, m2.ai_geometry, "each photo has its own stamp");
+        assert!(!m1.ai_stale(geometry_stamp(&on_plain)));
+    }
+
+    /// Presets saved before the flag existed load, keep their pixel masks, and apply as they did.
+    #[test]
+    fn legacy_presets_load_and_keep_their_pixel_masks() {
+        let legacy = r#"{"id":"user.old","name":"Old","group":"User","settings":{"masks":[{"id":1,"name":"Brush","visible":true,"invert":false,"components":[{"shape":{"kind":"brush","strokes":[]}}],"adjust":{}}],"light":{"exposure":1.0}}}"#;
+        let p: Preset = serde_json::from_str(legacy).unwrap();
+        assert!(!p.adaptive && !p.is_adaptive());
+        let out = p.apply(&DevelopSettings::default(), 1.0);
+        assert_eq!(out.masks.len(), 1);
+        assert!(matches!(out.masks[0].components[0].shape, MaskShape::Brush { .. }), "a pixel mask stays a pixel mask");
+        assert_eq!(out.light.exposure, 1.0);
+
+        let mut a = DevelopSettings::default();
+        a.masks = vec![local_mask(MaskShape::Brush { strokes: Vec::new() }, "Brush")];
+        let (plain, dropped) = Preset::from_settings_counted("q", "Plain", "User", &a, &[SettingsGroup::Masks]);
+        assert_eq!(dropped, 0);
+        assert!(!plain.adaptive, "a pixel-only preset is not adaptive");
+        assert_eq!(plain.settings["masks"].as_array().map(Vec::len), Some(1));
     }
 }

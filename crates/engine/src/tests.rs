@@ -1889,3 +1889,60 @@ fn a_preset_with_apply_auto_runs_auto_before_its_own_settings() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(active_dev(&s), before);
 }
+
+/// An adaptive preset keeps its semantic mask by kind (the brush mask is left out), and applying it to two photos
+/// computes a Subject mask for each with its own geometry stamp and the preset's adjustments, in one undo step.
+#[test]
+fn an_adaptive_preset_stores_semantic_masks_and_computes_them_per_photo() {
+    use lightcraft_catalog::PhotoId;
+    use lightcraft_develop::{AI_MASK_VERSION, DevelopSettings, LocalAdjustments, Mask, MaskComponent, MaskOp, MaskShape, geometry_stamp};
+    let mut s = demo();
+    let ids: Vec<PhotoId> = s.visible_cloned().into_iter().take(2).collect();
+    s.execute("library.select", &json!({"ids": [ids[0].0]})).unwrap();
+    let plain = active_dev(&s);
+    let mask = |shape: MaskShape, name: &str| Mask {
+        id: 1,
+        name: name.into(),
+        components: vec![MaskComponent { name: None, op: MaskOp::Add, invert: false, shape }],
+        adjust: LocalAdjustments { exposure: 0.5, ..LocalAdjustments::default() },
+        ..Mask::default()
+    };
+    let mut src = plain.clone();
+    src.masks = vec![mask(MaskShape::Subject, "Subject"), mask(MaskShape::Brush { strokes: Vec::new() }, "Brush")];
+    s.set_develop(ids[0], src, "setup").unwrap();
+    let made = s.execute("preset.create", &json!({"name": "Adaptive subject", "groups": ["masks"]})).unwrap();
+    assert_eq!(made["adaptive"], json!(true));
+    assert_eq!(made["droppedMasks"], json!(1), "the brush mask holds one photo's pixels and is not saved");
+    let pid = made["id"].as_str().unwrap().to_string();
+    let stored = s.presets.iter().find(|p| p.id == pid).unwrap();
+    assert!(stored.adaptive && stored.is_adaptive());
+
+    // the source photo is clean again; the second photo has a crop, so its geometry stamp differs
+    s.set_develop(ids[0], plain, "setup").unwrap();
+    s.execute("library.select", &json!({"ids": [ids[1].0]})).unwrap();
+    let mut other = active_dev(&s);
+    other.crop.geometry.angle = 5.0;
+    s.set_develop(ids[1], other, "setup").unwrap();
+    let before: Vec<DevelopSettings> = ids.iter().map(|id| (*s.develop_of(*id).unwrap()).clone()).collect();
+
+    s.execute("library.select", &json!({"ids": [ids[0].0, ids[1].0]})).unwrap();
+    s.execute("preset.apply", &json!({"id": pid, "ids": [ids[0].0, ids[1].0]})).unwrap();
+    let mut stamps = Vec::new();
+    for id in &ids {
+        let d = s.develop_of(*id).unwrap();
+        let m = d.masks.iter().find(|m| m.name == "Subject").expect("the Subject mask");
+        assert_eq!(m.components[0].shape, MaskShape::Subject);
+        assert_eq!(m.adjust.exposure, 0.5, "the preset's adjustments");
+        assert!(d.masks.iter().all(|m| m.name != "Brush"));
+        assert_eq!(m.ai_version, AI_MASK_VERSION);
+        assert_eq!(m.ai_geometry, Some(geometry_stamp(&d)), "stamped for this photo");
+        stamps.push(m.ai_geometry);
+    }
+    assert_ne!(stamps[0], stamps[1], "each photo has its own stamp");
+
+    // both photos change in one undo step
+    s.execute("edit.undo", &json!({})).unwrap();
+    for (id, b) in ids.iter().zip(&before) {
+        assert_eq!(*s.develop_of(*id).unwrap(), *b);
+    }
+}

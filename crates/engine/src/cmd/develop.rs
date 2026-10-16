@@ -1266,8 +1266,11 @@ pub fn specs() -> Vec<CommandSpec> {
                 let groups = groups_param(p, c)?.unwrap_or_else(SettingsGroup::default_copy);
                 let d = s.develop_of(id).unwrap_or_default();
                 let pid = format!("user.{}.{}", s.presets.len(), name.to_lowercase().replace(' ', "-"));
-                s.presets.push(Preset { auto: bool_or(p, "auto", false), ..Preset::from_settings(&pid, name, group, &d, &groups) });
-                Ok(json!({"id": pid}))
+                // semantic masks are saved by kind; pixel masks are left out of an adaptive preset (`droppedMasks`)
+                let (preset, dropped) = Preset::from_settings_counted(&pid, name, group, &d, &groups);
+                let adaptive = preset.is_adaptive();
+                s.presets.push(Preset { auto: bool_or(p, "auto", false), ..preset });
+                Ok(json!({"id": pid, "adaptive": adaptive, "droppedMasks": dropped}))
             }
         ),
         cmd!("preset.delete", "Delete Preset", [], None, "{id}", always, |s, p| {
@@ -1318,7 +1321,9 @@ pub fn specs() -> Vec<CommandSpec> {
                         Value::Object(keys.into_iter().filter_map(|k| current.get(&k).cloned().map(|v| (k, v))).collect())
                     }
                 };
-                ok()
+                let dropped = lightcraft_develop::presets::settle_masks(&mut pr.settings);
+                pr.adaptive = pr.is_adaptive();
+                Ok(json!({"adaptive": pr.adaptive, "droppedMasks": dropped}))
             }
         ),
         // ---- versions & history

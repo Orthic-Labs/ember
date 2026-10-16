@@ -27,6 +27,7 @@ fn many(n: usize) -> Vec<Preset> {
             favorite: false,
             builtin: false,
             auto: false,
+            adaptive: false,
         })
         .collect()
 }

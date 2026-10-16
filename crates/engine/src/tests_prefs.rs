@@ -18,7 +18,7 @@ fn temp_dir(tag: &str) -> PathBuf {
 }
 
 fn user_preset(id: &str, settings: serde_json::Value) -> Preset {
-    Preset { id: id.into(), name: id.into(), group: "User Presets".into(), settings, favorite: false, builtin: false, auto: false }
+    Preset { id: id.into(), name: id.into(), group: "User Presets".into(), settings, favorite: false, builtin: false, auto: false, adaptive: false }
 }
 
 fn with_presets(s: &mut Session) {

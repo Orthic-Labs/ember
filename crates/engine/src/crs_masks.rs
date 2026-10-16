@@ -518,6 +518,7 @@ mod tests {
             favorite: false,
             builtin: false,
             auto: false,
+            adaptive: false,
         };
         let mut mine = DevelopSettings::default();
         mine.masks.push(lightcraft_develop::Mask { id: 7, name: "Mine".into(), ..Default::default() });

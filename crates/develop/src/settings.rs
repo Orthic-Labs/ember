@@ -1151,6 +1151,12 @@ impl MaskShape {
                 | MaskShape::Landscape { .. }
         )
     }
+
+    /// Whether this shape is a semantic kind (Subject, Sky, Background, People, Landscape): it names what to
+    /// select and stores no pixels, so a preset can carry it and each photo computes its own.
+    pub fn is_semantic(&self) -> bool {
+        matches!(self, MaskShape::Subject | MaskShape::Sky | MaskShape::Background | MaskShape::People { .. } | MaskShape::Landscape { .. })
+    }
 }
 
 /// How many of `masks` are stale for a photo whose current geometry stamp is `geometry`.

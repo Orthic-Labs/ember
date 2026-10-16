@@ -1676,6 +1676,7 @@ mod tests {
                 favorite: false,
                 builtin: false,
                 auto: false,
+                adaptive: false,
             })
             .collect();
         assert_eq!(h.app.session.add_presets(many).len(), 5000);
