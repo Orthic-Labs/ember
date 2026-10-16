@@ -459,10 +459,8 @@ fn sidecar_contents(path: &Path, fresh: String, stamp: &str) -> std::io::Result<
     }
     // Regions are written only where the sidecar has none: one that has `mwg-rs:Regions` (ours or another
     // application's) keeps them byte for byte.
-    let has_regions = std::str::from_utf8(&bytes)
-        .ok()
-        .and_then(|s| lightcraft_meta::parse_xmp(s).ok())
-        .is_some_and(|d| d.values.contains_key("mwg-rs:Regions"));
+    let has_regions =
+        std::str::from_utf8(&bytes).ok().and_then(|s| lightcraft_meta::parse_xmp(s).ok()).is_some_and(|d| d.values.contains_key("mwg-rs:Regions"));
     let owned_if_present = if has_regions { OWNED_IF_STATED } else { OWNED_IF_STATED_OR_NEW_REGIONS };
     let rules = lightcraft_meta::MergeRules { owned: OWNED, owned_if_present };
     match std::str::from_utf8(&bytes)
