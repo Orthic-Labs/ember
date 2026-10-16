@@ -462,6 +462,33 @@ fn hdr_export_headroom_cap_clamps_exported_values() {
 }
 
 #[test]
+fn hdr_sdr_rendition_settings_round_trip_and_change_the_gain_map_base() {
+    use lightcraft_codecs::gainmap;
+    let mut s = Session::with_demo();
+    let id = sunset(&mut s);
+    s.execute("develop.hdr", &json!({"enabled": true, "maxEv": 3})).unwrap();
+    let o = ExportOptions::from_json(&json!({"longEdge": 240, "hdr": true}));
+    let base = |s: &mut Session| {
+        let e = export_photo(s, id, &o, 1).unwrap();
+        assert!(gainmap::is_gain_map_jpeg(&e.bytes));
+        lightcraft_codecs::decode(&e.bytes, Default::default()).unwrap().image.data.iter().map(|p| p[1]).collect::<Vec<f32>>()
+    };
+    let before = base(&mut s);
+    s.execute("develop.set", &json!({"control": "hdr.sdrBrightness", "value": 60})).unwrap();
+    s.execute("develop.set", &json!({"control": "hdr.sdrContrast", "value": -20})).unwrap();
+    let d = s.develop_of(id).unwrap();
+    assert_eq!((d.hdr.sdr_brightness, d.hdr.sdr_contrast), (60.0, -20.0));
+    // stored with the photo: the settings JSON reads back to the same rendition
+    let back: lightcraft_develop::DevelopSettings = serde_json::from_value(d.to_json()).unwrap();
+    assert_eq!(back.hdr, d.hdr);
+    assert_ne!(back.sdr_rendition().light.exposure, back.light.exposure, "the rendition brightens the SDR render");
+    let after = base(&mut s);
+    assert_eq!(before.len(), after.len());
+    let mean_diff = before.iter().zip(&after).map(|(a, b)| (a - b).abs()).sum::<f32>() / before.len() as f32;
+    assert!(mean_diff > 0.02, "the SDR rendition settings change the gain map's base image ({mean_diff})");
+}
+
+#[test]
 fn hdr_avif_export_is_pq_rec2020() {
     let mut s = Session::with_demo();
     let id = sunset(&mut s);
