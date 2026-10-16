@@ -741,6 +741,25 @@ mod tests {
     }
 
     #[test]
+    fn classic_shift_tab_toggles_only_the_side_panels() {
+        use crate::state::RightPanel;
+        let mut h = library();
+        h.app.ui.top_bar = true;
+        h.app.ui.left_panel = true;
+        h.app.ui.filmstrip = true;
+        h.app.ui.right = RightPanel::Edit;
+        key(&mut h, "Tab", true);
+        assert!(!h.app.ui.left_panel);
+        assert_eq!(h.app.ui.right, RightPanel::None);
+        assert!(h.app.ui.top_bar && h.app.ui.filmstrip);
+        assert!(h.app.ui.panels_hidden.is_none());
+        key(&mut h, "Tab", true);
+        assert!(h.app.ui.left_panel);
+        assert_eq!(h.app.ui.right, RightPanel::Edit);
+        assert!(h.app.ui.top_bar && h.app.ui.filmstrip);
+    }
+
+    #[test]
     fn f1_opens_the_keyboard_shortcut_list() {
         let mut h = library();
         key(&mut h, "F1", false);

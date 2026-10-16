@@ -77,6 +77,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("view.topPanel", "Top Bar", Some("F5"), "View"),
     ("view.rightPanel", "Right Panel", Some("F8"), "View"),
     ("view.panels", "Toggle All Panels", Some("Tab"), "View"),
+    // Classic ⇧Tab: side panels only (top bar and filmstrip stay)
+    ("view.sidePanels", "Toggle Side Panels", Some("Shift+Tab"), "View"),
     ("view.leftPanel", "My Photos Panel", Some("Cmd+Shift+L"), "View"),
     ("view.beforeAfter", "Compare Before and After", Some("Y"), "View"),
     ("view.beforeAfterSplit", "Before/After Split", Some("Shift+Y"), "View"),
@@ -689,6 +691,17 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         }
         "view.rightPanel" => {
             app.ui.right = if app.ui.right == RightPanel::None { RightPanel::Edit } else { RightPanel::None };
+            Ok(Value::Null)
+        }
+        "view.sidePanels" => {
+            // ⇧Tab hides both side panels when either is showing, otherwise shows the left panel and Edit
+            if app.ui.left_panel || app.ui.right != RightPanel::None {
+                app.ui.left_panel = false;
+                app.ui.right = RightPanel::None;
+            } else {
+                app.ui.left_panel = true;
+                app.ui.right = RightPanel::Edit;
+            }
             Ok(Value::Null)
         }
         "view.panels" => {
