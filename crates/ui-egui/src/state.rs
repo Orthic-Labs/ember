@@ -831,6 +831,9 @@ pub struct UiState {
     /// View ▸ HDR Display: show HDR edits above SDR white where the window and screen can. Off by
     /// default; with it off (or no HDR surface or headroom) every preview is the SDR rendition.
     pub hdr_display: bool,
+    /// View ▸ Preview SDR Rendition: show the SDR rendition even where HDR display is active, to check what an
+    /// SDR screen or export gets. Off by default; changes nothing while HDR display is inactive.
+    pub hdr_preview_sdr: bool,
     /// Red Eye panel: selected correction, and whether new ones are pet eyes.
     pub eye: usize,
     pub eye_pet: bool,
@@ -1316,6 +1319,7 @@ impl Default for UiState {
             point_color_visualize: false,
             hdr_visualize: false,
             hdr_display: false,
+            hdr_preview_sdr: false,
             eye: 0,
             eye_pet: false,
             visualize_spots: false,

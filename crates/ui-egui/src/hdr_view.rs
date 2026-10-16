@@ -51,10 +51,16 @@ pub fn decide(enabled: bool, surface_hdr: bool, headroom: Option<f32>) -> HdrVie
     }
 }
 
+/// View ▸ Preview SDR Rendition: with it on, an HDR view shows the SDR rendition instead (what an SDR
+/// screen or export gets); an SDR view stays as it is.
+pub fn with_sdr_preview(view: HdrView, preview_sdr: bool) -> HdrView {
+    if preview_sdr && view.is_hdr() { HdrView::Sdr { reason: "previewing the SDR rendition" } } else { view }
+}
+
 impl LightcraftApp {
-    /// How previews are shown now (SDR unless [`decide`] says HDR).
+    /// How previews are shown now (SDR unless [`decide`] says HDR and the SDR preview is off).
     pub fn hdr_view(&self) -> HdrView {
-        decide(self.ui.hdr_display, self.services.hdr_surface, self.hdr_headroom)
+        with_sdr_preview(decide(self.ui.hdr_display, self.services.hdr_surface, self.hdr_headroom), self.ui.hdr_preview_sdr)
     }
 
     /// Reads the screen's headroom about once a second, so moving the window to another screen or
@@ -110,6 +116,48 @@ mod tests {
         // no HDR surface (eframe's 8-bit one today): still SDR with the toggle on
         app.services.hdr_surface = false;
         assert!(!app.hdr_view().is_hdr());
+    }
+
+    #[test]
+    fn sdr_preview_turns_hdr_into_the_sdr_rendition_only() {
+        let hdr = HdrView::Hdr { headroom: 4.0 };
+        assert_eq!(with_sdr_preview(hdr, false), hdr);
+        let sdr = with_sdr_preview(hdr, true);
+        assert!(!sdr.is_hdr());
+        assert_eq!(sdr.headroom(), None);
+        // an SDR view keeps its own reason
+        let off = decide(false, true, Some(4.0));
+        assert_eq!(with_sdr_preview(off, true), off);
+        assert_eq!(with_sdr_preview(off, false), off);
+    }
+
+    #[test]
+    fn sdr_preview_toggle_overrides_an_active_hdr_view() {
+        let services = Services { png: None, hdr_surface: true, display_headroom: Some(Box::new(|| Some(4.0))), ..Default::default() };
+        let mut app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), services);
+        app.run(crate::early_access::COMMAND, serde_json::json!({"feature": "hdrDisplay", "enabled": true})).expect("early access on");
+        app.follow_hdr_headroom(&egui::Context::default());
+        app.ui.hdr_display = true;
+        assert!(!app.ui.hdr_preview_sdr, "off by default");
+        assert_eq!(app.hdr_view(), HdrView::Hdr { headroom: 4.0 });
+        let on = app.run("view.previewSdr", serde_json::json!({})).expect("toggles on");
+        assert_eq!((on["on"].as_bool(), on["hdrAvailable"].as_bool(), on["active"].as_bool()), (Some(true), Some(true), Some(false)));
+        assert!(!app.hdr_view().is_hdr());
+        let off = app.run("view.previewSdr", serde_json::json!({"on": false})).expect("switches off");
+        assert_eq!((off["on"].as_bool(), off["active"].as_bool()), (Some(false), Some(true)));
+        assert!(app.hdr_view().is_hdr());
+    }
+
+    #[test]
+    fn sdr_preview_command_follows_the_hdr_display_early_access_gate() {
+        let mut app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), Services { png: None, ..Default::default() });
+        assert!(app.run("view.previewSdr", serde_json::json!({})).is_err(), "refused while the early access feature is off");
+        assert!(!app.ui.hdr_preview_sdr);
+        app.run(crate::early_access::COMMAND, serde_json::json!({"feature": "hdrDisplay", "enabled": true})).expect("early access on");
+        let r = app.run("view.previewSdr", serde_json::json!({})).expect("runs");
+        assert_eq!(r["on"], true);
+        assert_eq!(r["hdrAvailable"], false, "no HDR display in tests, so the preview changes nothing");
+        assert_eq!(r["active"], false);
     }
 
     #[test]

@@ -102,7 +102,7 @@ pub const FEATURES: &[Feature] = &[
         label: "HDR display output",
         note: "View ▸ HDR Display: HDR edits above SDR white where the screen and window can show them. The 8-bit window surface is not enough yet.",
         default_on: false,
-        commands: &["view.hdrDisplay"],
+        commands: &["view.hdrDisplay", "view.previewSdr"],
         prefixes: &[],
         params: &[],
     },

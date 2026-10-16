@@ -104,6 +104,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("view.clipping", "Show Clipping", Some("J"), "View"),
     ("view.visualizeHdr", "Visualize HDR", None, "View"),
     ("view.hdrDisplay", "HDR Display", None, "View"),
+    ("view.previewSdr", "Preview SDR Rendition", None, "View"),
     // in grids S expands/collapses stacks (the engine command it shadows)
     ("view.softProof", "Soft Proofing", Some("S"), "View"),
     ("view.histogram", "Histogram", Some("Cmd+Shift+H"), "View"),
@@ -913,6 +914,12 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 app.toast(&ctx, format!("{}: {why}", crate::i18n::tr("HDR display is not available")));
             }
             Ok(json!({"on": app.ui.hdr_display, "active": view.is_hdr(), "headroom": app.hdr_headroom, "reason": reason}))
+        }
+        "view.previewSdr" => {
+            // {on?}; no params toggles. Shows the SDR rendition (the `hdr.sdr*` settings) where HDR display is active.
+            app.ui.hdr_preview_sdr = p.get("on").and_then(Value::as_bool).unwrap_or(!app.ui.hdr_preview_sdr);
+            let available = crate::hdr_view::decide(app.ui.hdr_display, app.services.hdr_surface, app.hdr_headroom).is_hdr();
+            Ok(json!({"on": app.ui.hdr_preview_sdr, "hdrAvailable": available, "active": app.hdr_view().is_hdr()}))
         }
         "view.softProof" => {
             // {on?, space?, profile?: ICC path | null, intent?: perceptual|relative, paperInk?,
