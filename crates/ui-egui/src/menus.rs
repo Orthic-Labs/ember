@@ -86,6 +86,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("view.panels", "Toggle All Panels", Some("Tab"), "View"),
     // Classic ⇧Tab: side panels only (top bar and filmstrip stay)
     ("view.sidePanels", "Toggle Side Panels", Some("Shift+Tab"), "View"),
+    ("view.soloMode", "Solo Mode", None, "View"),
     ("app.classicKeymap", "Classic Keymap", None, ""),
     ("view.leftPanel", "My Photos Panel", Some("Cmd+Shift+L"), "View"),
     ("view.beforeAfter", "Compare Before and After", Some("Y"), "View"),
@@ -793,6 +794,15 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         "view.rightPanel" => {
             app.ui.right = if app.ui.right == RightPanel::None { RightPanel::Edit } else { RightPanel::None };
             Ok(Value::Null)
+        }
+        "view.soloMode" => {
+            // {on?: bool} (flips when omitted): Solo Mode keeps one Edit section open, the last one opened
+            let on = p.get("on").and_then(Value::as_bool).unwrap_or(!app.ui.single_panel);
+            app.ui.single_panel = on;
+            if on && let Some(last) = app.ui.open_sections.pop() {
+                app.ui.open_sections = vec![last];
+            }
+            Ok(json!({"soloMode": on}))
         }
         "view.sidePanels" => {
             // ⇧Tab hides both side panels when either is showing, otherwise shows the left panel and Edit

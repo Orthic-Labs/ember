@@ -615,6 +615,13 @@ fn section(
     let (resp, toggled) = section_header(ui, id, title, open, Some(d.section_enabled(id)));
     if let Some(on) = toggled {
         let _ = app.run("develop.sectionEnabled", json!({"section": id, "enabled": on}));
+    } else if resp.clicked() && ui.input(|i| i.modifiers.alt) {
+        // Alt-click toggles Solo Mode; turning it on leaves this section open and the others shut
+        let on = !app.ui.single_panel;
+        let _ = app.run("view.soloMode", json!({"on": on}));
+        if on {
+            app.ui.open_sections = vec![id.to_string()];
+        }
     } else if resp.clicked() {
         app.ui.toggle_section(id);
     }

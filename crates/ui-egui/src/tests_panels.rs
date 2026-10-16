@@ -34,6 +34,24 @@ fn drag(h: &mut Headless, x: f32, dx: f32) {
     h.step();
 }
 
+/// Solo Mode (#146): one Edit section open at a time, the last one opened; saved with the UI state.
+#[test]
+fn solo_mode_keeps_one_edit_section_open_and_survives_a_save() {
+    let mut h = demo([1400.0, 900.0], json!({"view": "detail", "right": "edit"}));
+    h.app.ui.open_sections = vec!["light".into(), "color".into()];
+    let r = h.app.run("view.soloMode", json!({"on": true})).unwrap();
+    assert_eq!(r["soloMode"], true);
+    assert!(h.app.ui.single_panel);
+    assert_eq!(h.app.ui.open_sections, vec!["color".to_string()], "Solo Mode keeps the last section opened");
+    h.app.ui.toggle_section("effects");
+    assert_eq!(h.app.ui.open_sections, vec!["effects".to_string()], "opening a section closes the others");
+    let saved = serde_json::to_string(&h.app.ui).unwrap();
+    let back = serde_json::from_str::<crate::UiState>(&saved).unwrap().sanitized();
+    assert!(back.single_panel, "Solo Mode is saved with the UI state");
+    h.app.run("view.soloMode", json!({})).unwrap();
+    assert!(!h.app.ui.single_panel, "without `on` the command flips Solo Mode");
+}
+
 #[test]
 fn side_panels_resize_by_their_inner_edge_and_remember_it() {
     let mut h = demo([1400.0, 900.0], json!({"view": "detail", "right": "edit", "leftPanel": true}));
