@@ -722,8 +722,13 @@ pub fn render(
             _ => Err(m),
         }
     });
+    // the histogram counts on the device over the frame (cut to the window it shows), recorded
+    // before the readback submits it; without counters the CPU counts the same pixels below
+    let window = plan.keep.map_or((0, 0, w, h), |k| (k.x, k.y, k.w, k.h));
+    let counts = crate::histogram::record(&mut cx, &out, (w, h), window);
     let data: Vec<[u8; 4]> = cx.read(&out, n);
     let image = Rgba8 { width: w, height: h, data };
+    let gpu_histogram = counts.as_ref().and_then(|c| crate::histogram::read(&mut cx, c));
     lap("finish + readback", &mut t, &mut cx);
     if crate::ctx::failed() {
         return None;
@@ -736,9 +741,10 @@ pub fn render(
         fail(FailKind::Fatal, format!("the GPU returned an incomplete image ({unwritten} of {n} pixels unwritten)"));
         return None;
     }
-    let histogram = match plan.keep {
-        Some(k) => Histogram::of_srgb8(&image.crop(k.x, k.y, k.w, k.h)),
-        None => Histogram::of_srgb8(&image),
+    let histogram = match (gpu_histogram, plan.keep) {
+        (Some(h), _) => h,
+        (None, Some(k)) => Histogram::of_srgb8(&image.crop(k.x, k.y, k.w, k.h)),
+        (None, None) => Histogram::of_srgb8(&image),
     };
     lap("histogram", &mut t, &mut cx);
     // An entirely black result (upstream work that did not run would give that too): redo it on

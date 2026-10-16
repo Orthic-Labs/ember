@@ -129,10 +129,16 @@ impl Histogram {
         over(&self.r).max(over(&self.g)).max(over(&self.b)) as f32 / self.total as f32
     }
 
+    /// The stride [`Histogram::of_srgb8`] samples an image of `len` pixels with (at most ~1 MP is
+    /// visited). The GPU histogram (`lightcraft-gpu`) uses the same stride, so both count the same
+    /// pixels.
+    pub fn sample_stride(len: usize) -> usize {
+        ((len as f64 / 1_000_000.0).sqrt().ceil() as usize).max(1)
+    }
+
     pub fn of_srgb8(img: &Rgba8) -> Histogram {
         let mut h = Self::empty(None);
-        // Sample at most ~1 MP for speed.
-        let step = ((img.len() as f64 / 1_000_000.0).sqrt().ceil() as usize).max(1);
+        let step = Self::sample_stride(img.len());
         for y in (0..img.height).step_by(step) {
             for x in (0..img.width).step_by(step) {
                 let p = img.get(x, y);

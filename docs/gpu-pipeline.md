@@ -317,4 +317,6 @@ A view's stages keep an uploaded source only up to 96 MB (a Preview-level source
   faster path for exports.
 - Large-radius blurs at full size (dehaze dark channel at 24 MP) dominate the export: a summed-area
   table or a downsampled dark channel would cut them further.
-- GPU histogram (atomics) to skip the CPU pass over the readback.
+- GPU histogram: landed in code (#213). `crates/gpu/src/histogram.rs` counts the 8-bit frame with
+  atomics on the device, over the same sampled pixels and bins as `Histogram::of_srgb8`; the CPU
+  count is the fallback when the window is not in the frame. Pending CI verification of its test.
