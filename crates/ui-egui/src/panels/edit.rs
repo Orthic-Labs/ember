@@ -409,6 +409,16 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
         for c in ["detail.sharpenAmount", "detail.sharpenRadius", "detail.sharpenDetail", "detail.sharpenMasking"] {
             control(app, ui, d, c, c == "detail.sharpenAmount" || d.detail.sharpen_amount > 0.0);
         }
+        // Raw Details: the higher-quality demosaic of a raw photo's sensor data (off for every edit made before it existed)
+        if app.session.catalog.photo(id).is_some_and(|p| p.develops_raw()) {
+            sub_title(ui, crate::i18n::tr("Raw Details"));
+            egui::Frame::NONE.inner_margin(egui::Margin { left: 24, right: 22, top: 4, bottom: 4 }).show(ui, |ui| {
+                let mut on = d.enhance.raw_details;
+                if ui.checkbox(&mut on, crate::i18n::tr("Enhanced demosaic")).changed() {
+                    let _ = app.run("develop.rawDetails", json!({"enabled": on}));
+                }
+            });
+        }
         // AI Denoise is its own tool, apart from the manual noise reduction sliders below it
         sub_title(ui, crate::i18n::tr("AI Denoise"));
         // AI Denoise: how much of the photo's cleaned picture to mix in (raw files only), and what that picture is doing

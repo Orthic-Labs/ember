@@ -346,13 +346,19 @@ pub fn bin_factor(raw: &lightcraft_raw::RawImage, max_edge: usize) -> Option<usi
 /// instead of each one waking the pool from outside and waiting for it (which costs more than the
 /// loops themselves when the machine is busy).
 pub fn load_bytes(bytes: &[u8], max_edge: usize) -> Result<(Rgb32f, SourceInfo), String> {
-    rayon::scope(|_| load_bytes_now(std::borrow::Cow::Borrowed(bytes), max_edge, None, None).map(|(img, _, info)| (img, info)))
+    rayon::scope(|_| load_bytes_now(std::borrow::Cow::Borrowed(bytes), max_edge, None, None, false).map(|(img, _, info)| (img, info)))
 }
 
 /// [`load_bytes`] taking the file's bytes: a raw file's bytes are freed as soon as it is decoded
 /// (less memory held while it is developed).
 pub fn load_vec(bytes: Vec<u8>, max_edge: usize) -> Result<(Rgb32f, SourceInfo), String> {
-    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, None).map(|(img, _, info)| (img, info)))
+    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, None, false).map(|(img, _, info)| (img, info)))
+}
+
+/// [`load_vec`] with the "Raw Details" demosaic ([`lightcraft_raw::Method::RawDetails`]) for the levels that demosaic the
+/// sensor (previews that bin the mosaic instead are unaffected, as are files that are not Bayer raws).
+pub fn load_vec_detailed(bytes: Vec<u8>, max_edge: usize) -> Result<(Rgb32f, SourceInfo), String> {
+    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, None, true).map(|(img, _, info)| (img, info)))
 }
 
 /// Per-file crop provenance for an offline registration source, in un-oriented active-area pixels.
@@ -370,14 +376,16 @@ pub fn load_vec_for_alignment(bytes: Vec<u8>, max_edge: usize) -> Result<(Rgb32f
         .map(|full_default_crop| lightcraft_raw::probe_info(&bytes).map(|info| AlignmentCrop { camera_crop: info.crop, full_default_crop }))
         .transpose()
         .map_err(|error| error.to_string())?;
-    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, crop).map(|(image, _, info)| (image, info, provenance)))
+    rayon::scope(move |_| {
+        load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, crop, false).map(|(image, _, info)| (image, info, provenance))
+    })
 }
 
 /// [`load_vec`] that also develops the photo's cached denoised picture (`spec`) from the same decode: the plain
 /// picture, the denoised one (`None` when it cannot be read or does not fit this raw: the plain one is then all
 /// there is) and the source facts. Both pictures are the same size.
 pub fn load_vec_pair(bytes: Vec<u8>, max_edge: usize, spec: &DenoiseSpec) -> Result<(Rgb32f, Option<Rgb32f>, SourceInfo), String> {
-    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, Some(spec), None))
+    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, Some(spec), None, false))
 }
 
 /// The denoised camera RGB of `raw` from its cached product, as the plain development would have it: the default
@@ -407,6 +415,7 @@ fn load_bytes_now(
     max_edge: usize,
     denoise: Option<&DenoiseSpec>,
     alignment_crop: Option<lightcraft_raw::Rect>,
+    raw_details: bool,
 ) -> Result<(Rgb32f, Option<Rgb32f>, SourceInfo), String> {
     if lightcraft_raw::probe(&bytes).is_some() {
         let mut raw = match lightcraft_raw::decode(&bytes).map_err(|e| preview_reason(&bytes, e)) {
@@ -449,7 +458,12 @@ fn load_bytes_now(
         let (img, clip_mask) = match binned {
             Some((img, mask)) => (img, Some(mask)),
             None => {
-                let method = if max_edge <= 600 { lightcraft_raw::Method::Bilinear } else { lightcraft_raw::Method::Ahd };
+                // (Raw Details only changes the levels that demosaic the sensor; the small ones stay bilinear)
+                let method = match (max_edge <= 600, raw_details) {
+                    (true, _) => lightcraft_raw::Method::Bilinear,
+                    (false, true) => lightcraft_raw::Method::RawDetails,
+                    (false, false) => lightcraft_raw::Method::Ahd,
+                };
                 (raw.develop(method).map_err(|e| e.to_string())?, None)
             }
         };
@@ -1011,6 +1025,26 @@ pub fn fs_pair_loader() -> PairLoader {
     })
 }
 
+/// The filesystem-backed [`FileLoader`], with the "Raw Details" demosaic when `detail` is set.
+fn fs_loader(detail: bool) -> FileLoader {
+    Arc::new(move |path: &str, max_edge: usize| {
+        let len = std::fs::metadata(path).map(|m| usize::try_from(m.len()).unwrap_or(usize::MAX)).unwrap_or(0);
+        let weight = len * if max_edge <= crate::media::SourceLevel::Thumb.max_edge() { 3 } else { 6 };
+        let gate = crate::memory::work_gate();
+        let _permit = if crate::memory::is_background() { gate.acquire(weight) } else { gate.acquire_urgent(weight) };
+        let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
+        let r = if detail { load_vec_detailed(bytes, max_edge) } else { load_vec(bytes, max_edge) };
+        // the file, the samples and the intermediate images are gone: give their pages back
+        crate::memory::release();
+        r
+    })
+}
+
+/// The filesystem-backed loader of photos whose Raw Details setting is on ([`crate::media::MediaCache::file_loader_detailed`]).
+pub fn fs_detailed_loader() -> FileLoader {
+    fs_loader(true)
+}
+
 /// Filesystem-backed hooks (native). On the web the host installs bytes-based hooks instead.
 ///
 /// Their working memory is bounded by [`crate::memory::work_gate`]: background loads (grid
@@ -1019,17 +1053,7 @@ pub fn fs_pair_loader() -> PairLoader {
 /// interactive loads (the loupe, exports) never wait — they are counted, so background work
 /// yields to them.
 pub fn fs_hooks() -> (FileLoader, FileProbe) {
-    let loader: FileLoader = Arc::new(|path: &str, max_edge: usize| {
-        let len = std::fs::metadata(path).map(|m| usize::try_from(m.len()).unwrap_or(usize::MAX)).unwrap_or(0);
-        let weight = len * if max_edge <= crate::media::SourceLevel::Thumb.max_edge() { 3 } else { 6 };
-        let gate = crate::memory::work_gate();
-        let _permit = if crate::memory::is_background() { gate.acquire(weight) } else { gate.acquire_urgent(weight) };
-        let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
-        let r = load_vec(bytes, max_edge);
-        // the file, the samples and the intermediate images are gone: give their pages back
-        crate::memory::release();
-        r
-    });
+    let loader = fs_loader(false);
     let probe: FileProbe = Arc::new(|path: &str| {
         let before = std::fs::metadata(path).map_err(|e| format!("{path}: {e}"))?;
         let len = usize::try_from(before.len()).map_err(|_| format!("{path}: file too large"))?;
@@ -1065,6 +1089,7 @@ impl crate::Session {
     pub fn with_fs(mut self) -> Self {
         let (l, p) = fs_hooks();
         self.media.file_loader = Some(l);
+        self.media.file_loader_detailed = Some(fs_detailed_loader());
         self.media.file_probe = Some(p);
         self.media.preview_loader = Some(fs_preview_loader());
         self.media.denoise.loader = Some(fs_pair_loader());

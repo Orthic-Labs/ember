@@ -23,7 +23,7 @@ humans pick work from **[Top gaps](#top-gaps)**; whoever lands a feature updates
 | C. Views & navigation (VIEW) | 15 | 1 | 1 | 0 | 8/9 (89%) | 4/4 (100%) |
 | D. Search & filter (FILT) | 11 | 1 | 1 | 0 | 4/4 (100%) | 4/4 (100%) |
 | E. Metadata (META) | 5 | 1 | 0 | 0 | 2/2 (100%) | 2/2 (100%) |
-| F. Edit panel — global adjustments (EDIT) | 43 | 2 | 3 | 1 | 28/28 (100%) | 13/14 (93%) |
+| F. Edit panel — global adjustments (EDIT) | 43 | 3 | 2 | 1 | 28/28 (100%) | 13/14 (93%) |
 | G. Profiles (PROF) | 7 | 1 | 3 | 0 | 3/4 (75%) | 3/3 (100%) |
 | H. Crop & rotate (CROP) | 9 | 0 | 0 | 1 | 6/6 (100%) | 3/3 (100%) |
 | I. Remove / healing (REM) | 8 | 1 | 2 | 2 | 4/4 (100%) | 2/3 (67%) |
@@ -45,9 +45,9 @@ humans pick work from **[Top gaps](#top-gaps)**; whoever lands a feature updates
 | Y. Menus | 84 | 0 | 4 | 8 | 47/47 (100%) | 23/23 (100%) |
 | Z. Keyboard shortcuts (desktop) | 76 | 3 | 3 | 1 | 49/52 (94%) | 23/24 (96%) |
 | reference catalog editor extras | 34 | 16 | 35 | 8 | — | 24/26 (92%) |
-| **Total** | 408 | 49 | 73 | 35 | 192/200 (96%) | 146/157 (93%) |
+| **Total** | 408 | 50 | 72 | 35 | 192/200 (96%) | 146/157 (93%) |
 
-Weighted completion (✅ = 1, 🟡 = ½, 🚫 left out): **81.6%** of 530 in-scope rows — P0 98.0% of 200 · P1 95.5% of 157 · P2 49.7% of 172.
+Weighted completion (✅ = 1, 🟡 = ½, 🚫 left out): **81.7%** of 530 in-scope rows — P0 98.0% of 200 · P1 95.5% of 157 · P2 50.0% of 172.
 <!-- /parity:summary -->
 
 ## Top gaps and shortcut notes
@@ -193,7 +193,7 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 | LR-VIEW-SECONDWINDOW | Second display window [Classic] | P2 | ✅ | `cmd:view.secondWindow`, `crates/ui-egui/src/panels/second.rs` | Window ▸ Second Window (⌘F11): the active photo fitted in its own native window with its own render (a floating panel where there are no native windows); loupe view only (no grid / compare / survey there) |
 | LR-VIEW-CLIPPING | Clipping indicators | P0 | ✅ | `cmd:view.clipping` | |
 | LR-VIEW-HISTOGRAM | Histogram | P0 | ✅ | `cmd:view.histogram`, `crates/ui-egui/src/panels/edit.rs`, `crates/pipeline/src/lib.rs` (`hdr_histogram`) | HDR edits: SDR on the left half, the HDR range (0 to 5 stops above SDR white, a fixed scale) on the right with the headroom limit marked; colour bar (white, or Visualize HDR range's colours when that is on) and SDR / HDR labels; no drag-to-adjust on the histogram |
-| LR-VIEW-HDR-DISPLAY | HDR display output | P2 | ⬜ | `apps/lightcraft/src/hdr_display.rs` (`choose`, `preferred_hdr_format`) | SDR/HDR decision (platform, surface format, OS headroom, `LIGHTCRAFT_HDR_DISPLAY=0`) is unit-tested and logged at start; always SDR today because eframe configures an 8-bit surface; no OS headroom query yet [#46](https://github.com/Orthic-Labs/ember/issues/46) |
+| LR-VIEW-HDR-DISPLAY | HDR display output | P2 | ⬜ | `cmd:view.hdrDisplay`, `apps/lightcraft/src/hdr_display.rs` (`choose`, `preferred_hdr_format`), `apps/lightcraft/src/screen_profile.rs` (`hdr_headroom`), `crates/ui-egui/src/hdr_view.rs` (`decide`) | View ▸ HDR Display (off by default) and the SDR/HDR decision (toggle, surface format, OS headroom, `LIGHTCRAFT_HDR_DISPLAY=0`) are unit-tested and logged at start; macOS reads the screen's EDR headroom from NSScreen about once a second; with the toggle off, no HDR surface or no headroom every preview is the SDR rendition, unchanged. Still always SDR on screen: eframe 0.36 (egui-wgpu `preferred_framebuffer_format`) takes the first `Rgba8Unorm`/`Bgra8Unorm` the surface offers and has no hook for a surface format or colour space, so no `Rgba16Float` surface is configured and no float preview is drawn; Windows has no safe DXGI HDR query (needs `unsafe`, allowed only in `crates/sysmem`) [#46](https://github.com/Orthic-Labs/ember/issues/46) |
 
 ## D. Search & filter (FILT)
 
@@ -261,7 +261,7 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 | LR-EDIT-DETAIL-NR | Luminance noise reduction | P0 | ✅ | `ctl:detail.nrLuminance`, `ctl:detail.nrDetail`, `ctl:detail.nrContrast`, `cmd:develop.autoNoise`, `crates/pipeline/src/noise.rs` | guided filter of log luminance (CPU + GPU); Photo ▸ Auto Noise Reduction measures the photo's noise (signal-dependent model fitted on flat tiles of the original, [`docs/noise-reduction.md`](noise-reduction.md)) & sets luminance + colour NR deterministically, ISO as fallback; `dryRun` returns the estimate |
 | LR-EDIT-DETAIL-CNR | Colour noise reduction | P0 | ✅ | `ctl:detail.nrColor`, `ctl:detail.nrColorDetail`, `ctl:detail.nrColorSmoothness` | |
 | LR-EDIT-DETAIL-DENOISE | AI denoise | P2 | 🟡 | cmd:denoise.toggle, cmd:denoise.models.install, cmd:denoise.queue, ctl:enhance.denoise, `crates/denoise/`, `docs/denoise.md` | non-destructive Bayer RAW, opt-in weights, pure-Rust CPU/GPU; GPU convolution uses independently written shared scalars (Metal equivalence regression, issue #479); tiles can also run on another computer's graphics card (`lightcraft-cli denoise-serve`, `crates/denoise/src/remote.rs`); X-Trans/linear RGB, model policy and reference editor fidelity remain; closing the model setup without installing turns the switch back off (#922) [#27](https://github.com/Orthic-Labs/ember/issues/27) |
-| LR-EDIT-DETAIL-RAWDETAILS | Improved demosaic toggle | P2 | ⬜ | | [#51](https://github.com/Orthic-Labs/ember/issues/51) |
+| LR-EDIT-DETAIL-RAWDETAILS | Improved demosaic toggle | P2 | 🟡 | `cmd:develop.rawDetails`, `crates/raw/src/demosaic/detail.rs`, `crates/ui-egui/src/panels/edit.rs` | Detail ▸ Raw Details checkbox (off by default, so existing edits are unchanged): gradient-weighted directional Bayer demosaic with colour-difference refinement, beats AHD on edges and a zone plate in tests; X-Trans keeps its usual path, the web build has no detailed loader yet, a photo with AI Denoise on still develops its plain picture with AHD, previews that bin the mosaic are not demosaiced; not verified in a build [#51](https://github.com/Orthic-Labs/ember/issues/51) |
 | LR-EDIT-DETAIL-SUPERRES | Super resolution | P2 | ⬜ | | [#52](https://github.com/Orthic-Labs/ember/issues/52) |
 | LR-EDIT-DETAIL-AISHARPEN | AI sharpen | OOS | 🚫 | | |
 | LR-EDIT-OPTICS-CA | Remove chromatic aberration | P1 | ✅ | `crates/ui-egui/src/panels/edit.rs` (checkbox), `ctl:optics.caRed`, `ctl:optics.caBlue` | |
@@ -846,6 +846,7 @@ Latin stays upright. Advanced Japanese composition remains open. Regression cove
 | 2026-10-16 | minor | LR-EDIT-AUTO: per-slider Auto (`develop.autoControl`), Auto on a selection in one undo step (`develop.autoBatch`) and a preset apply-Auto flag (`preset.create` `auto`); status unchanged (🟡: full-corpus qualification open) |
 | 2026-10-16 | minor | LR-BEHAV-LOCALIZE: the nine partial catalogs cover every shared key (#185, machine-drafted, native review pending) |
 | 2026-10-16 | minor | LR-EDIT-OPTICS-PROFILE: manual lens profile picker (`develop.lensProfile`, Optics > Lens Profile) overrides the lens-database match; status unchanged (🟡) |
+| 2026-10-16 | minor | LR-VIEW-HDR-DISPLAY: View ▸ HDR Display (`view.hdrDisplay`), macOS EDR headroom query and a tested toggle/headroom decision; status unchanged (⬜: eframe's 8-bit surface) |
 | 2026-10-16 | minor | LR-EDIT-OPTICS-PROFILE: lens-database vignetting uses the focus distance from the Canon / Olympus maker note or Exif `SubjectDistance`; status unchanged (🟡) |
 | 2026-10-14 | minor | LR-IMP-CAMERA-COVERAGE: Nikon D600, D610 and D5000 NEFs drop the filler and noise columns on the right (a band), and the D600 and D610 measure their white level inside the image (upstream #1627); status unchanged (🟡) |
 | 2026-10-14 | patch | LRC-LIB-CATALOG-IMPORT: an image record without its file, folder or root record is left out with a warning instead of failing the whole import (upstream #1588); status unchanged |

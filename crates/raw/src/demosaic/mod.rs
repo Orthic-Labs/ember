@@ -5,6 +5,8 @@
 //! - [`Method::Ppg`] — Patterned Pixel Grouping (Chuan-kai Lin): gradient-selected green, colour-difference R/B.
 //! - [`Method::Ahd`] — Adaptive Homogeneity-Directed (Hirakawa & Parks, IEEE TIP 2005): horizontal/vertical
 //!   candidates chosen per pixel by CIELab homogeneity. The quality default for Bayer sensors.
+//! - [`Method::RawDetails`] — the opt-in "Raw Details" reconstruction (gradient-weighted directional blending with colour-difference
+//!   refinement, see `detail.rs`); Bayer only, other patterns use their usual path.
 //! - Non-Bayer patterns (X-Trans, …) always use `xtrans::directional`, our own edge-weighted colour-difference
 //!   interpolation.
 //!
@@ -12,6 +14,7 @@
 
 mod ahd;
 mod bilinear;
+mod detail;
 mod ppg;
 mod xtrans;
 
@@ -24,6 +27,8 @@ pub enum Method {
     Ppg,
     #[default]
     Ahd,
+    /// Higher-quality Bayer demosaic behind the Raw Details toggle (`detail.rs`); a non-Bayer mosaic is developed as with `Ahd`.
+    RawDetails,
 }
 
 /// Mirror-reflected access to a single-plane mosaic (reflection keeps Bayer parity: −k → k, w−1+k → w−1−k).
@@ -109,6 +114,7 @@ pub fn demosaic(n: &Normalized, method: Method) -> Rgb32f {
                 Method::Bilinear => bilinear::bilinear(&m),
                 Method::Ppg => ppg::ppg(&m),
                 Method::Ahd => ahd::ahd(&m),
+                Method::RawDetails => detail::raw_details(&m),
             }
         }
     }
@@ -179,7 +185,7 @@ mod tests {
         let img = Rgb32f::filled(17, 13, [0.3, 0.55, 0.8]);
         for pat in ["RGGB", "BGGR", "GRBG", "GBRG"] {
             let cfa = Cfa::bayer(pat).unwrap();
-            for m in [Method::Bilinear, Method::Ppg, Method::Ahd] {
+            for m in [Method::Bilinear, Method::Ppg, Method::Ahd, Method::RawDetails] {
                 let out = run(&img, &cfa, m);
                 for p in &out.data {
                     for c in 0..3 {
@@ -196,7 +202,7 @@ mod tests {
     fn known_samples_are_preserved() {
         let img = edgy_scene(40, 32);
         let cfa = Cfa::bayer("GRBG").unwrap();
-        for m in [Method::Bilinear, Method::Ppg, Method::Ahd] {
+        for m in [Method::Bilinear, Method::Ppg, Method::Ahd, Method::RawDetails] {
             let out = run(&img, &cfa, m);
             for y in 0..32 {
                 for x in 0..40 {
@@ -231,7 +237,7 @@ mod tests {
         let cfa = Cfa::bayer("RGGB").unwrap();
         for (w, h) in [(1, 1), (2, 2), (3, 5), (5, 3), (1, 7)] {
             let img = Rgb32f::filled(w, h, [0.5; 3]);
-            for m in [Method::Bilinear, Method::Ppg, Method::Ahd] {
+            for m in [Method::Bilinear, Method::Ppg, Method::Ahd, Method::RawDetails] {
                 let out = run(&img, &cfa, m);
                 assert_eq!((out.width, out.height), (w, h));
                 assert!(out.data.iter().all(|p| p.iter().all(|v| v.is_finite())));
@@ -258,7 +264,7 @@ mod tests {
         }
         let all_nan = Normalized { width: 9, height: 7, cpp: 1, data: vec![f32::NAN; 63], cfa: Some(cfa) };
         for n in [&patchy, &all_nan] {
-            for m in [Method::Bilinear, Method::Ppg, Method::Ahd] {
+            for m in [Method::Bilinear, Method::Ppg, Method::Ahd, Method::RawDetails] {
                 let out = demosaic(n, m);
                 assert_eq!((out.width, out.height), (n.width, n.height), "{m:?}");
             }
@@ -291,7 +297,7 @@ mod tests {
         let img = smooth_scene(w, h);
         let cfa = Cfa::bayer("RGGB").unwrap();
         let n = mosaic_from_rgb(&img, &cfa);
-        for m in [Method::Bilinear, Method::Ppg, Method::Ahd] {
+        for m in [Method::Bilinear, Method::Ppg, Method::Ahd, Method::RawDetails] {
             let t = std::time::Instant::now();
             let _ = demosaic(&n, m);
             let s = t.elapsed().as_secs_f64();

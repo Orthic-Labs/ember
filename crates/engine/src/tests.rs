@@ -352,6 +352,20 @@ fn op_log_replay_reproduces_catalog() {
     assert_eq!(c.to_snapshot(), s.catalog.to_snapshot());
 }
 
+/// Raw Details is a develop setting that every existing edit has off; the command flips it (or sets it) and it undoes.
+#[test]
+fn raw_details_command_sets_the_setting() {
+    let mut s = demo();
+    assert!(!active_dev(&s).enhance.raw_details);
+    s.execute("develop.rawDetails", &json!({})).unwrap();
+    assert!(active_dev(&s).enhance.raw_details, "toggles when `enabled` is omitted");
+    s.execute("develop.rawDetails", &json!({"enabled": true})).unwrap();
+    assert!(active_dev(&s).enhance.raw_details);
+    s.execute("develop.rawDetails", &json!({"enabled": false})).unwrap();
+    assert!(!active_dev(&s).enhance.raw_details);
+    assert!(s.execute("develop.rawDetails", &json!({"enabled": "yes"})).is_ok(), "a value that is not a bool toggles");
+}
+
 /// Every command runs (or fails cleanly with an error) with empty params and has metadata.
 #[test]
 fn command_sweep() {

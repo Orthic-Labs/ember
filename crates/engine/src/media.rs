@@ -336,6 +336,12 @@ pub struct MediaCache {
     /// share of [`crate::memory::budget`]); the least recently used entry of any of them goes first.
     budget: usize,
     pub file_loader: Option<FileLoader>,
+    /// [`Self::file_loader`] with the "Raw Details" demosaic, used for photos whose Raw Details setting is on
+    /// (`None`: this build has none, and every photo is developed as usual).
+    pub file_loader_detailed: Option<FileLoader>,
+    /// Photos whose cached sources were (or are being) developed with Raw Details; a photo whose setting no longer
+    /// agrees has its decoded sources dropped ([`Self::sync_raw_details`]).
+    detail_sources: std::collections::HashSet<PhotoId>,
     pub file_probe: Option<FileProbe>,
     pub preview_loader: Option<PreviewLoader>,
     /// Reads a photo file's bytes (Photo Merge); `None` = the local file system.
@@ -411,6 +417,8 @@ impl Default for MediaCache {
             preview_capacity: 0,
             budget,
             file_loader: None,
+            file_loader_detailed: None,
+            detail_sources: Default::default(),
             file_probe: None,
             preview_loader: None,
             file_bytes: None,
@@ -655,6 +663,7 @@ impl MediaCache {
     /// which the thumbnail would lose. Other readers (Auto, masks, [`crate::Session::source_now`]) keep
     /// the plain source so their measurements don't depend on what the cache holds.
     pub fn thumb_source_ref(&mut self, p: &Photo, level: SourceLevel) -> SourceRef {
+        self.sync_raw_details(p);
         if level == SourceLevel::Thumb
             && self.get_source(p.id, level).is_none()
             && self.denoise.spec(p.id).is_none()
@@ -665,8 +674,30 @@ impl MediaCache {
         self.source_ref(p, level)
     }
 
+    /// Whether photo `p` is developed with Raw Details (its setting is on and this build can). A decoded source made the
+    /// other way is dropped, so what is cached always matches the setting; nothing changes for a photo that never had it on.
+    fn sync_raw_details(&mut self, p: &Photo) -> bool {
+        let want = p.develop.enhance.raw_details && self.file_loader_detailed.is_some();
+        if self.detail_sources.contains(&p.id) != want {
+            self.forget(p.id);
+            if want {
+                self.detail_sources.insert(p.id);
+            } else {
+                self.detail_sources.remove(&p.id);
+            }
+        }
+        want
+    }
+
     fn source_ref_with(&mut self, p: &Photo, level: SourceLevel, cached: bool) -> SourceRef {
+        let detailed = self.sync_raw_details(p);
         let mut r = self.source_ref_plain(p, level, cached);
+        if detailed
+            && let SourceRef::File { loader: loader @ Some(_), .. } = &mut r
+            && let Some(l) = &self.file_loader_detailed
+        {
+            *loader = Some(l.clone());
+        }
         if let (SourceRef::File { denoise, .. }, Some((spec, loader))) = (&mut r, self.denoise.get(p.id)) {
             *denoise = Some((spec.clone(), loader.clone()));
         }
@@ -1717,6 +1748,51 @@ mod thumbnail_hash_tests {
         s.media.forget(PhotoId(1));
         s.accept(&old);
         assert_eq!(s.media.source_usage().0, 0);
+    }
+    /// Raw Details is a per-photo develop setting: off (the default of every edit made before it existed) the photo loads
+    /// exactly as before; on, its source comes from the detailed loader, and a decoded source made the other way is dropped.
+    #[test]
+    fn raw_details_selects_its_loader_and_drops_sources_made_the_other_way() {
+        let mut s = session();
+        let plain: FileLoader = Arc::new(|_, _| Ok((Rgb32f::new(8, 8), SourceInfo::default())));
+        let detailed: FileLoader = Arc::new(|_, _| Ok((Rgb32f::new(9, 9), SourceInfo::default())));
+        s.media.file_loader = Some(plain);
+        s.media.file_loader_detailed = Some(detailed);
+        let id = PhotoId(1);
+        // the width of the picture the photo's next load would give
+        let loads = |s: &mut crate::Session| {
+            let p = s.catalog.photo(id).unwrap().clone();
+            match s.media.source_ref_uncached(&p, SourceLevel::Preview) {
+                SourceRef::File { loader: Some(l), path, max_edge, .. } => l(&path, max_edge).unwrap().0.width,
+                _ => panic!("not a file source with a loader"),
+            }
+        };
+        let cached = |s: &mut crate::Session| {
+            let p = s.catalog.photo(id).unwrap().clone();
+            matches!(s.media.source_ref(&p, SourceLevel::Preview), SourceRef::Loaded(_))
+        };
+        let set = |s: &mut crate::Session, on: bool| {
+            let mut d = (*s.catalog.photo(id).unwrap().develop).clone();
+            d.enhance.raw_details = on;
+            let op = s.develop_op(id, d, "Raw Details").unwrap();
+            s.catalog.apply(op).unwrap();
+        };
+        assert_eq!(loads(&mut s), 8);
+        // a decoded source stays while the setting does
+        s.media.insert(id, SourceLevel::Preview, Arc::new(Rgb32f::new(8, 8)));
+        assert!(cached(&mut s));
+        set(&mut s, true);
+        assert!(!cached(&mut s), "the source made without Raw Details is dropped");
+        assert_eq!(loads(&mut s), 9);
+        s.media.insert(id, SourceLevel::Preview, Arc::new(Rgb32f::new(9, 9)));
+        assert!(cached(&mut s));
+        set(&mut s, false);
+        assert!(!cached(&mut s), "the source made with Raw Details is dropped");
+        assert_eq!(loads(&mut s), 8);
+        // a build without the detailed loader develops every photo as usual
+        set(&mut s, true);
+        s.media.file_loader_detailed = None;
+        assert_eq!(loads(&mut s), 8);
     }
     /// A panic while rendering (here in the decoder) used to end the pool's worker thread without
     /// an answer, so the view that asked showed "Rendering…" forever. It is the job's failure now,

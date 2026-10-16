@@ -301,6 +301,19 @@ mod tests {
     }
 
     #[test]
+    fn raw_details_is_off_for_settings_that_never_had_it() {
+        assert!(!DevelopSettings::default().enhance.raw_details);
+        let old: DevelopSettings = serde_json::from_str(r#"{"enhance": {"denoise": 30.0}}"#).unwrap();
+        assert!(!old.enhance.raw_details);
+        assert_eq!(old.enhance.denoise, 30.0);
+        let on: DevelopSettings = serde_json::from_str(r#"{"enhance": {"raw_details": true}}"#).unwrap();
+        assert!(on.enhance.raw_details);
+        // turning it on is an edit: the settings differ from a fresh default and from each other in their hash
+        assert_ne!(on.hash64(), DevelopSettings::default().hash64());
+        assert!(!on.is_unedited());
+    }
+
+    #[test]
     fn the_denoise_amount_is_a_slider_and_follows_the_detail_section() {
         let mut s = DevelopSettings::default();
         assert_eq!(s.denoise_amount(), 0.0);
