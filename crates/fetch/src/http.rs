@@ -493,11 +493,17 @@ pub fn post_json(url: &Url, headers: &[(&str, String)], body: &[u8], limits: &Li
 }
 
 fn request(url: &Url, headers: &[(&str, String)], limits: &Limits, method: &str, body: &[u8]) -> Result<Response, HttpError> {
+    // a caller that names itself (a tile server's usage policy asks for a contact address) replaces the default
+    let user_agent = if headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("user-agent")) {
+        None
+    } else {
+        Some(format!("User-Agent: Ember/{}\r\n", env!("CARGO_PKG_VERSION")))
+    };
     let mut req = format!(
-        "{method} {} HTTP/1.1\r\nHost: {}\r\nUser-Agent: Ember/{}\r\nAccept: */*\r\nAccept-Encoding: identity\r\nConnection: close\r\n",
+        "{method} {} HTTP/1.1\r\nHost: {}\r\n{}Accept: */*\r\nAccept-Encoding: identity\r\nConnection: close\r\n",
         url.path,
         url.host_header(),
-        env!("CARGO_PKG_VERSION")
+        user_agent.unwrap_or_default()
     );
     if method == "POST" {
         req.push_str(&format!("Content-Type: application/json\r\nContent-Length: {}\r\n", body.len()));

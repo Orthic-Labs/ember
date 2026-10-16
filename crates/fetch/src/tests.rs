@@ -408,3 +408,38 @@ fn hostile_file_specs_are_rejected_before_touching_disk() {
         assert!(!dir.exists());
     }
 }
+
+/// The request head a local server receives for `headers`.
+fn request_head(headers: &[(&str, String)]) -> String {
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = Url::parse(&format!("http://{}/tile.png", l.local_addr().unwrap())).unwrap();
+    let server = std::thread::spawn(move || {
+        let (mut s, _) = l.accept().unwrap();
+        let mut r = BufReader::new(s.try_clone().unwrap());
+        let mut head = String::new();
+        loop {
+            let mut line = String::new();
+            if r.read_line(&mut line).unwrap_or(0) == 0 || line.trim().is_empty() {
+                break;
+            }
+            head.push_str(&line);
+        }
+        s.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
+        head
+    });
+    let cancel = AtomicBool::new(false);
+    let limits = http::Limits { connect: Duration::from_secs(2), stall: Duration::from_secs(2), cancel: &cancel, deadline: None };
+    assert_eq!(http::get(&url, headers, &limits).unwrap().status, 200);
+    server.join().unwrap()
+}
+
+/// A caller that names itself (a tile server's policy asks for a contact address) is the only User-Agent sent.
+#[test]
+fn a_callers_user_agent_replaces_the_default() {
+    let named = request_head(&[("user-agent", "Ember/9 (+https://example.test/contact)".to_string())]);
+    let agents: Vec<&str> = named.lines().filter(|l| l.to_ascii_lowercase().starts_with("user-agent:")).collect();
+    assert_eq!(agents, vec!["user-agent: Ember/9 (+https://example.test/contact)"], "{named}");
+    let plain = request_head(&[]);
+    let agents: Vec<&str> = plain.lines().filter(|l| l.to_ascii_lowercase().starts_with("user-agent:")).collect();
+    assert_eq!(agents, vec![format!("User-Agent: Ember/{}", env!("CARGO_PKG_VERSION"))], "{plain}");
+}
