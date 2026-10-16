@@ -264,6 +264,19 @@ fn step(s: &mut Session, d: isize) -> Result<Value> {
     Ok(json!({"active": vis[next].0}))
 }
 
+/// `library.first` / `library.last`: select the first or last photo in view.
+fn jump(s: &mut Session, last: bool) -> Result<Value> {
+    let vis = s.visible_cloned();
+    let Some(target) = (if last { vis.last() } else { vis.first() }).copied() else {
+        return ok();
+    };
+    s.end_interaction()?;
+    s.selection = Selection::single(target);
+    s.active_mask = None;
+    s.active_spot = None;
+    Ok(json!({"active": target.0}))
+}
+
 /// `library.up` / `library.down`: how many photos to move (at least 1, capped so hostile input
 /// can't overflow).
 fn row_step(p: &Value) -> isize {
@@ -692,6 +705,8 @@ pub fn specs() -> Vec<CommandSpec> {
         }),
         cmd!("library.next", "Next Photo", [], Some("Right"), "{}", always, |s, _| step(s, 1)),
         cmd!("library.previous", "Previous Photo", [], Some("Left"), "{}", always, |s, _| step(s, -1)),
+        cmd!("library.first", "First Photo", [], Some("Home"), "{}", always, |s, _| jump(s, false)),
+        cmd!("library.last", "Last Photo", [], Some("End"), "{}", always, |s, _| jump(s, true)),
         cmd!(
             "library.down",
             "Photo Below",

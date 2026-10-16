@@ -271,6 +271,9 @@ pub struct AppSettings {
     pub grid_badges: GridBadges,
     /// Shortcuts the user changed (Help ▸ Keyboard Shortcuts): command id → shortcut, `""` = none.
     pub keymap: crate::shortcuts::Keymap,
+    /// Classic keymap (Settings ▸ Interface): E, C, L, I, R, K and M take their Lightroom Classic
+    /// meanings (Loupe, Compare, Lights Out, Info, Crop, Brush, Linear Gradient). Off by default.
+    pub classic_keymap: bool,
     /// Auto (follow the system), Dark or Light.
     pub appearance_mode: AppearanceMode,
     /// The theme of the dark appearance.
@@ -303,6 +306,7 @@ impl Default for AppSettings {
             film_badges: true,
             grid_badges: GridBadges::Auto,
             keymap: Default::default(),
+            classic_keymap: false,
             appearance_mode: AppearanceMode::Dark,
             dark_theme: DarkTheme::Charcoal,
             light_theme: LightTheme::Silver,

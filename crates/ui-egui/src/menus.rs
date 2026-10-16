@@ -79,6 +79,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("view.panels", "Toggle All Panels", Some("Tab"), "View"),
     // Classic ⇧Tab: side panels only (top bar and filmstrip stay)
     ("view.sidePanels", "Toggle Side Panels", Some("Shift+Tab"), "View"),
+    ("app.classicKeymap", "Classic Keymap", None, ""),
     ("view.leftPanel", "My Photos Panel", Some("Cmd+Shift+L"), "View"),
     ("view.beforeAfter", "Compare Before and After", Some("Y"), "View"),
     ("view.beforeAfterSplit", "Before/After Split", Some("Shift+Y"), "View"),
@@ -703,6 +704,12 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 app.ui.right = RightPanel::Edit;
             }
             Ok(Value::Null)
+        }
+        "app.classicKeymap" => {
+            // {on?: bool} (flips when omitted): E, C, L, I, R, K and M take their Lightroom Classic meanings
+            let on = p.get("on").and_then(Value::as_bool).unwrap_or(!app.ui.settings.classic_keymap);
+            app.ui.settings.classic_keymap = on;
+            Ok(json!({"classicKeymap": on}))
         }
         "view.panels" => {
             // Tab hides the top bar, both side panels and the filmstrip; Tab again puts back what it hid

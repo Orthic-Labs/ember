@@ -651,6 +651,13 @@ fn interface_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
         use crate::state::InfoOverlay as I;
         choices(ui, "settingsInfo", &[(I::Off, "Off"), (I::Basic, "File & date"), (I::Exposure, "Exposure")], &mut app.ui.info_overlay);
     });
+    heading(ui, t, crate::i18n::tr("Keyboard"));
+    check(
+        ui,
+        "settings.classicKeymap",
+        &mut app.ui.settings.classic_keymap,
+        "Classic keymap: E Loupe, C Compare, L Lights Out, I Info, R Crop, K Brush, M Linear Gradient",
+    );
 }
 
 /// Appearance Mode (`button:settingsAppearance-{0,1,2}`: Auto, Dark, Light) above the light and

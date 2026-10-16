@@ -71,6 +71,21 @@ pub fn shortcut_of<'a>(keymap: &'a Keymap, id: &str) -> Option<&'a str> {
 /// Engine commands that intentionally share a key and are disambiguated by context in [`handle`].
 pub const CONTEXTUAL: &[(&str, &str)] = &[("photo.reject", "crop.rotateAspect")];
 
+/// The Classic keymap layer (Settings ▸ Interface, `AppSettings::classic_keymap`): bare keys whose
+/// Lightroom Classic meaning differs from their primary binding. While the layer is on, each key runs
+/// its Classic command instead and its primary command does not fire, unless the user gave the key
+/// to a command. Lights Out, Compare and the info overlay have commands; the rest of the Classic
+/// view keys are listed in docs/parity-checklist.md (KEYC-VIEWS).
+pub const CLASSIC_KEYS: &[(&str, &str)] = &[
+    ("E", "view.detail"),
+    ("C", "view.compare"),
+    ("L", "view.lightsOut"),
+    ("I", "view.infoOverlay"),
+    ("R", "panel.crop"),
+    ("K", "tool.brush"),
+    ("M", "tool.linear"),
+];
+
 /// Commands other than `id` whose shortcut is the key `sc` (contextual partners excepted).
 pub fn conflicts(keymap: &Keymap, id: &str, sc: &str) -> Vec<&'static str> {
     let Some(key) = parse(sc) else { return vec![] };
@@ -355,6 +370,16 @@ pub fn handle(app: &mut LightcraftApp, ctx: &egui::Context) {
     let grid = library_grid(app);
     // keys the user gave to a command: the fixed bindings below (aliases, ratings) yield to them
     let taken: Vec<(Modifiers, Key)> = keymap.values().filter_map(|s| parse(s)).collect();
+    // the Classic layer's keys (bare letters) that no user assignment has taken: (modifiers, key, shortcut, command)
+    let classic: Vec<(Modifiers, Key, &'static str, &'static str)> = if app.ui.settings.classic_keymap {
+        CLASSIC_KEYS
+            .iter()
+            .filter_map(|(sc, id)| parse(sc).map(|(m, k)| (m, k, *sc, *id)))
+            .filter(|(_, k, _, _)| !taken.contains(&(Modifiers::NONE, *k)))
+            .collect()
+    } else {
+        Vec::new()
+    };
     // an open popup (a menu, a date picker's calendar) closes on Esc itself: Esc's command (Back,
     // which also closes dialogs) waits until nothing is open
     let popup_open = egui::Popup::is_any_open(ctx);
@@ -365,6 +390,7 @@ pub fn handle(app: &mut LightcraftApp, ctx: &egui::Context) {
             if let Some(sc) = binding(keymap, b.id, b.default)
                 && let Some((m, k)) = parse(sc)
                 && !native(sc)
+                && !classic.iter().any(|(cm, ck, _, _)| (*cm, *ck) == (m, k))
                 && !(k == Key::Escape && popup_open)
                 && matches(i, m, k)
                 && let Some(id) = grid_bracket_command(keymap, grid, b.id, (m, k))
@@ -379,6 +405,11 @@ pub fn handle(app: &mut LightcraftApp, ctx: &egui::Context) {
                 && matches(i, m, k)
             {
                 aliased.push((id, serde_json::from_str(params).unwrap_or_default()));
+            }
+        }
+        for (m, k, sc, id) in &classic {
+            if matches(i, *m, *k) && !native(*sc) {
+                fire.push(id.to_string());
             }
         }
         // rating 0-5, colour labels 6-9 (with Shift: and advance)
@@ -757,6 +788,79 @@ mod tests {
         assert!(h.app.ui.left_panel);
         assert_eq!(h.app.ui.right, RightPanel::Edit);
         assert!(h.app.ui.top_bar && h.app.ui.filmstrip);
+    }
+
+    #[test]
+    fn classic_keymap_is_off_by_default_and_old_settings_still_load() {
+        use crate::state::AppSettings;
+        assert!(!AppSettings::default().classic_keymap);
+        let old: AppSettings = serde_json::from_str(r#"{"gpu": false, "keymap": {}}"#).unwrap();
+        assert!(!old.classic_keymap);
+        assert!(!old.gpu);
+    }
+
+    #[test]
+    fn classic_keymap_off_keeps_the_primary_bindings() {
+        use crate::state::{RightPanel, ViewMode};
+        let mut h = library();
+        assert!(!h.app.ui.settings.classic_keymap);
+        h.app.ui.right = RightPanel::None;
+        key(&mut h, "E", false);
+        assert_eq!(h.app.ui.right, RightPanel::Edit);
+        assert_eq!(h.app.ui.view, ViewMode::PhotoGrid);
+        key(&mut h, "C", false);
+        assert_eq!(h.app.ui.right, RightPanel::Crop);
+        assert_eq!(h.app.ui.view, ViewMode::PhotoGrid);
+    }
+
+    #[test]
+    fn classic_keymap_on_resolves_the_classic_keys() {
+        use crate::state::{RightPanel, ViewMode};
+        let mut h = library();
+        let on = h.app.run("app.classicKeymap", json!({"on": true})).unwrap();
+        assert_eq!(on["classicKeymap"], true);
+        assert!(h.app.ui.settings.classic_keymap);
+        h.app.ui.right = RightPanel::None;
+
+        // E: Loupe (the Detail view), not the Edit panel
+        key(&mut h, "E", false);
+        assert_eq!(h.app.ui.view, ViewMode::Detail);
+        assert_eq!(h.app.ui.right, RightPanel::None);
+
+        // C: Compare; R: Crop
+        h.app.ui.view = ViewMode::PhotoGrid;
+        key(&mut h, "C", false);
+        assert_eq!(h.app.ui.view, ViewMode::Compare);
+        h.app.ui.view = ViewMode::PhotoGrid;
+        key(&mut h, "R", false);
+        assert_eq!(h.app.ui.right, RightPanel::Crop);
+
+        // I: info overlay cycles; L: lights out cycles; M: linear gradient tool
+        let info = h.app.ui.info_overlay;
+        key(&mut h, "I", false);
+        assert_ne!(h.app.ui.info_overlay, info);
+        assert_eq!(h.app.ui.right, RightPanel::Crop);
+        let lights = h.app.ui.lights_out;
+        key(&mut h, "L", false);
+        assert_ne!(h.app.ui.lights_out, lights);
+        let tool = h.app.ui.tool.clone();
+        key(&mut h, "M", false);
+        assert_ne!(h.app.ui.tool, tool);
+
+        // the command toggles the layer back off
+        let off = h.app.run("app.classicKeymap", json!({})).unwrap();
+        assert_eq!(off["classicKeymap"], false);
+        assert!(!h.app.ui.settings.classic_keymap);
+    }
+
+    #[test]
+    fn home_and_end_select_the_first_and_last_photo() {
+        use lightcraft_catalog::PhotoId;
+        let mut h = library();
+        key(&mut h, "End", false);
+        assert_eq!(h.app.session.active(), Some(PhotoId(4)));
+        key(&mut h, "Home", false);
+        assert_eq!(h.app.session.active(), Some(PhotoId(1)));
     }
 
     #[test]
