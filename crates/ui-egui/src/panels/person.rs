@@ -113,14 +113,8 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, name: &str) {
             }
             // "Merge into…": this person is another of the named people. The list is read only when the menu is open.
             let merge = ui.menu_button("Merge into…", |ui| {
-                let others: Vec<String> = app
-                    .session
-                    .catalog
-                    .people()
-                    .into_iter()
-                    .map(|p| p.name)
-                    .filter(|n| !n.trim().eq_ignore_ascii_case(shown_name.trim()))
-                    .collect();
+                let others: Vec<String> =
+                    app.session.catalog.people().into_iter().map(|p| p.name).filter(|n| !n.trim().eq_ignore_ascii_case(shown_name.trim())).collect();
                 if others.is_empty() {
                     ui.label("No other people to merge into");
                 }

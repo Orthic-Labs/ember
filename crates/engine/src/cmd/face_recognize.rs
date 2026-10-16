@@ -786,7 +786,8 @@ mod imp {
         let mut suggestions = std::collections::HashMap::new();
         if !refs.is_empty() {
             for ((photo, index, rect), e) in ordered.iter().take(limit) {
-                let ranked: Vec<_> = matching::rank(e, &refs).into_iter().filter(|c| !s.catalog.is_face_rejected(PhotoId(*photo), rect, &c.name)).collect();
+                let ranked: Vec<_> =
+                    matching::rank(e, &refs).into_iter().filter(|c| !s.catalog.is_face_rejected(PhotoId(*photo), rect, &c.name)).collect();
                 if let Some(x) = matching::suggest(&ranked, threshold, DEFAULT_MARGIN) {
                     suggestions.insert((*photo, *index), (x.name, x.score));
                 }

@@ -705,9 +705,7 @@ fn regions_block(x: &mut String, meta: &Metadata) {
     };
     x.push_str("   <mwg-rs:Regions rdf:parseType=\"Resource\">\n");
     if let (Some(w), Some(h)) = (meta.width, meta.height) {
-        x.push_str(&format!(
-            "    <mwg-rs:AppliedToDimensions rdf:parseType=\"Resource\" stDim:w=\"{w}\" stDim:h=\"{h}\" stDim:unit=\"pixel\"/>\n"
-        ));
+        x.push_str(&format!("    <mwg-rs:AppliedToDimensions rdf:parseType=\"Resource\" stDim:w=\"{w}\" stDim:h=\"{h}\" stDim:unit=\"pixel\"/>\n"));
     }
     x.push_str("    <mwg-rs:RegionList>\n     <rdf:Bag>\n");
     for region in &meta.regions {
