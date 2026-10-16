@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (first per-language measurement from the catalogs) · **Target:** reference catalog editor 15.5 / reference editor 9.6
+> **Last reviewed:** 2026-10-16 · **Last updated:** 2026-10-16 · **Change:** minor (#185: partial catalogs completed, machine-drafted) · **Target:** reference catalog editor 15.5 / reference editor 9.6
 
 How far each interface language is from `full`. How to add or maintain a language is in
 [localization.md](localization.md); per-language notes are in `localization-<code>.md`
@@ -46,15 +46,15 @@ that is promising but is not recorded as review, so the column says `no (communi
 | # | Language | Code | UI strings translated | Dialogs / tooltips / help | Script support | Native review | Status | To `full` |
 |---|---|---|---:|---|---|---|---|---:|
 | 1 | English | `en` | 2,304 / 2,304 (100%, source) | all; Help ▸ What's New and the shortcut sheet; no full user manual | Latin (Inter) | n/a | **full** | 0 h |
-| 2 | Simplified Chinese | `zh-hans` | 1,994 / 2,304 (87%) | menus, panels, dialogs, presets, profiles, dates; lower-layer errors English | Hans via craft-fonts (Noto Sans CJK SC); IME through winit; no vertical text in UI (not in target either) | no (community edits) | partial | 6–10 h |
-| 3 | Spanish | `es` | 1,972 / 2,304 (86%) | as zh-hans | Latin | no (community edits) | partial | 6–10 h |
+| 2 | Simplified Chinese | `zh-hans` | 2,163 keys present (all shared keys; machine-drafted, see #185 note) | menus, panels, dialogs, presets, profiles, dates; lower-layer errors English | Hans via craft-fonts (Noto Sans CJK SC); IME through winit; no vertical text in UI (not in target either) | no (community edits) | complete, machine-drafted (native review pending) | 6–10 h |
+| 3 | Spanish | `es` | 2,161 keys present (machine-drafted, see #185 note) | as zh-hans | Latin | no (community edits) | complete, machine-drafted (native review pending) | 6–10 h |
 | 4 | Hindi | `hi` | 0 (0%) | none | **Devanagari shaping missing** (egui has no complex shaping) | no | none (target: not shipped) | 50–90 h (shaping 25–50 h, shared with Arabic) |
 | 5 | Arabic | `ar` | 0 (0%) | none | **RTL layout and Arabic shaping missing** | no | none (target: not shipped) | 60–110 h (RTL mirroring 30–50 h + shaping, shared with Hindi) |
-| 6 | French | `fr` | 2,021 / 2,304 (88%) | as zh-hans | Latin | no (community edits) | partial | 5–9 h |
-| 7 | Portuguese (Brazil) | `pt-br` | 1,966 / 2,304 (85%) | as zh-hans | Latin | no (community edits) | partial | 6–10 h |
+| 6 | French | `fr` | 2,161 keys present (machine-drafted, see #185 note) | as zh-hans | Latin | no (community edits) | complete, machine-drafted (native review pending) | 5–9 h |
+| 7 | Portuguese (Brazil) | `pt-br` | 2,161 keys present (machine-drafted, see #185 note) | as zh-hans | Latin | no (community edits) | complete, machine-drafted (native review pending) | 6–10 h |
 | 8 | Indonesian | `id` | 0 (0%) | none | Latin (Inter covers it) | no | none (target: not shipped) | 10–16 h |
-| 9 | Japanese | `ja` | 1,995 / 2,304 (87%) | as zh-hans; vertical export watermarks | Jpan via craft-fonts (BIZ UDPGothic / UDMincho); IME through winit | no (community edits) | partial | 6–10 h |
-| 10 | German | `de` | 2,104 / 2,304 (91%) | as zh-hans; What's New translated line by line | Latin | no (community edits) | partial | 4–8 h |
+| 9 | Japanese | `ja` | 2,164 keys present (machine-drafted, see #185 note) | as zh-hans; vertical export watermarks | Jpan via craft-fonts (BIZ UDPGothic / UDMincho); IME through winit | no (community edits) | complete, machine-drafted (native review pending) | 6–10 h |
+| 10 | German | `de` | 2,162 keys present (machine-drafted for the 40 keys added in #185) | as zh-hans; What's New translated line by line | Latin | no (community edits) | complete, machine-drafted (native review pending) | 4–8 h |
 | 11 | Korean | `ko` | 0 (0%) | none | **no Korean (Hangul) face**: needs a non-reference publisher OFL face in craft-fonts (Noto CJK is allowed only for Chinese) | no | none | 14–22 h |
 | 12 | Vietnamese | `vi` | 0 (0%) | none | Latin with stacked diacritics (Inter covers it; check combining marks) | no | none (target: not shipped) | 10–16 h |
 
@@ -62,9 +62,9 @@ that is promising but is not recorded as review, so the column says `no (communi
 
 | Language | Code | UI strings translated | Script | Native review | Status | To `full` |
 |---|---|---:|---|---|---|---:|
-| Traditional Chinese (Taiwan) | `zh-hant` | 1,993 / 2,304 (87%) | Hant; uses the Simplified Chinese face until craft-fonts has a TC face | no (community edits) | partial | 8–14 h (incl. the font) |
-| Russian | `ru` | 1,704 / 2,304 (74%) | Cyrillic (Inter) | no (community edits) | partial | 8–12 h |
-| Ukrainian | `uk` | 2,287 / 2,304 (99%) | Cyrillic (Inter) | no (community edits) | partial (lower-layer errors English) | 2–4 h |
+| Traditional Chinese (Taiwan) | `zh-hant` | 2,161 keys present (machine-drafted, see #185 note) | Hant; uses the Simplified Chinese face until craft-fonts has a TC face | no (community edits) | complete, machine-drafted (native review pending) | 8–14 h (incl. the font) |
+| Russian | `ru` | 2,162 keys present (machine-drafted for the 8 keys added in #185) | Cyrillic (Inter) | no (community edits) | complete, machine-drafted (native review pending) | 8–12 h |
+| Ukrainian | `uk` | 2,162 keys present (machine-drafted for the 11 keys added in #185) | Cyrillic (Inter) | no (community edits) | complete, machine-drafted (native review pending) (lower-layer errors English) | 2–4 h |
 
 Target languages Ember lacks: Italian, Korean, Dutch, Polish, Swedish, Norwegian Bokmål, Thai
 (Thai needs shaping and line breaking without spaces). Each Latin-script one is ~10–16 h; Thai
@@ -85,8 +85,29 @@ Target languages Ember lacks: Italian, Korean, Dutch, Polish, Swedish, Norwegian
 - Add the 5 missing key languages: ~145–255 h, most of it RTL and complex shaping in egui.
 - Reach the target's 16 languages: + ~60–100 h (Italian, Dutch, Polish, Swedish, Norwegian, Thai).
 
+## Catalog completion batch (#185)
+
+Every shipped partial catalog now carries every key of the shared English key set (the union of the plain
+catalogs, 2,164 keys, of which the two `smart album value|Yes/No` contextual keys are Japanese-only). The
+keys added in #185 were **machine-drafted** by an agent, not translated by a native speaker, and they need
+native review before any language is called `full`. Each language's commit is `i18n: complete <language>
+catalog (#185)`. Added per language: German 40, Russian 8, Ukrainian 11, Simplified Chinese 162, Traditional
+Chinese 198, Japanese 199, Spanish 162, French 204, Brazilian Portuguese 160.
+
+- The catalog format has no fuzzy or needs-review flag, so this note is the only record of the draft status.
+- Contextual `smart album value|…` keys were added only to Japanese, which uses them; other languages keep
+  their plain Yes / No.
+- What's New lines were translated as wrapped fragments without checking the surrounding lines of
+  `docs/whats-new.md` in every case; the seams between fragments are the first thing a reviewer should check.
+- Face recognition terms (Face, Face Model, Detect Faces…) are new in these catalogs; their wording needs
+  review together.
+- The catalogs contain English-looking values that equal their key (see the per-language notes); those are
+  not part of this batch and were not changed.
+- Still open for #185: Indonesian, Vietnamese and Korean. Hindi and Arabic stay deferred until shaping and RTL exist.
+
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
 | 2026-10-10 | major | Created: per-language counts measured from the catalogs, the twelve key languages, script support, estimates |
+| 2026-10-16 | minor | #185: the nine partial catalogs completed with machine-drafted keys (needs native review); counts updated |
