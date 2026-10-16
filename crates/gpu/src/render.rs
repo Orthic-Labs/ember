@@ -933,6 +933,13 @@ fn brush_aux(dabs: &[&lightcraft_pipeline::masks::BrushDabs], erase: bool) -> Ve
 
 /// Cross guided filter (`masks::guided_cross`) of `p` steered by `guide`, max-combined with `p`.
 fn guided_cross_max(cx: &mut Cx<'_>, guide: &Buf, p: &Buf, w: usize, h: usize, sigma: f32, eps: f32) -> Buf {
+    guided_cross_with(cx, guide, p, w, h, sigma, eps, true)
+}
+
+/// Cross guided filter (`masks::guided_cross`) of `p` steered by `guide`, clamped to 0..1; with
+/// `keep_max` also max-combined with `p` (Auto Mask strokes).
+#[allow(clippy::too_many_arguments)]
+fn guided_cross_with(cx: &mut Cx<'_>, guide: &Buf, p: &Buf, w: usize, h: usize, sigma: f32, eps: f32, keep_max: bool) -> Buf {
     let n = w * h;
     let (m0, m1) = (cx.gpu.buffer(2 * n), cx.gpu.buffer(2 * n));
     map(cx, "xguided_pre", n, &[0], [Some(guide), Some(p), None], &m0);
@@ -942,8 +949,35 @@ fn guided_cross_max(cx: &mut Cx<'_>, guide: &Buf, p: &Buf, w: usize, h: usize, s
     map(cx, "xguided_ab", n, &[eps.to_bits()], [Some(&b0), Some(&b1), None], &ab);
     let ab = gaussian(cx, &ab, w, h, 2, sigma);
     let q = cx.gpu.buffer(n);
-    map(cx, "xguided_apply", n, &[], [Some(guide), Some(&ab), Some(p)], &q);
+    if keep_max {
+        map(cx, "xguided_apply", n, &[], [Some(guide), Some(&ab), Some(p)], &q);
+    } else {
+        map(cx, "xguided_q", n, &[], [Some(guide), Some(&ab), None], &q);
+    }
     q
+}
+
+/// A mask's Feather (Gaussian of the finished selection) and Refine Edges (guided filter on log
+/// luminance, blended by √k), as `masks::evaluate_one` does them, on the plane `alpha` (n words).
+fn feather_refine(cx: &mut Cx<'_>, alpha: &Buf, guide: &Buf, w: usize, h: usize, long: usize, feather: f64, refine: f64) -> Buf {
+    let n = w * h;
+    let mut cur = cx.copy(alpha);
+    if feather > 0.0 {
+        let k = (feather / 100.0).clamp(0.0, 1.0) as f32;
+        let sigma = 0.02 * long as f32 * k;
+        if sigma > 0.3 {
+            cur = gaussian(cx, &cur, w, h, 1, sigma);
+        }
+    }
+    if refine > 0.0 {
+        let k = (refine / 100.0).clamp(0.0, 1.0) as f32;
+        let sigma = (0.04 * long as f32 * k).max(1.0);
+        let q = guided_cross_with(cx, guide, &cur, w, h, sigma, 0.02, false);
+        let out = cx.gpu.buffer(n);
+        map(cx, "mask_blend", n, &[k.sqrt().to_bits()], [Some(&cur), Some(&q), None], &out);
+        cur = out;
+    }
+    cur
 }
 
 /// Evaluate the masks (`lightcraft_pipeline::masks::evaluate`): their alpha planes (concatenated,
@@ -1072,6 +1106,12 @@ fn masks(cx: &mut Cx<'_>, lin: &Buf, prep: &Prep, plan: &Plan<'_>, host: &mut Ho
             let k = [n as u32, 0, mi as u32, op];
             cx.run("combine", &k, &[None, None, None, Some(cbuf), Some(&alpha)], groups1(n));
         }
+        if m.feather > 0.0 || m.refine > 0.0 {
+            // Feather and Refine Edges act on the combined selection, before invert and amount
+            let sel = cx.slice(&alpha, mi * n, n);
+            let out = feather_refine(cx, &sel, &prep.log_l, w, h, frame.output_long(w, h), m.feather, m.refine);
+            cx.copy_into(&out, &alpha, mi * n);
+        }
         let amt = (m.adjust.amount / 100.0) as f32;
         cx.run(
             "finalize",
@@ -1178,6 +1218,48 @@ mod tests {
                         let want = want[i % nc].data[i / nc];
                         assert!((g - want).abs() < 1e-5 * (1.0 + sigma / 10.0), "{w}×{h} nc={nc} sigma={sigma}: word {i} {g} vs {want}");
                     }
+                }
+            }
+        }
+    }
+
+    /// Mask Feather and Refine Edges on the device against `masks::evaluate_one`: a soft radial
+    /// selection over a photo with a hard luminance step. Skips without an adapter. Tolerance
+    /// 2e-3 on alpha (0..1): the box blurs are the CPU's passes, so only float summation order
+    /// and the guided filter's variance cancellation differ.
+    #[test]
+    fn mask_feather_and_refine_match_cpu() {
+        use lightcraft_develop::{Mask, MaskComponent, MaskOp, MaskShape};
+        use lightcraft_geom::Point;
+        use lightcraft_pipeline::masks::evaluate_one;
+        use lightcraft_raster::Rgb32f;
+        let Some(gpu) = crate::device() else { return };
+        let _scope = crate::ctx::RenderScope::new(gpu);
+        for (w, h) in [(120usize, 80usize), (97, 61)] {
+            let step = w / 2;
+            let img = Rgb32f::from_fn(w, h, |x, y| if x < step { [0.05 + y as f32 * 1e-4; 3] } else { [0.6; 3] });
+            let log_l = Plane::from_fn(w, h, |x, _| if x < step { (0.05f32).log2() } else { (0.6f32).log2() });
+            let frame = lightcraft_pipeline::geometry::Frame::new(w, h, &Default::default(), true);
+            let base = Mask {
+                components: vec![MaskComponent {
+                    name: None,
+                    op: MaskOp::Add,
+                    invert: false,
+                    shape: MaskShape::Radial { center: Point::new(0.5, 0.5), rx: 0.3, ry: 0.25, angle: 0.0, feather: 40.0, invert: false },
+                }],
+                ..Default::default()
+            };
+            let plain = evaluate_one(&base, &frame, w, h, &img, &log_l, 0.0, None);
+            for (feather, refine) in [(50.0, 0.0), (0.0, 60.0), (40.0, 100.0), (100.0, 100.0)] {
+                let m = Mask { feather, refine, ..base.clone() };
+                let want = evaluate_one(&m, &frame, w, h, &img, &log_l, 0.0, None);
+                let mut cx = Cx::new(gpu);
+                let a = gpu.upload(&plain.data);
+                let g = gpu.upload(&log_l.data);
+                let out = feather_refine(&mut cx, &a, &g, w, h, frame.output_long(w, h), feather, refine);
+                let got: Vec<f32> = cx.read(&out, w * h);
+                for (i, (g, wv)) in got.iter().zip(&want.data).enumerate() {
+                    assert!((g - wv).abs() < 2e-3, "{w}×{h} feather {feather} refine {refine}: pixel {i} {g} vs {wv}");
                 }
             }
         }

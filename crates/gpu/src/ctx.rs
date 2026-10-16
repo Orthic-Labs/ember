@@ -57,6 +57,8 @@ const MODULES: &[Module] = &[
             "xguided_pre",
             "xguided_ab",
             "xguided_apply",
+            "xguided_q",
+            "mask_blend",
         ],
     },
     Module {

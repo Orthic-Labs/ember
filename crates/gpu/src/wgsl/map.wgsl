@@ -115,6 +115,27 @@ fn xguided_apply(@builtin(global_invocation_id) g: vec3<u32>, @builtin(num_workg
     dst[i] = max(c[i], clamp(b[2u * i] * a[i] + b[2u * i + 1u], 0.0, 1.0));
 }
 
+// `clamp(a·guide + b, 0, 1)`: the cross guided filter's output without the max with its input
+// (`masks::guided_cross`; a: guide, b: blurred coefficients).
+@compute @workgroup_size(256)
+fn xguided_q(@builtin(global_invocation_id) g: vec3<u32>, @builtin(num_workgroups) nw: vec3<u32>) {
+    let i = lin_index(g, nw);
+    if (i >= pu(0u)) {
+        return;
+    }
+    dst[i] = clamp(b[2u * i] * a[i] + b[2u * i + 1u], 0.0, 1.0);
+}
+
+// Refine Edges blend (`masks::evaluate_one`): `a + (b - a)·t`, t = P[1] (a: alpha, b: refined).
+@compute @workgroup_size(256)
+fn mask_blend(@builtin(global_invocation_id) g: vec3<u32>, @builtin(num_workgroups) nw: vec3<u32>) {
+    let i = lin_index(g, nw);
+    if (i >= pu(0u)) {
+        return;
+    }
+    dst[i] = a[i] + (b[i] - a[i]) * pf(1u);
+}
+
 // White balance: 3×3 matrix (P[1] = has matrix, P[2..11] row-major), clamped at 0.
 @compute @workgroup_size(256)
 fn wb_k(@builtin(global_invocation_id) g: vec3<u32>, @builtin(num_workgroups) nw: vec3<u32>) {

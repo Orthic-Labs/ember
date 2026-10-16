@@ -142,7 +142,7 @@ walks the drive.
   passes, three each way = the CPU's Gaussian: horizontal ones sum each pixel's window, so adjacent
   threads read adjacent pixels; vertical ones slide running sums down chunks of a column), `map`
   (log luminance, dark channel, guided-filter steps, white balance, luminance / colour NR, airlight
-  sampling), `mask` (linear / radial / luminance / colour range / brush shapes, combine, finalize),
+  sampling), `mask` (linear / radial / luminance / colour range / brush shapes, combine, finalize; a mask's Feather is a Gaussian of the combined selection and Refine Edges a guided filter on log luminance blended by √k, both through the `blur` passes and the `xguided_*` / `mask_blend` map kernels, matching `masks::evaluate_one` within 2e-3 on alpha),
   `finish` (the whole per-pixel stage) — each mirrors a named CPU function.
 - Per-stage hybrid: defringe and spot removal (rare, CPU-only for now) download the resampled image,
   run on the CPU and upload; heuristic mask shapes (Sky, Subject, Background, …) and brushes of more
