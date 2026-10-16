@@ -9,6 +9,7 @@ use lightcraft_develop::{DevelopSettings, EmbeddedLens};
 use lightcraft_geom::{Affine, CropGeometry, Homography, Orientation, Point, Rect};
 use lightcraft_raster::resample::{Filter, resize};
 use lightcraft_raster::{Rgb32f, par_rows};
+use std::sync::Arc;
 
 use crate::optics::{Warp, reorient_lens};
 
@@ -33,6 +34,9 @@ pub struct Frame {
     pub warp: Option<Warp>,
     /// Set when this frame draws only a window of a larger output (see [`Frame::window`]).
     pub view: Option<ViewWindow>,
+    /// The whole frame's Subject decision, so a window selects what the whole frame does (derived
+    /// data: equal for every frame, absent from the cache keys). Set by [`crate::plan`].
+    pub subject: Option<Arc<crate::masks::SubjectProxy>>,
 }
 
 /// Where a windowed [`Frame`]'s pixels sit in the full output: its offset and the full output's
@@ -76,6 +80,7 @@ impl Frame {
             flip_v: s.crop.flip_v,
             warp: (!warp.is_identity()).then_some(warp),
             view: None,
+            subject: None,
         };
         if apply_crop && s.geometry.constrain_crop {
             f.constrain_to_image();

@@ -34,8 +34,8 @@ const PROXY: usize = 512;
 const MIN_SHARE: f32 = 0.04;
 /// ...and a subject that fills more than this leaves no background to treat separately.
 const MAX_SUBJECT_SHARE: f32 = 0.9;
-/// A pixel belongs to a region when the region's alpha is at least this (the subject heuristic
-/// gives exactly 0.5 to a flat centre: that is not a subject).
+/// A pixel belongs to a region when the region's alpha is at least this (the subject segmenter's
+/// flat-frame fallback gives at most 0.5 to a centre ellipse: that is not a subject).
 const INSIDE: f32 = 0.6;
 /// A region with less spread than this (5th to 95th percentile, EV) is uniform: nothing to fit.
 const MIN_SPREAD: f32 = 0.1;
@@ -466,7 +466,8 @@ mod tests {
         let global_only = crate::look::settings_with(&DevelopSettings::default(), r.global);
         let (s0, _, b0) = medians(&src, &global_only);
         let (s1, _, b1) = medians(&src, &with(&r));
-        // the region as Auto sees it (the heuristic's subject includes the disc's edge band)
+        // the region as Auto sees it (the saliency segmenter's subject follows the disc's edge, within a
+        // pixel or two of the guided snap)
         // lands on the key target in the real render
         let planes = region_planes(&src, &info, &DevelopSettings::default()).unwrap();
         let e = encoded(&src, &with(&r));

@@ -13,6 +13,10 @@ use lightcraft_raster::{Image, Plane, Rgb32f};
 use crate::for_rows;
 use crate::geometry::Frame;
 
+mod subject;
+pub use subject::SubjectProxy;
+pub(crate) use subject::{subject_proxy, uses_subject};
+
 /// What an embedded segmentation matte selects.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MatteKind {
@@ -257,17 +261,9 @@ pub fn shape_alpha(shape: &MaskShape, frame: &Frame, w: usize, h: usize, img: &R
         MaskShape::Object { hint, .. } if hint.is_empty() => {}
         MaskShape::Prompt { .. } => {}
         MaskShape::Subject | MaskShape::Object { .. } | MaskShape::People { .. } => {
-            // Saliency heuristic: centre-weighted local contrast (replaced by the segmenter in M12).
-            let m = frame.out_to_norm(w, h);
-            let blur = lightcraft_raster::blur::gaussian(log_l, 0.03 * frame_px(frame, w));
-            for (i, v) in out.data.iter_mut().enumerate() {
-                let (x, y) = (i % w, i / w);
-                let n = m.apply(Point::new(x as f64 + 0.5, y as f64 + 0.5));
-                let d = (((n.x - 0.5) / 0.35).powi(2) + ((n.y - 0.55) / 0.4).powi(2)).sqrt() as f32;
-                let contrast = (log_l.data[i] - blur.data[i]).abs();
-                *v = (1.0 - smooth(0.6, 1.0, d)) * (0.5 + 0.5 * smooth(0.05, 0.6, contrast));
-            }
-            smooth_plane(&mut out, 0.015 * frame_px(frame, w));
+            // Classical saliency + region segmenter (see `subject`); a model segmentation or a
+            // DNG matte replaces it above.
+            out = subject::subject_alpha(frame, w, h, img, log_l);
         }
         MaskShape::Background => {
             let mut s = shape_alpha(&MaskShape::Subject, frame, w, h, img, log_l, ev, mattes);
@@ -746,6 +742,106 @@ mod tests {
         ] {
             assert!(shape_alpha(&shape, &f, 30, 30, &img, &l, 0.0, None).data.iter().all(|v| *v == 0.0));
         }
+    }
+
+    /// A grey scene (`f` gives each pixel's linear value) and its log luminance.
+    fn grey_scene(w: usize, h: usize, f: impl Fn(usize, usize) -> f32) -> (Rgb32f, Plane) {
+        let img = Rgb32f::from_fn(w, h, |x, y| {
+            let v = f(x, y);
+            [v, v, v]
+        });
+        let l = img.map(crate::local::log_lum);
+        (img, l)
+    }
+
+    fn disc(x: usize, y: usize, c: (f32, f32), r: f32) -> bool {
+        ((x as f32 + 0.5 - c.0).powi(2) + (y as f32 + 0.5 - c.1).powi(2)).sqrt() < r
+    }
+
+    fn subject_of(img: &Rgb32f, l: &Plane) -> Plane {
+        shape_alpha(&MaskShape::Subject, &frame(img.width, img.height), img.width, img.height, img, l, 0.0, None)
+    }
+
+    #[test]
+    fn subject_finds_an_off_centre_bright_disc_in_every_quadrant() {
+        let (w, h) = (320, 240);
+        let r = 0.1 * w as f32;
+        let quadrants = [(0.25, 0.3), (0.75, 0.3), (0.25, 0.75), (0.75, 0.75)];
+        for (qx, qy) in quadrants {
+            let c = (qx * w as f32, qy * h as f32);
+            let (img, l) = grey_scene(w, h, |x, y| if disc(x, y, c, r) { 0.8 } else { 0.04 });
+            let a = subject_of(&img, &l);
+            assert!(a.data.iter().all(|v| v.is_finite() && (0.0..=1.0).contains(v)));
+            let at = |dx: f32, dy: f32| a.get((c.0 + dx) as usize, (c.1 + dy) as usize);
+            assert!(at(0.0, 0.0) > 0.8 && at(0.5 * r, 0.0) > 0.8, "inside, quadrant {qx},{qy}: {} {}", at(0.0, 0.0), at(0.5 * r, 0.0));
+            // outside: a disc radius beyond the edge, and the opposite quadrant's centre
+            let opposite = a.get(((1.0 - qx) * w as f32) as usize, ((1.0 - qy) * h as f32) as usize);
+            assert!(opposite < 0.2 && at(0.0, 2.5 * r * if qy < 0.5 { 1.0 } else { -1.0 }) < 0.2, "outside, quadrant {qx},{qy}: {opposite}");
+        }
+    }
+
+    #[test]
+    fn subject_of_a_uniform_field_is_finite_and_weak() {
+        for (w, h) in [(320, 240), (64, 48), (5, 3), (1, 1)] {
+            let (img, l) = grey_scene(w, h, |_, _| 0.3);
+            let a = subject_of(&img, &l);
+            assert_eq!((a.width, a.height), (w, h));
+            assert!(a.data.iter().all(|v| v.is_finite() && (0.0..=0.5 + 1e-4).contains(v)), "{w}×{h}");
+            // (a frame of a few pixels is nearly all ellipse: only the range is checked there)
+            let mean = a.data.iter().sum::<f32>() / a.data.len() as f32;
+            assert!(w < 64 || mean < 0.3, "{w}×{h}: mean {mean}");
+        }
+    }
+
+    #[test]
+    fn subject_and_background_sum_to_one() {
+        let (w, h) = (320, 240);
+        let c = (0.3 * w as f32, 0.4 * h as f32);
+        for (img, l) in [grey_scene(w, h, |x, y| if disc(x, y, c, 40.0) { 0.7 } else { 0.05 }), grey_scene(w, h, |_, _| 0.2)] {
+            let f = frame(w, h);
+            let s = shape_alpha(&MaskShape::Subject, &f, w, h, &img, &l, 0.0, None);
+            let b = shape_alpha(&MaskShape::Background, &f, w, h, &img, &l, 0.0, None);
+            assert!(s.data.iter().zip(&b.data).all(|(s, b)| (s + b - 1.0).abs() < 1e-5));
+        }
+    }
+
+    #[test]
+    fn subject_keeps_the_larger_of_two_blobs() {
+        let (w, h) = (320, 240);
+        let (big, small) = ((0.3 * w as f32, 0.5 * h as f32), (0.8 * w as f32, 0.25 * h as f32));
+        // areas 0.15 w vs 0.06 w radius: about 6 : 1
+        let (img, l) = grey_scene(w, h, |x, y| if disc(x, y, big, 0.15 * w as f32) || disc(x, y, small, 0.06 * w as f32) { 0.8 } else { 0.04 });
+        let a = subject_of(&img, &l);
+        assert!(a.get(big.0 as usize, big.1 as usize) > 0.8, "the big blob: {}", a.get(big.0 as usize, big.1 as usize));
+        assert!(a.get(small.0 as usize, small.1 as usize) < 0.2, "the small blob: {}", a.get(small.0 as usize, small.1 as usize));
+    }
+
+    /// A bright block off the frame edges: its mask edge lies within 2 px of the block's edge. The
+    /// region is found on a plane half this size (512 px → 256), so it is placed to within one
+    /// work pixel (2 px) before the guided filter pulls it onto the photo's step edge.
+    #[test]
+    fn subject_edge_snaps_to_a_step_edge() {
+        let (w, h) = (512, 384);
+        let (img, l) = grey_scene(w, h, |x, y| if (150..330).contains(&x) && (100..284).contains(&y) { 0.8 } else { 0.04 });
+        let a = subject_of(&img, &l);
+        let row = h / 2;
+        let first = (0..w).find(|x| a.get(*x, row) >= 0.5).expect("a selected pixel");
+        let last = (0..w).rev().find(|x| a.get(*x, row) >= 0.5).expect("a selected pixel");
+        assert!((first as f32 - 150.0).abs() <= 2.0, "left edge at {first}, step at 150");
+        assert!((last as f32 - 329.0).abs() <= 2.0, "right edge at {last}, step at 329");
+        assert!(a.get(240, row) > 0.9 && a.get(40, row) < 0.1 && a.get(470, row) < 0.1);
+    }
+
+    #[test]
+    fn a_source_matte_still_overrides_the_subject_heuristic() {
+        let (w, h) = (64, 48);
+        let (img, l) = grey_scene(w, h, |_, _| 0.3);
+        let mut mattes = Mattes::default();
+        mattes.push(MatteKind::Person, Image::filled(8, 8, 255u8));
+        let f = frame(w, h);
+        let with = |shape: &MaskShape| shape_alpha(shape, &f, w, h, &img, &l, 0.0, Some(&mattes));
+        assert!(with(&MaskShape::Subject).data.iter().all(|v| *v > 0.99), "the person matte wins over the heuristic (weak on a flat frame)");
+        assert!(with(&MaskShape::Background).data.iter().all(|v| *v < 0.01));
     }
 
     #[test]

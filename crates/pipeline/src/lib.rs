@@ -410,7 +410,10 @@ pub fn plan<'a>(src: &Rgb32f, info: &SourceInfo, s: &'a DevelopSettings, req: &R
     let px_per_long = frame.px_per_long(full_w);
     let mut fixed_air = None;
     let mut keep = None;
-    let (frame, w, h) = match req.window {
+    // Subject / Background are decided once on the whole frame, so a window selects what the whole
+    // render does (the proxy is taken through the frame before it is narrowed to the window)
+    let subject = masks::uses_subject(s).then(|| masks::subject_proxy(src, info, s, &frame, full_w, full_h));
+    let (mut frame, w, h) = match req.window {
         Some(win) => {
             let win = win.clamped(full_w, full_h);
             if s.section_enabled("effects") && (s.effects.dehaze != 0.0 || s.masks.iter().any(|m| m.adjust.dehaze != 0.0)) {
@@ -427,6 +430,7 @@ pub fn plan<'a>(src: &Rgb32f, info: &SourceInfo, s: &'a DevelopSettings, req: &R
         }
         None => (frame, full_w, full_h),
     };
+    frame.subject = subject;
     let src_long = src.width.max(src.height);
     let geo = hash_of((format!("{frame:?}"), w, h));
     let (wb_t, wb_tint) = local::effective_wb(info, s);

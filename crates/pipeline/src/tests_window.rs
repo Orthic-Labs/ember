@@ -216,6 +216,10 @@ fn a_mask_overlay_window_matches_the_whole_render() {
         ("radial", MaskShape::Radial { center: Point::new(0.5, 0.5), rx: 0.2, ry: 0.15, angle: 20.0, feather: 50.0, invert: false }, 0.0),
         ("linear refined", MaskShape::Linear { start: Point::new(0.45, 0.5), end: Point::new(0.55, 0.5) }, 100.0),
         ("sky", MaskShape::Sky, 0.0),
+        // decided once on the whole frame (`SubjectProxy`), so the window selects what the whole render does;
+        // what differs is the edge refinement reading its neighbours (a few px, far inside `HALO`)
+        ("subject", MaskShape::Subject, 0.0),
+        ("background", MaskShape::Background, 0.0),
     ];
     for (name, shape, refine) in shapes {
         let mut s = DevelopSettings::default();
@@ -235,6 +239,33 @@ fn a_mask_overlay_window_matches_the_whole_render() {
             // (refine edges differs by a rounding step, as in `mask_edge_refinement_does_not_depend_on_the_window`)
             assert!(max <= 3 && mean <= 0.25, "{name} {view:?}: max {max} (≤ 3), mean {mean:.3} (≤ 0.25)");
         }
+    }
+}
+
+// Given a Subject mask, windows at the corners and in the middle select the same region as the whole
+// render, not the one their own pixels would give: the decision comes from the whole-frame proxy.
+// Tolerance as for the other masks (max 3 of 255 = 1.2 % alpha on white-on-black): both
+// sides sample the same proxy plane, so only the guided filter's few-pixel reach and ±1-level pixel
+// noise differ.
+#[test]
+fn a_window_selects_the_same_subject_as_the_whole_frame() {
+    use crate::{MaskView, Overlay};
+    use lightcraft_develop::{LocalAdjustments, Mask, MaskComponent, MaskOp, MaskShape};
+    let mut s = DevelopSettings::default();
+    s.masks.push(Mask {
+        id: 3,
+        components: vec![MaskComponent { name: None, op: MaskOp::Add, invert: false, shape: MaskShape::Subject }],
+        adjust: LocalAdjustments { exposure: 1.0, ..Default::default() },
+        ..Default::default()
+    });
+    let overlay = Overlay::Mask { id: 3, view: MaskView::WhiteOnBlack, color: [255, 0, 0], opacity: 100 };
+    let src = scene();
+    let f = render(&src, &SourceInfo::default(), &s, &RenderRequest { overlay, ..RenderRequest::fit(W, H) }).image;
+    for (x, y) in [(0, 0), (W - 400, 0), (0, H - 300), (W - 400, H - 300), (300, 180)] {
+        let win = PixelWindow { x, y, w: 400, h: 300 };
+        let w = render(&src, &SourceInfo::default(), &s, &RenderRequest { overlay, window: Some(win), ..RenderRequest::fit(W, H) }).image;
+        let (max, mean) = compare(&f, &w, win);
+        assert!(max <= 3 && mean <= 0.25, "window at {x},{y}: max {max} (≤ 3), mean {mean:.3} (≤ 0.25)");
     }
 }
 
