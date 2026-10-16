@@ -638,6 +638,9 @@ fn services(cc: &eframe::CreationContext<'_>, log_file: Option<&std::path::Path>
         backup_library: None,
         restore_library: None,
         system_theme: appearance::service(),
+        // set at start from the renderer's surface (`hdr_display`)
+        display_headroom: None,
+        hdr_surface: false,
     }
 }
 
@@ -883,8 +886,11 @@ fn main() -> eframe::Result {
                 // and the user's own download locations, one base URL per line (LIGHTCRAFT_SAM3_MIRRORS too)
                 session = session.with_default_sam3_model();
                 // HDR display: SDR unless the surface, platform and display all allow HDR
-                hdr_display::report(cc.wgpu_render_state.as_ref().map(|r| r.target_format));
-                let mut app = LightcraftApp::new(session, services(cc, app_log_file.as_deref()));
+                let hdr_out = hdr_display::report(cc.wgpu_render_state.as_ref().map(|r| r.target_format));
+                let mut svc = services(cc, app_log_file.as_deref());
+                svc.hdr_surface = hdr_out.is_hdr();
+                svc.display_headroom = hdr_display::headroom_fn();
+                let mut app = LightcraftApp::new(session, svc);
                 if let Some(ui) = prefs {
                     app.ui = ui;
                 }

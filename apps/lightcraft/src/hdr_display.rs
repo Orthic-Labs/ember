@@ -65,7 +65,6 @@ pub enum DisplayOutput {
 }
 
 impl DisplayOutput {
-    #[cfg_attr(not(test), allow(dead_code))] // read by the HDR view once the surface can be HDR
     pub fn is_hdr(self) -> bool {
         matches!(self, Self::Hdr { .. })
     }
@@ -116,11 +115,26 @@ pub fn choose(target: Option<TextureFormat>, platform: Platform, display_headroo
     }
 }
 
+/// The OS headroom query for the screen showing the window, for the UI to poll (it follows the
+/// window between screens and the display's HDR switch). macOS reads NSScreen's current EDR
+/// maximum; Windows has no safe query (DXGI's output colour space needs `unsafe` COM calls, which
+/// only `crates/sysmem` may hold), so it reports nothing and stays SDR.
+#[cfg(target_os = "macos")]
+pub fn headroom_fn() -> Option<lightcraft_ui_egui::HeadroomFn> {
+    Some(Box::new(crate::screen_profile::hdr_headroom))
+}
+
+/// See the macOS one: no safe headroom query on this platform.
+#[cfg(not(target_os = "macos"))]
+pub fn headroom_fn() -> Option<lightcraft_ui_egui::HeadroomFn> {
+    None
+}
+
 /// The decision for this start, logged once (the window renderer's `target` format).
 pub fn report(target: Option<TextureFormat>) -> DisplayOutput {
     let disabled = std::env::var("LIGHTCRAFT_HDR_DISPLAY").ok().is_some_and(|v| matches!(v.trim(), "0" | "off" | "false" | "no"));
-    // no OS headroom query is wired yet: unknown, so SDR unless everything else is HDR-ready
-    let out = choose(target, Platform::current(), None, disabled);
+    let headroom = headroom_fn().and_then(|mut f| f());
+    let out = choose(target, Platform::current(), headroom, disabled);
     match out {
         DisplayOutput::Sdr { reason } => log::info!("display: SDR ({reason})"),
         DisplayOutput::Hdr { format, encoding } => log::info!("display: HDR {encoding:?} ({format:?})"),

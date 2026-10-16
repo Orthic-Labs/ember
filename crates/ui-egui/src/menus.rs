@@ -102,6 +102,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("view.zoomOut", "Zoom Out", Some("Cmd+-"), "View"),
     ("view.clipping", "Show Clipping", Some("J"), "View"),
     ("view.visualizeHdr", "Visualize HDR", None, "View"),
+    ("view.hdrDisplay", "HDR Display", None, "View"),
     // in grids S expands/collapses stacks (the engine command it shadows)
     ("view.softProof", "Soft Proofing", Some("S"), "View"),
     ("view.histogram", "Histogram", Some("Cmd+Shift+H"), "View"),
@@ -846,6 +847,19 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             // {on?}; no params toggles. Shown on photos edited in HDR (see `develop.hdr`).
             app.ui.hdr_visualize = p.get("on").and_then(Value::as_bool).unwrap_or(!app.ui.hdr_visualize);
             Ok(json!({"on": app.ui.hdr_visualize}))
+        }
+        "view.hdrDisplay" => {
+            // {on?}; no params toggles. HDR edits above SDR white where the window and screen can show them.
+            app.ui.hdr_display = p.get("on").and_then(Value::as_bool).unwrap_or(!app.ui.hdr_display);
+            let view = app.hdr_view();
+            let reason = match view {
+                crate::hdr_view::HdrView::Sdr { reason } => Some(reason),
+                crate::hdr_view::HdrView::Hdr { .. } => None,
+            };
+            if let (true, Some(why)) = (app.ui.hdr_display, reason) {
+                app.toast(&ctx, format!("{}: {why}", crate::i18n::tr("HDR display is not available")));
+            }
+            Ok(json!({"on": app.ui.hdr_display, "active": view.is_hdr(), "headroom": app.hdr_headroom, "reason": reason}))
         }
         "view.softProof" => {
             // {on?, space?, profile?: ICC path | null, intent?: perceptual|relative, paperInk?,

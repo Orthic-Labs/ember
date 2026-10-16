@@ -218,6 +218,9 @@ fn services(originals: Originals, backend: Option<Backend>, files: Files, frozen
         picker: None,
         pick_display_profile: None,
         screen_profile: None,
+        // the browser canvas is an 8-bit surface
+        display_headroom: None,
+        hdr_surface: false,
         backup_library: Some(Box::new(move |session: &mut Session| {
             let Some(b) = backup_backend.clone() else { return Err("nothing is stored in this browser session (?store=memory)".into()) };
             // the photos' own names for the originals in the zip

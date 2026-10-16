@@ -20,11 +20,24 @@ pub fn icc() -> Option<Vec<u8>> {
     (!icc.is_empty()).then_some(icc)
 }
 
+/// The screen's current extended-dynamic-range headroom: the brightest component value it can show
+/// relative to SDR white (1.0 on an SDR screen or with HDR off, above 1.0 when macOS has the screen
+/// in EDR). `None` off the main thread or without a screen.
+pub fn hdr_headroom() -> Option<f32> {
+    let mtm = MainThreadMarker::new()?;
+    let app = NSApplication::sharedApplication(mtm);
+    let window = app.mainWindow().or_else(|| app.keyWindow()).or_else(|| app.windows().firstObject());
+    let screen = window.and_then(|w| w.screen()).or_else(|| NSScreen::mainScreen(mtm))?;
+    let v = screen.maximumExtendedDynamicRangeColorComponentValue() as f32;
+    v.is_finite().then_some(v)
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
     fn unknown_off_the_main_thread() {
         // AppKit is main-thread only; a test thread gets nothing rather than undefined behaviour
         assert_eq!(std::thread::spawn(super::icc).join().unwrap(), None);
+        assert_eq!(std::thread::spawn(super::hdr_headroom).join().unwrap(), None);
     }
 }

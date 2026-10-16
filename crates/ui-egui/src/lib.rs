@@ -14,6 +14,7 @@ pub mod credits;
 pub mod date_picker;
 pub mod docking;
 pub mod export_task;
+pub mod hdr_view;
 pub mod headless;
 pub mod i18n;
 pub mod icons;
@@ -168,6 +169,7 @@ pub type OpenModelFolderFn = std::sync::Arc<dyn Fn(&str) -> Result<(), String> +
 /// The ICC profile of the screen showing the window, as the system colour-manages it (`None`:
 /// not known).
 pub type ScreenProfileFn = Box<dyn FnMut() -> Option<Vec<u8>>>;
+pub use hdr_view::HeadroomFn;
 /// Whether an external editor can be started (its name as in [`Services::open_with`]); the
 /// error says why not and what to do (e.g. PhotoCraft isn't installed).
 pub type CheckEditorFn = Box<dyn Fn(&str) -> Result<(), String>>;
@@ -202,6 +204,11 @@ pub struct Services {
     /// The profile of the screen showing the window, used while none is chosen in Settings ▸
     /// Display (macOS, whose windows aren't colour-managed: issue #787).
     pub screen_profile: Option<ScreenProfileFn>,
+    /// The screen's HDR headroom (macOS: NSScreen's EDR maximum), for View ▸ HDR Display.
+    pub display_headroom: Option<HeadroomFn>,
+    /// The window surface carries values above SDR white (an `Rgba16Float` / PQ surface). False
+    /// everywhere today: eframe 0.36 configures an 8-bit surface and has no hook to change it.
+    pub hdr_surface: bool,
     /// Save dialog for an exported `.lcpreset` file.
     pub save_preset_file: Option<SaveFile>,
     /// Open dialog for a keyword list file (`.txt`, Photo Supreme's `.utf8`; File ▸ Import Keywords…).
@@ -412,6 +419,9 @@ pub struct LightcraftApp {
     /// and when it was last read (egui time, s).
     pub(crate) screen_profile: Option<Vec<u8>>,
     pub(crate) screen_profile_read: Option<f64>,
+    /// The screen's HDR headroom (`services.display_headroom`) and when it was last read (egui time, s).
+    pub(crate) hdr_headroom: Option<f32>,
+    pub(crate) hdr_headroom_read: Option<f64>,
     /// The library failed to open at launch: the blocking window, then the temporary-session
     /// banner (issue #100). Cleared once a library opens.
     pub library_problem: Option<panels::library_problem::LibraryProblem>,
@@ -491,6 +501,8 @@ impl LightcraftApp {
             display_error: None,
             screen_profile: None,
             screen_profile_read: None,
+            hdr_headroom: None,
+            hdr_headroom_read: None,
             library_problem: None,
             activity_expanded: false,
             model_setup: Default::default(),
@@ -1167,6 +1179,7 @@ impl LightcraftApp {
         if self.ui.settings.display_profile.is_empty() {
             self.follow_screen_profile(ctx);
         }
+        self.follow_hdr_headroom(ctx);
         if let Some(fs) = ctx.input(|i| i.viewport().fullscreen) {
             self.window_is_fullscreen = fs;
         }
