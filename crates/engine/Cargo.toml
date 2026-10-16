@@ -41,6 +41,7 @@ ab_glyph = { workspace = true }
 # Apply the font’s vertical substitutions and origins to Japanese watermarks.
 harfrust = { version = "0.14", default-features = false, features = ["std"] }
 unicode-segmentation = "1.13"
+base64 = "=0.23.1"
 lightcraft-segment = { workspace = true, optional = true }
 
 # model downloads run natively only (the web build fetches no models)

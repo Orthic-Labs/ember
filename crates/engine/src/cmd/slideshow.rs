@@ -1,6 +1,7 @@
 //! `slideshow.*`: the Classic Slideshow settings, templates, timeline, frames and export
 //! (see [`crate::slideshow`]). The desktop app's playback view is UI (`slideshow.play`).
 
+use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
 
 use super::{CommandSpec, always, bad, cmd};
@@ -118,6 +119,36 @@ fn frame(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
+/// One slide rendered in full, as RGBA8 bytes (base64), through the renderer playback and export use.
+fn render_slide_cmd(s: &mut Session, p: &Value) -> Result<Value> {
+    const ID: &str = "slideshow.renderSlide";
+    let index = p
+        .get("index")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| bad(ID, "missing `index`: a slide number from slideshow.timeline, from 0"))? as usize;
+    let width = p.get("width").and_then(Value::as_u64).unwrap_or(960) as usize;
+    let (w, h) = slideshow::frame_size(&s.slideshow, width).map_err(|e| bad(ID, e))?;
+    let ids = s.targets(p)?;
+    let model = s.slideshow.clone();
+    let timeline = Timeline::new(&model, &ids);
+    let slide = timeline
+        .slide(index)
+        .ok_or_else(|| bad(ID, format!("no slide {index}; the show has {} slides", timeline.entries.len())))?;
+    let img = slideshow::render_slide(s, &model, slide, w, h).map_err(|e| bad(ID, e))?;
+    Ok(json!({"index": index, "slide": slide_json(slide), "width": w, "height": h, "format": "rgba8", "rgba": STANDARD.encode(img.as_bytes())}))
+}
+
+/// Sets the slide length so the title screens and photos fill a track of `seconds`.
+fn fit_to_music(s: &mut Session, p: &Value) -> Result<Value> {
+    const ID: &str = "slideshow.fitToMusic";
+    let seconds = p.get("seconds").and_then(Value::as_f64).ok_or_else(|| bad(ID, "missing `seconds`: the length of the music"))?;
+    let photos = s.targets(p)?.len();
+    let titles = usize::from(!s.slideshow.titles.intro.trim().is_empty()) + usize::from(!s.slideshow.titles.ending.trim().is_empty());
+    let per = slideshow::fit_slide_seconds(seconds, photos, s.slideshow.titles.seconds, titles).map_err(|e| bad(ID, e))?;
+    s.slideshow = slideshow::merged(&s.slideshow, &json!({"playback": {"slideSeconds": per}})).map_err(|e| bad(ID, e))?;
+    Ok(json!({"model": s.slideshow, "slideSeconds": per, "photos": photos, "titles": titles}))
+}
+
 fn export(s: &mut Session, p: &Value) -> Result<Value> {
     const ID: &str = "slideshow.export";
     let format = p.get("format").and_then(Value::as_str).unwrap_or("pdf");
@@ -133,7 +164,7 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
             write_file(path, &bytes).map_err(|e| bad(ID, e))?;
             Ok(json!({"format": "pdf", "path": path, "slides": timeline.entries.len(), "bytes": bytes.len()}))
         }
-        "jpegs" => {
+        "jpeg" | "jpegs" => {
             let dir = p.get("dir").and_then(Value::as_str).filter(|x| !x.trim().is_empty()).ok_or_else(|| bad(ID, "missing `dir`"))?;
             let files = slideshow::export_jpegs(s, &model, &timeline, width).map_err(|e| bad(ID, e))?;
             let mut names = Vec::with_capacity(files.len());
@@ -143,9 +174,11 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
                 write_file(&path, bytes).map_err(|e| bad(ID, e))?;
                 names.push(name.clone());
             }
-            Ok(json!({"format": "jpegs", "dir": dir, "files": names}))
+            Ok(json!({"format": "jpeg", "dir": dir, "files": names}))
         }
-        _ => Err(bad(ID, "format must be pdf or jpegs")),
+        // video is not built: refuse by name rather than writing something else
+        "video" => Err(bad(ID, "unsupported format `video`: slideshows export pdf or jpeg; video export is not built yet (ROADMAP R. Video)")),
+        _ => Err(bad(ID, "format must be pdf or jpeg")),
     }
 }
 
@@ -159,7 +192,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Slideshow Settings",
             [],
             None,
-            "{layout?: {aspect, margin}, options?: {strokeWidth, strokeColor, shadow, zoomToFill}, backdrop?: {color, gradientTo}, overlays?: {identityPlate, text, ratingStars, size, color}, titles?: {intro, ending, seconds, size, color}, playback?: {slideSeconds, fadeSeconds, random, repeat, seed}} — each section holds only the settings to change → {model}",
+            "{layout?: {aspect, margin, guides}, options?: {strokeWidth, strokeColor, shadow, zoomToFill}, backdrop?: {color, gradientTo, image: photo id}, overlays?: {identityPlate, text, ratingStars, size, color}, titles?: {intro, ending, seconds, size, color}, playback?: {slideSeconds, fadeSeconds, random, repeat, auto, seed}, music?: {path}} — each section holds only the settings to change → {model}",
             always,
             set
         ),
@@ -197,8 +230,20 @@ pub fn specs() -> Vec<CommandSpec> {
             "{t: seconds into the show, width?: long edge 64–4096 (1920), ids?, path?: write the frame as a JPEG there} → {current, photo?, previous, alpha, width, height, path?, bytes?}; alpha is how far the current slide has faded in over the previous one (1 = settled)",
             always, frame),
         cmd!(query "slideshow.export", "Export Slideshow", [], None,
-            "{format?: pdf|jpegs (pdf), path (pdf), dir (jpegs), width?: long edge 64–4096 (1920), ids?} → one page or one JPEG per slide, each slide settled; replaces an existing output, never an original",
+            "{format?: pdf|jpeg (pdf), path (pdf), dir (jpeg), width?: long edge 64–4096 (1920), ids?} → one page or one JPEG per slide, each slide settled; replaces an existing output, never an original; video is refused as unsupported",
             always, export),
+        cmd!(query "slideshow.renderSlide", "Render Slideshow Slide", [], None,
+            "{index: slide number from slideshow.timeline (0 = first), width?: long edge 64–4096 (960), ids?} → {index, slide, width, height, format: rgba8, rgba: base64 RGBA bytes}; the same render playback and export use, settled (no fade)",
+            always, render_slide_cmd),
+        cmd!(
+            "slideshow.fitToMusic",
+            "Fit Slides to Music",
+            [],
+            None,
+            "{seconds: length of the music, ids?} — sets playback.slideSeconds so the title screens and photos fill the track; refused when the photos cannot fit at 0.5–60 s each → {model, slideSeconds, photos, titles}",
+            always,
+            fit_to_music
+        ),
     ]
 }
 
@@ -241,5 +286,26 @@ mod tests {
         assert_eq!(f["photo"], ids[0]);
         assert_eq!(f["width"], 256);
         assert!(s.execute("slideshow.frame", &json!({"ids": ids, "t": 99.0})).is_err());
+    }
+
+    #[test]
+    fn renders_a_slide_fits_to_music_and_refuses_video() {
+        let mut s = Session::with_demo();
+        let ids: Vec<u64> = s.catalog.photos().take(3).map(|p| p.id.0).collect();
+        // one slide comes back as RGBA at the requested width, 16:9
+        let r = s.execute("slideshow.renderSlide", &json!({"index": 0, "width": 128, "ids": ids})).unwrap();
+        assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(128), Some(72)));
+        let rgba = STANDARD.decode(r["rgba"].as_str().unwrap()).unwrap();
+        assert_eq!(rgba.len(), 128 * 72 * 4);
+        assert!(s.execute("slideshow.renderSlide", &json!({"index": 9, "width": 128, "ids": ids})).is_err());
+        // three photos and 12 s of music: 4 s each, and the playback setting follows
+        let fit = s.execute("slideshow.fitToMusic", &json!({"seconds": 12.0, "ids": ids})).unwrap();
+        assert_eq!(fit["slideSeconds"], 4.0);
+        assert_eq!(s.slideshow.playback.slide_seconds, 4.0);
+        assert!(s.execute("slideshow.fitToMusic", &json!({"seconds": 1.0, "ids": ids})).is_err());
+        // music is a path setting; video is refused by name, not written as something else
+        s.execute("slideshow.set", &json!({"music": {"path": "music/trip.mp3"}})).unwrap();
+        assert_eq!(s.slideshow.music.path, "music/trip.mp3");
+        assert!(s.execute("slideshow.export", &json!({"format": "video", "path": "out.mp4", "ids": ids})).is_err());
     }
 }

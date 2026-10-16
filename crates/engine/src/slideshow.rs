@@ -27,6 +27,7 @@ pub struct Model {
     pub overlays: Overlays,
     pub titles: Titles,
     pub playback: Playback,
+    pub music: Music,
 }
 
 /// Frame shape and the empty margin around each photo.
@@ -37,11 +38,13 @@ pub struct Layout {
     pub aspect: f64,
     /// Margin around the photo, as a fraction of the short edge (0–0.25).
     pub margin: f64,
+    /// Draw the margin lines on the module's preview. Guides are never drawn into a slide or an export.
+    pub guides: bool,
 }
 
 impl Default for Layout {
     fn default() -> Self {
-        Self { aspect: 16.0 / 9.0, margin: 0.05 }
+        Self { aspect: 16.0 / 9.0, margin: 0.05, guides: false }
     }
 }
 
@@ -64,12 +67,14 @@ impl Default for Options {
     }
 }
 
-/// The colour behind the photos: solid, or a vertical gradient from `color` to `gradient_to`.
+/// The colour behind the photos: solid, or a vertical gradient from `color` to `gradient_to`. A catalog
+/// photo (`image`, its id) covers the backdrop instead when it is set.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Backdrop {
     pub color: [u8; 3],
     pub gradient_to: Option<[u8; 3]>,
+    pub image: Option<u64>,
 }
 
 /// Text drawn over each photo. Templates may use `{file}`, `{title}`, `{caption}`, `{copyright}`,
@@ -126,13 +131,40 @@ pub struct Playback {
     pub random: bool,
     /// Start again after the last slide.
     pub repeat: bool,
+    /// Advance by itself when the show plays; `false` (manual) moves only when stepped.
+    pub auto: bool,
     pub seed: u64,
 }
 
 impl Default for Playback {
     fn default() -> Self {
-        Self { slide_seconds: 3.0, fade_seconds: 1.0, random: false, repeat: false, seed: 1 }
+        Self { slide_seconds: 3.0, fade_seconds: 1.0, random: false, repeat: false, auto: true, seed: 1 }
     }
+}
+
+/// The soundtrack the show is timed to: a file path. The engine does not decode audio; the length
+/// the slides are fitted to is given by the caller (see [`fit_slide_seconds`]).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Music {
+    pub path: String,
+}
+
+/// The seconds each photo shows so that the title screens and the photos fill `music_seconds`.
+/// Errors when there are no photos, the music length is not positive, or the photos would not fit
+/// at 0.5–60 seconds each.
+pub fn fit_slide_seconds(music_seconds: f64, photos: usize, title_seconds: f64, titles: usize) -> Result<f64, String> {
+    if photos == 0 {
+        return Err("select photos to fit to the music".into());
+    }
+    if !music_seconds.is_finite() || music_seconds <= 0.0 {
+        return Err("the music length must be a positive number of seconds".into());
+    }
+    let per = (music_seconds - title_seconds * titles as f64) / photos as f64;
+    if !(0.5..=60.0).contains(&per) {
+        return Err(format!("{photos} photos cannot fill {music_seconds:.1} s of music at {per:.2} s each (0.5–60 s per photo)"));
+    }
+    Ok(per)
 }
 
 /// A named set of settings: built-in ones ([`builtin_templates`]) or the user's, saved with the library.
@@ -145,12 +177,12 @@ pub struct Template {
 
 /// The built-in templates.
 pub fn builtin_templates() -> Vec<Template> {
-    let mut white = Model { backdrop: Backdrop { color: [255, 255, 255], gradient_to: None }, ..Model::default() };
+    let mut white = Model { backdrop: Backdrop { color: [255, 255, 255], ..Backdrop::default() }, ..Model::default() };
     white.overlays.color = [32, 32, 32];
     white.titles.color = [32, 32, 32];
     let framed = Model {
         options: Options { stroke_width: 0.012, stroke_color: [240, 240, 240], shadow: true, zoom_to_fill: false },
-        backdrop: Backdrop { color: [40, 40, 44], gradient_to: Some([8, 8, 10]) },
+        backdrop: Backdrop { color: [40, 40, 44], gradient_to: Some([8, 8, 10]), ..Backdrop::default() },
         ..Model::default()
     };
     vec![
@@ -184,6 +216,7 @@ impl Model {
         for text in [&v.identity_plate, &v.text, &t.intro, &t.ending] {
             check(text.chars().count() <= MAX_TEXT, "text must be at most 500 characters")?;
         }
+        check(self.music.path.chars().count() <= 4096, "music.path must be at most 4096 characters")?;
         Ok(())
     }
 }
@@ -406,6 +439,14 @@ pub fn expand(template: &str, fields: &Fields) -> String {
     out
 }
 
+/// The backdrop at `w` × `h`: the backdrop photo covering the frame when one is set, else the colour.
+pub fn backdrop_for(session: &mut Session, model: &Model, w: usize, h: usize) -> Result<Rgba8, String> {
+    let Some(id) = model.backdrop.image else { return Ok(backdrop(model, w, h)) };
+    let job = session.export_job(PhotoId(id), w, h, OutputSpace::Srgb, OutputDepth::U8)?;
+    let photo = job.run().rendered?.image;
+    Ok(cover(&photo, w, h))
+}
+
 /// A plain backdrop: solid, or a vertical gradient from the colour to `gradient_to`.
 pub fn backdrop(model: &Model, w: usize, h: usize) -> Rgba8 {
     let top = model.backdrop.color;
@@ -421,7 +462,7 @@ pub fn backdrop(model: &Model, w: usize, h: usize) -> Rgba8 {
 
 /// One slide at `w` × `h`, settled (no fade applied).
 pub fn render_slide(session: &mut Session, model: &Model, slide: Slide, w: usize, h: usize) -> Result<Rgba8, String> {
-    let mut img = backdrop(model, w, h);
+    let mut img = backdrop_for(session, model, w, h)?;
     match slide {
         Slide::Photo(id) => {
             place_photo(session, model, id, &mut img)?;
@@ -459,7 +500,7 @@ pub fn render_frame(session: &mut Session, model: &Model, timeline: &Timeline, t
     }
     let from = match frame.previous.and_then(|p| timeline.slide(p)) {
         Some(prev) => render_slide(session, model, prev, w, h)?,
-        None => backdrop(model, w, h),
+        None => backdrop_for(session, model, w, h)?,
     };
     Ok(Some((frame, blend(&from, &current, frame.alpha))))
 }
@@ -709,10 +750,76 @@ mod tests {
         assert_eq!(partial.backdrop.color, [9, 9, 9]);
         assert_eq!(partial.backdrop.gradient_to, None);
         assert_eq!(partial.layout, Layout::default());
+        // the newer settings default off, auto-advance on, no music
+        assert!(!partial.layout.guides);
+        assert_eq!(partial.backdrop.image, None);
+        assert!(partial.playback.auto);
+        assert!(partial.music.path.is_empty());
         // camelCase on disk
         let v = serde_json::to_value(&partial).unwrap();
         assert!(v["playback"].get("slideSeconds").is_some());
         assert!(v["layout"].get("margin").is_some());
+        assert!(v["backdrop"].get("gradientTo").is_some());
+        assert!(v["music"].get("path").is_some());
+    }
+
+    #[test]
+    fn backdrop_colour_fills_the_corners_and_washes_to_the_second_colour() {
+        let mut s = Session::with_demo();
+        let id = s.catalog.photos().next().unwrap().id;
+        let mut m = Model::default();
+        m.backdrop.color = [12, 200, 40];
+        m.layout.margin = 0.1;
+        let img = render_slide(&mut s, &m, Slide::Photo(id), 480, 270).unwrap();
+        // the photo sits inside the margins, so the corners show the backdrop colour
+        assert_eq!(img.data[0], [12, 200, 40, 255], "top-left corner");
+        assert_eq!(img.data[img.data.len() - 1], [12, 200, 40, 255], "bottom-right corner");
+        // a colour wash runs from the first colour at the top to the second at the bottom
+        let wash = Model { backdrop: Backdrop { color: [0, 0, 0], gradient_to: Some([200, 100, 0]), ..Backdrop::default() }, ..Model::default() };
+        let strip = backdrop(&wash, 1, 5);
+        assert_eq!(strip.data[0], [0, 0, 0, 255]);
+        assert_eq!(strip.data[4], [200, 100, 0, 255]);
+    }
+
+    #[test]
+    fn backdrop_photo_covers_the_frame_instead_of_the_colour() {
+        let mut s = Session::with_demo();
+        let id = s.catalog.photos().next().unwrap().id;
+        let mut m = Model::default();
+        m.backdrop.color = [1, 2, 3];
+        m.backdrop.image = Some(id.0);
+        let img = backdrop_for(&mut s, &m, 64, 36).unwrap();
+        assert_eq!((img.width, img.height), (64, 36));
+        assert!(img.data.iter().any(|p| *p != [1, 2, 3, 255]), "the photo is drawn");
+        // with no image, the colour backdrop is used
+        m.backdrop.image = None;
+        assert_eq!(backdrop_for(&mut s, &m, 64, 36).unwrap(), backdrop(&m, 64, 36));
+    }
+
+    #[test]
+    fn cover_crops_the_overflow_from_both_sides() {
+        // left half red, right half blue, cover a square: the sides are cropped, the halves survive
+        let mut src = Rgba8::filled(4, 2, [0, 0, 0, 255]);
+        for y in 0..2 {
+            for x in 0..4 {
+                src.data[y * 4 + x] = if x < 2 { [255, 0, 0, 255] } else { [0, 0, 255, 255] };
+            }
+        }
+        let out = cover(&src, 2, 2);
+        assert_eq!(out.data[0], [255, 0, 0, 255]);
+        assert_eq!(out.data[1], [0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn music_fits_the_slides_to_the_track() {
+        // 30 s of music, one 2 s title screen, 8 photos: (30 - 2) / 8 = 3.5 s each
+        assert_eq!(fit_slide_seconds(30.0, 8, 2.0, 1).unwrap(), 3.5);
+        assert_eq!(fit_slide_seconds(12.0, 3, 0.0, 0).unwrap(), 4.0);
+        // refused: no photos, a track the photos cannot fill at 0.5–60 s each, or a title longer than the track
+        assert!(fit_slide_seconds(30.0, 0, 2.0, 1).is_err());
+        assert!(fit_slide_seconds(1.0, 8, 2.0, 1).is_err(), "titles alone are longer");
+        assert!(fit_slide_seconds(1000.0, 8, 2.0, 0).is_err(), "over 60 s each");
+        assert!(fit_slide_seconds(f64::NAN, 8, 0.0, 0).is_err());
     }
 
     #[test]

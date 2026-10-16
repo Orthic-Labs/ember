@@ -4668,6 +4668,7 @@ name = "lightcraft-engine"
 version = "0.7.0"
 dependencies = [
  "ab_glyph",
+ "base64 0.23.1",
  "harfrust 0.14.0",
  "jxl-oxide",
  "libc",
