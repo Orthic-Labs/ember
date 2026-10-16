@@ -691,13 +691,22 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     let before = opts.format;
                     // "Rendered DNG" is a DNG option (below), not a format of its own in this list
                     let mut shown = if opts.format == F::RenderedDng { F::Dng } else { opts.format };
-                    choices(
-                        ui,
-                        "Format",
-                        "exportFormat",
-                        &[(F::Jpeg, "JPEG"), (F::Png, "PNG"), (F::Tiff, "TIFF"), (F::Psd, "PSD"), (F::Webp, "WebP"), (F::Avif, "AVIF"), (F::Jxl, "JPEG XL"), (F::Dng, "DNG"), (F::Original, "Original files")],
-                        &mut shown,
-                    );
+                    // AVIF is native only (its encoder is compiled out on wasm32), so the browser build doesn't offer it
+                    let formats: Vec<(F, &str)> = [
+                        (F::Jpeg, "JPEG"),
+                        (F::Png, "PNG"),
+                        (F::Tiff, "TIFF"),
+                        (F::Psd, "PSD"),
+                        (F::Webp, "WebP"),
+                        (F::Avif, "AVIF"),
+                        (F::Jxl, "JPEG XL"),
+                        (F::Dng, "DNG"),
+                        (F::Original, "Original files"),
+                    ]
+                    .into_iter()
+                    .filter(|(f, _)| *f != F::Avif || !cfg!(target_arch = "wasm32"))
+                    .collect();
+                    choices(ui, "Format", "exportFormat", &formats, &mut shown);
                     if shown != opts.format && !(shown == F::Dng && opts.format == F::RenderedDng) {
                         opts.format = shown;
                     }

@@ -178,7 +178,8 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
   storage until the site's data is cleared; backups larger than 4 GB need zip64, which isn't
   written yet.
 - **Control channel / MCP.** These are desktop-only, because they need a TCP socket.
-- **AVIF export** is untested in the browser; it's the one encoder that may not be wasm-safe.
+- **AVIF export** is native only: its encoder (`ravif`, `rav1e`) is compiled out on wasm32, so the browser
+  build doesn't offer the format in the export dialog (issue #196).
 - **JPEG XL export** is native only: the encoder (`jixel`) starts threads of its own, which wasm32 has not got; the
   web build reports "not available in this build". JPEG XL import works.
 
