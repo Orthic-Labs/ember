@@ -82,12 +82,15 @@ fn set_private(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"id": id.0, "private": private}))
 }
 
-/// `location.delete`: `{id}`; undo brings the location back as it was.
+/// `location.delete`: `{id}`; undo brings the location back as it was. A filter by it is cleared.
 fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "location.delete";
     let id = location_id(p, C)?;
     existing(s, id, C)?;
     s.commit("Delete Saved Location", Op::SetSavedLocation { id, location: None })?;
+    if s.filter.saved_location == Some(id) {
+        s.filter.saved_location = None;
+    }
     Ok(json!({"id": id.0}))
 }
 
@@ -104,10 +107,26 @@ pub fn specs() -> Vec<CommandSpec> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lightcraft_catalog::PhotoId;
 
     fn add_home(s: &mut Session, private: bool) -> u64 {
         let r = s.execute("location.add", &json!({"name": " Home ", "lat": 43.0, "lon": -110.0, "radiusM": 500.0, "private": private})).unwrap();
         r["id"].as_u64().unwrap()
+    }
+
+    /// The photos the library shows under `filter` (a partial Filter), in id order.
+    fn shown(s: &mut Session, filter: Value) -> Vec<PhotoId> {
+        s.execute("library.filter", &filter).unwrap();
+        let mut ids = s.visible_cloned();
+        ids.sort();
+        ids
+    }
+
+    fn put(s: &mut Session, id: PhotoId, gps: Option<(f64, f64)>, city: &str) {
+        let mut meta = s.catalog.photo(id).unwrap().meta.clone();
+        meta.gps = gps;
+        meta.city = city.into();
+        s.commit("test", Op::SetMeta { id, meta: Box::new(meta) }).unwrap();
     }
 
     fn list_names(s: &mut Session) -> Vec<(String, u64)> {
@@ -164,5 +183,35 @@ mod tests {
         add_home(&mut s, false);
         // 0.001 degrees of latitude is about 111 m: inside the 500 m circle
         assert_eq!(list_names(&mut s), vec![("Home".to_string(), 2)]);
+    }
+
+    #[test]
+    fn the_location_filter_selects_the_photos_inside_the_circle_and_the_gps_and_place_filters() {
+        let mut s = Session::with_demo();
+        let ids = s.visible_cloned();
+        let (a, b, c, d) = (ids[0], ids[1], ids[2], ids[3]);
+        put(&mut s, a, Some((43.0, -110.0)), "");
+        put(&mut s, b, Some((43.002, -110.0)), "Jackson");
+        put(&mut s, c, Some((50.0, 8.0)), "");
+        put(&mut s, d, None, "Paris");
+        let home = LocationId(add_home(&mut s, false));
+        let mut inside = vec![a, b];
+        inside.sort();
+        assert_eq!(shown(&mut s, json!({"savedLocation": home.0})), inside, "the photos inside the circle, and only those");
+        let with_gps = shown(&mut s, json!({"hasGps": true}));
+        assert!(with_gps.contains(&a) && with_gps.contains(&b) && with_gps.contains(&c) && !with_gps.contains(&d));
+        let without_gps = shown(&mut s, json!({"hasGps": false}));
+        assert!(without_gps.contains(&d) && !without_gps.contains(&a), "a photo with no GPS shows under No GPS");
+        let named = shown(&mut s, json!({"namedPlace": true}));
+        assert!(named.contains(&b) && named.contains(&d) && !named.contains(&a) && !named.contains(&c));
+        assert!(shown(&mut s, json!({"namedPlace": false})).contains(&a));
+        // the filters combine: a place name inside the circle
+        assert_eq!(shown(&mut s, json!({"savedLocation": home.0, "namedPlace": true})), vec![b]);
+        // a location that does not exist is refused, and the filter is left as it was
+        assert!(s.execute("library.filter", &json!({"savedLocation": 999})).is_err());
+        assert_eq!(shown(&mut s, json!({"savedLocation": home.0, "namedPlace": true})), vec![b]);
+        // deleting the location clears the filter that named it
+        s.execute("location.delete", &json!({"id": home.0})).unwrap();
+        assert_eq!(s.filter.saved_location, None);
     }
 }

@@ -4,7 +4,8 @@ use std::cmp::Ordering::Equal;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{AlbumId, Catalog, ColorLabel, Flag, MediaKind, Photo, PhotoId};
+use crate::locations::has_place_name;
+use crate::{AlbumId, Catalog, ColorLabel, Flag, LocationId, MediaKind, Photo, PhotoId};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +64,13 @@ pub struct Filter {
     /// A folder on disk: its files only (browsed ones too); `subfolders` includes everything below.
     pub folder: Option<String>,
     pub subfolders: bool,
+    /// A saved location (see [`crate::locations`]): photos whose GPS position is inside its circle. Format version 10.
+    pub saved_location: Option<LocationId>,
+    /// Photos with a GPS position (`true`) or without one (`false`). Format version 10.
+    pub has_gps: Option<bool>,
+    /// Photos tagged with a place name (`true`: Sublocation, City, State or Country set) or without one (`false`).
+    /// Format version 10.
+    pub named_place: Option<bool>,
     /// Smart-album rules (all / any / none, nested groups; see [`crate::rules`]).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rule_set: Option<crate::RuleSet>,
@@ -217,6 +225,20 @@ impl Filter {
         if !self.text.trim().is_empty() {
             v.push(format!("“{}”", self.text.trim()));
         }
+        if let Some(id) = self.saved_location {
+            let name = cat.and_then(|c| c.saved_location(id)).map_or_else(|| format!("#{}", id.0), |l| l.name.clone());
+            v.push(format!("location {name}"));
+        }
+        match self.has_gps {
+            Some(true) => v.push("with GPS".into()),
+            Some(false) => v.push("without GPS".into()),
+            None => {}
+        }
+        match self.named_place {
+            Some(true) => v.push("with a place name".into()),
+            Some(false) => v.push("without a place name".into()),
+            None => {}
+        }
         if let Some(rs) = self.rule_set.as_ref().filter(|r| !r.rules.is_empty()) {
             v.push(cat.map_or_else(|| rs.describe(), |c| rs.describe_with(c)));
         }
@@ -355,6 +377,15 @@ impl Filter {
         if let Some(c) = &self.camera
             && !p.meta.camera.eq_ignore_ascii_case(c)
         {
+            return false;
+        }
+        if let Some(id) = self.saved_location {
+            let inside = cat.saved_location(id).is_some_and(|l| p.meta.gps.is_some_and(|gps| l.contains(gps)));
+            if !inside {
+                return false;
+            }
+        }
+        if self.has_gps.is_some_and(|want| want != p.meta.gps.is_some()) || self.named_place.is_some_and(|want| want != has_place_name(p)) {
             return false;
         }
         self.text.split_whitespace().all(|tok| token_matches(p, tok))

@@ -435,7 +435,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Filter",
             [],
             None,
-            "partial Filter: {text?, rating?, ratingOp?: atLeast|exactly|atMost, flag?: pick|reject|none|null, label?, kind?, merged?: hdr|panorama|hdrPanorama|any, edited?, date?, libraryFolder?: a path from library.folders, keyword?, person?, camera?}",
+            "partial Filter: {text?, rating?, ratingOp?: atLeast|exactly|atMost, flag?: pick|reject|none|null, label?, kind?, merged?: hdr|panorama|hdrPanorama|any, edited?, date?, libraryFolder?: a path from library.folders, keyword?, person?, camera?, savedLocation?: an id from location.list, hasGps?: bool (GPS position or none), namedPlace?: bool (a place name or none)}",
             always,
             |s, p| {
                 let mut v = serde_json::to_value(&s.filter).unwrap_or_default();
@@ -452,6 +452,9 @@ pub fn specs() -> Vec<CommandSpec> {
                 // (their album was deleted) don't block other filter changes.
                 if let Some(rules) = f.rule_set.as_mut() {
                     rules.upgrade();
+                }
+                if let Some(id) = f.saved_location && s.catalog.saved_location(id).is_none() {
+                    return Err(bad("library.filter", format!("no saved location {}", id.0)));
                 }
                 let sets_rules = p.get("ruleSet").is_some_and(|r| !r.is_null());
                 if let Some(problems) = f.rule_set.as_ref().filter(|_| sets_rules).map(|rs| rs.check(&s.catalog)).filter(|p| !p.is_empty()) {

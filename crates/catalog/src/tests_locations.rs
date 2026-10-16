@@ -157,3 +157,32 @@ fn a_library_saved_before_locations_opens_with_none() {
     let back = Catalog::from_snapshot(&c.to_snapshot()).unwrap();
     assert_eq!(back.saved_locations().count(), 0);
 }
+
+#[test]
+fn the_location_filter_selects_the_photos_inside_the_circle_and_by_gps_or_place_name() {
+    let mut c = Catalog::new();
+    let inside = photo_at(&mut c, "in.jpg", Some(HOME));
+    let edge_gps = (HOME.0 + (1000.0 / EARTH_RADIUS_M).to_degrees(), HOME.1);
+    let on_edge = photo_at(&mut c, "edge.jpg", Some(edge_gps));
+    let away = photo_at(&mut c, "away.jpg", Some((44.0, -110.0)));
+    let no_gps = photo_at(&mut c, "none.jpg", None);
+    let mut meta = c.photo(no_gps).unwrap().meta.clone();
+    meta.city = "Paris".into();
+    c.apply(Op::SetMeta { id: no_gps, meta: Box::new(meta) }).unwrap();
+    let id = c.alloc_location_id();
+    let d = distance_m(HOME, edge_gps);
+    c.apply(Op::SetSavedLocation { id, location: Some(SavedLocation { name: "Home".into(), lat: HOME.0, lon: HOME.1, radius_m: d, private: false }) })
+        .unwrap();
+    let shown = |f: Filter| {
+        let mut ids = c.query(&f, &Sort::default());
+        ids.sort();
+        ids
+    };
+    let mut both = vec![inside, on_edge];
+    both.sort();
+    assert_eq!(shown(Filter { saved_location: Some(id), ..Default::default() }), both);
+    assert_eq!(shown(Filter { has_gps: Some(false), ..Default::default() }), vec![no_gps]);
+    assert_eq!(shown(Filter { named_place: Some(true), ..Default::default() }), vec![no_gps]);
+    assert!(shown(Filter { has_gps: Some(true), ..Default::default() }).contains(&away));
+    assert!(!shown(Filter { named_place: Some(true), ..Default::default() }).contains(&away));
+}

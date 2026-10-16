@@ -197,6 +197,20 @@ pub fn filter_chips(f: &Filter, cat: &Catalog) -> Vec<FilterChip> {
     if let Some(d) = &f.date {
         add(format!("Date: {}", date_label(d)), json!({"date": Null}));
     }
+    if let Some(id) = f.saved_location {
+        let name = cat.saved_location(id).map_or_else(|| "deleted location".to_string(), |l| l.name.clone());
+        add(format!("Location: {name}"), json!({"savedLocation": Null}));
+    }
+    match f.has_gps {
+        Some(true) => add("With GPS".into(), json!({"hasGps": Null})),
+        Some(false) => add("No GPS".into(), json!({"hasGps": Null})),
+        None => {}
+    }
+    match f.named_place {
+        Some(true) => add("With a place name".into(), json!({"namedPlace": Null})),
+        Some(false) => add("Without a place name".into(), json!({"namedPlace": Null})),
+        None => {}
+    }
     if let Some(d) = f.library_folder.as_deref().filter(|d| !d.trim().is_empty()) {
         // the last two names, so two folders called "Pictures" are told apart
         let name = lightcraft_catalog::folders::folder_label(d);

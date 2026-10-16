@@ -60,7 +60,7 @@ fn picker(app: &mut LightcraftApp, ui: &mut egui::Ui, id: &str, current: &str, a
     let r = crate::widgets::dropdown(
         ui,
         &format!("filter-{id}"),
-        if active && matches!(id, "camera" | "lens" | "keyword") { current } else { crate::i18n::tr(current) },
+        if active && matches!(id, "camera" | "lens" | "keyword" | "location") { current } else { crate::i18n::tr(current) },
         t.font(12.5),
         if active { t.text } else { t.text_label },
     );
@@ -264,6 +264,36 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         let shown = if shown.chars().count() > 22 { format!("{}…", shown.chars().take(21).collect::<String>()) } else { shown };
         picker(app, ui, id, &shown, current.is_some(), items);
     }
+
+    // location: a saved location (photos inside its circle), or whether photos have GPS / a place name
+    let saved: Vec<(lightcraft_catalog::LocationId, String)> =
+        app.session.catalog.saved_locations().map(|(id, l)| (id, l.name.clone())).collect();
+    let location_name = f.saved_location.and_then(|id| saved.iter().find(|(l, _)| *l == id).map(|(_, name)| name.clone()));
+    let (location_shown, location_active) = match (location_name, f.has_gps, f.named_place) {
+        (Some(name), _, _) if name.chars().count() > 22 => (format!("{}…", name.chars().take(21).collect::<String>()), true),
+        (Some(name), _, _) => (name, true),
+        (None, Some(true), _) => ("Has GPS".to_string(), true),
+        (None, Some(false), _) => ("No GPS".to_string(), true),
+        (None, None, Some(true)) => ("Has a place name".to_string(), true),
+        (None, None, Some(false)) => ("No place name".to_string(), true),
+        (None, None, None) => ("Location".to_string(), false),
+    };
+    let mut location_items = vec![("Any location".to_string(), json!({"savedLocation": null, "hasGps": null, "namedPlace": null}), !location_active)];
+    location_items.extend(
+        saved
+            .iter()
+            .map(|(id, name)| (name.clone(), json!({"savedLocation": id.0, "hasGps": null, "namedPlace": null}), f.saved_location == Some(*id))),
+    );
+    location_items.extend(
+        [
+            ("Has GPS", json!({"savedLocation": null, "hasGps": true, "namedPlace": null}), f.has_gps == Some(true)),
+            ("No GPS", json!({"savedLocation": null, "hasGps": false, "namedPlace": null}), f.has_gps == Some(false)),
+            ("Has a place name", json!({"savedLocation": null, "hasGps": null, "namedPlace": true}), f.named_place == Some(true)),
+            ("No place name", json!({"savedLocation": null, "hasGps": null, "namedPlace": false}), f.named_place == Some(false)),
+        ]
+        .map(|(label, patch, selected)| (label.to_string(), patch, selected)),
+    );
+    picker(app, ui, "location", &location_shown, location_active, location_items);
 
     // describe: natural-language search over keywords, people, places and captions (local, offline)
     let describe_id = egui::Id::new("filterbar:describe");
