@@ -424,6 +424,8 @@ struct WebApp {
     first_frame_logged: bool,
     last_save: f64,
     ui_written: Vec<u8>,
+    /// Replies to [`command`] calls whose writes are still on their way to browser storage.
+    held: Vec<(serde_json::Value, Reply)>,
 }
 
 impl WebApp {
@@ -516,6 +518,7 @@ impl WebApp {
             first_frame_logged: false,
             last_save: 0.0,
             ui_written,
+            held: Vec::new(),
         }
     }
 
@@ -683,9 +686,44 @@ impl WebApp {
         for (id, params, (resolve, reject)) in inbox {
             let params: serde_json::Value = serde_json::from_str(&params).unwrap_or(json!({}));
             let r = if id == "web.stats" { Ok(self.web_stats()) } else { self.app.run(&id, params) };
-            let _ = match r {
-                Ok(v) => resolve.call1(&JsValue::NULL, &v.to_string().into()),
-                Err(e) => reject.call1(&JsValue::NULL, &e.into()),
+            match r {
+                // the caller learns the outcome only once its writes are in browser storage
+                Ok(v) if self.must_wait_for_storage() => self.held.push((v, (resolve, reject))),
+                Ok(v) => {
+                    let _ = resolve.call1(&JsValue::NULL, &v.to_string().into());
+                }
+                Err(e) => {
+                    let _ = reject.call1(&JsValue::NULL, &e.into());
+                }
+            }
+        }
+    }
+
+    /// Whether a command's reply has to wait for its writes: there is storage to write to, the
+    /// library is not frozen, and something is dirty or being flushed.
+    fn must_wait_for_storage(&self) -> bool {
+        self.backend.is_some() && !self.frozen.get() && (self.files.is_dirty() || self.flushing.get())
+    }
+
+    /// Resolve the held [`command`] replies once their writes are flushed; reject them if browser
+    /// storage refused the write (the change is in memory only and says so). Polls while waiting.
+    fn release_held(&mut self, ctx: &egui::Context) {
+        if self.held.is_empty() {
+            return;
+        }
+        if self.flushing.get() || (self.files.error().is_none() && self.files.is_dirty()) {
+            // a flush is running, or the next one starts in `save` this frame
+            ctx.request_repaint_after(std::time::Duration::from_millis(16));
+            return;
+        }
+        let error = self.files.error();
+        for (v, (resolve, reject)) in std::mem::take(&mut self.held) {
+            let _ = match &error {
+                None => resolve.call1(&JsValue::NULL, &v.to_string().into()),
+                Some(e) => reject.call1(
+                    &JsValue::NULL,
+                    &format!("the command ran, but browser storage refused its write, so it is not saved: {e}").into(),
+                ),
             };
         }
     }
@@ -708,6 +746,7 @@ impl eframe::App for WebApp {
         }
         self.app.logic(ctx);
         self.save();
+        self.release_held(ctx);
         if let Some(b) = self.bench.as_mut()
             && let Some(report) = b.step(&mut self.app)
         {

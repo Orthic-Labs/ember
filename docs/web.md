@@ -156,16 +156,21 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
   (`preset.export` with `content`). `.cube` LUT profiles and point-curve presets aren't wired to
   the browser picker yet.
 - **Automation.** `await lightcraft.command("library.info", "{}")` runs any engine or UI command
-  by id on the next frame and resolves to the JSON result (`web.stats` reports storage, workers
-  and the render queue). This is how the headless-Chrome checks drive the page.
+  by id on the next frame and resolves to the JSON result once the command's writes are in browser
+  storage (or rejects if storage refused them; no storage, `?store=memory`, resolves at once).
+  `web.stats` reports storage, workers and the render queue. This is how the headless-Chrome
+  checks drive the page.
 
 ## Not yet
 
 - **Exports and auto-adjustments run on the main thread** (they need the original's pixels
   there). Right after a reload, the first such command on a photo whose original isn't in memory
   yet fails with "still loading" and works a moment later.
-- **Durability is "a frame later", not fsync-before-return:** a crash or tab kill in the few
-  milliseconds between a command and its flush loses that command.
+- **Durability is "a frame later" for user actions:** a click or key command is written to browser
+  storage a few milliseconds after it runs (one flush), so a crash or tab kill in that window loses
+  it. The automation API is durable before it returns: `command()` (see *Automation*) resolves only
+  once its writes reached storage, and rejects, saying the change is not saved, if storage refused
+  them. A kill check for the user path is still to do (issue #193 stays open for it).
 - **Data-safety gaps still open** (issue #107): a panic in a decoder still ends the page (and a
   photo that panics while its thumbnail renders can do so again after a reload; there is no
   `?safe` start that skips rendering yet); removing photos doesn't delete their stored originals
