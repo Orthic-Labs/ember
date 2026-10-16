@@ -4572,7 +4572,6 @@ dependencies = [
  "png 0.18.1",
  "rfd",
  "rightkit-qa",
- "rightkit-qa-driver",
  "rightkit-tauri-shell",
  "serde",
  "serde_json",
@@ -6983,6 +6982,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
 
 [[package]]
+name = "rightkit-automation"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "092b0fb723bdd4e5aced4ec9396d4c8282992f11b05cc862c0bac7d192aea8b9"
+dependencies = [
+ "windows 0.62.2",
+]
+
+[[package]]
 name = "rightkit-child-process"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7019,34 +7027,24 @@ dependencies = [
 
 [[package]]
 name = "rightkit-qa"
-version = "0.4.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1c82c2edd359746be7df7b56156490c1bb2e564c85c735fbded3270c7f16e6f"
+checksum = "7dfe6443e77655c2e7c75901352dd47975759bf5e2eab524353781d6f531ee6b"
 dependencies = [
  "getrandom 0.3.4",
  "png 0.18.1",
+ "rightkit-automation",
  "rightkit-child-process",
  "rightkit-daemon",
  "rightkit-fs",
- "rightkit-qa-driver",
  "rightkit-sidecar",
  "serde",
  "serde_json",
- "toml 0.8.2",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "rightkit-qa-driver"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa04b94dbf995e35dcfe8678404c7e62a4d798167d6b316cb696483b1f414f46"
-dependencies = [
- "rightkit-daemon",
- "serde_json",
  "tauri",
+ "toml 0.8.2",
  "webview2-com",
  "windows 0.62.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
