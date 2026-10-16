@@ -89,6 +89,14 @@ pub const CLASSIC_KEYS: &[(&str, &str)] = &[
     ("Shift+M", "tool.radial"),
     ("Shift+J", "view.clipping"),
     ("Shift+Q", "view.visualizeSpots"),
+    // Q: Spot Removal, the Remove panel (the primary keymap has it on H)
+    ("Q", "panel.remove"),
+    // ⌘⌥1–7 switch modules: Library, Develop, Map, Slideshow, Print. Book (⌘⌥4) and Web (⌘⌥7) have no module yet.
+    ("Cmd+Alt+1", "view.photoGrid"),
+    ("Cmd+Alt+2", "view.detail"),
+    ("Cmd+Alt+3", "map.view"),
+    ("Cmd+Alt+5", "slideshow.view"),
+    ("Cmd+Alt+6", "print.view"),
 ];
 
 /// Commands other than `id` whose shortcut is the key `sc` (contextual partners excepted).
@@ -1431,3 +1439,7 @@ mod tests {
 #[cfg(test)]
 #[path = "shortcuts/tests_relative_ratings.rs"]
 mod relative_rating_tests;
+
+#[cfg(test)]
+#[path = "shortcuts/tests_classic_keys.rs"]
+mod classic_key_tests;
