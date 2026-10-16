@@ -362,10 +362,10 @@ fn fill_box(src: &mut [[f32; 3]], tgt: &[[f32; 3]], alpha: &[f32], bw: usize, bh
     for y in 0..bh {
         for x in 0..bw {
             let i = y * bw + x;
-            if hole[i] {
-                if let Some(d) = src.get_mut(i) {
-                    *d = sample_low(&out, lw, lh, k, x, y);
-                }
+            if hole.get(i).copied().unwrap_or(false)
+                && let Some(d) = src.get_mut(i)
+            {
+                *d = sample_low(&out, lw, lh, k, x, y);
             }
         }
     }
@@ -662,7 +662,7 @@ mod tests {
         }
         assert!(n > 100);
         // a plain heal from one source or a flat fill would sit near 0.25 here; the texture is 0.5 apart
-        assert!(err / n as f32 < 0.15, "mean error {}", err / n as f32);
+        assert!(err / (n as f32) < 0.15, "mean error {}", err / n as f32);
         assert!(img.data.iter().flatten().all(|v| v.is_finite()));
     }
 
