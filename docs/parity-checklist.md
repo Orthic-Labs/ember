@@ -471,7 +471,7 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 
 | Id | Feature | Tier | Status | Evidence | Missing / notes |
 |---|---|---|---|---|---|
-| LR-MAP-INFO | Location in the info panel | P1 | 🟡 | `cmd:photo.setMeta` (`location`, `city`, `state`, `country`, `gps`), `crates/ui-egui/src/panels/right.rs` | location, city, state/province, country and GPS editable; Show on Map (OpenStreetMap in the browser); no map in the panel [#82](https://github.com/Orthic-Labs/ember/issues/82) |
+| LR-MAP-INFO | Location in the info panel | P1 | ✅ | `cmd:photo.setMeta` (`location`, `city`, `state`, `country`, `gps`), `cmd:photo.showOnMap`, `crates/ui-egui/src/panels/right.rs`, `crates/ui-egui/src/location.rs` | location, city, state/province, country and GPS editable; Show on Map (OpenStreetMap in the browser); no map in the panel [#82](https://github.com/Orthic-Labs/ember/issues/82) |
 | LR-MAP-MODULE | Map module [Classic] | P2 | ⬜ | | [#83](https://github.com/Orthic-Labs/ember/issues/83) |
 
 ## V. Preferences (PREF)

@@ -663,11 +663,9 @@ fn info(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
                 if text_button(ui, "showOnMap", crate::i18n::tr("Show on Map"), false)
                     .on_hover_text(crate::i18n::tr("Open the place in OpenStreetMap"))
                     .clicked()
+                    && let Err(e) = app.run("photo.showOnMap", json!({}))
                 {
-                    let url = format!("https://www.openstreetmap.org/?mlat={la:.6}&mlon={lo:.6}#map=15/{la:.6}/{lo:.6}");
-                    if let Err(e) = crate::links::open(app, &url) {
-                        app.toast(ui.ctx(), e);
-                    }
+                    app.toast(ui.ctx(), e);
                 }
             });
             if text_button(ui, "fillLocation", crate::i18n::tr("Fill Location"), false)
