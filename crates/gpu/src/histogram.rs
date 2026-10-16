@@ -73,10 +73,9 @@ mod tests {
         let Some(gpu) = crate::device() else { return };
         let _scope = crate::ctx::RenderScope::new(gpu);
         // small frames sample every pixel (stride 1); the large one samples every second pixel
-        for (w, h, windows) in [
-            (301, 207, vec![(0, 0, 301, 207), (17, 9, 240, 150), (300, 206, 1, 1)]),
-            (1201, 1003, vec![(0, 0, 1201, 1003), (5, 3, 1100, 990)]),
-        ] {
+        for (w, h, windows) in
+            [(301, 207, vec![(0, 0, 301, 207), (17, 9, 240, 150), (300, 206, 1, 1)]), (1201, 1003, vec![(0, 0, 1201, 1003), (5, 3, 1100, 990)])]
+        {
             let img = frame(w, h);
             let packed = words(&img);
             for window in windows {

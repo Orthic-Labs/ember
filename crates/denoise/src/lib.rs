@@ -23,9 +23,9 @@
 #[cfg(feature = "runtime")]
 pub mod cpu;
 
-pub mod net;
 #[cfg(feature = "nafnet")]
 pub mod naf;
+pub mod net;
 pub mod onnx;
 mod onnx_proto;
 

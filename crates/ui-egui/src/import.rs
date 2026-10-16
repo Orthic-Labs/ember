@@ -1158,7 +1158,10 @@ pub fn body(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &mut ImportDialog) {
             let tags_open = field(ui, "Template", |ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 let w = tag_field_width(ui);
-                crate::text_field::TextField::singleline("field:importFolderTemplate", &mut d.folder_template).hint(DEFAULT_FOLDER_TEMPLATE).width(w).show(ui);
+                crate::text_field::TextField::singleline("field:importFolderTemplate", &mut d.folder_template)
+                    .hint(DEFAULT_FOLDER_TEMPLATE)
+                    .width(w)
+                    .show(ui);
                 tag_toggle(ui, "importFolders")
             });
             if tags_open {
@@ -1304,7 +1307,10 @@ pub fn body(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &mut ImportDialog) {
         });
     }
     field(ui, "Keywords", |ui| {
-        crate::text_field::TextField::singleline("field:importKeywords", &mut d.keywords).hint(crate::i18n::tr("comma, separated")).width(f32::INFINITY).show(ui);
+        crate::text_field::TextField::singleline("field:importKeywords", &mut d.keywords)
+            .hint(crate::i18n::tr("comma, separated"))
+            .width(f32::INFINITY)
+            .show(ui);
     });
 }
 

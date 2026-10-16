@@ -1056,7 +1056,6 @@ fn preview_only_pill(ui: &mut egui::Ui, canvas: Rect, reason: &str) {
     ui.interact(r, egui::Id::new("preview-only-pill"), Sense::hover()).on_hover_text(crate::widgets::preview_only_explanation(reason));
 }
 
-
 /// Size of the Navigator mini map (points).
 const NAV_W: f32 = 180.0;
 

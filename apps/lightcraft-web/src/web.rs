@@ -835,10 +835,9 @@ impl WebApp {
         for (v, (resolve, reject)) in std::mem::take(&mut self.held) {
             let _ = match &error {
                 None => resolve.call1(&JsValue::NULL, &v.to_string().into()),
-                Some(e) => reject.call1(
-                    &JsValue::NULL,
-                    &format!("the command ran, but browser storage refused its write, so it is not saved: {e}").into(),
-                ),
+                Some(e) => {
+                    reject.call1(&JsValue::NULL, &format!("the command ran, but browser storage refused its write, so it is not saved: {e}").into())
+                }
             };
         }
     }

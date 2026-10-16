@@ -42,7 +42,14 @@ pub struct NafConfig {
 impl NafConfig {
     /// The width-16 class: channels 16, 32, 64, 128 and 256 in the middle; 2 190 947 parameters.
     pub fn width16() -> NafConfig {
-        NafConfig { in_channels: IN_CHANNELS, out_channels: OUT_CHANNELS, width: 16, middle_blocks: 3, enc_blocks: vec![1, 1, 1, 2], dec_blocks: vec![1, 1, 1, 1] }
+        NafConfig {
+            in_channels: IN_CHANNELS,
+            out_channels: OUT_CHANNELS,
+            width: 16,
+            middle_blocks: 3,
+            enc_blocks: vec![1, 1, 1, 2],
+            dec_blocks: vec![1, 1, 1, 1],
+        }
     }
 
     /// A few thousand parameters, for tests.
@@ -285,7 +292,11 @@ impl NafNet {
     pub fn infer(&self, input: &[f32], h: usize, w: usize, device: &Device) -> Result<Vec<f32>> {
         let want = self.cfg.in_channels * h * w;
         if h == 0 || w == 0 || input.len() != want {
-            return Err(Error::Data(format!("input has {} samples, a {h}x{w} image with {} channels needs {want}", input.len(), self.cfg.in_channels)));
+            return Err(Error::Data(format!(
+                "input has {} samples, a {h}x{w} image with {} channels needs {want}",
+                input.len(),
+                self.cfg.in_channels
+            )));
         }
         let x = Tensor::from_vec(input.to_vec(), (1, self.cfg.in_channels, h, w), device)?;
         let y = self.forward(&x)?.flatten_all()?;

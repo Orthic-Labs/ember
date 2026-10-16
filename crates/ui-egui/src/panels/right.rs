@@ -641,7 +641,11 @@ fn info(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
         let gid = egui::Id::new("info-gps");
         ui.label(egui::RichText::new("GPS").size(11.5).color(t.text_dim));
         let mut text: String = ui.data(|d| d.get_temp(gid)).unwrap_or_else(|| gps.clone());
-        let r = crate::text_field::TextField::singleline("field:gps", &mut text).hint(crate::i18n::tr("latitude, longitude")).width(f32::INFINITY).show(ui).response;
+        let r = crate::text_field::TextField::singleline("field:gps", &mut text)
+            .hint(crate::i18n::tr("latitude, longitude"))
+            .width(f32::INFINITY)
+            .show(ui)
+            .response;
         if r.has_focus() {
             ui.data_mut(|d| d.insert_temp(gid, text.clone()));
         } else {

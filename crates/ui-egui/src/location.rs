@@ -30,10 +30,7 @@ mod tests {
 
     #[test]
     fn map_url_centres_the_page_on_the_position() {
-        assert_eq!(
-            map_url(48.8566, 2.3522).unwrap(),
-            "https://www.openstreetmap.org/?mlat=48.856600&mlon=2.352200#map=15/48.856600/2.352200"
-        );
+        assert_eq!(map_url(48.8566, 2.3522).unwrap(), "https://www.openstreetmap.org/?mlat=48.856600&mlon=2.352200#map=15/48.856600/2.352200");
         assert!(map_url(-90.0, 180.0).is_ok());
     }
 

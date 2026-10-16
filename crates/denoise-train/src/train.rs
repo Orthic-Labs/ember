@@ -46,7 +46,9 @@ impl DeviceKind {
 }
 
 fn open_cuda() -> Result<Device> {
-    config("CUDA is not built in: the workspace lock carries no CUDA stack. Use --device cpu or metal, or add a local cuda feature on the training machine")
+    config(
+        "CUDA is not built in: the workspace lock carries no CUDA stack. Use --device cpu or metal, or add a local cuda feature on the training machine",
+    )
 }
 #[cfg(feature = "metal")]
 fn open_metal() -> Result<Device> {
@@ -363,7 +365,10 @@ pub fn train(manifest: &SplitManifest, cfg: &TrainConfig) -> Result<TrainSummary
         }
         let loss = train_step(&net, &mut opt, &examples, cfg.pair.patch, &device)?;
         if !loss.is_finite() {
-            return Err(Error::Diverged(format!("loss {loss} at step {step}; the last checkpoint in {} is the last good state", cfg.out_dir.display())));
+            return Err(Error::Diverged(format!(
+                "loss {loss} at step {step}; the last checkpoint in {} is the last good state",
+                cfg.out_dir.display()
+            )));
         }
         running += loss as f64;
         running_n += 1;
@@ -403,7 +408,13 @@ pub fn train(manifest: &SplitManifest, cfg: &TrainConfig) -> Result<TrainSummary
         }
     }
     save_atomic(&varmap, &cfg.out_dir.join("final.safetensors"))?;
-    Ok(TrainSummary { steps_run: cfg.steps - start, final_step: cfg.steps, best_val_loss: best, last_val_loss: last_val, out_dir: cfg.out_dir.clone() })
+    Ok(TrainSummary {
+        steps_run: cfg.steps - start,
+        final_step: cfg.steps,
+        best_val_loss: best,
+        last_val_loss: last_val,
+        out_dir: cfg.out_dir.clone(),
+    })
 }
 
 #[cfg(test)]

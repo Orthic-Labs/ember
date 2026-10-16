@@ -23,7 +23,10 @@ pub fn body(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
     let mut search: String = ui.data(|d| d.get_temp(search_id)).unwrap_or_default();
     let mut show_all: bool = ui.data(|d| d.get_temp(all_id)).unwrap_or(false);
     ui.horizontal(|ui| {
-        crate::text_field::TextField::singleline("field:shortcutsSearch", &mut search).hint(crate::i18n::tr("Search commands or keys")).width(220.0).show(ui);
+        crate::text_field::TextField::singleline("field:shortcutsSearch", &mut search)
+            .hint(crate::i18n::tr("Search commands or keys"))
+            .width(220.0)
+            .show(ui);
         let r = ui.checkbox(&mut show_all, crate::i18n::tr("Show commands without a shortcut"));
         register(ui.ctx(), "check:shortcuts.showAll", r.rect);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

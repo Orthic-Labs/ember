@@ -1117,9 +1117,7 @@ mod tests {
     fn feather_and_refine_do_not_depend_on_the_resolution() {
         for (feather, refine) in [(50.0, 0.0), (0.0, 60.0), (40.0, 40.0)] {
             let (small, big) = (ramp_row(150, feather, refine), ramp_row(300, feather, refine));
-            let worst = (0..150)
-                .map(|x| (small[x] - (big[2 * x] + big[2 * x + 1]) / 2.0).abs())
-                .fold(0.0f32, f32::max);
+            let worst = (0..150).map(|x| (small[x] - (big[2 * x] + big[2 * x + 1]) / 2.0).abs()).fold(0.0f32, f32::max);
             assert!(worst < 0.08, "feather {feather} refine {refine}: differs by {worst}");
         }
     }

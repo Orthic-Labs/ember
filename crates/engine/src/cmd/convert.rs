@@ -147,23 +147,26 @@ fn render_to_dng(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub fn specs() -> Vec<CommandSpec> {
-    vec![cmd!(
-        "photo.renderToDng",
-        "Render to DNG",
-        ["Photo"],
-        None,
-        "{ids?, colorSpace=prophoto|srgb|displayP3|adobeRgb|rec2020, hdr=false, dir? (demo photos)} — render each photo with its edits as a linear 16-bit float DNG next to the original, add it to the library and stack it on the original → {path, id, original, copies}",
-        has_selection,
-        render_to_dng
-    ), cmd!(
-        "photo.convertToDng",
-        "Convert to DNG",
-        ["Photo"],
-        None,
-        "{ids?} — write each raw photo as a lossless DNG next to it (settings embedded) and relink the photo to it; originals are kept → {converted: [{id, path, original}], skipped}",
-        has_selection,
-        convert
-    )]
+    vec![
+        cmd!(
+            "photo.renderToDng",
+            "Render to DNG",
+            ["Photo"],
+            None,
+            "{ids?, colorSpace=prophoto|srgb|displayP3|adobeRgb|rec2020, hdr=false, dir? (demo photos)} — render each photo with its edits as a linear 16-bit float DNG next to the original, add it to the library and stack it on the original → {path, id, original, copies}",
+            has_selection,
+            render_to_dng
+        ),
+        cmd!(
+            "photo.convertToDng",
+            "Convert to DNG",
+            ["Photo"],
+            None,
+            "{ids?} — write each raw photo as a lossless DNG next to it (settings embedded) and relink the photo to it; originals are kept → {converted: [{id, path, original}], skipped}",
+            has_selection,
+            convert
+        ),
+    ]
 }
 
 /// Edit in an external editor, the engine half: render the photo with its edits as a 16-bit

@@ -400,8 +400,7 @@ pub fn referenced_hashes(bytes: &[u8], out: &mut std::collections::HashSet<Strin
 /// Library folders (of `all`) to delete: every valid one except the active library and the one it
 /// replaced. Sorted, for stable logs.
 pub fn abandoned_libraries(all: &[String], active: &str, previous: Option<&str>) -> Vec<String> {
-    let mut out: Vec<String> =
-        all.iter().filter(|d| valid_library_dir(d) && d.as_str() != active && Some(d.as_str()) != previous).cloned().collect();
+    let mut out: Vec<String> = all.iter().filter(|d| valid_library_dir(d) && d.as_str() != active && Some(d.as_str()) != previous).cloned().collect();
     out.sort();
     out.dedup();
     out
@@ -582,9 +581,8 @@ mod tests {
 
     #[test]
     fn cleanup_keeps_the_active_and_previous_library_and_what_they_name() {
-        let all: Vec<String> = ["library", "library-restored-1", "library-restored-2", "library-restored-3", "originals", "library-../x"]
-            .map(String::from)
-            .to_vec();
+        let all: Vec<String> =
+            ["library", "library-restored-1", "library-restored-2", "library-restored-3", "originals", "library-../x"].map(String::from).to_vec();
         assert_eq!(abandoned_libraries(&all, "library-restored-3", Some("library-restored-2")), ["library", "library-restored-1"]);
         assert_eq!(abandoned_libraries(&all, "library", None), ["library-restored-1", "library-restored-2", "library-restored-3"]);
         let referenced: std::collections::HashSet<String> = ["a1".to_string()].into();

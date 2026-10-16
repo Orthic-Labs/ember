@@ -182,7 +182,8 @@ mod tests {
     use lightcraft_catalog::model::PhotoId;
 
     fn photo() -> Photo {
-        let mut p = Photo::new(PhotoId(1), Source::File { path: "/photos/2026/IMG_1.jpg".into() }, "IMG_1.jpg", "JPEG", 6000, 4000, "2026-10-01T08:00:00");
+        let mut p =
+            Photo::new(PhotoId(1), Source::File { path: "/photos/2026/IMG_1.jpg".into() }, "IMG_1.jpg", "JPEG", 6000, 4000, "2026-10-01T08:00:00");
         p.captured = Some("2026-10-16T09:30:00".into());
         p
     }

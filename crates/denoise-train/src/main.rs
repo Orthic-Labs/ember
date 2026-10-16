@@ -103,7 +103,13 @@ fn run(tokens: &[String]) -> Result<()> {
             let cfg = split_config(&mut a)?;
             a.finish()?;
             let m = build_manifest(&corpus, &cfg)?;
-            println!("train {} / val {} / heldout {} files ({} byte-identical duplicates dropped)", m.train.len(), m.val.len(), m.heldout.len(), m.duplicates.len());
+            println!(
+                "train {} / val {} / heldout {} files ({} byte-identical duplicates dropped)",
+                m.train.len(),
+                m.val.len(),
+                m.heldout.len(),
+                m.duplicates.len()
+            );
             m.verify_assignments()?;
             if let Err(e) = m.verify() {
                 println!("WARNING: {e}");

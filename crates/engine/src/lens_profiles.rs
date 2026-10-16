@@ -47,16 +47,38 @@ pub fn lookup(db: &LensDb, m: &lightcraft_meta::Metadata, w: f64, h: f64, orient
 /// The profile a lens picked by hand ([`LensOverride`]) gives the photo with metadata `m`: the same correction as
 /// [`lookup`], from that lens instead of the one the EXIF names. `None` when the database has no such lens, the
 /// photo has no focal length, or the profile has no usable correction at it.
-pub fn lookup_override(db: &LensDb, pick: &LensOverride, m: &lightcraft_meta::Metadata, w: f64, h: f64, orientation: lightcraft_geom::Orientation) -> Option<EmbeddedLens> {
+pub fn lookup_override(
+    db: &LensDb,
+    pick: &LensOverride,
+    m: &lightcraft_meta::Metadata,
+    w: f64,
+    h: f64,
+    orientation: lightcraft_geom::Orientation,
+) -> Option<EmbeddedLens> {
     let lens = db.find_exact(&pick.make, &pick.model)?;
     let camera = db.find_camera(m.make.as_deref().unwrap_or_default(), m.model.as_deref().unwrap_or_default());
     let focal = m.focal_length.filter(|f| f.is_finite() && *f > 0.0)?;
     correction(lens, camera, m, focal, w, h, orientation)
 }
 
-fn correction(lens: &Profile, camera: Option<&Camera>, m: &lightcraft_meta::Metadata, focal: f64, w: f64, h: f64, orientation: lightcraft_geom::Orientation) -> Option<EmbeddedLens> {
+fn correction(
+    lens: &Profile,
+    camera: Option<&Camera>,
+    m: &lightcraft_meta::Metadata,
+    focal: f64,
+    w: f64,
+    h: f64,
+    orientation: lightcraft_geom::Orientation,
+) -> Option<EmbeddedLens> {
     let crop = frame_crop_factor(camera.map(|c| c.crop_factor), focal, m.focal_length_35mm);
-    let shot = Shot { focal, aperture: m.f_number, distance: m.focus_distance.filter(|d| d.is_finite() && *d > 0.0), crop_factor: crop, width: w, height: h };
+    let shot = Shot {
+        focal,
+        aperture: m.f_number,
+        distance: m.focus_distance.filter(|d| d.is_finite() && *d > 0.0),
+        crop_factor: crop,
+        width: w,
+        height: h,
+    };
     let corr = lens.correction(&shot)?;
     Some(lightcraft_pipeline::optics::reorient_lens(&corr, orientation, w, h))
 }
@@ -202,7 +224,8 @@ mod tests {
               </lens></lensdatabase>"#,
         )
         .unwrap();
-        let at = |d: Option<f64>| lookup(&db, &lightcraft_meta::Metadata { focus_distance: d, ..meta() }, 6000.0, 4000.0, Orientation::Normal).unwrap();
+        let at =
+            |d: Option<f64>| lookup(&db, &lightcraft_meta::Metadata { focus_distance: d, ..meta() }, 6000.0, 4000.0, Orientation::Normal).unwrap();
         let far = at(None);
         let near = at(Some(0.55));
         assert_ne!(near, far, "a near focus differs from the farthest calibrated distance");
