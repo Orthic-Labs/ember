@@ -1,0 +1,28 @@
+[package]
+name = "lightcraft-av1dec"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Ember av1dec (L0): safe AV1 still-picture decoder over rav1d (BSD-2-Clause Rust port of dav1d). Allowed `unsafe` for the rav1d FFI calls only; the API is safe."
+
+# Opts out of the workspace lints only to keep `unsafe_code = "deny"` overridable for the single FFI
+# module (`native`); like `lightcraft-sysmem` this is an isolated helper crate (see CLAUDE.md and
+# craftrules standards/never-crash.md).
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+
+[dependencies]
+thiserror = { workspace = true }
+
+# rav1d has no safe public API (its `rav1d_*` functions are crate-private), so `native` calls its
+# C-ABI `dav1d_*` entry points. No `asm` feature: it needs nasm (non-Rust). wasm32 builds the stub.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rav1d = { workspace = true }
+
+[dev-dependencies]
+# Test streams: a tiny AVIF from the encoder Ember exports with; its `mdat` is the AV1 item.
+ravif = { workspace = true }
