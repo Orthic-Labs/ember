@@ -438,6 +438,30 @@ fn hdr_float_tiff_keeps_highlights_above_white() {
 }
 
 #[test]
+fn hdr_export_headroom_cap_clamps_exported_values() {
+    let o = ExportOptions::from_json(&json!({"longEdge": 240, "format": "tiff", "bitDepth": 32, "hdr": true, "hdrMaxEv": 0.2}));
+    assert_eq!(o.hdr_max_ev, Some(0.2));
+    assert_eq!(o.to_json()["hdrMaxEv"], 0.2, "the cap round trips");
+    assert_eq!(ExportOptions::from_json(&json!({"hdrMaxEv": 9})).hdr_max_ev, Some(5.0), "clamped to the 5 stop limit");
+    assert_eq!(ExportOptions::default().hdr_max_ev, None);
+    let mut s = Session::with_demo();
+    let id = sunset(&mut s);
+    s.execute("develop.hdr", &json!({"enabled": true, "maxEv": 2})).unwrap();
+    let max_of = |s: &mut Session, o: &ExportOptions| {
+        let e = export_photo(s, id, o, 1).unwrap();
+        let d = lightcraft_codecs::decode(&e.bytes, Default::default()).unwrap();
+        d.image.data.iter().flat_map(|p| p.iter().copied()).fold(0.0f32, f32::max)
+    };
+    let capped = max_of(&mut s, &o);
+    let uncapped = max_of(&mut s, &ExportOptions { hdr_max_ev: None, ..o.clone() });
+    assert!(capped <= 0.2f32.exp2() + 1e-3, "capped at 0.2 stops: {capped}");
+    assert!(uncapped > 1.2, "the edit's own headroom keeps its highlights: {uncapped}");
+    // a cap above the edit's limit changes nothing
+    let above = max_of(&mut s, &ExportOptions { hdr_max_ev: Some(4.0), ..o.clone() });
+    assert!((above - uncapped).abs() < 1e-4, "{above} vs {uncapped}");
+}
+
+#[test]
 fn hdr_avif_export_is_pq_rec2020() {
     let mut s = Session::with_demo();
     let id = sunset(&mut s);

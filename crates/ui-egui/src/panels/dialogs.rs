@@ -772,6 +772,20 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                         if opts.hdr && !opts.hdr_output() {
                             ui.label(egui::RichText::new("HDR TIFF needs 32-bit float.").color(t.text_dim));
                         }
+                        if opts.hdr {
+                            let mut cap = opts.hdr_max_ev.is_some();
+                            ui.horizontal(|ui| {
+                                ui.checkbox(&mut cap, "Limit HDR headroom").on_hover_text("Clamp highlights above this many stops over SDR white (the photo's own HDR headroom limit applies otherwise)");
+                                if cap {
+                                    let mut ev = opts.hdr_max_ev.unwrap_or(lightcraft_develop::Hdr::DEFAULT_MAX_EV);
+                                    ui.add(egui::DragValue::new(&mut ev).range(0.0..=lightcraft_develop::Hdr::MAX_EV_LIMIT).speed(0.05).suffix(" EV"));
+                                    opts.hdr_max_ev = Some(ev);
+                                }
+                            });
+                            if !cap {
+                                opts.hdr_max_ev = None;
+                            }
+                        }
                         if opts.hdr && opts.format == F::Avif {
                             use lightcraft_engine::export::HdrCurve as H;
                             choices(ui, "HDR curve", "exportHdrCurve", &[(H::Pq, "PQ"), (H::Hlg, "HLG")], &mut opts.hdr_transfer);
