@@ -33,6 +33,7 @@ pub mod region;
 pub mod render;
 pub mod shortcuts;
 pub mod sidebar;
+pub mod slideshow_view;
 pub mod softpaint;
 pub mod state;
 pub mod sync;
@@ -1320,6 +1321,13 @@ impl LightcraftApp {
         self.hover_preview = None;
         self.ai_mask_detail(&ctx);
         self.place_names_outcome(&ctx);
+        if self.ui.classic_slideshow.is_some() {
+            // Classic Slideshow playback: the frame alone on black, until it ends or Escape
+            egui::CentralPanel::default().frame(egui::Frame::NONE.fill(egui::Color32::BLACK)).show(ui, |ui| slideshow_view::show(self, &ctx, ui));
+            self.widgets = widgets::take_registry(&ctx);
+            self.end_frame(&ctx, t0);
+            return;
+        }
         if self.ui.fullscreen {
             // full-screen preview: the photo alone on black
             egui::CentralPanel::default().frame(egui::Frame::NONE.fill(egui::Color32::BLACK)).show(ui, |ui| panels::detail::show(self, ui));

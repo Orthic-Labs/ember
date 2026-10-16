@@ -155,6 +155,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("view.sidebarMoveSection", "Move Sidebar Section", None, ""),
     ("view.sidebarReset", "Reset Sidebar Sections", None, ""),
     ("view.slideshow", "Slideshow", Some("Cmd+Alt+Enter"), "View"),
+    ("slideshow.play", "Classic Slideshow", None, "View"),
     ("view.secondWindow", "Second Window", Some("Cmd+F11"), "Window"),
     ("tool.keywordPainter", "Keyword Painter", None, ""),
     ("view.gridInfo", "Grid Info", None, ""),
@@ -559,8 +560,18 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             app.toast(&ctx, if app.ui.auto_advance { "Auto Advance On" } else { "Auto Advance Off" });
             Ok(json!({"autoAdvance": app.ui.auto_advance}))
         }
+        "slideshow.play" => {
+            // Classic Slideshow: the selected photos (or the visible ones), full screen
+            let r = crate::slideshow_view::start(app, &ctx);
+            if r.is_ok() {
+                app.toast(&ctx, crate::i18n::tr("Classic slideshow · Space pauses · arrows step · Esc ends"));
+            }
+            r
+        }
         "view.back" => {
-            if app.ui.dialog.is_some() {
+            if app.ui.classic_slideshow.is_some() {
+                app.ui.classic_slideshow = None;
+            } else if app.ui.dialog.is_some() {
                 app.ui.dialog = None;
             } else if app.ui.lights_out != crate::state::LightsOut::On {
                 app.ui.lights_out = crate::state::LightsOut::On;

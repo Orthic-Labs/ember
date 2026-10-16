@@ -738,6 +738,9 @@ pub struct UiState {
     /// time), paused.
     #[serde(skip)]
     pub slideshow: Option<(f64, f64, bool)>,
+    /// A Classic Slideshow playback (`slideshow.play`), drawn full screen; not saved.
+    #[serde(skip)]
+    pub classic_slideshow: Option<crate::slideshow_view::Run>,
     /// Info overlay on the loupe.
     pub info_overlay: InfoOverlay,
     /// View Options: the two info overlays' lines and the render message (`view.viewOptions`).
@@ -1158,6 +1161,7 @@ impl Default for UiState {
             fullscreen: false,
             lights_out: LightsOut::On,
             slideshow: None,
+            classic_slideshow: None,
             second_window: false,
             keyword_painter: None,
             keywording_view: KeywordingView::default(),
