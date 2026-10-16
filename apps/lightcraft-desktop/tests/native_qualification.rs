@@ -625,7 +625,8 @@ fn set_native_viewport(control: &rightkit_qa::control::Control, width: u64, heig
             const content = rect('.lc-content');
             const exact = (r) => r && r.display !== 'none' && Math.abs(r.width - viewport.width) <= 1 && Math.abs(r.height - viewport.height) <= 1 && Math.abs(r.bottom - viewport.height) <= 1;
             const child = (r) => r && r.display !== 'none' && r.width >= 1 && r.height >= 1 && Math.abs(r.bottom - viewport.height) <= 1;
-            return outer.every(exact) && child(body) && child(plane) && child(content);
+            // on a miss, the rects become `last result` in the timeout message
+            return (outer.every(exact) && child(body) && child(plane) && child(content)) || { viewport, outer, body, plane, content };
         })();"#;
     let layout_settled = wait_for_dom(control, layout);
     assert_eq!(layout_settled.as_bool(), Some(true), "native viewport layout must settle after resize");
@@ -1730,6 +1731,8 @@ fn native_hidden_control_journeys() {
                     assert_eq!(wait_for_dom(control, "return document.querySelector('.rk-palette') !== null;").as_bool(), Some(true));
                     control.key("Escape").expect("command palette Escape must execute");
                     assert_eq!(wait_for_dom(control, "return document.querySelector('.rk-palette') === null;").as_bool(), Some(true));
+                    // WebKit on macOS doesn't focus a button on click, so start from the trigger on every platform.
+                    control.eval("document.querySelector('.rk-search--trigger')?.focus(); return true;").expect("palette trigger focus must execute");
                     let pre_modal_focus = control
                         .eval("return (() => { const node = document.activeElement; return { tag: node?.tagName, id: node?.id, className: node?.className, aria: node?.getAttribute('aria-label') }; })();")
                         .expect("pre-modal focus query must execute");
