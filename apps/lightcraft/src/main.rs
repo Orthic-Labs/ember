@@ -15,10 +15,10 @@
 //! `{"id":1,"method":"ui.inspect","params":{}}` → `{"id":1,"ok":true,"result":…}`.
 //! See `lightcraft_ui_egui::control` for the methods.
 //!
-//! On Windows, release builds are GUI-subsystem programs: launching the app opens no console
-//! window (issue #7). Their `--help` / `--version` output and diagnostics then have no console to
-//! go to; use `lightcraft-cli` (a console program) from a terminal, or a debug build.
-#![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
+//! On Windows, every build is a GUI-subsystem program: launching the app opens no console window
+//! (issue #7). Its `--help` / `--version` output and diagnostics then have no console to go to; use
+//! `lightcraft-cli` (a console program) from a terminal.
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 

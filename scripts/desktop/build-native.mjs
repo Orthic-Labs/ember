@@ -33,7 +33,7 @@ if (checkout.error || checkout.status !== 0) fail('pinned craft-fonts checkout f
 const env = { ...process.env, CRAFT_FONTS_DIR: fonts, CRAFT_FONTS_REQUIRED: '1' };
 run(['run', 'build'], repoRoot, env);
 // Retain headless experiment CLI as an exact-revision compiler artifact too.
-const cliCompiler = runCargoSync(['build', '--locked', '-p', 'lightcraft-cli', '--target', target, '--profile', 'release-iterate', '--message-format=json'], { cwd: repoRoot, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true });
+const cliCompiler = runCargoSync(['build', '--locked', '-p', 'lightcraft-cli', '--target', target, '--message-format=json'], { cwd: repoRoot, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true });
 writeFileSync(path.join(root, 'cli-cargo-artifacts.jsonl'), cliCompiler.stdout || '');
 if (cliCompiler.stderr) process.stderr.write(cliCompiler.stderr);
 if (cliCompiler.error || cliCompiler.status !== 0) {
@@ -52,7 +52,7 @@ materializeArtifacts(cliEntries, path.join(root, 'headless-cli'), {
   qualification: 'compiled; source gates required before corpus extraction',
   unsigned: true,
 });
-const compiler = runCargoSync(['build', '--locked', '--manifest-path', 'apps/lightcraft-desktop/Cargo.toml', '--features', 'qa-native,custom-protocol', '--target', target, '--profile', 'release-iterate', '--message-format=json'], { cwd: repoRoot, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true });
+const compiler = runCargoSync(['build', '--locked', '--manifest-path', 'apps/lightcraft-desktop/Cargo.toml', '--features', 'qa-native,custom-protocol', '--target', target, '--message-format=json'], { cwd: repoRoot, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true });
 // Retain compiler records on failures too. A large asynchronous stdout write
 // followed by process failure can drop diagnostics near the end of JSON output.
 writeFileSync(path.join(root, 'cargo-artifacts.jsonl'), `${cliCompiler.stdout || ''}\n${compiler.stdout || ''}`);
@@ -62,8 +62,9 @@ if (compiler.error || compiler.status !== 0) {
   fail(`RightKit candidate Cargo failed: ${compiler.error?.message || compiler.status}`);
 }
 const nativeRoot = path.join(repoRoot, 'apps/lightcraft-desktop');
-run(['exec', 'tauri', 'build', '--ci', '--no-sign', '--target', target, '--features', 'qa-native,custom-protocol', '--bundles', platform === 'macos' ? 'app,dmg' : 'nsis', '--', '--profile=release-iterate', '--locked'], nativeRoot, env);
-const descriptor = { productName: 'Ember', targetTriple: target, manifestPath: 'apps/lightcraft-desktop/Cargo.toml' };
+run(['exec', 'tauri', 'build', '--ci', '--no-sign', '--debug', '--target', target, '--features', 'qa-native,custom-protocol', '--bundles', platform === 'macos' ? 'app,dmg' : 'nsis', '--', '--locked'], nativeRoot, env);
+// Cargo's dev profile writes to target/<triple>/debug; @rightkit/release before 0.2.167 still looks under release-iterate.
+const descriptor = { productName: 'Ember', targetTriple: target, manifestPath: 'apps/lightcraft-desktop/Cargo.toml', bundleDirectory: path.join('target', target, 'debug', 'bundle', platform === 'macos' ? 'macos' : 'nsis') };
 const bundle = resolveTauriBundleDirectory(descriptor, { root: repoRoot, platform: platform === 'macos' ? 'mac' : 'win', env });
 const destination = path.join(root, 'packages', path.basename(bundle.installer));
 mkdirSync(path.dirname(destination), { recursive: true });

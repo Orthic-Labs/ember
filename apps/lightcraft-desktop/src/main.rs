@@ -1,3 +1,5 @@
+// Windows: a GUI-subsystem program, so launching Ember opens no console window.
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
