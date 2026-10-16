@@ -23,6 +23,7 @@ pub mod model;
 pub mod query;
 pub mod rules;
 pub mod safe_file;
+pub mod search;
 pub mod stacks;
 pub mod store;
 
@@ -1018,5 +1019,7 @@ mod tests_local;
 mod tests_lock;
 #[cfg(test)]
 mod tests_repair;
+#[cfg(test)]
+mod tests_search;
 #[cfg(test)]
 mod tests_torn_append;

@@ -104,7 +104,7 @@ search embeddings; generative remove runs in reference publisher's cloud.
 | Faces / People | YuNet detection, SFace / AuraFace recognition (opt-in downloads), People view | ✅ (MVP, [faces.md](faces.md)) |
 | Assisted culling | focus, bursts | 🟡 (no eyes-open / aesthetics scores) [#44](https://github.com/Orthic-Labs/ember/issues/44) |
 | Auto (tone), adaptive presets | Auto calibrated on reference editor's Auto results (#628); no adaptive presets | 🟡 [#50](https://github.com/Orthic-Labs/ember/issues/50) |
-| Natural-language search | — | ⬜ [#47](https://github.com/Orthic-Labs/ember/issues/47) |
+| Natural-language search | — | 🟡 [#47](https://github.com/Orthic-Labs/ember/issues/47) |
 
 **Blocked on a model strategy** (maintainer decision): licensable weights or our own training;
 pure-Rust inference is proven (faces, SAM 3, denoise).

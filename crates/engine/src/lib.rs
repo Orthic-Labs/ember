@@ -1054,6 +1054,8 @@ pub fn json_delta(old: &Value, new: &Value) -> Option<Value> {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_ai_update;
+#[cfg(test)]
 mod tests_album_order;
 #[cfg(test)]
 mod tests_albums_local;
@@ -1094,6 +1096,8 @@ mod tests_keyword_list;
 mod tests_libops;
 #[cfg(test)]
 mod tests_library;
+#[cfg(test)]
+mod tests_library_search;
 #[cfg(test)]
 mod tests_lightroom_folder;
 #[cfg(test)]

@@ -3,7 +3,7 @@
 //! no photo, metadata or catalog data. The result maps onto fields of `lightcraft_catalog::Filter`
 //! (`crates/catalog/src/query.rs`), emitted as a `library.filter` patch. Wasm-safe: no network,
 //! no clock.
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 pub const SEARCH_MODEL: &str = "extract-1";
@@ -46,7 +46,7 @@ pub const ENTITY_TYPES: [(&str, &str); 13] = [
     ("edited", "yes when only edited photos are wanted, no when only unedited photos are wanted."),
 ];
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Entity {
     #[serde(rename = "type")]
     pub kind: String,
@@ -54,8 +54,8 @@ pub struct Entity {
     pub confidence: f64,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct SearchEntities {
     pub entities: Vec<Entity>,
     pub input_tokens: Option<u64>,

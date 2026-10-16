@@ -265,6 +265,28 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         picker(app, ui, id, &shown, current.is_some(), items);
     }
 
+    // describe: natural-language search over keywords, people, places and captions (local, offline)
+    let describe_id = egui::Id::new("filterbar:describe");
+    let mut query = ui.data(|d| d.get_temp::<String>(describe_id)).unwrap_or_default();
+    let edit = crate::text_field::TextField::singleline("field:describe", &mut query)
+        .hint("Describe photos…".to_string())
+        .width(180.0)
+        .font(t.font(12.5))
+        .text_color(t.text)
+        .show(ui);
+    if edit.committed() {
+        let note = match app.run("library.searchText", json!({"query": query.clone()})) {
+            Ok(v) => v["matched"].as_u64().map(|n| format!("{n} matched")).unwrap_or_default(),
+            Err(message) => message,
+        };
+        ui.data_mut(|d| d.insert_temp(describe_id.with("note"), note));
+    }
+    ui.data_mut(|d| d.insert_temp(describe_id, query));
+    let note = ui.data(|d| d.get_temp::<String>(describe_id.with("note"))).unwrap_or_default();
+    if !note.is_empty() {
+        ui.label(egui::RichText::new(note).font(t.font(12.0)).color(t.text_dim));
+    }
+
     // save / clear
     ui.add_space(14.0);
     let filtering = app.session.filter != Default::default();

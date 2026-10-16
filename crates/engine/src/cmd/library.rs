@@ -462,6 +462,42 @@ pub fn specs() -> Vec<CommandSpec> {
             }
         ),
         cmd!(
+            "library.searchText",
+            "Search Photos by Description",
+            [],
+            None,
+            "{query?: string, scaledown?: ScaleDown Extract result {entities}} — ranks the library's photos by their keywords, people, title, caption and places (local, offline, no network): the grid shows the matches (filter `only`); an empty query changes nothing and no match is an error. With `scaledown` (the output of `lightcraft-cli ai search`, the only network step) the search is that result as a library.filter patch instead → {changed, matched, top?}",
+            always,
+            |s, p| {
+                if let Some(raw) = p.get("scaledown").filter(|v| !v.is_null()) {
+                    let found: lightcraft_photo_ai::search::SearchEntities = serde_json::from_value(raw.clone())
+                        .map_err(|_| bad("library.searchText", "scaledown must be a ScaleDown Extract result with entities"))?;
+                    let mut v = serde_json::to_value(&s.filter).unwrap_or_default();
+                    lightcraft_develop::presets::deep_merge(&mut v, &lightcraft_photo_ai::search::entities_to_filter_json(&found));
+                    let mut f: Filter = serde_json::from_value(v).map_err(|e| bad("library.searchText", e.to_string()))?;
+                    // a new search replaces the previous one: its ranked-match set goes too
+                    f.only = Vec::new();
+                    f.library_folder = f.library_folder.filter(|d| !d.trim().is_empty());
+                    s.filter = f;
+                    let matched = s.visible().len();
+                    return Ok(json!({"changed": true, "matched": matched}));
+                }
+                let query = p.get("query").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
+                if query.is_empty() {
+                    return Ok(json!({"changed": false, "matched": null}));
+                }
+                let hits = lightcraft_catalog::search::rank(&s.catalog, &query);
+                if hits.is_empty() {
+                    return Err(bad("library.searchText", format!("no photo in the library matches “{query}”")));
+                }
+                s.filter.only = hits.iter().map(|(id, _)| *id).collect();
+                let top: Vec<u64> = hits.iter().take(12).map(|(id, _)| id.0).collect();
+                let matched = hits.len();
+                let shown = s.visible().len();
+                Ok(json!({"changed": true, "matched": matched, "shown": shown, "top": top}))
+            }
+        ),
+        cmd!(
             query "library.folders",
             "Library Folders",
             [],

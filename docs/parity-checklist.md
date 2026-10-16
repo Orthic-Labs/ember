@@ -200,7 +200,7 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 | Id | Feature | Tier | Status | Evidence | Missing / notes |
 |---|---|---|---|---|---|
 | LR-FILT-SEARCH-META | Text search | P0 | ✅ | `cmd:library.filter` (`text`), `crates/ui-egui/src/panels/topbar.rs`, `crates/catalog/src/query.rs` | fielded tokens (`rating:3`, `iso:>800`, `camera:…`); no suggestions dropdown |
-| LR-FILT-SEARCH-AI | Natural-language search | P2 | ⬜ | | [#47](https://github.com/Orthic-Labs/ember/issues/47) |
+| LR-FILT-SEARCH-AI | Natural-language search | P2 | 🟡 | `cmd:library.searchText` (`query`), `crates/catalog/src/search.rs` (`rank`), `crates/ui-egui/src/panels/filterbar.rs` (describe field), `crates/catalog/src/tests_search.rs`, `crates/engine/src/tests_library_search.rs` | local and offline: ranks by keywords, people, title, caption and places with stems and synonyms, and a dated ScaleDown result applies as a filter patch (`lightcraft-cli ai search`, the only network step, text only). Not done: the desktop does not call ScaleDown or offer an opt-in toggle; no local date phrases ("last summer"); matches are a snapshot until searched again. [#47](https://github.com/Orthic-Labs/ember/issues/47) |
 | LR-FILT-RATING | Rating filter | P0 | ✅ | `cmd:library.filter` (`rating`, `ratingOp`), `crates/ui-egui/src/panels/filterbar.rs` | ≥ / = / ≤ stars in the filter bar (`cmd:view.filterBar`) |
 | LR-FILT-FLAG | Flag filter | P0 | ✅ | `cmd:library.filter` (`flag`), `crates/ui-egui/src/panels/filterbar.rs` | picked / rejected / unflagged (one at a time) |
 | LR-FILT-LABEL | Colour-label filter | P1 | ✅ | `cmd:library.filter` (`label`), `crates/ui-egui/src/panels/filterbar.rs` | one label at a time; no “no label” choice |
@@ -876,6 +876,7 @@ Latin stays upright. Advanced Japanese composition remains open. Regression cove
 | 2026-10-16 | minor | KEYC-VIEWS, KEYC-COMPARE, KEYC-DEVELOP: Classic keymap layer (`app.classicKeymap`, off by default) for E, C, L, I, R, K, M; Home / End (`library.first`, `library.last`); statuses unchanged (🟡) |
 | 2026-10-16 | minor | KEYC-RATING, KEYC-METADATA, KEYC-DEVELOP: Classic backtick flag cycle (`photo.cycleFlag`), ⇧M / ⇧J / ⇧Q Classic keys, ⌘U / ⇧⌘U (`develop.autoTone`, `develop.autoWhiteBalance`), ⌘K (`panel.keywordsFocus`), ⌘⌥⇧C / ⌘⌥⇧V (`photo.copyMetadata`, `photo.pasteMetadata` now carry rating and label); statuses unchanged (🟡) |
 | 2026-10-16 | minor | LR-EXP-RENDERDNG: `photo.renderToDng` catalog command (render, add next to the original, stack); status ✅ |
+| 2026-10-16 | minor | LR-FILT-SEARCH-AI: natural-language search, local and offline (`library.searchText`, filter-bar describe field); status 🟡; the generated summary is due its `xtask parity --write` refresh |
 | 2026-10-11 | minor | LR-PROF-CAMERACOLOR: raws with a black-and-white camera JPEG take its tone curve (issue #577) |
 | 2026-10-11 | minor | LR-VIEW-ZOOM and LR-VIEW-COMPARE: Compare and Reference are sharp at 1:1 (zoom windows per pane, two originals kept decoded while they are open); statuses unchanged |
 | 2026-10-11 | minor | LR-IMP-FORMATS and LR-IMP-CAMERA-COVERAGE: EOS R5 Mark II CR3 decodes from sensor data (57% of its C-RAW files opened as a preview: QP-map escape); status unchanged (🟡) |
