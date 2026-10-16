@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 const build = { cmd: 'node', args: ['scripts/desktop/build-native.mjs'] };
+// Cargo's dev profile writes bundles to target/<triple>/debug; @rightkit/release before 0.2.167 looks under release-iterate.
 // The workspace version is the product version (Cargo.toml [workspace.package]); package.json and tauri.conf.json match it.
 const version = /^\[workspace\.package\][^[]*?^version\s*=\s*"(\d+\.\d+\.\d+)"/ms.exec(readFileSync(new URL('./Cargo.toml', import.meta.url), 'utf8'))?.[1];
 if (!version) throw new Error('Cargo.toml [workspace.package] must declare a SemVer version');
@@ -26,8 +27,8 @@ export default {
   },
   development: {
     targets: {
-      mac: { build: [build], install: { kind: 'tauri', productName: 'Ember', targetTriple: 'aarch64-apple-darwin', manifestPath: 'apps/lightcraft-desktop/Cargo.toml', destination: '/Applications/Ember.app' } },
-      win: { build: [build], install: { kind: 'tauri', productName: 'Ember', targetTriple: 'x86_64-pc-windows-msvc', manifestPath: 'apps/lightcraft-desktop/Cargo.toml', expectedInstalledPath: path.join(process.env.LOCALAPPDATA || '.', 'Ember', 'lightcraft-desktop.exe') } },
+      mac: { build: [build], install: { kind: 'tauri', productName: 'Ember', targetTriple: 'aarch64-apple-darwin', bundleDirectory: 'target/aarch64-apple-darwin/debug/bundle/macos', manifestPath: 'apps/lightcraft-desktop/Cargo.toml', destination: '/Applications/Ember.app' } },
+      win: { build: [build], install: { kind: 'tauri', productName: 'Ember', targetTriple: 'x86_64-pc-windows-msvc', bundleDirectory: 'target/x86_64-pc-windows-msvc/debug/bundle/nsis', manifestPath: 'apps/lightcraft-desktop/Cargo.toml', expectedInstalledPath: path.join(process.env.LOCALAPPDATA || '.', 'Ember', 'lightcraft-desktop.exe') } },
     },
   },
   targets: {
