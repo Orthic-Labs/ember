@@ -223,6 +223,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("app.export", "Export Now", None, ""),
     ("app.showInFinder", "Show in Finder", Some("Cmd+R"), "Photo"),
     ("app.openSamModelFolder", "Show in File Manager", None, ""),
+    ("photo.showOnMap", "Show on Map", None, "Photo"),
     ("dialog.rename", "Rename Photos…", Some("F2"), "Photo"),
     ("dialog.labelNames", "Edit Color Label Names…", None, ""),
     ("dialog.captureTime", "Edit Capture Time…", None, "Photo"),
@@ -1309,6 +1310,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         "dialog.mergePanorama" => crate::merge::open(app, "merge.panorama"),
         "dialog.mergeHdrPanorama" => crate::merge::open(app, "merge.hdrPanorama"),
         "app.openSamModelFolder" => crate::panels::dialogs::show_model_folder(app),
+        "photo.showOnMap" => crate::location::show_on_map(app),
         "app.about" => {
             app.ui.dialog = Some(Dialog::About);
             Ok(Value::Null)
@@ -1981,6 +1983,9 @@ pub fn ui_enabled(app: &LightcraftApp, id: &str) -> bool {
                     .is_some_and(|p| matches!(p.source, lightcraft_engine::catalog::Source::File { .. }))
         }
         "app.openSamModelFolder" => app.session.segmenter.dir.is_some() && app.services.open_with.is_some(),
+        "photo.showOnMap" => {
+            app.session.active().and_then(|id| app.session.catalog.photo(id)).is_some_and(|p| p.meta.gps.is_some()) && app.services.open_url.is_some()
+        }
         "file.exportPresets" => app.session.presets.iter().any(|p| !p.builtin),
         "file.exportCurvePresets" => !app.session.curve_presets.is_empty(),
         "view.compare" => app.session.catalog.len() > 1,

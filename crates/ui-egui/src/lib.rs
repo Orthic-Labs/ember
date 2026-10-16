@@ -21,6 +21,7 @@ pub mod import;
 pub mod info_overlay;
 pub mod lightroom_import;
 pub mod links;
+pub mod location;
 pub mod menu_level;
 pub mod menubar;
 pub mod menus;
