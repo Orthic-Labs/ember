@@ -809,17 +809,6 @@ dependencies = [
 
 [[package]]
 name = "brotli"
-version = "8.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cc91aac060a7a1e25823bdccbfb6af1875b88f17c6daac97894eed8207166b3"
-dependencies = [
- "alloc-no-stdlib 2.0.4",
- "alloc-stdlib 0.2.4",
- "brotli-decompressor 5.0.3",
-]
-
-[[package]]
-name = "brotli"
 version = "9.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8b851b75c23ca7873623d612fe49bd1989aeb03d08fb9432187eb253d3d4c6b"
@@ -1294,6 +1283,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 
 [[package]]
+name = "const-oid"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
+
+[[package]]
 name = "cookie"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1562,6 +1557,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cvvdp-lite"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff00b4fbb7a3f6ef94e3958811a848372615d58ab82074084279884b788a6ad7"
+
+[[package]]
 name = "darling"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1643,7 +1644,7 @@ version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7c1832837b905bbfb5101e07cc24c8deddf52f93225eee6ead5f4d63d53ddcb"
 dependencies = [
- "const-oid",
+ "const-oid 0.9.6",
  "pem-rfc7468",
  "zeroize",
 ]
@@ -1714,7 +1715,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
  "block-buffer 0.10.4",
- "const-oid",
+ "const-oid 0.9.6",
  "crypto-common 0.1.7",
  "subtle",
 ]
@@ -1726,6 +1727,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1dd6dbb5841937940781866fa1281a1ff7bd3bf827091440879f9994983d5c2"
 dependencies = [
  "block-buffer 0.12.1",
+ "const-oid 0.10.2",
  "crypto-common 0.2.2",
 ]
 
@@ -2190,7 +2192,7 @@ dependencies = [
  "emath",
  "epaint_default_fonts",
  "font-types",
- "harfrust",
+ "harfrust 0.12.0",
  "log",
  "nohash-hasher",
  "parking_lot",
@@ -3424,7 +3426,19 @@ checksum = "c03d949a14aa089bbb282f7dd76a498a7f684428e4257202efc119ec010376f9"
 dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
- "read-fonts",
+ "read-fonts 0.41.0",
+ "smallvec",
+]
+
+[[package]]
+name = "harfrust"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86aa776d6d32b072119e1f1650f4db843ff4382a4aaa6a2c9c4e35703cd377cb"
+dependencies = [
+ "bitflags 2.13.2",
+ "bytemuck",
+ "read-fonts 0.45.1",
  "smallvec",
 ]
 
@@ -3967,9 +3981,13 @@ dependencies = [
 
 [[package]]
 name = "jixel"
-version = "0.3.4"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "278a75e12caacec34be774d62ad05e45fc0b6a52d1f4e9f7fbc0209ecdf794f3"
+checksum = "1bc0b509580dce6f3160cfe91d9d72b8548239000eb3217502d73dc52f889a1d"
+dependencies = [
+ "cvvdp-lite",
+ "ssimu2-lite",
+]
 
 [[package]]
 name = "jni"
@@ -4545,12 +4563,12 @@ dependencies = [
  "lightcraft-denoise-core",
  "lightcraft-nafnet",
  "lightcraft-raster",
- "miniz_oxide 0.8.9",
+ "miniz_oxide 0.9.1",
  "proptest",
  "rayon",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "thiserror 2.0.21",
  "web-time",
 ]
@@ -4560,12 +4578,12 @@ name = "lightcraft-denoise-core"
 version = "0.7.0"
 dependencies = [
  "lightcraft-raster",
- "miniz_oxide 0.8.9",
+ "miniz_oxide 0.9.1",
  "proptest",
  "rayon",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "thiserror 2.0.21",
  "web-time",
 ]
@@ -4589,7 +4607,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "thiserror 2.0.21",
 ]
 
@@ -4639,7 +4657,7 @@ version = "0.7.0"
 dependencies = [
  "lightcraft-color",
  "lightcraft-geom",
- "miniz_oxide 0.8.9",
+ "miniz_oxide 0.9.1",
  "proptest",
  "serde",
  "serde_json",
@@ -4650,7 +4668,7 @@ name = "lightcraft-engine"
 version = "0.7.0"
 dependencies = [
  "ab_glyph",
- "harfrust",
+ "harfrust 0.14.0",
  "jxl-oxide",
  "libc",
  "lightcraft-catalog",
@@ -4679,7 +4697,7 @@ dependencies = [
  "lightcraft-sysmem",
  "lightcraft-tiff",
  "log",
- "miniz_oxide 0.8.9",
+ "miniz_oxide 0.9.1",
  "rayon",
  "serde",
  "serde_json",
@@ -4697,7 +4715,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "thiserror 2.0.21",
  "web-time",
 ]
@@ -4709,7 +4727,7 @@ dependencies = [
  "log",
  "rustls",
  "rustls-rustcrypto",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "webpki-roots",
 ]
 
@@ -4717,7 +4735,7 @@ dependencies = [
 name = "lightcraft-geocode"
 version = "0.7.0"
 dependencies = [
- "miniz_oxide 0.8.9",
+ "miniz_oxide 0.9.1",
  "serde",
 ]
 
@@ -4768,7 +4786,7 @@ version = "0.7.0"
 dependencies = [
  "lightcraft-develop",
  "lightcraft-geom",
- "quick-xml 0.38.4",
+ "quick-xml 0.42.0",
 ]
 
 [[package]]
@@ -4805,7 +4823,7 @@ dependencies = [
  "lightcraft-geom",
  "lightcraft-tiff",
  "proptest",
- "quick-xml 0.38.4",
+ "quick-xml 0.42.0",
  "serde",
  "serde_json",
 ]
@@ -4825,14 +4843,14 @@ dependencies = [
 name = "lightcraft-photo-ai"
 version = "0.7.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "lightcraft-codecs",
  "lightcraft-develop",
  "lightcraft-fetch",
  "lightcraft-raster",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
 ]
 
 [[package]]
@@ -4889,11 +4907,11 @@ dependencies = [
  "lightcraft-meta",
  "lightcraft-raster",
  "lightcraft-tiff",
- "miniz_oxide 0.8.9",
+ "miniz_oxide 0.9.1",
  "proptest",
  "rayon",
  "serde",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "thiserror 2.0.21",
  "zune-core",
  "zune-jpeg",
@@ -6605,15 +6623,6 @@ checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
 
 [[package]]
 name = "quick-xml"
-version = "0.38.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
-dependencies = [
- "memchr",
-]
-
-[[package]]
-name = "quick-xml"
 version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1"
@@ -6871,6 +6880,19 @@ dependencies = [
  "bytemuck",
  "font-types",
  "once_cell",
+]
+
+[[package]]
+name = "read-fonts"
+version = "0.45.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4edc8db0d972de88e53a085b1f01fb3fbdae7bb0cb7a0ce2b2f8285a412fe3ef"
+dependencies = [
+ "bytemuck",
+ "foldhash",
+ "font-types",
+ "once_cell",
+ "yoke 0.8.3",
 ]
 
 [[package]]
@@ -7180,7 +7202,7 @@ version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8573f03f5883dcaebdfcf4725caa1ecb9c15b2ef50c43a07b816e06799bb12d"
 dependencies = [
- "const-oid",
+ "const-oid 0.9.6",
  "digest 0.10.7",
  "num-bigint-dig",
  "num-integer",
@@ -7739,7 +7761,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "819ab7d62b1d3e72d9d9dea5650bac30424f9111364bb94928dbf5ecad1baa68"
 dependencies = [
  "bytemuck",
- "read-fonts",
+ "read-fonts 0.41.0",
 ]
 
 [[package]]
@@ -7917,6 +7939,12 @@ dependencies = [
  "base64ct",
  "der",
 ]
+
+[[package]]
+name = "ssimu2-lite"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "232fcdf6a69da36815de1c378df0b56fc72f170535450eef45745118ab78b91b"
 
 [[package]]
 name = "stable_deref_trait"
@@ -8226,7 +8254,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6585c5b536c00f039d12ce70a9755172d5423bbcfd3969863baa70314c3e02f"
 dependencies = [
  "base64 0.23.1",
- "brotli 9.0.0",
+ "brotli",
  "ico",
  "json-patch",
  "plist",
@@ -8318,7 +8346,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "362ab21cd4cc713f2a02b1a9b5688198b1541cfb6907c4281e9190e0f0ef4aa3"
 dependencies = [
  "anyhow",
- "brotli 9.0.0",
+ "brotli",
  "cargo_metadata",
  "ctor",
  "dom_query",
@@ -10174,10 +10202,10 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 name = "xtask"
 version = "0.7.0"
 dependencies = [
- "brotli 8.0.4",
+ "brotli",
  "flate2",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
 ]
 
 [[package]]

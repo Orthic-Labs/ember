@@ -38,4 +38,4 @@ jpeg-encoder = { workspace = true }
 proptest = { workspace = true }
 zune-jpegxl = { workspace = true }
 # Pinned CC0 corpus identities; not a product dependency.
-sha2 = { version = "0.10", default-features = false, features = ["std"] }
+sha2 = { version = "0.11", default-features = false }
