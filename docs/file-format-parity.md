@@ -20,11 +20,11 @@ import and export formats. Ours come from `crates/codecs/src/sniff.rs`, `crates/
 | PNG | ✅ | ✅ | ✅ | ✅ | |
 | PSD / PSB | ✅ (maximized-compatibility composite) | ✅ (Classic: PSD export, edit-in round trip) | ✅ merged composite | ⬜ (external-editor round trip writes 16-bit TIFF) | `crates/codecs/src/psd.rs` |
 | HEIC / HEIF | ✅ | ⬜ (Classic) / HDR only | ✅ in every release build (`crates/heif`, heic-rs) | ⬜ | `heif` feature on by packaging scripts |
-| AVIF | ✅ | ✅ (HDR) | ⬜ recognised, not decoded (no permissive pure-Rust AV1 decoder) | ✅ 8/10-bit, PQ HDR | |
+| AVIF | ✅ | ✅ (HDR) | ⬜ recognised, not decoded (no permissive pure-Rust AV1 decoder) | ✅ 8/10-bit, PQ HDR | Decode blocked: the only candidate, `rav1d` 1.1.0 (BSD-2-Clause, Rust port of dav1d), is not in `Cargo.lock`, its default features switch on assembly (needs `default-features = false`), and AVIF also needs an ISOBMFF item parser and YCbCr conversion. `photo.renderToAvif` is blocked with it: the render is added to the library by importing the file, which needs the decoder |
 | JPEG XL | ✅ | ✅ | ✅ (`jxl-oxide`) incl. DNG 1.7 JXL tiles | ✅ lossy / lossless, 8/16-bit, PQ HDR (`jixel`, native only; ⬜ web) | `crates/engine/src/tests_export.rs` |
 | WebP | not in its document types | ⬜ | ✅ | ✅ | beyond target |
 | GIF, BMP | ⬜ | ⬜ | ✅ | ⬜ | beyond target |
-| DNG (from raw) | ✅ | ✅ incl. lossy, embedded original | ✅ | ✅ uncompressed, LJ92 or deflate; ⬜ lossy raw (CFA) DNG, embedded original | `crates/raw/src/dngwrite.rs` |
+| DNG (from raw) | ✅ | ✅ incl. lossy, embedded original | ✅ | ✅ uncompressed, LJ92 or deflate; ⬜ lossy raw (CFA) DNG, embedded original | `crates/raw/src/dngwrite.rs`; lossy CFA needs the DNG 1.7 interleaved layout (1-plane JPEG XL tiles of a stacked-field image, `RowInterleaveFactor` / `ColumnInterleaveFactor`), which neither the writer nor the reader has and the spec text could not be checked here |
 | Render to DNG (15.5) | — | ✅ | — | ✅ export format "Rendered DNG" and the catalog command `photo.renderToDng` (linear float DNG, edit baked in, added next to the original and stacked); lossy JPEG XL option (`dngCompression: lossy`, DNG 1.7 Compression 52546 tiles via `jixel`, native only, CI verification pending) | `crates/raw/src/dngwrite.rs` (`write_rendered_dng_with`) |
 | Original + sidecar | — | ✅ | — | ✅ | |
 | HDR gain map JPEG (ISO 21496-1) | ✅ | ✅ | ✅ (gain map read) | ✅ | `crates/codecs/src/gainmap.rs` |
@@ -82,3 +82,4 @@ Remaining: **26–47 h** (AVIF decode 8–15 h if a permissive decoder is writte
 | 2026-10-16 | minor | Palette (indexed-colour) TIFF decodes through its ColorMap (1–8-bit indices; `crates/codecs/src/tiff_codec.rs`). Audit: GIF, BMP, WebP and JPEG XL already decode and sniff by magic; no new crate was added. Still missing: AVIF decode, HEIC in default builds |
 | 2026-10-16 | minor | Lossy JPEG XL DNG for Render to DNG (`dngCompression: lossy`, DNG 1.7 tags JXLDistance/Effort/DecodeSpeed); raw (CFA) lossy DNG still open |
 | 2026-10-17 | minor | DNG export: embedded JPEG preview option (`dngPreview`: none / medium / full), a SubIFD with NewSubFileType 1 |
+| 2026-10-17 | minor | Blockers recorded for lossy raw (CFA) DNG and AVIF decode / `photo.renderToAvif` (#79, #188); no behaviour change |
