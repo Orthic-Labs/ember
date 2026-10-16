@@ -453,7 +453,9 @@ pub fn specs() -> Vec<CommandSpec> {
                 if let Some(rules) = f.rule_set.as_mut() {
                     rules.upgrade();
                 }
-                if let Some(id) = f.saved_location && s.catalog.saved_location(id).is_none() {
+                if let Some(id) = f.saved_location
+                    && s.catalog.saved_location(id).is_none()
+                {
                     return Err(bad("library.filter", format!("no saved location {}", id.0)));
                 }
                 let sets_rules = p.get("ruleSet").is_some_and(|r| !r.is_null());

@@ -171,8 +171,11 @@ fn the_location_filter_selects_the_photos_inside_the_circle_and_by_gps_or_place_
     c.apply(Op::SetMeta { id: no_gps, meta: Box::new(meta) }).unwrap();
     let id = c.alloc_location_id();
     let d = distance_m(HOME, edge_gps);
-    c.apply(Op::SetSavedLocation { id, location: Some(SavedLocation { name: "Home".into(), lat: HOME.0, lon: HOME.1, radius_m: d, private: false }) })
-        .unwrap();
+    c.apply(Op::SetSavedLocation {
+        id,
+        location: Some(SavedLocation { name: "Home".into(), lat: HOME.0, lon: HOME.1, radius_m: d, private: false }),
+    })
+    .unwrap();
     let shown = |f: Filter| {
         let mut ids = c.query(&f, &Sort::default());
         ids.sort();

@@ -65,8 +65,6 @@ mod tests_crop_tool;
 #[cfg(test)]
 mod tests_cull_review;
 #[cfg(test)]
-mod tests_enhance;
-#[cfg(test)]
 mod tests_curve;
 #[cfg(test)]
 mod tests_date_picker;
@@ -74,6 +72,8 @@ mod tests_date_picker;
 mod tests_dialog_fit;
 #[cfg(test)]
 mod tests_dialogs;
+#[cfg(test)]
+mod tests_enhance;
 #[cfg(test)]
 mod tests_error_kinds;
 #[cfg(test)]

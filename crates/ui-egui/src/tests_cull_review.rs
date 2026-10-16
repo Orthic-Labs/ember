@@ -124,7 +124,8 @@ fn import_with_the_culling_option_queues_the_pass_for_the_imported_photos() {
     let mut h = Headless::new(LightcraftApp::new(session, Services { png: None, ..Default::default() }), [1200.0, 800.0], 1.0);
     h.settle(Duration::from_secs(20));
     let undo0 = h.app.session.undo.len();
-    let task = crate::import::ImportTask::new(vec![dir.to_string_lossy().to_string()], serde_json::json!({"mode": "add", "cull": true}), undo0, false);
+    let task =
+        crate::import::ImportTask::new(vec![dir.to_string_lossy().to_string()], serde_json::json!({"mode": "add", "cull": true}), undo0, false);
     h.app.import = Some(task);
     assert!(h.step_until(Duration::from_secs(60), |h| h.app.import.is_none()));
     let mut added: Vec<u64> = h.app.session.catalog.photos().map(|photo| photo.id.0).collect();

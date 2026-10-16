@@ -19,7 +19,10 @@ const C: &str = "camera.calibrate";
 fn corners_of(p: &Value) -> Result<[[f64; 2]; 4]> {
     if let Some(c) = p.get("corners").filter(|v| !v.is_null()) {
         let wrong = || {
-            bad(C, "`corners` must be four [x, y] points, as fractions 0 to 1 of the picture: top left of patch 1 (dark skin), top right of patch 6, bottom right of patch 24 (black), bottom left of patch 19 (white)")
+            bad(
+                C,
+                "`corners` must be four [x, y] points, as fractions 0 to 1 of the picture: top left of patch 1 (dark skin), top right of patch 6, bottom right of patch 24 (black), bottom left of patch 19 (white)",
+            )
         };
         let points = c.as_array().filter(|a| a.len() == 4).ok_or_else(wrong)?;
         let mut out = [[0.0f64; 2]; 4];

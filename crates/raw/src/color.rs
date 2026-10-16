@@ -468,7 +468,12 @@ mod tests {
             forward_matrix: [Some(fa), Some(fb)],
             ..Default::default()
         };
-        let only = |m: Mat3, f: Mat3, ill: u16| ColorData { illuminant: [ill, 0], color_matrix: [Some(m), None], forward_matrix: [Some(f), None], ..Default::default() };
+        let only = |m: Mat3, f: Mat3, ill: u16| ColorData {
+            illuminant: [ill, 0],
+            color_matrix: [Some(m), None],
+            forward_matrix: [Some(f), None],
+            ..Default::default()
+        };
         let (warm, cool) = (cct::temp_tint_to_xy(2300.0, 0.0), cct::temp_tint_to_xy(12000.0, 0.0));
         assert_eq!(illuminant_weight(&both, warm), 1.0);
         assert_eq!(illuminant_weight(&both, cool), 0.0);

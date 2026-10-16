@@ -97,10 +97,34 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(query "location.list", "Saved Locations", [], None, "{} → {locations: [{id, name, lat, lon, radiusM, private, photos}]} — saved locations by name; photos = library photos inside the circle", always, list),
-        cmd!("location.add", "Add Saved Location", [], None, "{name, lat, lon, radiusM (metres, more than 0), private?: bool} → {id} — a named circle on the map; a private one strips the GPS and place names of the photos inside it on export; one undo step", always, add),
+        cmd!(
+            "location.add",
+            "Add Saved Location",
+            [],
+            None,
+            "{name, lat, lon, radiusM (metres, more than 0), private?: bool} → {id} — a named circle on the map; a private one strips the GPS and place names of the photos inside it on export; one undo step",
+            always,
+            add
+        ),
         cmd!("location.rename", "Rename Saved Location", [], None, "{id, name} → {id} — renames a saved location; one undo step", always, rename),
-        cmd!("location.setPrivate", "Set Location Privacy", [], None, "{id, private: bool} → {id, private} — marks a saved location private (its photos' GPS and place names leave out of exports) or public; one undo step", always, set_private),
-        cmd!("location.delete", "Delete Saved Location", [], None, "{id} → {id} — deletes a saved location (the photos keep their GPS); one undo step", always, delete),
+        cmd!(
+            "location.setPrivate",
+            "Set Location Privacy",
+            [],
+            None,
+            "{id, private: bool} → {id, private} — marks a saved location private (its photos' GPS and place names leave out of exports) or public; one undo step",
+            always,
+            set_private
+        ),
+        cmd!(
+            "location.delete",
+            "Delete Saved Location",
+            [],
+            None,
+            "{id} → {id} — deletes a saved location (the photos keep their GPS); one undo step",
+            always,
+            delete
+        ),
     ]
 }
 

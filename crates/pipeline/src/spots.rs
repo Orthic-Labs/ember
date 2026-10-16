@@ -702,7 +702,15 @@ mod tests {
     fn remove_with_a_chosen_source_still_heals_from_it() {
         // a source offset set: the spot heals from there, so it takes the source's detail (here fine stripes) and keeps
         // the target's tone; a fill from the flat surroundings would stay a flat 0.1 (heal never copies the source's tone)
-        let mut img = Rgb32f::from_fn(100, 100, |x, _| if x < 50 { [0.1; 3] } else if x % 2 == 0 { [0.9; 3] } else { [0.5; 3] });
+        let mut img = Rgb32f::from_fn(100, 100, |x, _| {
+            if x < 50 {
+                [0.1; 3]
+            } else if x % 2 == 0 {
+                [0.9; 3]
+            } else {
+                [0.5; 3]
+            }
+        });
         let frame = Frame::new(100, 100, &DevelopSettings::default(), true);
         let spot =
             Spot { source_offset: Some(Point::new(0.5, 0.0)), feather: 0.0, size: 0.05, points: vec![Point::new(0.25, 0.5)], ..Default::default() };

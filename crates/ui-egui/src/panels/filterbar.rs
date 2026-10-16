@@ -266,8 +266,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     }
 
     // location: a saved location (photos inside its circle), or whether photos have GPS / a place name
-    let saved: Vec<(lightcraft_catalog::LocationId, String)> =
-        app.session.catalog.saved_locations().map(|(id, l)| (id, l.name.clone())).collect();
+    let saved: Vec<(lightcraft_catalog::LocationId, String)> = app.session.catalog.saved_locations().map(|(id, l)| (id, l.name.clone())).collect();
     let location_name = f.saved_location.and_then(|id| saved.iter().find(|(l, _)| *l == id).map(|(_, name)| name.clone()));
     let (location_shown, location_active) = match (location_name, f.has_gps, f.named_place) {
         (Some(name), _, _) if name.chars().count() > 22 => (format!("{}…", name.chars().take(21).collect::<String>()), true),
