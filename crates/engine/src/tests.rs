@@ -734,6 +734,28 @@ fn paste_from_previous_and_copy_paste_metadata() {
 }
 
 #[test]
+fn copy_paste_metadata_carries_rating_and_label_in_one_undo_step() {
+    let mut s = demo();
+    let ids: Vec<_> = s.visible().iter().copied().take(2).collect();
+    s.execute("library.select", &json!({"ids": [ids[0].0]})).unwrap();
+    s.execute("photo.rate", &json!({"rating": 5, "ids": [ids[0].0]})).unwrap();
+    s.execute("photo.label", &json!({"label": "green", "ids": [ids[0].0]})).unwrap();
+    s.execute("photo.setMeta", &json!({"ids": [ids[0].0], "title": "Dawn"})).unwrap();
+    s.execute("photo.copyMetadata", &json!({})).unwrap();
+    s.execute("photo.rate", &json!({"rating": 1, "ids": [ids[1].0]})).unwrap();
+    s.execute("photo.label", &json!({"label": "none", "ids": [ids[1].0]})).unwrap();
+    s.execute("photo.setMeta", &json!({"ids": [ids[1].0], "title": ""})).unwrap();
+    s.execute("library.select", &json!({"ids": [ids[1].0]})).unwrap();
+    s.execute("photo.pasteMetadata", &json!({"ids": [ids[1].0]})).unwrap();
+    let pasted = s.catalog.photo(ids[1]).unwrap();
+    assert_eq!((pasted.rating, pasted.label, pasted.meta.title.as_str()), (5, Some(lightcraft_catalog::ColorLabel::Green), "Dawn"));
+    // one undo step takes the rating, label and Edit Info back together
+    s.execute("edit.undo", &json!({})).unwrap();
+    let before = s.catalog.photo(ids[1]).unwrap();
+    assert_eq!((before.rating, before.label, before.meta.title.as_str()), (1, None, ""));
+}
+
+#[test]
 fn stacks_move_and_split() {
     let mut s = demo();
     let ids: Vec<_> = s.visible().iter().copied().take(5).collect();

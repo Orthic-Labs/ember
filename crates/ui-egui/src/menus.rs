@@ -128,6 +128,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("panel.presets", "Presets", Some("Shift+P"), "Window"),
     ("panel.info", "Info", Some("I"), "Window"),
     ("panel.keywords", "Keywords", Some("K"), "Window"),
+    ("panel.keywordsFocus", "Keyword Field", Some("Cmd+K"), "Window"),
     ("panel.versions", "Versions", Some("Shift+V"), "Window"),
     ("panel.activity", "History", None, "Window"),
     ("panel.close", "Close Panel", None, ""),
@@ -1054,6 +1055,13 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         }
         "panel.keywords" => {
             panel(app, &ctx, RightPanel::Keywords, "Keywords");
+            Ok(Value::Null)
+        }
+        "panel.keywordsFocus" => {
+            // ⌘K: open the Keywords panel (it stays open if already shown) and put the cursor in its
+            // Add keyword field
+            app.ui.right = RightPanel::Keywords;
+            ctx.memory_mut(|m| m.request_focus(crate::text_field::id("field:keyword")));
             Ok(Value::Null)
         }
         "panel.versions" => {

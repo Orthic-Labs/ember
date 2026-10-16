@@ -870,6 +870,16 @@ mod tests {
     }
 
     #[test]
+    fn command_k_opens_the_keywords_panel() {
+        use crate::state::RightPanel;
+        let mut h = library();
+        h.app.ui.right = RightPanel::None;
+        let r = h.request("ui.key", json!({"key": "K", "cmd": true}), std::time::Duration::from_secs(20));
+        assert_eq!(r["ok"], true, "{r}");
+        assert_eq!(h.app.ui.right, RightPanel::Keywords);
+    }
+
+    #[test]
     fn home_and_end_select_the_first_and_last_photo() {
         use lightcraft_catalog::PhotoId;
         let mut h = library();

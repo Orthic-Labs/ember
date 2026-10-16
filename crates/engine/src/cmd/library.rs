@@ -655,10 +655,11 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!(query "library.devices", "Cameras and Cards", [], None, "{} → [{name, path (its DCIM folder), root}] — mounted volumes with a DCIM folder", always, |_, _| {
             Ok(serde_json::to_value(crate::devices::devices_now()).unwrap_or_default())
         }),
-        cmd!(query "photo.copyMetadata", "Copy Metadata", ["Photo"], None, "{} — title, caption, copyright (notice, status, usage terms, info URL), creator, location and keywords of the active photo", has_active, |s, _| {
+        cmd!(query "photo.copyMetadata", "Copy Metadata", ["Photo"], Some("Cmd+Alt+Shift+C"), "{} — rating, label, title, caption, copyright (notice, status, usage terms, info URL), creator, location and keywords of the active photo", has_active, |s, _| {
             let id = s.active().ok_or_else(|| bad("photo.copyMetadata", "no active photo"))?;
-            let m = &s.catalog.photo(id).ok_or_else(|| bad("photo.copyMetadata", "no photo"))?.meta;
-            let v = json!({"title": m.title, "caption": m.caption, "altText": m.alt_text, "extendedDescription": m.extended_description,
+            let ph = s.catalog.photo(id).ok_or_else(|| bad("photo.copyMetadata", "no photo"))?;
+            let m = &ph.meta;
+            let v = json!({"rating": ph.rating, "label": ph.label, "title": m.title, "caption": m.caption, "altText": m.alt_text, "extendedDescription": m.extended_description,
                 "copyright": m.copyright, "copyrightStatus": m.copyright_status.id(), "usageTerms": m.usage_terms, "copyrightUrl": m.copyright_url,
                 "creator": m.creator, "location": m.location, "city": m.city, "state": m.state, "country": m.country,
                 "keywords": m.keywords});
@@ -669,24 +670,54 @@ pub fn specs() -> Vec<CommandSpec> {
             "photo.pasteMetadata",
             "Paste Metadata",
             ["Photo"],
-            None,
-            "{ids?, fields?: [title|caption|copyright|copyrightStatus|usageTerms|copyrightUrl|creator|location|keywords] (default: all copied)}",
+            Some("Cmd+Alt+Shift+V"),
+            "{ids?, fields?: [rating|label|title|caption|copyright|copyrightStatus|usageTerms|copyrightUrl|creator|location|keywords] (default: all copied); keywords replace the targets' keywords} — one undo step",
             has_selection,
             |s, p| {
                 let c = "photo.pasteMetadata";
                 let clip = s.meta_clipboard.clone().ok_or_else(|| bad(c, "nothing copied (photo.copyMetadata)"))?;
                 let fields: Option<Vec<String>> =
                     p.get("fields").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
+                let wanted = |k: &str| fields.as_ref().is_none_or(|f| f.iter().any(|x| x == k));
                 let mut params = serde_json::Map::new();
                 for (k, v) in clip.as_object().into_iter().flatten() {
-                    if fields.as_ref().is_none_or(|f| f.iter().any(|x| x == k)) {
+                    // rating and label are photo fields, not Edit Info fields: they are pasted below
+                    if k != "rating" && k != "label" && wanted(k) {
                         params.insert(k.clone(), v.clone());
                     }
                 }
                 if let Some(ids) = p.get("ids") {
                     params.insert("ids".into(), ids.clone());
                 }
-                s.execute("photo.setMeta", &Value::Object(params))
+                let before = s.commits();
+                // only the rating and label were asked for: nothing for Edit Info to do
+                let out = if params.keys().any(|k| k != "ids") { s.execute("photo.setMeta", &Value::Object(params))? } else { json!({}) };
+                let targets = s.targets(p)?;
+                let mut ops = Vec::new();
+                if wanted("rating")
+                    && let Some(r) = clip.get("rating").and_then(Value::as_u64).and_then(|r| u8::try_from(r).ok()).filter(|r| *r <= 5)
+                {
+                    for id in &targets {
+                        if s.catalog.photo(*id).is_some_and(|ph| ph.rating != r) {
+                            ops.push(Op::SetRating { id: *id, rating: r });
+                        }
+                    }
+                }
+                if wanted("label") && clip.get("label").is_some() {
+                    let label = clip.get("label").and_then(Value::as_str).and_then(ColorLabel::parse);
+                    for id in &targets {
+                        if s.catalog.photo(*id).is_some_and(|ph| ph.label != label) {
+                            ops.push(Op::SetLabel { id: *id, label });
+                        }
+                    }
+                }
+                if !ops.is_empty() {
+                    s.commit("Paste Metadata", Op::Batch { ops })?;
+                }
+                // Edit Info and the rating/label batch are one step for the user
+                let steps = usize::try_from(s.commits().wrapping_sub(before)).unwrap_or(0);
+                s.merge_undo(steps, "Paste Metadata");
+                Ok(out)
             }
         ),
         cmd!(
