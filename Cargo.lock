@@ -4578,6 +4578,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "lightcraft-denoise-train"
+version = "0.7.0"
+dependencies = [
+ "candle-core",
+ "candle-nn",
+ "lightcraft-raw",
+ "rayon",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "lightcraft-desktop"
 version = "0.7.0"
 dependencies = [

@@ -49,3 +49,40 @@ Mac host metadata was Apple M1 (Virtual), 3 CPUs & 7,516,196,864 bytes memory; n
 Cross-platform pixel SHA-256 values are not bit-identical, including noisy/output buffers & one soft-edge clean buffer, so receipts bind each platform independently. Results describe synthetic RGB guided-NR behavior only; they provide no photographic, learned-model or Metal evidence.
 
 Next compare a rights-cleared RGB candidate against identical procedural & consented photographic conditions.
+
+## Own-trained denoiser: training and eval tooling (#200)
+
+Status, 2026-10-16: tooling written and unit-tested in source; **nothing has been trained and no result exists** (no build, test or training has run yet; CI verifies the source). Scope is decision A only: the CC0 raw corpus, no consented shoots, no paid compute, hardware we own. Everything below lives in `crates/denoise-train` (`lightcraft-denoise-train`), a tool crate registered `Exempt` in `xtask layers`; no product crate depends on it and its outputs are never committed (`*.safetensors` is gitignored).
+
+### Run it
+
+```text
+cargo xtask corpus --download                                  # CC0 raws into corpus/raw (gitignored)
+denoise-train splits --corpus corpus/raw                       # show the hash split; warns on an empty split
+denoise-train train  --corpus corpus/raw --out D:\scratch\ember-denoise\run1 --steps 200000 --device cpu
+denoise-train train  --corpus corpus/raw --out D:\scratch\ember-denoise\run1 --resume --steps 200000
+denoise-train eval   --weights D:\scratch\ember-denoise\run1\best.safetensors --out D:\scratch\ember-denoise\run1\eval.json
+```
+
+Build and run the binary (`-p lightcraft-denoise-train`, bin `denoise-train`) through the repo's Rust wrapper in the dev profile; on a CPU that is slow, so try a small `--steps` first. `--device metal` needs `--features metal` on macOS; CUDA is not built in (it would add a CUDA stack to the workspace lock). Output paths must be under `D:\scratch` or `/Volumes/D/scratch`.
+
+### Data
+
+* **Splits** (`split.rs`): per file, by `SHA-256(salt || SHA-256(file bytes)) mod 1000`: 15% held-out, 10% validation, 75% train (`--heldout-permille`, `--val-permille`). The unit is content, so renames never move a file, byte-identical copies share a split and are listed once, and adding files never reassigns existing ones. `verify()` rejects an empty split or a hash in two splits; `verify_assignments()` re-derives every assignment. Training reads `train` only, validation reads `val` only, `eval` reads `heldout` only (taken from the run's `splits.json`). Caveat: two different files of one scene (a burst) can land in different splits; keep the corpus one frame per scene. The corpus is small, so a tiny corpus can leave a split empty and `splits` says so.
+* **Pairs** (`data.rs`): clean = demosaic (PPG) of a black-subtracted, white-normalised CC0 Bayer crop (sources recorded above ISO 800, X-Trans and linear DNGs are skipped); noisy = demosaic of the same mosaic after a Poisson-Gaussian noise draw, clipped at white. Random exposure reduction of 0 to 3 stops, the 8 flips/rotations, 128 px patches, fresh noise on every draw, every example seeded from `(seed, step, index)`.
+* **Noise** (`noise.rs`): `y = a·Poisson(x/a) + sqrt(b)·N(0,1)`, so `E[y] = x`, `var(y) = a·x + b`. Per ISO: `a = (ISO/base)/full_well_e`, `b = (read_e·a)² + adc²`, with camera and ISO drawn log-uniformly from `SensorPrior` (ISO 100 to 25 600, full well 20k to 90k e-, read noise 1.5 to 6 e-). These ranges are plausible, **not calibrated** to any camera.
+* **Conditioning**: the network gets noisy linear camera RGB plus `sqrt(a·max(y,0)+b)·16` per channel (6 input channels); `(a, b)` are jittered log-normally (sigma 0.15) at train time so an estimated `(a, b)` from `pipeline::noise` at inference does not hurt.
+
+### Model and weights
+
+`model.rs` is NAFNet on candle with the reference parameter names and PyTorch layouts: `intro`, `ending`, `encoders.{i}.{j}`, `middle_blks.{j}`, `decoders.{i}.{j}`, `downs.{i}`, `ups.{i}.0`, per block `norm1/2`, `conv1..5`, `sca.1`, `beta`, `gamma`. Width 16, encoder `[1,1,1,2]`, 3 middle, decoder `[1,1,1,1]`: 2 190 947 parameters (a test checks this against the closed form `7c²+33c` per block). Differences from the reference: 6 input channels (the global skip adds the first three), and the final convolution starts at zero weights so training starts from the identity. Weights are plain F32 safetensors with a `contract.json` beside them (architecture config, input/output contract, noise prior, split counts).
+
+**Correction to the delivery plan:** `crates/denoise` loads ONNX plain U-Nets (no depthwise convolution, channel attention or LayerNorm), so it cannot run this network. The Candle inference path for the shipped model is separate work: `NafNet::load`/`infer`/`infer_tiled` here are the reference implementation to port or reuse, not a product integration. Training is Rust on candle, not PyTorch as `local-ai-delivery.md` first sketched.
+
+### Eval report (`eval.json`)
+
+On held-out files only, per ISO stratum (800 to 25 600 on a fixed reference camera): MSE, PSNR, display-encoded PSNR, gradient RMSE, signed per-channel bias and R/G, B/G shift, each for the noisy input and the network. Plus whole-image vs tiled difference (128 px tiles, 32 px overlap), procedural flats, steps, soft edge and texture at ISO 3200 and 12 800 (structure left in flats, edge overshoot, gradient energy kept), and warm p50/p95 latency of one 512 px whole-image call on the chosen device.
+
+`status` is always `UNQUALIFIED`. The `checks` thresholds are provisional values proposed by the tool (never worse than the noisy input, at least 2 dB at ISO 3200 and up, bias at most 0.003, chroma shift at most 0.02, tiled difference at most 0.02, no invented structure in flats, no added overshoot, texture energy 0.3 to 1.5); they are not ratified here, and passing them is necessary evidence only.
+
+Not measured: human preference and the classical-NR comparison (gate item 5), peak memory and named Mac/Windows latency (item 4), the product colour contract (item 2: training runs in demosaiced camera RGB, not scene-linear Rec.2020, until that contract is fixed), and consented camera/ISO strata.

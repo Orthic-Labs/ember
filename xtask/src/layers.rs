@@ -71,6 +71,8 @@ pub const TABLE: &[(&str, Class)] = &[
     ("cli", Class::Exempt),
     ("web", Class::Exempt),
     ("xtask", Class::Exempt),
+    // training tooling: not product code, nothing depends on it
+    ("denoise-train", Class::Exempt),
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).

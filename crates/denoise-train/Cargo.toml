@@ -1,0 +1,34 @@
+[package]
+name = "lightcraft-denoise-train"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Ember training tooling (not product code): CC0 pair generation, NAFNet-w16 training and the denoise qualification eval, in pure Rust on candle"
+
+[lib]
+name = "lightcraft_denoise_train"
+path = "src/lib.rs"
+
+[[bin]]
+name = "denoise-train"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# Optional accelerator on hardware we own (off by default and in CI). CUDA is deliberately not a feature: it would add
+# cudarc and the CUDA toolchain to the workspace lock; add it locally on the training machine if needed.
+metal = ["candle-core/metal", "candle-nn/metal"]
+
+[dependencies]
+lightcraft-raw = { workspace = true }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
