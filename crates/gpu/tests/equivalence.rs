@@ -595,6 +595,28 @@ fn highlights_shadows_base_matches_on_every_process() {
     }
 }
 
+/// Colour noise reduction at half resolution (V3 and later) and at full resolution (V1 / V2, and
+/// sigma below `NR_COLOR_HALF_MIN_SIGMA`) match the CPU, on even and odd sizes.
+#[test]
+fn colour_noise_reduction_half_resolution_matches() {
+    if !gpu() {
+        return;
+    }
+    let info = SourceInfo::default();
+    for &(sw, sh, w, h) in &[(1200, 800, 1200, 800), (1201, 799, 601, 399), (1200, 800, 301, 201)] {
+        let src = scene(5, sw, sh);
+        let req = RenderRequest::fit(w, h);
+        for p in Process::ALL {
+            for color in [8.0, 60.0, 100.0] {
+                let mut s = DevelopSettings { process: p.version(), ..DevelopSettings::default() };
+                s.detail.nr_color = color;
+                s.detail.nr_color_smoothness = 50.0;
+                check(&format!("{p:?} colour NR {color} {w}x{h}"), &src, &info, &s, &req);
+            }
+        }
+    }
+}
+
 #[test]
 fn overlays_match() {
     if !gpu() {

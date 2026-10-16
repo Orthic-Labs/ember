@@ -299,11 +299,40 @@ pub struct NrLum {
     pub k: f32,
 }
 
-/// Colour noise reduction: chromaticity blurred by `sigma` px, mixed in by `t`.
+/// Colour noise reduction: chromaticity blurred by `sigma` px, mixed in by `t`. With `half` the
+/// blur runs on the 2x box-downsampled chromaticity (`sigma / 2` px) and is bilinearly upsampled
+/// (process V3 and later, `sigma` at least [`NR_COLOR_HALF_MIN_SIGMA`]); luminance is untouched.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NrColor {
     pub sigma: f32,
     pub t: f32,
+    pub half: bool,
+}
+
+/// Smallest colour-NR `sigma` (px) that runs at half resolution: below it the half-resolution blur
+/// (`sigma / 2` < 1.5 px) is too narrow to be well sampled, and the full-resolution blur is cheap.
+pub const NR_COLOR_HALF_MIN_SIGMA: f32 = 3.0;
+
+/// Whether `s`'s rendering process lets colour NR run at half resolution (V3 and later; V1/V2
+/// photos keep the full-resolution blur so their look is unchanged).
+pub fn nr_color_half_process(s: &DevelopSettings) -> bool {
+    !matches!(s.process.process(), Process::V1 | Process::V2)
+}
+
+/// Half-resolution plane size for a `w x h` plane (`ceil(w / 2)`, at least 1).
+pub fn nr_color_half_size(w: usize, h: usize) -> (usize, usize) {
+    (w.div_ceil(2).max(1), h.div_ceil(2).max(1))
+}
+
+/// Gaussian blur of chromaticity `chroma` by `sigma` px, at half resolution when `half`.
+pub fn nr_color_blur(chroma: &Rgb32f, sigma: f32, half: bool) -> Rgb32f {
+    use lightcraft_raster::resample::{Filter, resize};
+    if !half || chroma.width < 2 || chroma.height < 2 {
+        return gaussian(chroma, sigma);
+    }
+    let (lw, lh) = nr_color_half_size(chroma.width, chroma.height);
+    let lo = resize(chroma, lw, lh, Filter::Box);
+    resize(&gaussian(&lo, sigma / 2.0), chroma.width, chroma.height, Filter::Bilinear)
 }
 
 /// Noise-reduction parameters at an output long edge of `out_long` px (see [`denoise`]).
@@ -318,7 +347,7 @@ pub fn nr_params(s: &DevelopSettings, src_long: usize, out_long: usize) -> (Opti
     let c = (col > 0.0).then(|| {
         let sigma = (1.5 + 6.0 * col) * scale.max(0.35) * (1.0 + (s.detail.nr_color_smoothness / 100.0) as f32);
         let keep = (s.detail.nr_color_detail / 100.0) as f32 * 0.5;
-        NrColor { sigma, t: col * (1.0 - keep) }
+        NrColor { sigma, t: col * (1.0 - keep), half: nr_color_half_process(s) && sigma >= NR_COLOR_HALF_MIN_SIGMA }
     });
     (l, c)
 }
@@ -351,7 +380,7 @@ pub fn denoise(img: &mut Rgb32f, s: &DevelopSettings, src_long: usize, out_long:
             let y = luminance_2020(c).max(1e-6);
             [c[0] / y, c[1] / y, c[2] / y]
         });
-        let b = gaussian(&chroma, nr.sigma);
+        let b = nr_color_blur(&chroma, nr.sigma, nr.half);
         for_rows(&mut img.data, w, |y, row| {
             for (x, p) in row.iter_mut().enumerate() {
                 let i = y * w + x;
@@ -698,5 +727,78 @@ mod nr_tests {
         let (v1, m1) = var(&img);
         assert!(v1 < v0 * 0.5, "{v0} -> {v1}");
         assert!((m1 - m0).abs() < 0.01);
+    }
+
+    /// Constant luminance, colour noise (+-0.03 on R/Y and B/Y) and a chromaticity step at `edge`.
+    fn chroma_noise_scene(w: usize, h: usize, edge: usize) -> Rgb32f {
+        Rgb32f::from_fn(w, h, |x, y| {
+            let n = |k: usize| (((x * 7919 + y * 104729 + k * 15485863) % 97) as f32 / 97.0 - 0.5) * 0.06;
+            let (r, b) = if x < edge { (0.40, 0.20) } else { (0.20, 0.40) };
+            [(r + n(1)) * 0.3, 0.3, (b + n(2)) * 0.3]
+        })
+    }
+
+    fn chroma_of(img: &Rgb32f) -> Rgb32f {
+        img.map(|c| {
+            let y = luminance_2020(c).max(1e-6);
+            [c[0] / y, c[1] / y, c[2] / y]
+        })
+    }
+
+    fn max_diff(a: &Rgb32f, b: &Rgb32f) -> f32 {
+        a.data.iter().zip(&b.data).flat_map(|(p, q)| (0..3).map(move |k| (p[k] - q[k]).abs())).fold(0.0, f32::max)
+    }
+
+    /// The half-resolution blur of the chromaticity stays within 0.02 (chromaticity units, which
+    /// span about 0.2..0.4 across the step) of the full-resolution blur everywhere, so the step's
+    /// transition (the colour bleed) has the same width to well under a pixel.
+    #[test]
+    fn half_resolution_chroma_blur_tracks_the_full_resolution_blur() {
+        for edge in [64, 65] {
+            let chroma = chroma_of(&chroma_noise_scene(128, 96, edge));
+            for sigma in [3.0, 6.0, 12.0] {
+                let full = nr_color_blur(&chroma, sigma, false);
+                let half = nr_color_blur(&chroma, sigma, true);
+                let d = max_diff(&full, &half);
+                assert!(d < 0.02, "edge {edge} sigma {sigma}: {d}");
+            }
+        }
+    }
+
+    /// Whole colour NR: V3 (half resolution) is within 0.02 per channel of V2 (full resolution),
+    /// and V2 / V1 do not use the half-resolution blur at all.
+    #[test]
+    fn colour_nr_half_resolution_is_gated_by_process_and_close_to_full() {
+        let src = chroma_noise_scene(128, 128, 64);
+        let mut v2 = DevelopSettings { process: Process::V2.version(), ..DevelopSettings::default() };
+        let mut v3 = DevelopSettings { process: Process::V3.version(), ..DevelopSettings::default() };
+        v2.detail.nr_color = 60.0;
+        v3.detail.nr_color = 60.0;
+        let (_, c2) = nr_params(&v2, 128, 128);
+        let (_, c3) = nr_params(&v3, 128, 128);
+        assert!(!c2.is_some_and(|c| c.half) && c3.is_some_and(|c| c.half));
+        let (mut a, mut b) = (src.clone(), src.clone());
+        denoise(&mut a, &v2, 128, 128);
+        denoise(&mut b, &v3, 128, 128);
+        let d = max_diff(&a, &b);
+        assert!(d < 0.02, "{d}");
+        assert!(max_diff(&a, &src) > 0.005, "colour NR must change the image");
+        // the constant-luminance (green) channel stays finite
+        assert!(b.data.iter().all(|p| p[1].is_finite()));
+    }
+
+    /// Odd sizes, single rows / columns and 1 x 1 never panic and stay finite.
+    #[test]
+    fn half_resolution_colour_nr_handles_tiny_and_odd_sizes() {
+        let mut s = DevelopSettings { process: Process::V3.version(), ..DevelopSettings::default() };
+        s.detail.nr_color = 100.0;
+        for (w, h) in [(1, 1), (1, 7), (7, 1), (2, 2), (3, 5), (5, 3), (31, 17)] {
+            let mut img = chroma_noise_scene(w, h, w / 2);
+            denoise(&mut img, &s, w.max(h), w.max(h));
+            assert!(img.data.iter().all(|p| p.iter().all(|v| v.is_finite())), "{w}x{h}");
+            let chroma = chroma_of(&img);
+            let blurred = nr_color_blur(&chroma, 8.0, true);
+            assert_eq!((blurred.width, blurred.height), (w, h));
+        }
     }
 }
