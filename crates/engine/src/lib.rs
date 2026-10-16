@@ -20,6 +20,7 @@ pub mod apple_photos;
 pub mod availability;
 pub mod book;
 pub mod branding;
+pub mod camera_calibration;
 pub(crate) mod camera_preview;
 pub mod camera_profiles;
 pub mod cmd;

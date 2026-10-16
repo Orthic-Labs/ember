@@ -155,7 +155,7 @@ pub fn get(model: &str) -> Option<Arc<CameraProfile>> {
 /// keys, so thumbnails rendered before a profile existed are not reused after.
 pub fn cache_key() -> u64 {
     static KEY: OnceLock<u64> = OnceLock::new();
-    *KEY.get_or_init(|| {
+    let base = *KEY.get_or_init(|| {
         let entries = dir().and_then(|d| std::fs::read_dir(d).ok());
         let mut files: Vec<(String, u64, u64)> = entries
             .into_iter()
@@ -177,7 +177,9 @@ pub fn cache_key() -> u64 {
             h.str(model).str(json);
         }
         h.finish().0 as u64
-    })
+    });
+    // profiles `camera.calibrate` saved since start
+    base.wrapping_add(crate::camera_calibration::generation().wrapping_mul(0x9E37_79B9_7F4A_7C15))
 }
 
 /// Per camera model: the photos read and their pooled colour pairs.

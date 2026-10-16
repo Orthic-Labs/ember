@@ -85,6 +85,13 @@ fn starting_colour_with(
     fit: impl FnOnce(&RawImage, &CameraTransform) -> (Option<CameraLook>, bool),
     monochrome: impl FnOnce(&RawImage, &CameraTransform) -> Option<CameraLook>,
 ) -> (Xy, CameraTransform, Option<CameraLook>) {
+    // a chart calibration of this camera model (`camera.calibrate`) outranks every estimate below
+    if let Some(profile) = raw.metadata.model.as_deref().and_then(crate::camera_calibration::get)
+        && profile.fill(&mut raw.color)
+        && lightcraft_pipeline::profiling()
+    {
+        eprintln!("[profile] {:?} camera colour from a chart calibration: {}", raw.format, profile.model);
+    }
     let start = |raw: &RawImage| {
         let xy = lightcraft_raw::color::as_shot_white_xy(raw);
         (xy, lightcraft_raw::color::camera_transform(raw, xy))

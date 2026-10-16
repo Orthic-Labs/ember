@@ -8,6 +8,7 @@ mod activity;
 mod before;
 mod book;
 pub(crate) mod browse;
+mod calibrate;
 mod color;
 pub(crate) mod convert;
 pub mod cull;
@@ -176,6 +177,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(activity::specs());
         v.extend(slideshow::specs());
         v.extend(book::specs());
+        v.extend(calibrate::specs());
         v
     })
 }
