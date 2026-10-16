@@ -494,7 +494,12 @@ fn cache_location_json(s: &Session, lib_dir: &std::path::Path) -> Value {
 #[cfg(not(target_arch = "wasm32"))]
 fn cache_location(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "library.cacheLocation";
-    let lib_dir = s.library.as_ref().filter(|l| l.on_disk).map(|l| l.dir.clone()).ok_or_else(|| bad(C, "the thumbnail cache folder needs a library on disk"))?;
+    let lib_dir = s
+        .library
+        .as_ref()
+        .filter(|l| l.on_disk)
+        .map(|l| l.dir.clone())
+        .ok_or_else(|| bad(C, "the thumbnail cache folder needs a library on disk"))?;
     let reset = p.get("reset").and_then(Value::as_bool).unwrap_or(false);
     let chosen = str_param(p, "path").filter(|x| !x.trim().is_empty());
     if !reset && chosen.is_none() {

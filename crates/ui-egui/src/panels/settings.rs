@@ -446,14 +446,19 @@ fn performance_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
             let names = gpu::adapters();
             let mut index = names.iter().position(|n| *n == app.ui.settings.gpu_adapter).map_or(0, |i| i + 1);
             let auto = crate::i18n::tr("Automatic");
-            let opts: Vec<(usize, &str)> = std::iter::once((0, auto)).chain(names.iter().enumerate().map(|(i, n)| (i + 1, n.as_str()))).collect();
+            let mut opts: Vec<(usize, &str)> = vec![(0, auto)];
+            opts.extend(names.iter().enumerate().map(|(i, n)| (i + 1, n.as_str())));
             if choices(ui, "settingsGpuAdapter", &opts, &mut index) {
                 let name = index.checked_sub(1).and_then(|i| names.get(i)).cloned().unwrap_or_default();
                 app.ui.settings.gpu_adapter = name.clone();
                 let _ = app.run("app.gpu", json!({"adapter": name}));
             }
         });
-        hint(ui, t, crate::i18n::tr("Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts."));
+        hint(
+            ui,
+            t,
+            crate::i18n::tr("Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts."),
+        );
     }
     let status = if !gpu::available() {
         match gpu::unavailable_reason() {
@@ -604,7 +609,9 @@ fn cache_folder(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
     hint(
         ui,
         t,
-        crate::i18n::tr("Thumbnails are a cache: they are rebuilt when missing, so the folder can be cleared or moved safely. It can't be inside the library's Originals."),
+        crate::i18n::tr(
+            "Thumbnails are a cache: they are rebuilt when missing, so the folder can be cleared or moved safely. It can't be inside the library's Originals.",
+        ),
     );
 }
 
@@ -1299,7 +1306,8 @@ fn device_settings_have_defaults_and_survive_a_save() {
     use crate::state::AppSettings;
     let d = AppSettings::default();
     assert!(d.gpu && !d.gpu_low_power && d.memory_mb == 0 && d.gpu_adapter.is_empty());
-    let saved = serde_json::to_string(&AppSettings { gpu_low_power: true, memory_mb: 2048, gpu_adapter: "AMD Radeon".into(), ..Default::default() }).unwrap();
+    let edited = AppSettings { gpu_low_power: true, memory_mb: 2048, gpu_adapter: "AMD Radeon".into(), ..Default::default() };
+    let saved = serde_json::to_string(&edited).unwrap();
     let back: AppSettings = serde_json::from_str(&saved).unwrap();
     assert!(back.gpu_low_power && back.memory_mb == 2048 && back.gpu && back.gpu_adapter == "AMD Radeon");
     // a ui.json written before the GPU choice existed keeps the fast GPU
