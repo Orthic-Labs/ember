@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getSnapshot, nativeAction, openSecondWindow, runCommand, savePreferences } from './api';
 import { allUiMetadata, applyUiCommand, UI_COMMAND_IDS } from './commands';
 import { normalizeLocale, translate } from './i18n';
+import { checkForUpdates, startupUpdateCheck, updateNotice } from './updates';
 import type { DesktopContextValue, DesktopSnapshot, DialogState, JsonObject, StartupView, UiState, ViewMode, WindowBootstrap } from './types';
 
 const MIN_STAGE = 360;
@@ -314,6 +315,14 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  // Startup update policy (updates.ts): silent when not provisioned; surfaces only an available update.
+  useEffect(() => {
+    if (isSecondary) return;
+    void startupUpdateCheck()?.then((status) => {
+      if (status.kind === 'available') setNotice(updateNotice(status));
+    });
+  }, [isSecondary]);
+
   // Host snapshot is authoritative, but app-level rendering preferences are engine commands;
   // apply them once after persisted UI settings hydrate, before preview requests begin.
   useEffect(() => {
@@ -430,6 +439,11 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
         if (id === 'view.fullScreenPreview') return nativeAction('toggleFullscreen', { ...params, enabled: params.enabled });
         if (id === 'view.enterFullScreen') return nativeAction('fullscreen', params);
         if (id === 'app.quit') return nativeAction('closeWindow', params);
+        if (id === 'app.checkUpdates') {
+          const status = await checkForUpdates();
+          setNotice(updateNotice(status));
+          return status;
+        }
         if (id === 'app.help' || id === 'app.discord' || id === 'app.feedback' || id === 'app.website' || id === 'app.github' || id === 'app.artcraft') {
           return nativeAction('openUrl', { url: HELP_URLS[id] });
         }

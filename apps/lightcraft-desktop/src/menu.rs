@@ -136,6 +136,7 @@ pub fn spec() -> MenuSpec {
         ],
         help: vec![
             MenuEntry::item("app.about", "About Ember"),
+            MenuEntry::item("app.checkUpdates", "Check for Updates…"),
             MenuEntry::item("app.help", "Ember Help"),
             MenuEntry::item("app.github", "Ember on GitHub"),
         ],
@@ -144,7 +145,13 @@ pub fn spec() -> MenuSpec {
 
 #[cfg(test)]
 mod tests {
-    use super::accelerator;
+    use super::{accelerator, spec};
+    use rightkit_tauri_shell::MenuEntry;
+
+    #[test]
+    fn help_menu_offers_check_for_updates() {
+        assert!(spec().help.contains(&MenuEntry::item("app.checkUpdates", "Check for Updates…")));
+    }
 
     #[test]
     fn platform_modifier_is_used_only_for_command_shortcuts() {

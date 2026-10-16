@@ -244,6 +244,7 @@ const LAYOUT: &[(&str, &[&str])] = &[
             "---",
             "app.website",
             "app.github",
+            "app.checkUpdates",
             "app.artcraft",
             "---",
             "app.whatsNew",
