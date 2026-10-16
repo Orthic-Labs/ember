@@ -954,6 +954,12 @@ pub(crate) struct Active {
 // ---------------------------------------------------------------------------------------------------------------------
 // products
 
+/// Whether Super Resolution can run in this build. None ships yet (gap 11): Photo ▸ Enhance refuses it and its
+/// checkbox stays off.
+pub fn super_resolution_available() -> bool {
+    false
+}
+
 /// The photos whose files can be denoised at all: raw files developed from their sensor data and read from disk.
 pub(crate) fn eligible(p: &Photo) -> bool {
     p.develops_raw() && matches!(p.source, Source::File { .. }) && !p.deleted

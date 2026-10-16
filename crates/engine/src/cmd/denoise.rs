@@ -585,6 +585,90 @@ fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"id": id.0, "enabled": on, "amount": amount}))
 }
 
+/// Photo ▸ Enhance…: AI Denoise and Raw Details for the raw photos given (else the active photo), as settings plus the
+/// denoised picture made in the background. Nothing is exported or written; one undo step for the whole call. Super
+/// Resolution is refused: no such model ships yet.
+fn enhance(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "photo.enhance";
+    if p.get("superResolution").is_some_and(|v| v.as_bool() != Some(false)) {
+        return Err(bad(C, "Super Resolution is not available in this build: no super resolution model ships yet"));
+    }
+    let denoise = match p.get("denoise") {
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(v) => {
+            let amount = v.as_f64().filter(|a| a.is_finite() && (0.0..=100.0).contains(a));
+            Some(Some(amount.ok_or_else(|| bad(C, "`denoise` must be an amount from 0 to 100, or null for off"))?))
+        }
+    };
+    let raw = match p.get("rawDetails") {
+        None => None,
+        Some(v) => Some(v.as_bool().ok_or_else(|| bad(C, "`rawDetails` must be true or false"))?),
+    };
+    if denoise.is_none() && raw.is_none() {
+        return Err(bad(C, "give `denoise` and/or `rawDetails`"));
+    }
+    let ids = match ids_param(p).filter(|ids| !ids.is_empty()) {
+        Some(ids) => ids,
+        None => vec![s.active().ok_or_else(|| bad(C, "select a raw photo"))?],
+    };
+    let mut targets = Vec::new();
+    let mut skipped = Vec::new();
+    for id in ids {
+        let photo = s.catalog.photo(id).ok_or_else(|| bad(C, "no such photo"))?;
+        if crate::denoise::eligible(photo) {
+            targets.push(id);
+        } else {
+            skipped.push(id.0);
+        }
+    }
+    if targets.is_empty() {
+        return Err(bad(C, "Enhance applies to raw photos developed from their sensor data"));
+    }
+    if matches!(denoise, Some(Some(_))) {
+        s.denoise_refresh_active(true);
+        if s.denoise.active.is_none() {
+            return Err(bad(C, "AI Denoise needs a model: install one in Settings > AI Denoise"));
+        }
+    }
+    s.end_interaction()?;
+    let mut ops = Vec::new();
+    // each photo with what it is now: id, AI Denoise on, Denoise amount, Raw Details
+    let mut done: Vec<(PhotoId, bool, f64, bool)> = Vec::new();
+    for id in targets {
+        let before = s.develop_of(id).ok_or_else(|| bad(C, "no such photo"))?.enhance;
+        let mut d = (*s.develop_of(id).ok_or_else(|| bad(C, "no such photo"))?).clone();
+        match denoise {
+            None => {}
+            Some(None) => d.enhance.denoise_on = Some(false),
+            Some(Some(amount)) => {
+                d.enhance.denoise = amount;
+                d.enhance.denoise_on = Some(true);
+            }
+        }
+        if let Some(on) = raw {
+            d.enhance.raw_details = on;
+        }
+        done.push((id, d.enhance.denoise_enabled(), d.enhance.denoise, d.enhance.raw_details));
+        if d.enhance != before {
+            ops.extend(s.develop_op(id, d, "Enhance"));
+        }
+    }
+    if !ops.is_empty() {
+        s.commit("Enhance", lightcraft_catalog::Op::Batch { ops })?;
+    }
+    for (id, on, _, _) in &done {
+        if *on {
+            s.denoise_enqueue(&[*id], true, false);
+        } else if matches!(denoise, Some(None)) {
+            s.denoise_cancel(Some(*id), false);
+        }
+    }
+    let enhanced: Vec<Value> =
+        done.iter().map(|(id, on, amount, raw)| json!({"id": id.0, "denoise": on, "amount": amount, "rawDetails": raw})).collect();
+    Ok(json!({"enhanced": enhanced, "skipped": skipped}))
+}
+
 fn queue(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "denoise.queue";
     s.denoise_refresh_active(true);
@@ -661,6 +745,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id?: photoId, enabled?: bool} → {id, enabled, amount} — turn AI Denoise on (50% initially) or off for one raw photo, independent of selection and Auto Sync; needs an installed model to turn on",
             always,
             toggle
+        ),
+        cmd!(
+            "photo.enhance",
+            "Enhance",
+            [],
+            None,
+            "{ids?: [photoId], denoise?: 0..100 | null, rawDetails?: bool, superResolution?: bool} → {enhanced: [{id, denoise, amount, rawDetails}], skipped: [photoId]} — Photo ▸ Enhance…: for the raw photos among `ids` (else the active photo) set AI Denoise at `denoise` (null: off; omitted: unchanged) and Raw Details (`rawDetails`; omitted: unchanged) as settings, one undo step per call; the denoised picture is made in the background and nothing is exported or written. Non-raw photos are skipped. `superResolution: true` is refused: no such model ships yet",
+            always,
+            enhance
         ),
         cmd!(query "denoise.queue", "Denoise Photos", [], None, "{ids?: [photoId], scope?: selected | visible | withAmount, retry?: false} → {added, …status} — make the denoised pictures of raw photos that have none, in the background. `retry` tries photos that failed before", always, queue),
         cmd!(query "denoise.cancel", "Cancel Denoise", [], None, "{id?, all?} → {cancelled} — stop the photo being made and/or forget the ones waiting (all of them when `id` is omitted)", always, cancel),

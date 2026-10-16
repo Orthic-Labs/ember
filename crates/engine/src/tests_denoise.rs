@@ -858,3 +858,26 @@ fn denoise_row_while_queue_is_busy() {
     assert!(rows(&x.s).is_empty(), "the row goes once the photo is made");
     let _ = std::fs::remove_dir_all(&x.dir);
 }
+
+/// Photo ▸ Enhance: Denoise and Raw Details are set together in one undo step, and Super Resolution is refused before
+/// anything changes (no such model ships).
+#[test]
+fn enhance_sets_denoise_and_raw_details_in_one_undo_step_and_refuses_super_resolution() {
+    let mut x = setup("enhance", true);
+    let id = photo(&x.s);
+    x.s.execute("library.select", &json!({"ids": [id.0]})).unwrap();
+    let undo = x.s.undo.len();
+    assert!(x.s.execute("photo.enhance", &json!({"denoise": 60, "rawDetails": true, "superResolution": true})).is_err());
+    assert_eq!(x.s.undo.len(), undo, "a refused Enhance changes nothing");
+    assert!(!x.s.develop_of(id).unwrap().enhance.raw_details);
+    let r = x.s.execute("photo.enhance", &json!({"denoise": 60, "rawDetails": true})).unwrap();
+    assert_eq!((r["enhanced"][0]["denoise"].clone(), r["enhanced"][0]["amount"].clone()), (json!(true), json!(60.0)), "{r}");
+    assert_eq!(x.s.undo.len(), undo + 1, "both settings are one undo step");
+    let d = x.s.develop_of(id).unwrap();
+    assert!(d.enhance.raw_details && d.enhance.denoise_enabled() && d.enhance.denoise == 60.0);
+    x.s.execute("edit.undo", &json!({})).unwrap();
+    let d = x.s.develop_of(id).unwrap();
+    assert!(!d.enhance.raw_details && !d.enhance.denoise_enabled(), "one undo takes both back");
+    drop(x.s);
+    let _ = std::fs::remove_dir_all(x.dir);
+}
