@@ -165,6 +165,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("view.sidebarReset", "Reset Sidebar Sections", None, ""),
     ("view.slideshow", "Slideshow", Some("Cmd+Alt+Enter"), "View"),
     ("slideshow.play", "Classic Slideshow", None, "View"),
+    ("slideshow.view", "Classic Slideshow Module", None, "View"),
     ("print.view", "Classic Print", None, "View"),
     ("map.view", "Classic Map", None, "View"),
     ("map.online", "Online Map", None, ""),
@@ -611,12 +612,15 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             r
         }
         "print.view" => crate::print_view::open(app),
+        "slideshow.view" => crate::slideshow_view::open(app),
         "map.view" => crate::map_view::open(app),
         "map.online" => crate::map_view::set_online(app, p),
         "map.tileUrl" => crate::map_view::set_tile_url(app, p),
         "view.back" => {
             if app.ui.classic_slideshow.is_some() {
                 app.ui.classic_slideshow = None;
+            } else if app.ui.classic_slideshow_view.is_some() {
+                app.ui.classic_slideshow_view = None;
             } else if app.ui.classic_map.is_some() {
                 app.ui.classic_map = None;
             } else if app.ui.classic_print.is_some() {

@@ -8,6 +8,8 @@
 //! a cross-fade's start.
 
 use crate::LightcraftApp;
+use crate::pick::{PickRequest, Picked};
+use crate::text_field::TextField;
 use lightcraft_engine::Session;
 use lightcraft_engine::slideshow::{self, Frame, Model, Timeline};
 use lightcraft_raster::Rgba8;
@@ -37,6 +39,13 @@ pub struct Run {
 }
 
 impl Run {
+    /// A playback that starts at the first slide: running when the show advances by itself, paused
+    /// (stepped with the keys) when it is manual.
+    fn new(model: Model, timeline: Timeline, size: (usize, usize), now: f64) -> Run {
+        let paused = if model.playback.auto { None } else { Some(0.0) };
+        Run { model, timeline, size, started: now, paused, slides: Vec::new(), shown: None }
+    }
+
     fn elapsed(&self, now: f64) -> f64 {
         self.paused.unwrap_or(now - self.started)
     }
@@ -110,7 +119,7 @@ impl Run {
                 self.ensure(session, p)?;
                 self.kept(p).cloned().ok_or("slide not rendered")?
             }
-            None => slideshow::backdrop(&self.model, self.size.0, self.size.1),
+            None => slideshow::backdrop_for(session, &self.model, self.size.0, self.size.1)?,
         };
         Ok(slideshow::blend(&from, &current, frame.alpha))
     }
@@ -133,7 +142,7 @@ pub fn start(app: &mut LightcraftApp, ctx: &egui::Context) -> Result<Value, Stri
     }
     let slides = timeline.entries.len();
     let duration = timeline.total;
-    app.ui.classic_slideshow = Some(Run { model, timeline, size, started: ctx.input(|i| i.time), paused: None, slides: Vec::new(), shown: None });
+    app.ui.classic_slideshow = Some(Run::new(model, timeline, size, ctx.input(|i| i.time)));
     Ok(json!({"slides": slides, "seconds": duration}))
 }
 
@@ -205,6 +214,272 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     });
 }
 
+/// Long edge of the module's preview, in pixels.
+const PREVIEW_LONG_EDGE: usize = 960;
+
+/// The Classic Slideshow module view's state (`slideshow.view`): the slide shown, the text fields
+/// being typed in and the music length and template name. Not saved; the settings are the engine's
+/// (`slideshow.set`), and the preview is the engine's slide render.
+#[derive(Clone, Debug)]
+pub struct Module {
+    /// The slide shown, by timeline index.
+    pub slide: usize,
+    /// The preview last drawn: its key (settings, slide and photos).
+    shown: Option<String>,
+    /// Text fields being typed in, until their edit ends: (field, text).
+    drafts: Vec<(&'static str, String)>,
+    /// The length of the music typed for "Fit slides to music", in seconds.
+    pub music_seconds: f64,
+    /// The name typed for a template to save.
+    pub template_name: String,
+}
+
+impl Default for Module {
+    fn default() -> Self {
+        Self { slide: 0, shown: None, drafts: Vec::new(), music_seconds: 180.0, template_name: String::new() }
+    }
+}
+
+/// Opens the module view (`slideshow.view`); it shows the selected photos, or the visible ones.
+pub fn open(app: &mut LightcraftApp) -> Result<Value, String> {
+    app.ui.classic_slideshow_view = Some(Module::default());
+    Ok(Value::Null)
+}
+
+fn preview_id() -> egui::Id {
+    egui::Id::new("classic-slideshow-module-slide")
+}
+
+/// A single-line setting: its draft while it is typed, and `Some(text)` on the frame the edit ends.
+fn text_setting(ui: &mut egui::Ui, drafts: &mut Vec<(&'static str, String)>, id: &'static str, label: &str, current: &str) -> Option<String> {
+    ui.label(label);
+    let mut text = drafts.iter().find(|(k, _)| *k == id).map_or_else(|| current.to_string(), |(_, t)| t.clone());
+    let r = TextField::singleline(id, &mut text).show(ui);
+    drafts.retain(|(k, _)| *k != id);
+    if r.editing {
+        drafts.push((id, text.clone()));
+    }
+    r.committed().then_some(text)
+}
+
+/// The slide at `index` rendered for the preview, at the preview's size.
+fn render_preview(session: &mut Session, model: &Model, timeline: &Timeline, index: usize) -> Result<lightcraft_raster::Rgba8, String> {
+    let (w, h) = slideshow::frame_size(model, PREVIEW_LONG_EDGE)?;
+    let slide = timeline.slide(index).ok_or("no slide to show")?;
+    slideshow::render_slide(session, model, slide, w, h)
+}
+
+/// Draws the module view: the settings on the left, the slide at the right.
+pub fn show_module(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
+    let Some(run) = app.ui.classic_slideshow_view.clone() else { return };
+    let ids = {
+        let selected = app.session.selected();
+        if selected.is_empty() { app.session.visible_cloned() } else { selected }
+    };
+    let model = app.session.slideshow.clone();
+    let timeline = Timeline::new(&model, &ids);
+    let slides = timeline.entries.len();
+    let slide = run.slide.min(slides.saturating_sub(1));
+    let mut next = run.clone();
+    next.slide = slide;
+    let mut m = model.clone();
+    let mut templates: Vec<String> = slideshow::builtin_templates().into_iter().map(|t| t.name).collect();
+    templates.extend(app.session.slideshow_templates.iter().map(|t| t.name.clone()));
+    let (mut close, mut export, mut play, mut fit, mut save) = (false, false, false, false, false);
+    let mut chosen: Option<String> = None;
+    egui::SidePanel::left("classicSlideshowSettings").resizable(false).default_width(290.0).show_inside(ui, |ui| {
+        ui.horizontal(|ui| {
+            if ui.button(crate::i18n::tr("Close")).clicked() {
+                close = true;
+            }
+            if ui.add_enabled(slides > 0, egui::Button::new(crate::i18n::tr("Play"))).clicked() {
+                play = true;
+            }
+            if ui.add_enabled(slides > 0, egui::Button::new(crate::i18n::tr("Export PDF…"))).clicked() {
+                export = true;
+            }
+        });
+        ui.separator();
+        egui::ComboBox::from_id_salt("slideshowTemplate").selected_text(crate::i18n::tr("Apply template")).show_ui(ui, |ui| {
+            for name in &templates {
+                if ui.selectable_label(false, name.as_str()).clicked() {
+                    chosen = Some(name.clone());
+                }
+            }
+        });
+        ui.horizontal(|ui| {
+            TextField::singleline("slideshowTemplateName", &mut next.template_name).show(ui);
+            let named = !next.template_name.trim().is_empty();
+            if ui.add_enabled(named, egui::Button::new(crate::i18n::tr("Save as template"))).clicked() {
+                save = true;
+            }
+        });
+        ui.separator();
+        ui.label(crate::i18n::tr("Aspect (width ÷ height)"));
+        ui.add(egui::DragValue::new(&mut m.layout.aspect).range(0.2..=5.0).speed(0.01));
+        ui.label(crate::i18n::tr("Margin"));
+        ui.add(egui::DragValue::new(&mut m.layout.margin).range(0.0..=0.25).speed(0.001));
+        ui.checkbox(&mut m.layout.guides, crate::i18n::tr("Guides"));
+        ui.separator();
+        ui.checkbox(&mut m.options.zoom_to_fill, crate::i18n::tr("Zoom to fill"));
+        ui.label(crate::i18n::tr("Stroke width"));
+        ui.add(egui::DragValue::new(&mut m.options.stroke_width).range(0.0..=0.05).speed(0.001));
+        ui.label(crate::i18n::tr("Stroke colour"));
+        ui.color_edit_button_srgb(&mut m.options.stroke_color);
+        ui.checkbox(&mut m.options.shadow, crate::i18n::tr("Shadow"));
+        ui.separator();
+        ui.label(crate::i18n::tr("Backdrop colour"));
+        ui.color_edit_button_srgb(&mut m.backdrop.color);
+        let mut gradient = m.backdrop.gradient_to.is_some();
+        if ui.checkbox(&mut gradient, crate::i18n::tr("Gradient to")).changed() {
+            let to = m.backdrop.gradient_to.unwrap_or([0, 0, 0]);
+            m.backdrop.gradient_to = gradient.then_some(to);
+        }
+        if let Some(mut to) = m.backdrop.gradient_to
+            && ui.color_edit_button_srgb(&mut to).changed()
+        {
+            m.backdrop.gradient_to = Some(to);
+        }
+        ui.separator();
+        if let Some(text) = text_setting(ui, &mut next.drafts, "slideshowIdentity", crate::i18n::tr("Identity plate"), &m.overlays.identity_plate) {
+            m.overlays.identity_plate = text;
+        }
+        if let Some(text) = text_setting(ui, &mut next.drafts, "slideshowText", crate::i18n::tr("Overlay text (metadata fields in braces)"), &m.overlays.text) {
+            m.overlays.text = text;
+        }
+        ui.checkbox(&mut m.overlays.rating_stars, crate::i18n::tr("Rating stars"));
+        ui.separator();
+        if let Some(text) = text_setting(ui, &mut next.drafts, "slideshowIntro", crate::i18n::tr("Intro title"), &m.titles.intro) {
+            m.titles.intro = text;
+        }
+        if let Some(text) = text_setting(ui, &mut next.drafts, "slideshowEnding", crate::i18n::tr("Ending title"), &m.titles.ending) {
+            m.titles.ending = text;
+        }
+        ui.separator();
+        ui.label(crate::i18n::tr("Seconds per photo"));
+        ui.add(egui::DragValue::new(&mut m.playback.slide_seconds).range(0.5..=60.0).speed(0.1));
+        ui.label(crate::i18n::tr("Fade seconds"));
+        ui.add(egui::DragValue::new(&mut m.playback.fade_seconds).range(0.0..=60.0).speed(0.05));
+        ui.checkbox(&mut m.playback.random, crate::i18n::tr("Random order"));
+        ui.checkbox(&mut m.playback.repeat, crate::i18n::tr("Repeat"));
+        ui.checkbox(&mut m.playback.auto, crate::i18n::tr("Advance automatically"));
+        ui.separator();
+        if let Some(path) = text_setting(ui, &mut next.drafts, "slideshowMusic", crate::i18n::tr("Music file"), &m.music.path) {
+            m.music.path = path;
+        }
+        ui.label(crate::i18n::tr("Music length (seconds)"));
+        ui.add(egui::DragValue::new(&mut next.music_seconds).range(1.0..=7200.0).speed(1.0));
+        if ui.button(crate::i18n::tr("Fit slides to music")).clicked() {
+            fit = true;
+        }
+    });
+    if m != model
+        && let Err(e) = app.run("slideshow.set", json!(m))
+    {
+        app.toast_error(ctx, e);
+    }
+    if let Some(name) = chosen
+        && let Err(e) = app.run("slideshow.applyTemplate", json!({"name": name}))
+    {
+        app.toast_error(ctx, e);
+    }
+    if save {
+        let name = next.template_name.trim().to_string();
+        match app.run("slideshow.saveTemplate", json!({"name": name})) {
+            Ok(_) => {
+                app.toast(ctx, format!("Saved template {name}"));
+                next.template_name.clear();
+            }
+            Err(e) => app.toast_error(ctx, e),
+        }
+    }
+    if fit {
+        match app.run("slideshow.fitToMusic", json!({"seconds": next.music_seconds})) {
+            Ok(done) => app.toast(ctx, format!("{:.2} s per photo", done["slideSeconds"].as_f64().unwrap_or(0.0))),
+            Err(e) => app.toast_error(ctx, e),
+        }
+    }
+    if slides == 0 {
+        ui.label(crate::i18n::tr("Select photos to show."));
+    } else {
+        ui.horizontal(|ui| {
+            if ui.add_enabled(slide > 0, egui::Button::new(crate::i18n::tr("Previous slide"))).clicked() {
+                next.slide = slide - 1;
+            }
+            ui.label(format!("{} {} / {}", crate::i18n::tr("Slide"), slide + 1, slides));
+            if ui.add_enabled(slide + 1 < slides, egui::Button::new(crate::i18n::tr("Next slide"))).clicked() {
+                next.slide = slide + 1;
+            }
+        });
+        let key = format!("{}|{}|{:?}", serde_json::to_string(&m).unwrap_or_default(), slide, ids);
+        if run.shown.as_deref() != Some(key.as_str()) {
+            next.shown = Some(key);
+            match render_preview(&mut app.session, &m, &timeline, slide) {
+                Ok(mut img) => {
+                    if let Some(d) = app.renderer.display()
+                        && let Err(e) = d.profile.from_srgb(&mut img)
+                    {
+                        log::warn!("display profile: {e}");
+                    }
+                    let color = egui::ColorImage::from_rgba_unmultiplied([img.width, img.height], &img.as_bytes());
+                    let tex = ctx.load_texture("classic-slideshow-module-slide", color, egui::TextureOptions::LINEAR);
+                    ctx.data_mut(|d| d.insert_temp(preview_id(), tex));
+                }
+                Err(e) => app.toast_error(ctx, e),
+            }
+        }
+        if let Some(tex) = ctx.data(|d| d.get_temp::<egui::TextureHandle>(preview_id())) {
+            let size = tex.size_vec2();
+            let rect = ui.max_rect();
+            let scale = (rect.width() / size.x.max(1.0)).min(rect.height() / size.y.max(1.0));
+            let shown = ui.centered_and_justified(|ui| ui.add(egui::Image::new((tex.id(), size * scale))).rect).inner;
+            if m.layout.guides {
+                // the margin lines, as the render places them: a fraction of the short edge
+                let guide = shown.shrink(m.layout.margin as f32 * shown.width().min(shown.height()));
+                let stroke = egui::Stroke::new(1.0, egui::Color32::from_white_alpha(160));
+                let painter = ui.painter();
+                painter.line_segment([guide.left_top(), guide.right_top()], stroke);
+                painter.line_segment([guide.right_top(), guide.right_bottom()], stroke);
+                painter.line_segment([guide.right_bottom(), guide.left_bottom()], stroke);
+                painter.line_segment([guide.left_bottom(), guide.left_top()], stroke);
+            }
+        }
+    }
+    if play {
+        match start(app, ctx) {
+            Ok(_) => app.toast(ctx, crate::i18n::tr("Classic slideshow · Space pauses · arrows step · Esc ends")),
+            Err(e) => app.toast_error(ctx, e),
+        }
+    }
+    if export {
+        export_pdf(app, ctx);
+    }
+    if close {
+        app.ui.classic_slideshow_view = None;
+    } else if let Some(open) = app.ui.classic_slideshow_view.as_mut() {
+        *open = next;
+    }
+}
+
+/// Asks for a PDF path, then writes the show there (`slideshow.export`).
+fn export_pdf(app: &mut LightcraftApp, ctx: &egui::Context) {
+    let params = json!({"format": "pdf"});
+    let request = PickRequest::save("Slideshow PDF", "PDF", &["pdf"], "Slideshow.pdf");
+    match crate::pick::ask(app, "slideshow.export", &params, "path", request, |_| None) {
+        Picked::Now(paths) => {
+            let Some(path) = paths.first() else { return };
+            let mut params = params;
+            params["path"] = json!(path);
+            match app.run("slideshow.export", params) {
+                Ok(done) => app.toast(ctx, format!("Exported {} slides to {}", done["slides"], path)),
+                Err(e) => app.toast_error(ctx, e),
+            }
+        }
+        Picked::Later => {}
+        Picked::Unavailable => app.toast_error(ctx, "no save dialog on this platform; slideshow.export needs a path"),
+    }
+}
+
 fn frame_id() -> egui::Id {
     egui::Id::new("classic-slideshow-frame")
 }
@@ -258,6 +533,19 @@ mod tests {
         r.seek(3.0, 0.0);
         assert!(r.step(0.0, true));
         assert_eq!(r.elapsed(0.0), 0.0);
+    }
+
+    #[test]
+    fn manual_playback_starts_paused_on_the_first_slide() {
+        let mut model = Model::default();
+        model.playback.auto = false;
+        let timeline = Timeline::new(&model, &[PhotoId(1), PhotoId(2)]);
+        let manual = Run::new(model, timeline, (16, 16), 0.0);
+        assert_eq!(manual.elapsed(100.0), 0.0, "time stands still until a step or Space");
+        assert_eq!(manual.timeline.frame_at(manual.elapsed(100.0)).unwrap().current, 0);
+        let auto_model = Model::default();
+        let auto = Run::new(auto_model.clone(), Timeline::new(&auto_model, &[PhotoId(1)]), (16, 16), 0.0);
+        assert!(auto.paused.is_none(), "an automatic show runs from the start");
     }
 
     #[test]

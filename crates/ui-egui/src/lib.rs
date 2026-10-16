@@ -1400,6 +1400,13 @@ impl LightcraftApp {
             self.end_frame(&ctx, t0);
             return;
         }
+        if self.ui.classic_slideshow_view.is_some() {
+            // Classic Slideshow module: the settings beside the slide, with its PDF export
+            egui::CentralPanel::default().show(ui, |ui| slideshow_view::show_module(self, &ctx, ui));
+            self.widgets = widgets::take_registry(&ctx);
+            self.end_frame(&ctx, t0);
+            return;
+        }
         if self.ui.fullscreen {
             // full-screen preview: the photo alone on black
             egui::CentralPanel::default().frame(egui::Frame::NONE.fill(egui::Color32::BLACK)).show(ui, |ui| panels::detail::show(self, ui));
