@@ -33,6 +33,7 @@ pub mod crs;
 pub mod crs_masks;
 pub mod demo;
 pub mod denoise;
+pub mod depth;
 pub mod devices;
 pub mod display;
 mod errors;

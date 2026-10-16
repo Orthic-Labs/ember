@@ -861,6 +861,26 @@ fn g_toggles_grids_and_shift_g_starts_guided_upright() {
 }
 
 #[test]
+fn depth_range_explains_a_photo_without_depth_and_edits_its_range() {
+    let mut h = detail("panel.masking");
+    exec(&mut h, "mask.add", json!({"kind": "depthRange", "lo": 0.0, "hi": 0.5}));
+    h.settle(SETTLE);
+    let range = |h: &Headless| match &develop(h).masks[0].components[0].shape {
+        MaskShape::DepthRange { lo, hi, .. } => (*lo, *hi),
+        s => panic!("{s:?}"),
+    };
+    // the demo photo has no depth map: the control says so
+    let r = h.request("ui.clickWidget", json!({"id": "depthNone:0"}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    // drag the far handle from the middle of the bar to its right end
+    let r = h.request("ui.dragWidget", json!({"id": "depthRange:0", "fx": 0.5, "fy": 0.5, "dx": 100.0}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    let (lo, hi) = range(&h);
+    assert_eq!(lo, 0.0, "the nearer handle moves");
+    assert!(hi > 0.9, "{hi}");
+}
+
+#[test]
 fn luminance_range_controls_and_map() {
     let mut h = detail("panel.masking");
     exec(&mut h, "mask.add", json!({"kind": "luminanceRange", "lo": 0.6, "hi": 1.0}));

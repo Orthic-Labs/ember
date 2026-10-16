@@ -11,7 +11,8 @@
 //!
 //! HEIF records orientation in the container (`irot`/`imir`, plus a `clap` crop), not in EXIF.
 //! [`Options::apply_transforms`] applies them; with it off, the pixels come back as coded.
-//! Auxiliary images other than alpha (HDR gain maps, depth maps) are ignored.
+//! Auxiliary images other than alpha (HDR gain maps, depth maps) are ignored by [`decode`]; the depth map of a
+//! portrait photo is read by [`decode_depth`].
 //!
 //! Never panics: heic-rs is young, so every call into it runs under `catch_unwind` and a panic
 //! inside it becomes [`Error::Malformed`].
@@ -204,6 +205,75 @@ pub fn decode_thumbnail(bytes: &[u8], min_edge: u32, options: &Options) -> Resul
         (decoded.exif, decoded.xmp) = metadata(&ctx);
         Ok(Some(decoded))
     })
+}
+
+/// A depth or disparity map stored as an auxiliary image of the primary picture, as portrait-mode phones write it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Depth {
+    pub width: u32,
+    pub height: u32,
+    /// Bits per sample as coded: the codes run from 0 to `2^bit_depth - 1`.
+    pub bit_depth: u8,
+    /// The samples are disparity (a larger code is nearer), not depth (a larger code is farther).
+    pub disparity: bool,
+    /// The luma samples, row-major, upright like the primary picture: its rotation and mirror are applied, and its
+    /// crop as the same fraction of the (smaller) depth map.
+    pub data: Vec<u16>,
+}
+
+/// Decodes the depth map of the primary image, if the file has one (an `auxl` auxiliary image whose `auxC` type
+/// names depth or disparity: Apple's `urn:com:apple:photo:2018:aux:…` types, or HEVC auxiliary type 2). Pictures
+/// larger than `max_pixels` are refused.
+pub fn decode_depth(bytes: &[u8], max_pixels: u64) -> Result<Option<Depth>, Error> {
+    guarded(|| decode_depth_unguarded(bytes, max_pixels))
+}
+
+fn decode_depth_unguarded(bytes: &[u8], max_pixels: u64) -> Result<Option<Depth>, Error> {
+    let ctx = Context::open(bytes).map_err(err)?;
+    let primary = ctx.meta.primary;
+    let Some((aux, disparity)) = depth_item(&ctx, primary) else { return Ok(None) };
+    let p = ctx.props(primary).map_err(err)?;
+    let (pw, ph) = ctx.coded_size(primary, &p).map_err(err)?;
+    let ap = ctx.props(aux).map_err(err)?;
+    let (aw, ah) = ctx.coded_size(aux, &ap).map_err(err)?;
+    heic_rs::image::check_pixels(aw, ah, max_pixels).map_err(err)?;
+    let coded = Coded::decode(&ctx, aux, &ap, max_pixels)?;
+    let planes = coded.planes()?;
+    let (w, h) = planes.size();
+    let bit_depth = planes.bit_depth();
+    let data = ycc::luma_codes(&planes).ok_or_else(|| Error::Malformed("the depth image is incomplete".into()))?;
+    let img = orient::apply_scaled(orient::Pixels { width: w, height: h, ch: 1, data }, (pw as usize, ph as usize), &p.transforms)?;
+    Ok(Some(Depth {
+        width: u32::try_from(img.width).map_err(|_| Error::Limit("depth map too wide".into()))?,
+        height: u32::try_from(img.height).map_err(|_| Error::Limit("depth map too tall".into()))?,
+        bit_depth,
+        disparity,
+        data: img.data,
+    }))
+}
+
+/// The auxiliary image of `primary` that holds depth, and whether its samples are disparity.
+fn depth_item(ctx: &Context<'_>, primary: u32) -> Option<(u32, bool)> {
+    for r in ctx.meta.refs.iter().filter(|r| r.kind == heic_rs::meta::iref::RefKind::Auxl && r.to.contains(&primary)) {
+        let Ok(p) = ctx.props(r.from) else { continue };
+        if let Some(disparity) = p.auxc.and_then(|a| depth_kind(a.urn)) {
+            return Some((r.from, disparity));
+        }
+    }
+    None
+}
+
+/// For the auxiliary type URN of a depth map, whether its samples are disparity. Apple's portrait depth is
+/// disparity (inverse distance: a larger code is nearer); the generic HEVC / MPEG depth types are distances.
+fn depth_kind(urn: &str) -> Option<bool> {
+    let u = urn.to_ascii_lowercase();
+    if u.ends_with("disparity") || (u.starts_with("urn:com:apple:photo:") && (u.ends_with(":depth") || u.ends_with("portraitdepth"))) {
+        Some(true)
+    } else if u.ends_with("auxiliary:depth") || u == "urn:mpeg:hevc:2015:auxid:2" || u.ends_with(":aux:depth") {
+        Some(false)
+    } else {
+        None
+    }
 }
 
 /// An item's ICC profile; a grid whose own properties carry none takes its first tile's (as on

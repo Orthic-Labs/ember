@@ -9,11 +9,13 @@
 //! - [`parse_gpx`] — GPS track logs (GPX) for geotagging by capture time.
 //! - [`extract`] — all of the above for a whole file (JPEG, PNG, WebP, TIFF/DNG/raw, Canon CR3).
 //! - [`cr3`] — the Canon CR3 container (metadata blocks, XMP, the JPEG and raw tracks).
+//! - [`find_depth`] — the depth map an Android portrait JPEG embeds (Dynamic Depth or GDepth).
 #![forbid(unsafe_code)]
 
 mod container;
 pub mod cr3;
 mod datetime;
+mod depth;
 mod exif;
 mod focus;
 mod gpx;
@@ -24,6 +26,7 @@ mod xmp_merge;
 
 pub use container::{Embedded, embedded, jpeg_segments, png_chunks, webp_chunks};
 pub use datetime::DateTime;
+pub use depth::{DepthError, EmbeddedDepth, RangeFormat, find_depth};
 pub use exif::{from_tiff, read_exif, strip_exif_header, try_read_exif, write_exif};
 pub use gpx::{GpxError, Match, TrackPoint, Tracklog, parse_gpx};
 pub use iptc::parse_iptc;

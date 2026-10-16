@@ -125,7 +125,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
     egui::Frame::NONE.inner_margin(egui::Margin { left: 24, right: 22, top: 0, bottom: 10 }).show(ui, |ui| {
         ui.label(egui::RichText::new(crate::i18n::tr("Create New Mask")).color(t.text_dim));
         ui.add_space(6.0);
-        let tiles: [(&str, &str, Icon); 10] = [
+        let tiles: [(&str, &str, Icon); 11] = [
             ("object", "Object", Icon::Subject),
             ("prompt", "Describe", Icon::Subject),
             ("subject", "Subject", Icon::Subject),
@@ -136,6 +136,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
             ("radial", "Radial", Icon::Radial),
             ("luminanceRange", "Luminance", Icon::Sliders),
             ("colorRange", "Color", Icon::Picker),
+            ("depthRange", "Depth", Icon::Sliders),
         ];
         // four 52 pt tiles a row when they and their labels fit, else fewer (wider for a long label)
         let widest = |size: f32| {
@@ -546,6 +547,58 @@ fn overlay_options(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     }
 }
 
+/// A selected range on a 0..1 scale: a grey bar (`bright_first`: bright on the left, else dark) with the span outlined
+/// and two handles. A click or drag moves the nearer handle (one undo step per drag); `Some((lo, hi))` when it moved.
+fn range_bar(
+    app: &mut LightcraftApp,
+    ui: &mut egui::Ui,
+    id: String,
+    undo_label: &str,
+    (lo, hi): (f64, f64),
+    bright_first: bool,
+) -> Option<(f64, f64)> {
+    let t = Tokens::get(ui.ctx());
+    let w = ui.available_width().min(240.0);
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, 18.0), Sense::click_and_drag());
+    register(ui.ctx(), id, rect);
+    let p = ui.painter();
+    let n = 24;
+    for k in 0..n {
+        let a = k as f32 / n as f32;
+        let r = Rect::from_min_max(
+            pos2(rect.left() + a * w, rect.top() + 4.0),
+            pos2(rect.left() + (a + 1.0 / n as f32) * w + 0.5, rect.bottom() - 4.0),
+        );
+        let level = if bright_first { 1.0 - a } else { a };
+        p.rect_filled(r, 0.0, egui::Color32::from_gray((level * 255.0) as u8));
+    }
+    let x = |v: f64| rect.left() + v.clamp(0.0, 1.0) as f32 * w;
+    p.rect_stroke(
+        Rect::from_min_max(pos2(x(lo), rect.top() + 2.0), pos2(x(hi), rect.bottom() - 2.0)),
+        2.0,
+        Stroke::new(1.5, t.accent),
+        egui::StrokeKind::Middle,
+    );
+    for v in [lo, hi] {
+        p.circle_filled(pos2(x(v), rect.center().y), 5.0, egui::Color32::WHITE);
+        p.circle_stroke(pos2(x(v), rect.center().y), 5.0, Stroke::new(1.0, egui::Color32::from_gray(40)));
+    }
+    if resp.drag_started() {
+        let _ = app.run("develop.beginInteraction", json!({"label": undo_label}));
+    }
+    let mut moved = None;
+    if (resp.dragged() || resp.clicked())
+        && let Some(pos) = resp.interact_pointer_pos()
+    {
+        let v = (((pos.x - rect.left()) / w) as f64).clamp(0.0, 1.0);
+        moved = Some(if (v - lo).abs() <= (v - hi).abs() { (v.min(hi - 0.01), hi) } else { (lo, v.max(lo + 0.01)) });
+    }
+    if resp.drag_stopped() {
+        let _ = app.run("develop.endInteraction", json!({}));
+    }
+    moved
+}
+
 /// Controls for a range component: the selected range (two handles over a dark → light bar),
 /// Smoothness, and Show Luminance Map; colour ranges get Refine.
 fn range_controls(app: &mut LightcraftApp, ui: &mut egui::Ui, comp: usize, shape: &MaskShape) {
@@ -630,6 +683,40 @@ fn range_controls(app: &mut LightcraftApp, ui: &mut egui::Ui, comp: usize, shape
                     app.ui.mask_overlay_mode = if mode == "colorOnBw" { "color".into() } else { mode };
                 }
             }
+        }
+        MaskShape::DepthRange { lo, hi, feather } => {
+            ui.label(egui::RichText::new(crate::i18n::tr("Select Depth Range")).color(t.text_dim).size(11.5));
+            // the photo's own depth map (portrait photos from Pixel and other Android phones, iPhone portrait photos)
+            let has_depth = app.session.active().is_some_and(|id| app.session.source_info(id).mattes.as_ref().is_some_and(|m| m.has_depth()));
+            if !has_depth {
+                let note = crate::i18n::tr(
+                    "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.",
+                );
+                let r = ui.add(egui::Label::new(egui::RichText::new(note).color(t.star).size(11.5)).wrap());
+                register(ui.ctx(), format!("depthNone:{comp}"), r.rect);
+            }
+            let (lo, hi, feather) = (*lo, *hi, *feather);
+            if let Some((nlo, nhi)) = range_bar(app, ui, format!("depthRange:{comp}"), "Depth Range", (lo, hi), true) {
+                update(app, MaskShape::DepthRange { lo: nlo, hi: nhi, feather });
+            }
+            ui.label(egui::RichText::new(format!("{}  →  {}", crate::i18n::tr("Near"), crate::i18n::tr("Far"))).color(t.text_dim).size(11.0));
+            // Smoothness: the falloff on both sides of the range
+            let smooth = ControlSpec {
+                id: "depthSmoothness",
+                label: "Smoothness",
+                section: Section::Light,
+                min: 0.0,
+                max: 100.0,
+                default: 20.0,
+                step: 1.0,
+                decimals: 0,
+                track: Track::Plain,
+            };
+            let cur = (feather / 0.5 * 100.0).clamp(0.0, 100.0);
+            let out = slider(ui, &smooth, cur, true, None);
+            apply_slider_out(app, &smooth, out, |app, v| {
+                app.run("mask.update", json!({"component": comp, "shape": MaskShape::DepthRange { lo, hi, feather: v / 100.0 * 0.5 }}))
+            });
         }
         MaskShape::Object { edge, .. } | MaskShape::Prompt { edge, .. } => {
             // Edge: how crisp the selection's border is (−100 hard … 0 as computed … 100 soft)
@@ -856,6 +943,7 @@ fn component_menu(app: &mut LightcraftApp, ui: &mut egui::Ui, op: &str) {
         ("sky", "Sky"),
         ("subject", "Subject"),
         ("luminanceRange", "Luminance Range"),
+        ("depthRange", "Depth Range"),
     ] {
         // painting only adds or erases
         if kind == "brush" && op == "intersect" {

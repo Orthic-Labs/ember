@@ -2311,5 +2311,10 @@
   "Video support isn't installed": "Dukungan video belum terpasang",
   "Playback position": "Posisi pemutaran",
   "Set Poster Frame": "Atur bingkai poster",
-  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Gunakan bingkai di layar sebagai poster klip ini di kisi, loupe, dan ekspor"
+  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Gunakan bingkai di layar sebagai poster klip ini di kisi, loupe, dan ekspor",
+  "Depth": "Kedalaman",
+  "Select Depth Range": "Pilih Rentang Kedalaman",
+  "Near": "Dekat",
+  "Far": "Jauh",
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "Foto ini tidak punya peta kedalaman untuk dipilih. Rentang Kedalaman memerlukan foto yang menyematkannya, misalnya foto mode potret dari Pixel atau iPhone."
 }

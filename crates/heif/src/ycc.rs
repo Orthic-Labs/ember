@@ -236,6 +236,16 @@ pub fn put_alpha(planes: &Planes<'_>, rgba: &mut [u16]) -> Option<()> {
     Some(())
 }
 
+/// A picture's luma samples as coded (a depth map's codes), row-major.
+pub fn luma_codes(planes: &Planes<'_>) -> Option<Vec<u16>> {
+    let (w, h) = planes.size();
+    let mut out = vec![0u16; w.checked_mul(h)?];
+    for (y, row) in out.chunks_exact_mut(w.max(1)).enumerate().take(h) {
+        planes.luma_row(y, row)?;
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

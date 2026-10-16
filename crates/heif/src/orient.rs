@@ -104,6 +104,32 @@ pub fn apply(mut img: Pixels, transforms: &[Transform]) -> Result<Pixels, Error>
     Ok(img)
 }
 
+/// [`apply`] for an image of the same scene as a `primary`-sized picture but smaller (a depth map): turns and
+/// mirrors apply as they are, a crop as the same fraction of the image.
+pub fn apply_scaled(mut img: Pixels, mut primary: (usize, usize), transforms: &[Transform]) -> Result<Pixels, Error> {
+    for t in transforms {
+        match *t {
+            Transform::Crop(c) => {
+                let (left, top, cw, ch) = crop_rect(primary.0, primary.1, c)?;
+                let (iw, ih) = (img.width, img.height);
+                let sx = |v: usize| v.saturating_mul(iw) / primary.0.max(1);
+                let sy = |v: usize| v.saturating_mul(ih) / primary.1.max(1);
+                let (x0, y0) = (sx(left).min(iw.saturating_sub(1)), sy(top).min(ih.saturating_sub(1)));
+                let w = sx(left + cw).saturating_sub(x0).clamp(1, (iw - x0).max(1));
+                let h = sy(top + ch).saturating_sub(y0).clamp(1, (ih - y0).max(1));
+                img = img.remap(w, h, |x, y| (x + x0, y + y0));
+                primary = (cw, ch);
+            }
+            Transform::Rotate(Rotation::Ccw90 | Rotation::Ccw270) => {
+                img = apply(img, &[*t])?;
+                primary = (primary.1, primary.0);
+            }
+            _ => img = apply(img, &[*t])?,
+        }
+    }
+    Ok(img)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

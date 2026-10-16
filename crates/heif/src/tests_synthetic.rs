@@ -1,7 +1,7 @@
 //! Decoding lossless synthetic HEIF files ([`crate::testdata`]): every expected sample is known.
 
 use crate::testdata::{Prop, Spec, build};
-use crate::{Error, Options, decode, decode_thumbnail, probe};
+use crate::{Error, Options, decode, decode_depth, decode_thumbnail, probe};
 
 /// A luma value unique enough to identify its position; chroma neutral.
 fn luma(x: u32, y: u32) -> u16 {
@@ -127,6 +127,34 @@ fn metadata_aux_images_and_thumbnails() {
     assert_eq!(t.exif.as_deref(), Some(exif.as_slice()));
     assert_eq!(t.icc.as_deref(), Some(icc.as_slice()));
     assert!(decode_thumbnail(&bytes, 33, &Options::default()).unwrap().is_none());
+}
+
+#[test]
+fn depth_comes_from_its_auxiliary_image() {
+    let urn = "urn:com:apple:photo:2018:aux:depth";
+    let spec = |props: Vec<Prop>, urn: &'static str| Spec { props, ignored_aux: vec![urn], ..Spec::new(64, 32, &grey) };
+    let depth = |s: &Spec, limit: u64| decode_depth(&build(s), limit);
+    // the auxiliary image's luma is (x + y) % 256; Apple's depth type is disparity
+    let d = depth(&spec(vec![FULL_601], urn), 1 << 20).unwrap().unwrap();
+    assert_eq!((d.width, d.height, d.bit_depth, d.disparity), (64, 32, 8, true));
+    assert_eq!((d.data[0], d.data[5 + 64 * 3], d.data.len()), (0, 8, 64 * 32));
+    // a generic depth type holds distances
+    let d = depth(&spec(vec![], "urn:mpeg:hevc:2015:auxid:2"), 1 << 20).unwrap().unwrap();
+    assert!(!d.disparity);
+    // other auxiliary images, and none at all: no depth
+    assert!(depth(&spec(vec![], "urn:com:apple:photo:2020:aux:hdrgainmap"), 1 << 20).unwrap().is_none());
+    assert!(depth(&spec(vec![], "urn:com:apple:photo:2018:aux:portraiteffectsmatte"), 1 << 20).unwrap().is_none());
+    assert!(depth(&Spec::new(64, 32, &grey), 1 << 20).unwrap().is_none());
+    // turned with the picture: the right column becomes the top row
+    let d = depth(&spec(vec![Prop::Irot(1)], urn), 1 << 20).unwrap().unwrap();
+    assert_eq!((d.width, d.height, d.data[0]), (32, 64, 63));
+    // a crop covers the same fraction of the depth map: here it is as large as the picture
+    let d = depth(&spec(vec![Prop::Clap(32, 16, 0, 0)], urn), 1 << 20).unwrap().unwrap();
+    assert_eq!((d.width, d.height, d.data[0]), (32, 16, 24));
+    // the pixel limit, and garbage
+    assert!(matches!(depth(&spec(vec![], urn), 10), Err(Error::Limit(_))));
+    assert!(decode_depth(&[0xff; 64], 1 << 20).is_err());
+    assert!(decode_depth(b"", 1 << 20).is_err());
 }
 
 #[test]

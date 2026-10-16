@@ -2310,5 +2310,10 @@
   "Video support isn't installed": "未安裝影片支援",
   "Playback position": "播放位置",
   "Set Poster Frame": "設定海報影格",
-  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "將目前畫面用作此影片在網格、放大檢視與匯出中的海報影格"
+  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "將目前畫面用作此影片在網格、放大檢視與匯出中的海報影格",
+  "Depth": "深度",
+  "Select Depth Range": "選取深度範圍",
+  "Near": "近",
+  "Far": "遠",
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "這張照片沒有可供選取的深度圖。深度範圍需要內嵌深度圖的照片，例如用 Pixel 或 iPhone 人像模式拍攝的照片。"
 }

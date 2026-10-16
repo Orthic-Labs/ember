@@ -2311,5 +2311,10 @@
   "Video support isn't installed": "Поддержка видео не установлена",
   "Playback position": "Позиция воспроизведения",
   "Set Poster Frame": "Задать кадр постера",
-  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Использовать текущий кадр как постер этого клипа в сетке, лупе и экспорте"
+  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Использовать текущий кадр как постер этого клипа в сетке, лупе и экспорте",
+  "Depth": "Глубина",
+  "Select Depth Range": "Выбрать диапазон глубины",
+  "Near": "Ближе",
+  "Far": "Дальше",
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "В этом фото нет карты глубины, по которой можно выбирать. Диапазону глубины нужно фото со встроенной картой глубины, например портретный снимок с Pixel или iPhone."
 }

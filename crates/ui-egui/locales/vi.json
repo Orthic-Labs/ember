@@ -2311,5 +2311,10 @@
   "Video support isn't installed": "Chưa cài đặt hỗ trợ video",
   "Playback position": "Vị trí phát",
   "Set Poster Frame": "Đặt khung hình poster",
-  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Dùng khung hình đang hiển thị làm poster của clip này trong lưới, kính lúp và khi xuất"
+  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Dùng khung hình đang hiển thị làm poster của clip này trong lưới, kính lúp và khi xuất",
+  "Depth": "Độ sâu",
+  "Select Depth Range": "Chọn dải độ sâu",
+  "Near": "Gần",
+  "Far": "Xa",
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "Ảnh này không có bản đồ độ sâu để chọn. Dải độ sâu cần một ảnh có nhúng bản đồ độ sâu, chẳng hạn ảnh chân dung chụp bằng Pixel hoặc iPhone."
 }

@@ -2311,5 +2311,10 @@
   "Video support isn't installed": "동영상 지원이 설치되어 있지 않습니다",
   "Playback position": "재생 위치",
   "Set Poster Frame": "포스터 프레임 설정",
-  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "화면의 프레임을 그리드, 루페, 내보내기에서 이 클립의 포스터로 사용합니다"
+  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "화면의 프레임을 그리드, 루페, 내보내기에서 이 클립의 포스터로 사용합니다",
+  "Depth": "깊이",
+  "Select Depth Range": "깊이 범위 선택",
+  "Near": "가까이",
+  "Far": "멀리",
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "이 사진에는 선택에 사용할 깊이 맵이 없습니다. 깊이 범위에는 깊이 맵이 포함된 사진이 필요합니다(예: Pixel이나 iPhone의 인물 사진 모드로 찍은 사진)."
 }

@@ -96,7 +96,7 @@ search embeddings; generative remove runs in reference publisher's cloud.
 | Subject / Sky / Background masks | classical heuristics; the file's own DNG semantic mattes | 🟡 [#27](https://github.com/Orthic-Labs/ember/issues/27) |
 | People (faces, body, hair, skin…) and Landscape masks | — | ⬜ [#27](https://github.com/Orthic-Labs/ember/issues/27) |
 | Object / Describe masks | SAM 3 in pure Rust (Metal / CPU); opt-in 3.4 GB download, no mirror configured | 🟡 [#62](https://github.com/Orthic-Labs/ember/issues/62) |
-| Depth range mask, Lens Blur | — | ⬜ [#64](https://github.com/Orthic-Labs/ember/issues/64) |
+| Depth range mask, Lens Blur | Depth range selects on the depth map a Pixel / Android portrait JPEG or an iPhone portrait HEIC embeds (synthetic files only so far); Lens Blur has no depth source yet | 🟡 [#64](https://github.com/Orthic-Labs/ember/issues/64) |
 | AI Denoise | Bayer only, pure-Rust CPU / GPU, user-installed weights | 🟡 [#27](https://github.com/Orthic-Labs/ember/issues/27) |
 | Raw Details, Super Resolution | — | ⬜ [#51](https://github.com/Orthic-Labs/ember/issues/51) |
 | Generative remove, distractions, reflections | — (generative is out of scope: cloud) | ⬜ |
@@ -300,6 +300,7 @@ P2 items 12–25 h; look tuning, performance, packaging, hardening 25–45 h.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | Depth range mask reads embedded depth maps (Android Dynamic Depth / GDepth, iPhone HEIC auxiliary depth): checklist row ⬜ → 🟡 (#64), no headline number moved |
 | 2026-10-13 | minor | Removed stale prohibition on internal research & publisher-specific installed-app path; aligned wording with maintainer-authorized read-only analysis while retaining historical evidence, asset exclusions & all measurements |
 | 2026-10-11 | minor | EOS R5 Mark II CR3 verified (raw-parity.md): use-weighted share whose camera decodes 84% → 85%, RAW decoding 76% → 77%; full 60.6% → 60.7%, mainstream depth 71.8% → 72.1%, essentials depth 77.4% → 77.5%; the rounded numbers (~61%, ~49%, ~64%) are unchanged |
 | 2026-10-10 | minor | RAW measured model by model (raw-parity.md): RAW decoding (76%) and colour (35%) are explicit rows of the full sum (59% → 61%); mainstream uses the use-weighted 84% plus a ×0.85 colour discount (51% → 49%); essentials uses 84% × colour 0.75 (63% → 64%); beta ~14 points |

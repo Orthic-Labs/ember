@@ -44,11 +44,18 @@ pub enum MatteKind {
 #[derive(Clone, Default, PartialEq)]
 pub struct Mattes {
     mattes: Vec<(MatteKind, Image<u8>)>,
+    /// The photo's own depth map ([`Mattes::set_depth`]): what Depth Range selects on.
+    depth: Option<Plane>,
 }
 
 impl std::fmt::Debug for Mattes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_list().entries(self.mattes.iter().map(|(k, m)| (k, m.width, m.height))).finish()
+        let mut l = f.debug_list();
+        l.entries(self.mattes.iter().map(|(k, m)| (k, m.width, m.height)));
+        if let Some(d) = &self.depth {
+            l.entry(&("depth", d.width, d.height));
+        }
+        l.finish()
     }
 }
 
@@ -61,12 +68,25 @@ impl Mattes {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.mattes.is_empty()
+        self.mattes.is_empty() && self.depth.is_none()
+    }
+
+    /// Attach the photo's depth map: 0 (nearest) to 1 (farthest) over the whole EXIF-oriented image, at its own
+    /// (usually low) resolution. A damaged or empty one is ignored.
+    pub fn set_depth(&mut self, depth: Plane) {
+        if depth.width > 0 && depth.height > 0 && depth.data.len() == depth.width.saturating_mul(depth.height) {
+            self.depth = Some(depth);
+        }
+    }
+
+    /// The photo carries a depth map (Depth Range has something to select on).
+    pub fn has_depth(&self) -> bool {
+        self.depth.is_some()
     }
 
     /// Memory held (bytes).
     pub fn bytes(&self) -> usize {
-        self.mattes.iter().map(|(_, m)| m.data.len()).sum()
+        self.mattes.iter().map(|(_, m)| m.data.len()).sum::<usize>() + self.depth.as_ref().map_or(0, |d| d.data.len() * 4)
     }
 
     fn of(&self, kinds: &[MatteKind]) -> Vec<&Image<u8>> {
@@ -285,8 +305,54 @@ pub fn shape_alpha(shape: &MaskShape, frame: &Frame, w: usize, h: usize, img: &R
                 out = sky::scene_alpha(frame, w, h, img, log_l, c);
             }
         }
-        MaskShape::DepthRange { .. } => {}
+        MaskShape::DepthRange { lo, hi, feather } => {
+            // the photo's embedded depth map; without one nothing is selected
+            if let Some(depth) = mattes.and_then(|m| m.depth.as_ref()) {
+                out = depth_range_alpha(depth, *lo, *hi, *feather, frame, w, h);
+            }
+        }
     }
+    out
+}
+
+/// Depth Range: the output pixels whose depth (0 nearest … 1 farthest, from the photo's depth map) lies in
+/// `lo..hi`, with `feather` (0..1, in depth units) of falloff on each side. The map is sampled in normalized image
+/// coordinates like the photo, so previews and exports select the same places.
+fn depth_range_alpha(depth: &Plane, lo: f64, hi: f64, feather: f64, frame: &Frame, w: usize, h: usize) -> Plane {
+    if !(lo.is_finite() && hi.is_finite() && feather.is_finite()) {
+        return Plane::new(w, h);
+    }
+    let (lo, hi, f) = (lo as f32, hi as f32, (feather.clamp(0.0, 1.0) as f32).max(1e-3));
+    let mut out = sample_plane(depth, frame, w, h);
+    for v in out.data.iter_mut() {
+        *v = smooth(lo - f, lo, *v) * (1.0 - smooth(hi, hi + f, *v));
+    }
+    out
+}
+
+/// `src` (covering the whole EXIF-oriented image) at each output pixel, sampled like the image: user orientation,
+/// lens / perspective warp, crop and flips; bilinear. Pixels the warp leaves outside the image read far below 0.
+fn sample_plane(src: &Plane, frame: &Frame, w: usize, h: usize) -> Plane {
+    let mut out = Plane::new(w, h);
+    out.data.fill(-1e3);
+    let o2t = frame.out_to_oriented(w, h);
+    let oriented =
+        if frame.orient == Orientation::Normal { std::borrow::Cow::Borrowed(src) } else { std::borrow::Cow::Owned(src.oriented(frame.orient)) };
+    let (sx, sy) = ((oriented.width as f64 / frame.ow) as f32, (oriented.height as f64 / frame.oh) as f32);
+    for_rows(&mut out.data, w, |y, row| {
+        for (x, v) in row.iter_mut().enumerate() {
+            let s = match &frame.warp {
+                Some(wp) => {
+                    let Some((_, s)) = wp.frame(&o2t, x, y) else {
+                        continue;
+                    };
+                    s
+                }
+                None => o2t.apply(Point::new(x as f64 + 0.5, y as f64 + 0.5)),
+            };
+            *v = bilinear(&oriented, s.x as f32 * sx, s.y as f32 * sy);
+        }
+    });
     out
 }
 
@@ -718,6 +784,83 @@ mod tests {
         let a = shape_alpha(&MaskShape::Linear { start: Point::new(0.0, 0.0), end: Point::new(1.0, 0.0) }, &f, 100, 50, &img, &l, 0.0, None);
         assert!(a.get(1, 25) > 0.99 && a.get(98, 25) < 0.01);
         assert!((a.get(50, 25) - 0.5).abs() < 0.05);
+    }
+
+    /// A depth map of 8 × 4 ramping from near (the left edge, 0) to far (the right edge, 1).
+    fn ramp_depth() -> Mattes {
+        let mut d = Plane::new(8, 4);
+        for (i, v) in d.data.iter_mut().enumerate() {
+            *v = (i % 8) as f32 / 7.0;
+        }
+        let mut m = Mattes::default();
+        m.set_depth(d);
+        m
+    }
+
+    fn depth_range(lo: f64, hi: f64, feather: f64, (w, h): (usize, usize), mattes: Option<&Mattes>) -> Plane {
+        let shape = MaskShape::DepthRange { lo, hi, feather };
+        shape_alpha(&shape, &frame(w, h), w, h, &Rgb32f::new(w, h), &Plane::new(w, h), 0.0, mattes)
+    }
+
+    #[test]
+    fn depth_range_selects_by_the_photos_depth_map() {
+        let m = ramp_depth();
+        assert!(m.has_depth() && !m.is_empty());
+        // the near part: the left is in, the right is out
+        let a = depth_range(0.0, 0.4, 0.0, (80, 40), Some(&m));
+        assert!(a.get(2, 20) > 0.99 && a.get(40, 20) < 0.01 && a.get(77, 20) < 0.01);
+        // the far part
+        let a = depth_range(0.6, 1.0, 0.0, (80, 40), Some(&m));
+        assert!(a.get(2, 20) < 0.01 && a.get(77, 20) > 0.99);
+        // the middle band
+        let a = depth_range(0.4, 0.6, 0.0, (80, 40), Some(&m));
+        assert!(a.get(2, 20) < 0.01 && a.get(40, 20) > 0.99 && a.get(77, 20) < 0.01);
+        // the feather softens the edge of the range
+        let partial = |a: &Plane| (0..80).filter(|x| (0.05..0.95).contains(&a.get(*x, 20))).count();
+        let hard = partial(&depth_range(0.0, 0.5, 0.0, (80, 40), Some(&m)));
+        let soft = partial(&depth_range(0.0, 0.5, 0.4, (80, 40), Some(&m)));
+        assert!(hard < 3 && soft > 15, "{hard} {soft}");
+        // a photo without depth selects nothing, and so does a damaged range
+        assert!(depth_range(0.0, 1.0, 0.1, (80, 40), None).data.iter().all(|v| *v == 0.0));
+        assert!(depth_range(0.0, 1.0, 0.1, (80, 40), Some(&Mattes::default())).data.iter().all(|v| *v == 0.0));
+        assert!(depth_range(f64::NAN, 1.0, 0.1, (80, 40), Some(&m)).data.iter().all(|v| *v == 0.0));
+        assert!(depth_range(0.0, f64::INFINITY, f64::NAN, (80, 40), Some(&m)).data.iter().all(|v| *v == 0.0));
+    }
+
+    #[test]
+    fn depth_range_is_resolution_independent() {
+        let m = ramp_depth();
+        let coarse = depth_range(0.2, 0.7, 0.3, (40, 20), Some(&m));
+        let fine = depth_range(0.2, 0.7, 0.3, (400, 200), Some(&m));
+        for k in 0..40 {
+            let (a, b) = (coarse.get(k, 10), fine.get(k * 10 + 5, 100));
+            assert!((a - b).abs() < 0.03, "column {k}: {a} vs {b}");
+        }
+    }
+
+    #[test]
+    fn depth_range_follows_the_crop() {
+        // cropped to the right half of the photo, whose depth is 0.5 and farther: a near range has nothing left
+        let mut d = DevelopSettings::default();
+        d.crop.geometry.rect = lightcraft_geom::Rect::from_center(Point::new(0.75, 0.5), 0.5, 1.0);
+        let f = Frame::new(40, 20, &d, true);
+        let m = ramp_depth();
+        let select = |lo: f64, hi: f64| {
+            let shape = MaskShape::DepthRange { lo, hi, feather: 0.0 };
+            shape_alpha(&shape, &f, 20, 20, &Rgb32f::new(20, 20), &Plane::new(20, 20), 0.0, Some(&m))
+        };
+        assert!(select(0.0, 0.45).data.iter().all(|v| *v < 0.05));
+        assert!(select(0.5, 1.0).get(10, 10) > 0.99);
+    }
+
+    #[test]
+    fn a_damaged_depth_map_is_not_attached() {
+        let mut m = Mattes::default();
+        m.set_depth(Plane::new(0, 4));
+        let mut d = Plane::new(4, 4);
+        d.data.truncate(3);
+        m.set_depth(d);
+        assert!(!m.has_depth() && m.is_empty());
     }
 
     #[test]

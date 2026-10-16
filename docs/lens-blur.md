@@ -49,5 +49,5 @@ range mask, #64) replaces `coc_plane` only; the rest of the render is depth-sour
 ## Not done
 
 - A panel (the controls are reachable through the control channel, MCP and `lightcraft-cli` only).
-- Depth-map source, depth range mask (#64), and GPU kernel.
+- A depth-map source for the blur (the photo's embedded depth plane, loaded for the depth range mask of #64, is not used by it yet), and a GPU kernel.
 - Bokeh shapes other than the disc and cat's eye (aperture blades, custom shapes).

@@ -2311,5 +2311,10 @@
   "Video support isn't installed": "Videounterstützung ist nicht installiert",
   "Playback position": "Wiedergabeposition",
   "Set Poster Frame": "Posterbild festlegen",
-  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Das angezeigte Bild als Posterbild dieses Clips in Raster, Lupe und Export verwenden"
+  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Das angezeigte Bild als Posterbild dieses Clips in Raster, Lupe und Export verwenden",
+  "Depth": "Tiefe",
+  "Select Depth Range": "Tiefenbereich auswählen",
+  "Near": "Nah",
+  "Far": "Fern",
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "Dieses Foto hat keine Tiefenkarte, nach der sich auswählen ließe. Tiefenbereich braucht ein Foto mit eingebetteter Tiefenkarte, etwa ein Porträtfoto von einem Pixel oder iPhone."
 }

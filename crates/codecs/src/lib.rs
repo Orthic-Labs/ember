@@ -21,6 +21,7 @@
 #[cfg(all(feature = "avif", not(target_arch = "wasm32")))]
 mod avif;
 mod convert;
+pub mod depth;
 pub mod display;
 pub mod encode;
 pub mod exif;

@@ -2311,5 +2311,10 @@
   "Video support isn't installed": "Підтримку відео не встановлено",
   "Playback position": "Позиція відтворення",
   "Set Poster Frame": "Задати кадр постера",
-  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Використати поточний кадр як постер цього кліпу в сітці, лупі та експорті"
+  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Використати поточний кадр як постер цього кліпу в сітці, лупі та експорті",
+  "Depth": "Глибина",
+  "Select Depth Range": "Вибрати діапазон глибини",
+  "Near": "Ближче",
+  "Far": "Далі",
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "У цьому фото немає карти глибини, за якою можна вибирати. Діапазону глибини потрібне фото із вбудованою картою глибини, наприклад портретний знімок із Pixel або iPhone."
 }

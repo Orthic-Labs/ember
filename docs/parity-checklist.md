@@ -28,7 +28,7 @@ humans pick work from **[Top gaps](#top-gaps)**; whoever lands a feature updates
 | H. Crop & rotate (CROP) | 9 | 0 | 0 | 1 | 6/6 (100%) | 3/3 (100%) |
 | I. Remove / healing (REM) | 8 | 1 | 2 | 2 | 4/4 (100%) | 2/3 (67%) |
 | J. Red eye (EYE) | 2 | 0 | 0 | 0 | — | 1/1 (100%) |
-| K. Masking (MASK) | 13 | 5 | 5 | 0 | 7/8 (88%) | 5/5 (100%) |
+| K. Masking (MASK) | 13 | 6 | 4 | 0 | 7/8 (88%) | 5/5 (100%) |
 | L. Presets (PRE) | 6 | 0 | 1 | 1 | 2/2 (100%) | 2/2 (100%) |
 | M. Versions & history (VER) | 5 | 0 | 0 | 0 | 1/1 (100%) | 3/3 (100%) |
 | N. Copy / paste / sync (SYNC) | 5 | 0 | 0 | 0 | 3/3 (100%) | 1/1 (100%) |
@@ -45,9 +45,9 @@ humans pick work from **[Top gaps](#top-gaps)**; whoever lands a feature updates
 | Y. Menus | 84 | 0 | 4 | 8 | 47/47 (100%) | 23/23 (100%) |
 | Z. Keyboard shortcuts (desktop) | 76 | 3 | 3 | 1 | 49/52 (94%) | 23/24 (96%) |
 | reference catalog editor extras | 34 | 16 | 35 | 8 | — | 24/26 (92%) |
-| **Total** | 409 | 54 | 67 | 35 | 192/200 (96%) | 146/157 (93%) |
+| **Total** | 409 | 55 | 66 | 35 | 192/200 (96%) | 146/157 (93%) |
 
-Weighted completion (✅ = 1, 🟡 = ½, 🚫 left out): **82.3%** of 530 in-scope rows — P0 98.0% of 200 · P1 96.2% of 157 · P2 51.2% of 172.
+Weighted completion (✅ = 1, 🟡 = ½, 🚫 left out): **82.4%** of 530 in-scope rows — P0 98.0% of 200 · P1 96.2% of 157 · P2 51.5% of 172.
 <!-- /parity:summary -->
 
 ## Top gaps and shortcut notes
@@ -351,7 +351,7 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 | LR-MASK-RADIAL | Radial gradient | P0 | ✅ | `cmd:tool.radial`, `cmd:mask.update`, `crates/ui-egui/src/panels/detail.rs` | drag the selected ellipse's body or centre pin to move; edge grips resize, outer grip rotates; rotated and compound radial components, hidden pins, outside hit rejection and one-step undo tested |
 | LR-MASK-COLORRANGE | Colour range | P1 | ✅ | `cmd:mask.add` (`colorRange`), `cmd:mask.sampleColor`, `cmd:mask.update`, `crates/pipeline/src/lib.rs` (`color_range_sample`) | Color tile → click the photo to sample (⇧-click adds, up to 5; samples taken in the space the mask compares in), Pick button, Refine slider |
 | LR-MASK-LUMRANGE | Luminance range | P1 | ✅ | `cmd:mask.add` (`luminanceRange`), `cmd:mask.update`, `crates/ui-egui/src/panels/masking.rs` (`range_controls`) | range bar with two handles (one undo step per drag), Smoothness, Show Luminance Map (B&W photo with the range tinted) |
-| LR-MASK-DEPTHRANGE | Depth range | P2 | ⬜ | | shape exists, needs depth data [#64](https://github.com/Orthic-Labs/ember/issues/64) |
+| LR-MASK-DEPTHRANGE | Depth range | P2 | 🟡 | `cmd:mask.add` (`depthRange`), `cmd:mask.update`, `crates/pipeline/src/masks.rs` (`depth_range_alpha`, `Mattes::set_depth`), `crates/engine/src/depth.rs`, `crates/meta/src/depth.rs`, `crates/codecs/src/depth.rs`, `crates/heif/src/lib.rs` (`decode_depth`), `crates/ui-egui/src/panels/masking.rs` (`range_controls`) | selects on the depth map the photo embeds: Android portrait JPEGs (Dynamic Depth container item, older `GDepth:Data`; `RangeInverse` / `RangeLinear`) and iPhone portrait HEICs (auxiliary depth / disparity image, only in builds with the `heif` feature); stored at low resolution (long edge ≤ 512) and sampled in normalized coordinates, so previews and exports agree; Near–Far bar, Smoothness, and a note when the photo has no depth map. Only synthetic files tested: not yet tried on real Pixel / iPhone files, no depth estimated for other photos [#64](https://github.com/Orthic-Labs/ember/issues/64) |
 | LR-MASK-COMBINE | Add / subtract / intersect | P0 | ✅ | `cmd:mask.addComponent`, `cmd:tool.brush` | Add/Subtract > Brush creates a component with the chosen operation; Erase removes paint within that brush component |
 | LR-MASK-INVERT | Invert | P0 | ✅ | `cmd:mask.invert` | |
 | LR-MASK-AMOUNT | Mask amount | P1 | ✅ | `cmd:mask.adjust` (`amount`), `crates/ui-egui/src/panels/masking.rs` | |

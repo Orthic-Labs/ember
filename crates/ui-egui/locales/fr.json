@@ -2310,5 +2310,10 @@
   "Video support isn't installed": "La prise en charge de la vidéo n'est pas installée",
   "Playback position": "Position de lecture",
   "Set Poster Frame": "Définir l'image d'affiche",
-  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Utiliser l'image affichée comme image d'affiche de ce clip dans la grille, la loupe et les exports"
+  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Utiliser l'image affichée comme image d'affiche de ce clip dans la grille, la loupe et les exports",
+  "Depth": "Profondeur",
+  "Select Depth Range": "Sélectionner une plage de profondeur",
+  "Near": "Proche",
+  "Far": "Loin",
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "Cette photo n’a pas de carte de profondeur sur laquelle sélectionner. Plage de profondeur demande une photo qui en contient une, par exemple un portrait pris avec un Pixel ou un iPhone."
 }

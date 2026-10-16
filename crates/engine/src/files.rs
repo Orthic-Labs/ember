@@ -563,10 +563,17 @@ fn load_bytes_now(
         ));
     }
     let d = lightcraft_codecs::decode(&bytes, fit_box(max_edge)).map_err(|e| e.to_string())?;
+    // the photo's own depth map, when it embeds one (Android portrait JPEG, iPhone portrait HEIC); one that can't be
+    // read leaves the photo without depth, which Depth Range says
+    let mattes = crate::depth::embedded_depth(&bytes, Orientation::from_exif(d.orientation)).ok().flatten().map(|depth| {
+        let mut m = lightcraft_pipeline::masks::Mattes::default();
+        m.set_depth(depth);
+        Arc::new(m)
+    });
     drop(bytes);
     let img = d.to_working();
     let img = if img.width.max(img.height) > max_edge { fit(&img, max_edge, max_edge, Filter::Mitchell) } else { img };
-    Ok((img.into_oriented(Orientation::from_exif(d.orientation)), None, SourceInfo::default()))
+    Ok((img.into_oriented(Orientation::from_exif(d.orientation)), None, SourceInfo { mattes, ..SourceInfo::default() }))
 }
 
 /// Which white-balance scale a raw is edited on, decided from the file alone, the way the catalog decides it from

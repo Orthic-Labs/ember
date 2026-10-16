@@ -47,13 +47,14 @@ numeric tone labels alone do not complete corpus preparation. See [format & comp
 | 26 | **Performance at scale**: 85k-photo library opens in 1.7–4.7 s; 100k grid: a headless test on a 100k-photo catalog asserts that unchanged frames rebuild nothing and visit only the rows near the screen (`a_100k_photo_grid_visits_only_the_visible_rows`), frame-time numbers still to record (`grid_frame_100k`, ignored); colour NR at half resolution landed in code (V3; measure with `LIGHTCRAFT_PROFILE=1`, `nr colour` / `nr_col` stages); the GPU histogram is counted on the device in code (`crates/gpu/src/histogram.rs`, CPU fallback; CI verifies the CPU-oracle test) [#189](https://github.com/Orthic-Labs/ember/issues/189) | ROADMAP log, gpu-pipeline.md | large-catalog users | 15–30 | [target-app-parity](target-app-parity.md#by-dimension) |
 | 27 | **Windows / Linux runtime coverage**: Windows installer UI unverified on Windows (#79); GPU path proven on Apple only; the Linux riscv64 tarball (new in 0.6.0, #844) is cross-compiled and never run beyond a QEMU smoke test [#190](https://github.com/Orthic-Labs/ember/issues/190) | ROADMAP, issues, `release.yml` | non-Mac users find bugs first | 15–30 | [hardware-parity](hardware-parity.md) |
 | 28 | **Small Classic shortcuts and keys**: flag cycle has no key (`photo.cycleFlag`); desktop app lacks F5 top bar and `\` filter bar; ⇧Tab and T (toolbar) missing [#146](https://github.com/Orthic-Labs/ember/issues/146) | [ui-parity](ui-parity.md#shortcuts) | Classic muscle memory | 4–8 | [ui-parity](ui-parity.md) |
+| 29 | **Depth range: embedded depth maps only, unverified on real files**: Depth Range selects on the depth map a Pixel / Android portrait JPEG (Dynamic Depth, GDepth) or an iPhone portrait HEIC embeds; it has been tried on synthetic files only, the HEIC path needs the `heif` feature, no depth is estimated for photos without one, and Lens Blur does not use the map yet [#64](https://github.com/Orthic-Labs/ember/issues/64) | checklist row 🟡 | masking by distance works on phone portrait photos only; other photos get a note instead of a selection | 4–8 | [lens-blur](lens-blur.md) |
 
 Beta-blocking gaps (B) total **~230–430 h**; with the stability and platform work they need around them,
 **~340–600 h** to beta (incl. 40–80 h for the ~92 open core-path user issues) (see [target-app-parity.md](target-app-parity.md#stage)).
 
 ## Gaps by kind
 
-- **Feature:** 5, 8, 11, 12, 13, 15, 16, 18, 19
+- **Feature:** 5, 8, 11, 12, 13, 15, 16, 18, 19, 29
 - **UI / UX:** 4, 23, 24, 28
 - **File format:** 2, 6, 7, 10, 13, 20, 25 (raw ones in [raw-parity.md](raw-parity.md))
 - **Hardware:** 14, 17, 22, 27

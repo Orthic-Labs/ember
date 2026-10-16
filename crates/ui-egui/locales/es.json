@@ -2310,5 +2310,10 @@
   "Video support isn't installed": "La compatibilidad con vídeo no está instalada",
   "Playback position": "Posición de reproducción",
   "Set Poster Frame": "Establecer fotograma de póster",
-  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Usar el fotograma en pantalla como póster de este clip en la cuadrícula, la lupa y las exportaciones"
+  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Usar el fotograma en pantalla como póster de este clip en la cuadrícula, la lupa y las exportaciones",
+  "Depth": "Profundidad",
+  "Select Depth Range": "Seleccionar rango de profundidad",
+  "Near": "Cerca",
+  "Far": "Lejos",
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "Esta foto no tiene un mapa de profundidad en el que seleccionar. Rango de profundidad necesita una foto que lo incluya, como una foto en modo retrato de un Pixel o un iPhone."
 }

@@ -207,7 +207,7 @@ mask: `CorrectionName` → name, `CorrectionAmount` → Amount, inactive correct
 | `Mask/CircularGradient` (`Top/Left/Bottom/Right`, `Angle`, `Feather`, `Flipped`) | radial gradient | box fractions → long-edge radii (presets assume 3:2; sidecars use the photo's shape). `Flipped="true"` means effect inside: in `MaskGroupBasedCorrections` with `Version` 2 (what the reference editor writes for an ordinary radial) and in the legacy `CircularGradientBasedCorrections` Radial Filter, whose default (no `Flipped`) is outside. A `MaskGroupBasedCorrections` radial without `Version` is inside whatever `Flipped` says, and its `Feather` is halved (the reference editor rescales it that way when it upgrades one). Inverting is `MaskInverted` |
 | `Mask/Paint` (`Dabs` "d x y", `Radius`, `Flow`, `CenterWeight`, `MaskValue`) | brush | one brush component per correction; `MaskValue` ≤ 0 erases |
 | `Mask/Image` `MaskSubType` 1 / 2 | Subject / Sky | other AI selections are reported, not guessed |
-| `Mask/RangeMask` `Type` 2 / 3 (`LumRange`, `DepthRange`) | luminance / depth range | lightness converted to our range scale; colour ranges are reported |
+| `Mask/RangeMask` `Type` 2 / 3 (`LumRange`, `DepthRange`) | luminance / depth range | lightness converted to our range scale; a depth range selects on the photo's embedded depth map, near 0 … far 1 over that photo's own span (nothing on a photo without one); colour ranges are reported |
 | `MaskBlendMode` 0 / 1 / 2, `MaskInverted` | add / subtract / intersect, invert | |
 
 Applying a preset adds its masks to the photo's own (masks the photo already has are not added twice), and the Amount
