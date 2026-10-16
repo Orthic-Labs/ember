@@ -525,6 +525,121 @@ fn rereading_a_sidecar_clears_regions_only_when_it_states_them() {
     let _ = std::fs::remove_dir_all(&src);
 }
 
+/// The `mwg-rs:Regions` block of a packet, from its opening tag to its closing one.
+fn regions_block_of(packet: &str) -> Option<&str> {
+    let start = packet.find("<mwg-rs:Regions")?;
+    let close = "</mwg-rs:Regions>";
+    let end = packet[start..].find(close)? + start + close.len();
+    Some(&packet[start..end])
+}
+
+/// Whether two region lists have the same boxes, kinds, names and descriptions, in order.
+fn same_regions(want: &[lightcraft_meta::Region], got: &[lightcraft_meta::Region]) -> bool {
+    want.len() == got.len()
+        && want.iter().zip(got).all(|(w, g)| {
+            let (a, b) = (w.rect, g.rect);
+            w.kind == g.kind
+                && w.name == g.name
+                && w.description == g.description
+                && [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().all(|d| d.abs() < 1e-9)
+        })
+}
+
+/// A sidecar that already has `mwg-rs:Regions` (another application's) keeps that block byte for byte when Ember saves
+/// into it, though the photo's face came from it.
+#[test]
+fn saving_keeps_another_apps_regions_byte_for_byte() {
+    let src = temp_dir("regions-keep");
+    let lib = temp_dir("regions-keep-lib");
+    write_png(&src.join("portrait.png"), 9);
+    std::fs::write(src.join("portrait.xmp"), MWG_REGIONS).unwrap();
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    s.execute("library.import", &json!({"paths": [src.join("portrait.png").to_string_lossy()]})).unwrap();
+    let id = only(&s);
+    s.execute("library.select", &json!({"ids": [id.0]})).unwrap();
+    s.execute("photo.rate", &json!({"rating": 4})).unwrap();
+    s.execute("photo.saveMetadataToFile", &json!({})).unwrap();
+    let out = std::fs::read_to_string(src.join("portrait.xmp")).unwrap();
+    assert_eq!(regions_block_of(&out), regions_block_of(MWG_REGIONS), "{out}");
+    assert_eq!(lightcraft_meta::parse_xmp(&out).unwrap().metadata.rating, Some(4), "the rest was saved");
+    let _ = std::fs::remove_dir_all(&src);
+    let _ = std::fs::remove_dir_all(&lib);
+}
+
+/// A sidecar with no regions gains the photo's named faces, and reading it back gives the same boxes and names.
+#[test]
+fn a_sidecar_without_regions_gains_the_named_faces() {
+    let src = temp_dir("regions-gain");
+    let lib = temp_dir("regions-gain-lib");
+    write_png(&src.join("portrait.png"), 9);
+    std::fs::write(src.join("portrait.xmp"), MWG_REGIONS).unwrap();
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    s.execute("library.import", &json!({"paths": [src.join("portrait.png").to_string_lossy()]})).unwrap();
+    let id = only(&s);
+    s.execute("library.select", &json!({"ids": [id.0]})).unwrap();
+    // another application's sidecar, without regions, takes the place of the one that had them
+    std::fs::write(src.join("portrait.xmp"), OTHER_APP_SIDECAR).unwrap();
+    s.execute("photo.saveMetadataToFile", &json!({})).unwrap();
+    let out = std::fs::read_to_string(src.join("portrait.xmp")).unwrap();
+    assert!(out.contains("other:Secret=\"keep me\"") && out.contains("crs:Exposure2012=\"+0.65\""), "{out}");
+    let have = s.catalog.photo(id).unwrap().meta.regions.clone();
+    assert_eq!(have.len(), 1);
+    let written = lightcraft_meta::parse_xmp(&out).unwrap().metadata.regions;
+    assert!(same_regions(&have, &written), "{have:?} written as {written:?}\n{out}");
+    assert_eq!(written[0].name.as_deref(), Some("Jane Doe"));
+    // reading the sidecar back leaves the same regions
+    s.execute("photo.readMetadataFromFile", &json!({})).unwrap();
+    assert!(same_regions(&have, &s.catalog.photo(id).unwrap().meta.regions));
+    let _ = std::fs::remove_dir_all(&src);
+    let _ = std::fs::remove_dir_all(&lib);
+}
+
+/// A new sidecar for a photo with a named face carries its regions too.
+#[test]
+fn a_new_sidecar_for_a_named_face_gets_the_regions() {
+    let src = temp_dir("regions-new");
+    let lib = temp_dir("regions-new-lib");
+    write_png(&src.join("portrait.png"), 9);
+    std::fs::write(src.join("portrait.xmp"), MWG_REGIONS).unwrap();
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    s.execute("library.import", &json!({"paths": [src.join("portrait.png").to_string_lossy()]})).unwrap();
+    let id = only(&s);
+    std::fs::remove_file(src.join("portrait.xmp")).unwrap();
+    s.execute("photo.saveMetadataToFile", &json!({"ids": [id.0]})).unwrap();
+    let out = std::fs::read_to_string(src.join("portrait.xmp")).unwrap();
+    let have = s.catalog.photo(id).unwrap().meta.regions.clone();
+    assert!(same_regions(&have, &lightcraft_meta::parse_xmp(&out).unwrap().metadata.regions), "{out}");
+    let _ = std::fs::remove_dir_all(&src);
+    let _ = std::fs::remove_dir_all(&lib);
+}
+
+/// A photo without a named face writes no `mwg-rs:Regions`, whether it has no sidecar yet or only unnamed face boxes.
+#[test]
+fn a_photo_without_named_faces_writes_no_regions_block() {
+    let src = temp_dir("regions-none");
+    let lib = temp_dir("regions-none-lib");
+    write_png(&src.join("plain.png"), 2);
+    write_png(&src.join("unnamed.png"), 9);
+    std::fs::write(src.join("unnamed.xmp"), MWG_REGIONS.replace(r#"mwg-rs:Name="Jane Doe" "#, "")).unwrap();
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    s.execute("library.import", &json!({"paths": [src.to_string_lossy()]})).unwrap();
+    std::fs::remove_file(src.join("unnamed.xmp")).unwrap();
+    let plain = s.catalog.photos().find(|p| p.file_name == "plain.png").unwrap().id;
+    let unnamed = s.catalog.photos().find(|p| p.file_name == "unnamed.png").unwrap().id;
+    assert_eq!(s.catalog.photo(unnamed).unwrap().meta.regions.len(), 1, "the unnamed box was read");
+    s.execute("photo.saveMetadataToFile", &json!({"ids": [plain.0, unnamed.0]})).unwrap();
+    for name in ["plain.xmp", "unnamed.xmp"] {
+        let out = std::fs::read_to_string(src.join(name)).unwrap();
+        assert!(!out.contains("mwg-rs:Regions"), "{name}: {out}");
+    }
+    let _ = std::fs::remove_dir_all(&src);
+    let _ = std::fs::remove_dir_all(&lib);
+}
+
 fn synthetic_dng(xmp: &str) -> Vec<u8> {
     synthetic_dng_with(Some(xmp), lightcraft_meta::Metadata::default())
 }

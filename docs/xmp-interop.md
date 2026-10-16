@@ -54,7 +54,7 @@ the only copy of those edits outside that application's catalog. Saving never dr
   from what the sidecar said.
 - The **capture time** (`exif:DateTimeOriginal`, `photoshop:DateCreated`) and **GPS** (`exif:GPSLatitude`,
   `exif:GPSLongitude`) are replaced only when Ember has a value; otherwise the file's stay.
-- **Everything else is kept byte for byte**: other namespaces (`crs:`, `xmpMM:`, `lr:hierarchicalSubject`, unknown
+- **Everything else is kept byte for byte**: other namespaces (`crs:`, `xmpMM:`, `lr:hierarchicalSubject`, `mwg-rs:Regions` (see Face regions), unknown
   ones), `xmp:CreatorTool`, comments, the packet wrapper and padding. Ember's properties go into one
   `rdf:Description` of their own; owned properties written by another application (in attribute or element form) are
   removed from its description, which otherwise stays as it was.
@@ -81,9 +81,13 @@ Ember reads face, pet, focus and barcode regions in the Metadata Working Group's
 write them, from sidecars and from XMP embedded in the file. Named faces become people in the People view
 (LR-LIB-PEOPLE in [`parity-checklist.md`](parity-checklist.md)), and every region is drawn as a box in the loupe.
 
-- **Read only in sidecars.** Ember never writes `mwg-rs:Regions` into a sidecar; saving one keeps another application's
-  regions byte for byte. The writer `write_xmp_lc_with_regions` can emit them (mirroring the reader, including the
-  orientation turns) and reads back the same boxes; nothing calls it for sidecars yet. Removing or resizing a box in the loupe changes the library only.
+- **Written only into a sidecar that has none.** A save writes the photo's regions as `mwg-rs:Regions` (all of them, so
+  they read back as they are) when the photo has a named face and the sidecar has no `mwg-rs:Regions`. A sidecar that has
+  one, from any application, keeps that block byte for byte, and later saves don't touch it: faces named, renamed or
+  removed in Ember then reach only the library. A photo without a named face writes no block. Boxes are written upright,
+  without `mwg-rs:Rotation` or `AppliedToDimensions`, because Ember doesn't keep the file's Exif orientation; another
+  application that applies an orientation may place boxes differently on a photo whose file is rotated or mirrored.
+  Removing or resizing a box in the loupe changes the library only.
 - **Areas**: `stArea:x`/`y` are the box's centre, `w`/`h` its size, normalized to the photo (`stArea:unit="pixel"`
   areas are divided by `mwg-rs:AppliedToDimensions`, and dropped without it). Boxes are clipped to the photo; one
   that misses it entirely, or has a non-finite, zero or negative size, is skipped (the rest of the list is kept).

@@ -575,9 +575,9 @@ pub fn write_xmp_lc(meta: &Metadata, lc: &[(&str, &str)]) -> String {
     write_packet(meta, lc, false)
 }
 
-/// Like [`write_xmp_lc`], and with the photo's regions as `mwg-rs:Regions` (see [`regions_block`]). Nothing writes this
-/// into a sidecar yet: `docs/xmp-interop.md` still says Ember never writes regions. [`parse_xmp`] reads back the same
-/// boxes, kinds, names and descriptions.
+/// Like [`write_xmp_lc`], and with the photo's regions as `mwg-rs:Regions` (see [`regions_block`]). The sidecar save
+/// writes them only into a sidecar that has no `mwg-rs:Regions` yet (`docs/xmp-interop.md`). [`parse_xmp`] reads back
+/// the same boxes, kinds, names and descriptions.
 pub fn write_xmp_lc_with_regions(meta: &Metadata, lc: &[(&str, &str)]) -> String {
     write_packet(meta, lc, true)
 }

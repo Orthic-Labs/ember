@@ -142,8 +142,8 @@ pub fn parse_sidecar(xmp: &str, target: crate::crs::Target) -> std::result::Resu
             .then(|| lightcraft_catalog::keywords::from_file(&m.keywords, &m.hierarchical_keywords)),
         // A sidecar that has `mwg-rs:Regions` at all (even an empty list) was written by an app that
         // knows about regions, so it's authoritative: its list, empty or not, replaces the catalog's.
-        // One without it (most writers, Ember's own included, which keeps another app's
-        // `mwg-rs:Regions` byte for byte but never writes one) says nothing about regions, and the
+        // One without it (most writers; Ember writes its own only into a sidecar that has none, and keeps
+        // another app's `mwg-rs:Regions` byte for byte) says nothing about regions, and the
         // photo's are kept.
         regions: d.values.contains_key("mwg-rs:Regions").then(|| m.regions.clone()),
         captured: m.capture_time.map(|d| d.to_iso()),
@@ -315,6 +315,21 @@ pub fn sidecar_packet(p: &Photo, cat: &lightcraft_catalog::Catalog) -> String {
 /// [`sidecar_packet`], without any location (GPS, sublocation, city, state, country) when
 /// `remove_location` is set (an export with "Remove location info").
 pub fn sidecar_packet_with(p: &Photo, cat: &lightcraft_catalog::Catalog, remove_location: bool) -> String {
+    packet(p, cat, remove_location, false)
+}
+
+/// The packet a sidecar save writes: [`sidecar_packet`], and the photo's regions too when it has a named face
+/// (see [`has_named_face`]).
+fn sidecar_save_packet(p: &Photo, cat: &lightcraft_catalog::Catalog) -> String {
+    packet(p, cat, false, true)
+}
+
+/// Whether a photo has a named face: the trigger for writing its regions into a sidecar.
+fn has_named_face(regions: &[lightcraft_meta::Region]) -> bool {
+    regions.iter().any(|r| r.kind == lightcraft_meta::RegionKind::Face && r.name.as_deref().is_some_and(|n| !n.trim().is_empty()))
+}
+
+fn packet(p: &Photo, cat: &lightcraft_catalog::Catalog, remove_location: bool, with_regions: bool) -> String {
     let nz = |s: &str| (!s.trim().is_empty()).then(|| s.to_string());
     let meta = lightcraft_meta::Metadata {
         software: Some("Ember".into()),
@@ -342,6 +357,12 @@ pub fn sidecar_packet_with(p: &Photo, cat: &lightcraft_catalog::Catalog, remove_
     if remove_location {
         (meta.sublocation, meta.city, meta.state, meta.country, meta.gps) = (None, None, None, None, None);
     }
+    // All of the photo's regions, so reading the sidecar back gives the same list. Orientation and size are
+    // left out: Ember doesn't keep the file's EXIF orientation, so the boxes are written upright, unrotated.
+    let with_regions = with_regions && has_named_face(&p.meta.regions);
+    if with_regions {
+        meta.regions = p.meta.regions.clone();
+    }
     let settings = serde_json::to_string(&*p.develop).unwrap_or_default();
     let flag = match p.flag {
         Flag::None => "none",
@@ -352,7 +373,7 @@ pub fn sidecar_packet_with(p: &Photo, cat: &lightcraft_catalog::Catalog, remove_
     if !remove_location && !p.meta.location.trim().is_empty() {
         lc.push(("location", p.meta.location.as_str()));
     }
-    lightcraft_meta::write_xmp_lc(&meta, &lc)
+    if with_regions { lightcraft_meta::write_xmp_lc_with_regions(&meta, &lc) } else { lightcraft_meta::write_xmp_lc(&meta, &lc) }
 }
 
 /// The properties Ember writes and owns in a sidecar: replaced on every save (removed when
@@ -382,6 +403,11 @@ pub const OWNED: &[&str] = &[
 /// doesn't read from sidecars): otherwise the sidecar's own value stays. Anything else Ember
 /// writes (`xmp:CreatorTool`) goes only into new sidecars.
 pub const OWNED_IF_STATED: &[&str] = &["exif:DateTimeOriginal", "photoshop:DateCreated", "exif:GPSLatitude", "exif:GPSLongitude"];
+
+/// [`OWNED_IF_STATED`] plus `mwg-rs:Regions`, used only for a sidecar that has none ([`sidecar_contents`]): there
+/// Ember's regions are added, and another application's regions are never replaced.
+const OWNED_IF_STATED_OR_NEW_REGIONS: &[&str] =
+    &["exif:DateTimeOriginal", "photoshop:DateCreated", "exif:GPSLatitude", "exif:GPSLongitude", "mwg-rs:Regions"];
 
 /// Write `data` to `path` atomically: a temp file next to it, synced, then renamed over it.
 fn write_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
@@ -431,7 +457,14 @@ fn sidecar_contents(path: &Path, fresh: String, stamp: &str) -> std::io::Result<
     if bytes.iter().all(u8::is_ascii_whitespace) {
         return Ok((fresh, false, None));
     }
-    let rules = lightcraft_meta::MergeRules { owned: OWNED, owned_if_present: OWNED_IF_STATED };
+    // Regions are written only where the sidecar has none: one that has `mwg-rs:Regions` (ours or another
+    // application's) keeps them byte for byte.
+    let has_regions = std::str::from_utf8(&bytes)
+        .ok()
+        .and_then(|s| lightcraft_meta::parse_xmp(s).ok())
+        .is_some_and(|d| d.values.contains_key("mwg-rs:Regions"));
+    let owned_if_present = if has_regions { OWNED_IF_STATED } else { OWNED_IF_STATED_OR_NEW_REGIONS };
+    let rules = lightcraft_meta::MergeRules { owned: OWNED, owned_if_present };
     match std::str::from_utf8(&bytes)
         .map_err(|e| e.to_string())
         .and_then(|old| lightcraft_meta::merge_xmp(old, &fresh, rules).map_err(|e| e.to_string()))
@@ -644,7 +677,7 @@ impl Session {
         self.validate_sidecar_packets_for_paths(std::slice::from_ref(&path), &crate::rename::RealFs)?;
         let p = self.catalog.photo(id).ok_or(lightcraft_catalog::CatalogError::NoPhoto(id))?;
         let err = |e: std::io::Error| EngineError::Other(format!("{}: {e}", path.display()));
-        let (data, merged, backup) = sidecar_contents(&path, sidecar_packet(p, &self.catalog), &(self.clock)()).map_err(err)?;
+        let (data, merged, backup) = sidecar_contents(&path, sidecar_save_packet(p, &self.catalog), &(self.clock)()).map_err(err)?;
         write_atomic(&path, data.as_bytes()).map_err(err)?;
         self.note_sidecar_write(&path, data.as_bytes());
         Ok(SidecarSaved { path, merged, backup })
