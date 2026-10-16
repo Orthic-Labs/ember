@@ -66,6 +66,25 @@ fn up_and_down_promote_the_next_candidate_to_select() {
     assert_eq!(h.app.ui.compare, Some((vis[2], vis[3])), "Up promotes the next candidate again");
 }
 
+/// Survey tiles the selection into the fewest columns that keep the tiles largest, and the
+/// survey's × on a tile (a selection toggle) takes that photo out of the survey.
+#[test]
+fn survey_fits_the_selection_and_drops_the_photos_removed_from_it() {
+    use crate::panels::compare::{survey_columns, survey_photos};
+    let mut h = demo();
+    let vis: Vec<u64> = h.app.session.visible_cloned().iter().map(|p| p.0).collect();
+    let area = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(900.0, 600.0));
+    assert_eq!(survey_columns(1, area), 1);
+    assert_eq!(survey_columns(4, area), 2, "four 3:2 tiles in a 3:2 area make a 2 x 2 grid");
+    h.request("engine.execute", json!({"command": "library.select", "params": {"ids": [vis[0], vis[1], vis[2]], "active": vis[0]}}), T);
+    let r = h.request("engine.execute", json!({"command": "view.survey"}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["result"]["photos"], 3);
+    h.request("engine.execute", json!({"command": "library.select", "params": {"ids": [vis[1]], "mode": "toggle"}}), T);
+    let shown: Vec<u64> = survey_photos(&mut h.app).iter().map(|p| p.0).collect();
+    assert_eq!(shown, vec![vis[0], vis[2]]);
+}
+
 /// A filmstrip click in Compare puts the photo into the active side: the candidate after
 /// entering Compare, the select after clicking the select's pane; a photo already on the other
 /// side swaps the two. `compare.set` does the same for agents, with an explicit `side`.

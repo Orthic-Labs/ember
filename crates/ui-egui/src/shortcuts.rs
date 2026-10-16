@@ -1012,6 +1012,19 @@ mod tests {
     }
 
     #[test]
+    fn s_expands_and_collapses_the_stack_in_the_grid() {
+        use lightcraft_catalog::{Op, PhotoId, Stack, StackId};
+        let mut h = library();
+        let stack = Stack { id: StackId(1), photos: vec![PhotoId(1), PhotoId(2)], collapsed: false };
+        h.app.session.catalog.apply(Op::AddStack { stack }).unwrap();
+        let collapsed = |h: &crate::headless::Headless| h.app.session.catalog.stack(StackId(1)).is_some_and(|s| s.collapsed);
+        key(&mut h, "S", false);
+        assert!(collapsed(&h), "S collapses the active photo's stack in the grid");
+        key(&mut h, "S", false);
+        assert!(!collapsed(&h), "S expands it again");
+    }
+
+    #[test]
     fn f1_opens_the_keyboard_shortcut_list() {
         let mut h = library();
         key(&mut h, "F1", false);
