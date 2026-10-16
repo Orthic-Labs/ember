@@ -124,7 +124,8 @@ fn apply_auto_values(s: &mut Session, c: &str, id: PhotoId, r: &RegionAuto, basi
         s.set_develop(id, d, &label)?;
         return Ok(json!({"control": ctl, "value": value}));
     }
-    apply_auto(c, &mut d, r)?;
+    let source = s.ai_source_of(id);
+    apply_auto(c, &mut d, r, source)?;
     s.set_develop(id, d, "Auto")?;
     if let Some(active) = s.active_mask
         && !s.develop_of(id).is_some_and(|d| d.masks.iter().any(|m| m.id == active))
@@ -135,8 +136,9 @@ fn apply_auto_values(s: &mut Session, c: &str, id: PhotoId, r: &RegionAuto, basi
 }
 
 /// Write Auto's result into `d`: the eight global values, and its region masks in place of the
-/// ones Auto made last time (the user's masks stay).
-fn apply_auto(c: &str, d: &mut DevelopSettings, r: &RegionAuto) -> Result<()> {
+/// ones Auto made last time (the user's masks stay). The regions are stamped with the photo's
+/// source file (`source`, [`Session::ai_source_of`]) and geometry, as an AI selection computed now.
+fn apply_auto(c: &str, d: &mut DevelopSettings, r: &RegionAuto, source: u64) -> Result<()> {
     let a = r.global;
     d.light.exposure = a.exposure;
     d.light.contrast = a.contrast;
@@ -147,11 +149,11 @@ fn apply_auto(c: &str, d: &mut DevelopSettings, r: &RegionAuto) -> Result<()> {
     d.color.vibrance = a.vibrance;
     d.color.saturation = a.saturation;
     d.masks.retain(|m| !is_auto_mask(m));
-    // the regions are stamped with the photo's geometry (Update AI Settings compares it after a crop)
+    // Update AI Settings compares the stamps after a replaced file or a crop
     let g = lightcraft_develop::geometry_stamp(d);
     let mut masks = r.masks_for(&d.masks).ok_or_else(|| bad(c, "no free Auto mask IDs"))?;
     for m in &mut masks {
-        m.ai_geometry = Some(g);
+        m.restamp(source, g);
     }
     d.masks.extend(masks);
     Ok(())
@@ -635,7 +637,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 for id in ids {
                     let r = auto_values(s, c, id, regions)?;
                     let mut d = (*s.develop_of(id).unwrap_or_default()).clone();
-                    apply_auto(c, &mut d, &r)?;
+                    apply_auto(c, &mut d, &r, s.ai_source_of(id))?;
                     ops.extend(s.develop_op(id, d, "Auto Settings"));
                 }
                 let n = ops.len();
@@ -651,20 +653,31 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update AI Settings",
             ["Photo"],
             None,
-            "{ids?, dryRun?: bool} — recomputes the stale AI masks (Subject, Sky, Background, People, Landscape) of each target photo (`ids`, else the selection) as one undo step. A mask is stale when an older AI algorithm made it, its source file changed since, or (Object and Describe) the photo's orientation, flips, lens or transform changed since. Object and Describe masks need the SAM 3 model: they stay stale and are counted in `pending` → {stale, updated, pending, changed}",
+            "{ids?, masks?: [mask id] (only those masks), dryRun?: bool} — recomputes the stale AI masks (Subject, Sky, Background, People, Landscape) of each target photo (`ids`, else the selection) as one undo step. A mask is stale when an older AI algorithm made it, its source file changed since, or (Object and Describe) the photo's orientation, flips, lens or transform changed since. Object and Describe masks need the SAM 3 model: they stay stale and are counted in `pending` → {stale, updated, pending, changed}",
             has_selection,
             |s, p| {
                 let dry = bool_or(p, "dryRun", false);
+                // `masks`: only those masks (a mask's own Update badge); each target photo's masks of those ids
+                let bad_masks = || bad("develop.updateAi", "`masks` must be mask ids (whole numbers)");
+                let only: Option<Vec<u32>> = match p.get("masks") {
+                    None | Some(Value::Null) => None,
+                    Some(Value::Array(a)) => {
+                        let ids = a.iter().map(|v| v.as_u64().and_then(|n| u32::try_from(n).ok()).ok_or_else(bad_masks));
+                        Some(ids.collect::<Result<_>>()?)
+                    }
+                    Some(_) => return Err(bad_masks()),
+                };
+                let wanted = |m: &lightcraft_develop::Mask| only.as_ref().is_none_or(|ids| ids.contains(&m.id));
                 let ids: Vec<PhotoId> = s.targets(p)?.into_iter().filter(|id| s.catalog.photo(*id).is_some()).collect();
                 let (mut stale, mut updated, mut pending, mut changed) = (0, 0, 0, 0);
                 let mut ops = Vec::new();
                 for id in ids {
                     let base = s.develop_of(id).unwrap_or_default();
                     let (src, g) = s.ai_stamps(id);
-                    stale += lightcraft_develop::ai_stale_count(&base.masks, src, g);
+                    stale += base.masks.iter().filter(|m| wanted(m) && m.ai_stale(src, g)).count();
                     let mut d = (*base).clone();
                     let mut photo_changed = false;
-                    for m in d.masks.iter_mut().filter(|m| m.ai_stale(src, g)) {
+                    for m in d.masks.iter_mut().filter(|m| wanted(m) && m.ai_stale(src, g)) {
                         if m.ai_recomputable() {
                             m.restamp(src, g);
                             updated += 1;
@@ -1377,7 +1390,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 if preset.auto {
                     // "apply Auto": Auto Settings first, the preset's own settings on top
                     let r = auto_values(s, "preset.apply", id, false)?;
-                    apply_auto("preset.apply", &mut base, &r)?;
+                    apply_auto("preset.apply", &mut base, &r, source)?;
                 }
                 ops.extend(s.develop_op(id, preset.apply_to_photo(&base, amount, Some(source)), &label));
             }

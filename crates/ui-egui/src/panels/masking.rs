@@ -2,7 +2,7 @@
 
 use egui::{Rect, Sense, Stroke, pos2, vec2};
 use lightcraft_catalog::PhotoId;
-use lightcraft_develop::{ControlSpec, LocalAdjustments, MaskShape, Section, Track};
+use lightcraft_develop::{ControlSpec, DevelopSettings, LocalAdjustments, MaskShape, Section, Track};
 use serde_json::json;
 
 use super::edit::apply_slider_out;
@@ -86,16 +86,38 @@ fn tile_layout(width: f32, label: impl Fn(f32) -> f32) -> (usize, f32, f32) {
     (2, room(2).max(24.0), 9.5)
 }
 
+/// The ids of the AI masks of `d` that Update AI Settings must recompute, for a photo whose current
+/// source and geometry stamps are `source` and `geometry` ([`lightcraft_engine::Session::ai_stamps`]).
+pub fn stale_mask_ids(d: &DevelopSettings, source: u64, geometry: u64) -> Vec<u32> {
+    d.masks.iter().filter(|m| m.ai_stale(source, geometry)).map(|m| m.id).collect()
+}
+
+/// Update AI Settings for photo `id`: every stale AI mask, or only `mask` (its own Update badge). A
+/// stale Object or Describe mask needs the SAM 3 model and stays stale: the status line says so.
+fn update_ai(app: &mut LightcraftApp, id: PhotoId, mask: Option<u32>) {
+    let mut params = json!({"ids": [id.0]});
+    if let Some(mask) = mask {
+        params["masks"] = json!([mask]);
+    }
+    if let Ok(result) = app.run("develop.updateAi", params)
+        && result["pending"].as_u64().unwrap_or(0) > 0
+    {
+        app.ui.status = crate::i18n::tr("Object and Describe masks need the SAM 3 model to update").to_string();
+    }
+}
+
 pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
     let t = Tokens::get(ui.ctx());
     let d = app.session.develop_of(id).unwrap_or_default();
     header(ui, "Masking");
-    if app.session.ai_stale_count(id) > 0 {
+    let (source, geometry) = app.session.ai_stamps(id);
+    let stale = stale_mask_ids(&d, source, geometry);
+    if !stale.is_empty() {
         egui::Frame::NONE.inner_margin(egui::Margin { left: 24, right: 22, top: 0, bottom: 8 }).show(ui, |ui| {
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.label(egui::RichText::new(crate::i18n::tr("AI masks need updating")).color(t.star));
-                if ui.button(crate::i18n::tr("Update AI Settings")).clicked() {
-                    let _ = app.run("develop.updateAi", json!({"ids": [id.0]}));
+                if text_button(ui, "maskUpdateAll", "Update All AI Masks", false).clicked() {
+                    update_ai(app, id, None);
                 }
             });
         });
@@ -251,12 +273,33 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
             paint(ui.painter(), Rect::from_min_size(r.min + vec2(8.0, 7.0), vec2(16.0, 16.0)), icon, t.text_label);
             // a long name is cut short (with …) before the eye, the full name on hover
             let color = if m.visible { t.text } else { t.text_disabled };
-            let g = one_line(ui.painter(), &m.name, t.font(13.0), color, r.width() - 32.0 - 32.0);
+            // a stale AI mask has an Update badge between its name and the eye
+            let stale_here = stale.contains(&m.id);
+            let badge = crate::i18n::tr("Update");
+            let badge_galley = ui.painter().layout_no_wrap(badge.to_string(), t.semibold(10.5), t.star);
+            let badge_w = if stale_here { badge_galley.size().x + 14.0 } else { 0.0 };
+            let g = one_line(ui.painter(), &m.name, t.font(13.0), color, r.width() - 32.0 - 32.0 - if stale_here { badge_w + 6.0 } else { 0.0 });
             let elided = g.elided;
             let at = pos2(r.left() + 32.0, r.center().y - g.size().y / 2.0);
             register(ui.ctx(), format!("maskName:{}", m.id), Rect::from_min_size(at, g.size()));
             ui.painter().galley(at, g, color);
             let resp = if elided { resp.on_hover_text(&m.name) } else { resp };
+            if stale_here {
+                let br = Rect::from_min_size(pos2(r.right() - 30.0 - badge_w, r.center().y - 9.0), vec2(badge_w, 18.0));
+                register(ui.ctx(), format!("maskUpdate:{}", m.id), br);
+                let click = ui.interact(br, egui::Id::new(("maskUpdate", m.id)), Sense::click());
+                ui.painter().rect_filled(br, 9.0_f32, if click.hovered() { t.hover } else { t.inset });
+                ui.painter().rect_stroke(br, 9.0_f32, Stroke::new(1.0, t.star), egui::StrokeKind::Inside);
+                ui.painter().galley(br.center() - badge_galley.size() / 2.0, badge_galley, t.star);
+                let tip = if m.ai_recomputable() {
+                    crate::i18n::tr("This AI mask is out of date: click to update it")
+                } else {
+                    crate::i18n::tr("Object and Describe masks need the SAM 3 model to update")
+                };
+                if click.on_hover_text(tip).clicked() {
+                    update_ai(app, id, Some(m.id));
+                }
+            }
             // show / hide on hover (and always while hidden)
             // (the pointer test, not `hovered`: over the eye, the row itself no longer counts as hovered)
             if ui.rect_contains_pointer(r) || !m.visible {
@@ -939,5 +982,76 @@ mod tests {
         assert_eq!(n, 2);
         assert!(w >= 24.0);
         assert_eq!(tile_layout(f32::NAN, long).0, 2);
+    }
+
+    /// A mask of one AI selection, stamped with `version` of the AI algorithm.
+    fn ai_mask(id: u32, shape: MaskShape, version: u32) -> lightcraft_develop::Mask {
+        use lightcraft_develop::{Mask, MaskComponent, MaskOp};
+        Mask {
+            id,
+            name: format!("AI {id}"),
+            components: vec![MaskComponent { name: None, op: MaskOp::Add, invert: false, shape }],
+            ai_version: version,
+            ..Default::default()
+        }
+    }
+
+    /// The panel's widgets for a frame of it.
+    fn panel_widgets(app: &mut LightcraftApp, id: PhotoId) -> Vec<String> {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx);
+        let raw = crate::headless::HeadlessView::raw_input(vec2(400.0, 900.0), 1.0, 0.0, vec![]);
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui, id));
+        out.textures_delta.clear();
+        crate::widgets::take_registry(&ctx).into_iter().map(|(w, _)| w).collect()
+    }
+
+    // #65: a stale AI mask has its own Update badge, and Update All AI Masks shows while any is stale
+    #[test]
+    fn a_stale_ai_mask_gets_an_update_badge_and_the_panel_an_update_all_button() {
+        let mut app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), crate::Services { png: None, ..Default::default() });
+        let id = app.session.active().unwrap();
+        let current = lightcraft_develop::AI_MASK_VERSION;
+        let mut d = (*app.session.develop_of(id).unwrap()).clone();
+        d.masks = vec![ai_mask(1, MaskShape::Sky, current), ai_mask(2, MaskShape::Subject, 0)];
+        app.session.set_develop(id, d, "setup").unwrap();
+
+        let (source, geometry) = app.session.ai_stamps(id);
+        assert_eq!(stale_mask_ids(&app.session.develop_of(id).unwrap(), source, geometry), [2]);
+        let widgets = panel_widgets(&mut app, id);
+        assert!(widgets.contains(&"maskUpdate:2".to_string()), "the stale mask has the badge: {widgets:?}");
+        assert!(!widgets.contains(&"maskUpdate:1".to_string()), "a current mask has none: {widgets:?}");
+        assert!(widgets.contains(&"button:maskUpdateAll".to_string()), "{widgets:?}");
+
+        // the badge updates its own mask and nothing else
+        let mut d = (*app.session.develop_of(id).unwrap()).clone();
+        d.masks.push(ai_mask(3, MaskShape::Sky, 0));
+        app.session.set_develop(id, d, "setup").unwrap();
+        update_ai(&mut app, id, Some(2));
+        let (source, geometry) = app.session.ai_stamps(id);
+        assert_eq!(stale_mask_ids(&app.session.develop_of(id).unwrap(), source, geometry), [3], "mask 2 is current, mask 3 still stale");
+        let widgets = panel_widgets(&mut app, id);
+        assert!(!widgets.contains(&"maskUpdate:2".to_string()) && widgets.contains(&"maskUpdate:3".to_string()), "{widgets:?}");
+
+        // Update All AI Masks takes the rest; with nothing stale neither shows
+        update_ai(&mut app, id, None);
+        let widgets = panel_widgets(&mut app, id);
+        assert!(!widgets.iter().any(|w| w.starts_with("maskUpdate")), "{widgets:?}");
+        assert!(!widgets.contains(&"button:maskUpdateAll".to_string()), "{widgets:?}");
+    }
+
+    // an Object or Describe mask the model has to recompute keeps its badge, and the status says why
+    #[test]
+    fn an_object_mask_keeps_its_badge_and_the_status_names_the_model() {
+        let mut app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), crate::Services { png: None, ..Default::default() });
+        let id = app.session.active().unwrap();
+        let object = MaskShape::Object { hint: vec![], exclude: vec![], seg: None, detail: vec![], edge: 0.0 };
+        let mut d = (*app.session.develop_of(id).unwrap()).clone();
+        d.masks = vec![ai_mask(1, object, 0)];
+        app.session.set_develop(id, d, "setup").unwrap();
+        update_ai(&mut app, id, Some(1));
+        assert!(app.ui.status.contains("SAM 3"), "{}", app.ui.status);
+        assert!(panel_widgets(&mut app, id).contains(&"maskUpdate:1".to_string()), "still stale: the badge stays");
     }
 }

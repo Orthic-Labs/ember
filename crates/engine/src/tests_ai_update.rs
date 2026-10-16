@@ -227,3 +227,70 @@ fn the_indicator_clears_when_the_stale_ai_masks_are_updated() {
     s.execute("develop.updateAi", &json!({"ids": [id.0]})).unwrap();
     assert_eq!(s.ai_stale_count(id), 0, "the badge clears");
 }
+
+#[test]
+fn update_can_be_limited_to_named_masks() {
+    let mut s = demo();
+    let id = s.visible_cloned()[0];
+    select(&mut s, &[id]);
+    let other = Mask { id: 3, name: "Sky".into(), ..subject(0) };
+    set_masks(&mut s, id, vec![subject(0), other]);
+    let r = s.execute("develop.updateAi", &json!({"masks": [3], "dryRun": true})).unwrap();
+    assert_eq!((r["stale"].as_u64(), r["updated"].as_u64()), (Some(1), Some(1)), "only the named mask counts");
+    s.execute("develop.updateAi", &json!({"masks": [3]})).unwrap();
+    let versions = |s: &Session| masks_of(s, id).iter().map(|m| m.ai_version).collect::<Vec<_>>();
+    assert_eq!(versions(&s), [0, AI_MASK_VERSION], "only mask 3 is updated");
+    assert_eq!(s.ai_stale_count(id), 1, "the other is still stale");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(versions(&s), [0, 0], "one undo step");
+    // a mask that is not there updates nothing and leaves no undo step
+    let commits = s.commits();
+    let r = s.execute("develop.updateAi", &json!({"masks": [99]})).unwrap();
+    assert_eq!((r["stale"].as_u64(), r["changed"].as_u64()), (Some(0), Some(0)));
+    assert_eq!(s.commits(), commits);
+    assert!(s.execute("develop.updateAi", &json!({"masks": ["a"]})).is_err());
+    assert!(s.execute("develop.updateAi", &json!({"masks": 3})).is_err());
+    // without `masks`: every stale mask, as before
+    let r = s.execute("develop.updateAi", &json!({})).unwrap();
+    assert_eq!(r["updated"], 2);
+}
+
+/// Auto's result for a photo with a sky region.
+fn sky_region() -> lightcraft_pipeline::auto::regions::RegionAuto {
+    use lightcraft_pipeline::auto::AutoTone;
+    use lightcraft_pipeline::auto::regions::{Region, RegionAdjust, RegionAuto};
+    let region = RegionAdjust { region: Region::Sky, share: 0.3, adjust: lightcraft_develop::LocalAdjustments::default() };
+    RegionAuto { global: AutoTone::default(), regions: vec![region] }
+}
+
+/// The photo's Auto region is stamped for its source file and geometry now, so it is current, and a
+/// replaced file stales it.
+fn assert_auto_region_stamped(s: &Session, id: PhotoId, what: &str) {
+    let d = s.develop_of(id).unwrap_or_default();
+    let auto: Vec<&Mask> = d.masks.iter().filter(|m| m.auto).collect();
+    assert_eq!(auto.len(), 1, "{what}: Auto wrote its sky region");
+    let (source, geometry) = s.ai_stamps(id);
+    assert_eq!((auto[0].ai_source, auto[0].ai_geometry), (Some(source), Some(geometry)), "{what}");
+    assert_eq!(s.ai_stale_count(id), 0, "{what}: current when written");
+    assert_eq!(lightcraft_develop::ai_stale_in(&d, source ^ 1), 1, "{what}: another source file stales it");
+}
+
+// issue #65: the regions Auto measures are AI selections like any other, so they carry the source stamp
+#[test]
+fn auto_measured_regions_are_stamped_with_the_source() {
+    let mut s = demo();
+    let id = s.visible_cloned()[0];
+    select(&mut s, &[id]);
+    // Auto Settings (develop.auto, and a measure applied by develop.applyAutoValues)
+    let basis = crate::auto_measure::auto_basis(&s, id).unwrap();
+    s.execute("develop.applyAutoValues", &json!({"id": id.0, "values": sky_region(), "basis": basis})).unwrap();
+    assert_auto_region_stamped(&s, id, "applyAutoValues");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.develop_of(id).unwrap_or_default().masks.iter().all(|m| !m.auto));
+    // Auto Settings to Selection
+    let basis = crate::auto_measure::auto_basis(&s, id).unwrap();
+    s.prepare_auto(id, true, basis, crate::auto_measure::AutoMeasured::Tone(sky_region()));
+    s.execute("develop.autoBatch", &json!({})).unwrap();
+    s.clear_prepared_auto();
+    assert_auto_region_stamped(&s, id, "autoBatch");
+}
