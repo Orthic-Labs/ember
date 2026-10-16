@@ -347,7 +347,7 @@ fn watermark_fonts(craft: &'static [crate::fonts::CraftFont]) -> Vec<ab_glyph::F
 /// Unlike Unicode presentation-form characters, GSUB works with BIZ UD fonts too.
 fn watermark_cell_glyphs(
     font: &ab_glyph::FontRef<'_>,
-    data: &harfrust::ShaperData,
+    shaping: &harfrust::Font,
     text: &str,
     vertical: bool,
     px: f32,
@@ -355,22 +355,21 @@ fn watermark_cell_glyphs(
     top: f32,
 ) -> Option<Vec<ab_glyph::Glyph>> {
     use ab_glyph::{Font, ScaleFont};
-    let face = harfrust::FontRef::new(font.font_data()).ok()?;
-    let mut buf = harfrust::UnicodeBuffer::new();
+    let mut buf = harfrust::Buffer::new();
     buf.push_str(text);
     buf.set_direction(if vertical { harfrust::Direction::TopToBottom } else { harfrust::Direction::LeftToRight });
     buf.guess_segment_properties();
-    let shaped = data.shaper(&face).build().shape(buf, harfrust::ShapeOptions::new());
-    if shaped.glyph_infos().is_empty() {
+    harfrust::shape(&harfrust::ShaperFont::new(shaping), &mut buf, harfrust::ShapeOptions::new()).ok()?;
+    if buf.glyph_infos().is_empty() {
         return None;
     }
     let sf = font.as_scaled(px);
     let (sx, sy) = (sf.h_scale_factor(), sf.v_scale_factor());
-    let advance_x = shaped.glyph_positions().iter().map(|p| p.x_advance as f32 * sx).sum::<f32>();
-    let advance_y = shaped.glyph_positions().iter().map(|p| -(p.y_advance as f32) * sy).sum::<f32>();
+    let advance_x = buf.glyph_positions().iter().map(|p| p.x_advance as f32 * sx).sum::<f32>();
+    let advance_y = buf.glyph_positions().iter().map(|p| -(p.y_advance as f32) * sy).sum::<f32>();
     let (mut x, mut y) = if vertical { (left + px / 2.0, top + (px - advance_y) / 2.0) } else { (left + (px - advance_x) / 2.0, top + sf.ascent()) };
     let mut glyphs = Vec::new();
-    for (info, pos) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
+    for (info, pos) in buf.glyph_infos().iter().zip(buf.glyph_positions()) {
         let gid = u16::try_from(info.glyph_id).ok().filter(|g| *g != 0)?;
         let pen = ab_glyph::point(x + pos.x_offset as f32 * sx, y - pos.y_offset as f32 * sy);
         glyphs.push(ab_glyph::GlyphId(gid).with_scale_and_position(px, pen));
@@ -449,7 +448,7 @@ fn watermark_coverage(
     let fonts = watermark_fonts(craft);
     let Some(latin) = fonts.first() else { return };
     let vertical_data: Vec<_> = if wm.vertical {
-        fonts.iter().map(|font| harfrust::FontRef::new(font.font_data()).ok().map(|face| harfrust::ShaperData::new(&face))).collect()
+        fonts.iter().map(|font| harfrust::Font::new(font.font_data().to_vec(), 0)).collect()
     } else {
         Vec::new()
     };
@@ -2702,7 +2701,7 @@ mod tests {
         // BIZ UDMincho has no Unicode presentation-form characters: the old fallback drew 、。.
         assert_eq!(font.glyph_id('︑').0, 0);
         assert_eq!(font.glyph_id('︒').0, 0);
-        let data = harfrust::ShaperData::new(&harfrust::FontRef::new(entry.bytes).unwrap());
+        let data = harfrust::Font::new(entry.bytes, 0).unwrap();
         for ch in ['、', '。'] {
             let glyph = watermark_cell_glyphs(&font, &data, &ch.to_string(), true, 100.0, 0.0, 0.0).unwrap().remove(0);
             assert_ne!(glyph.id, font.glyph_id(ch), "the font's vertical alternate for {ch}");
@@ -2775,7 +2774,7 @@ mod tests {
     fn upright_watermark_cell_retains_multiple_glyphs() {
         use ab_glyph::{Font, ScaleFont};
         let font = ab_glyph::FontRef::try_from_slice(WATERMARK_FONT).unwrap();
-        let data = harfrust::ShaperData::new(&harfrust::FontRef::new(WATERMARK_FONT).unwrap());
+        let data = harfrust::Font::new(WATERMARK_FONT, 0).unwrap();
         // There is no precomposed A with a combining long solidus overlay.
         let glyphs = watermark_cell_glyphs(&font, &data, "A\u{338}", false, 30.0, 0.0, 0.0).unwrap();
         assert_eq!(glyphs.len(), 2, "retain the base and the separately positioned combining glyph");
