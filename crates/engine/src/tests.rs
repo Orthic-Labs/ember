@@ -1828,9 +1828,7 @@ fn auto_batch_with_regions_replaces_its_masks_and_keeps_the_users() {
     let ids: Vec<_> = s.visible_cloned().into_iter().take(2).collect();
     s.execute("library.select", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
     s.execute("mask.add", &json!({"kind": "radial", "center": [0.3, 0.3], "name": "mine"})).unwrap();
-    let auto_masks = |s: &Session, id| {
-        s.develop_of(id).unwrap().masks.iter().filter(|m| lightcraft_pipeline::auto::regions::is_auto_mask(m)).count()
-    };
+    let auto_masks = |s: &Session, id| s.develop_of(id).unwrap().masks.iter().filter(|m| lightcraft_pipeline::auto::regions::is_auto_mask(m)).count();
     s.execute("develop.autoBatch", &json!({})).unwrap();
     let first: Vec<usize> = ids.iter().map(|id| auto_masks(&s, *id)).collect();
     s.execute("develop.autoBatch", &json!({})).unwrap();

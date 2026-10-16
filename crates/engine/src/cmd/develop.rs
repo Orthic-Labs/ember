@@ -1207,17 +1207,25 @@ pub fn specs() -> Vec<CommandSpec> {
             s.commit(&label, Op::Batch { ops })?;
             ok()
         }),
-        cmd!("preset.create", "Create Preset", ["Photo"], None, "{name, group?, groups?: [settingsGroup], auto?: bool (apply Auto Settings to a photo before the preset)}", has_active, |s, p| {
-            let c = "preset.create";
-            let id = active(s, c)?;
-            let name = str_param(p, "name").ok_or_else(|| bad(c, "missing name"))?;
-            let group = str_param(p, "group").unwrap_or("User Presets");
-            let groups = groups_param(p, c)?.unwrap_or_else(SettingsGroup::default_copy);
-            let d = s.develop_of(id).unwrap_or_default();
-            let pid = format!("user.{}.{}", s.presets.len(), name.to_lowercase().replace(' ', "-"));
-            s.presets.push(Preset { auto: bool_or(p, "auto", false), ..Preset::from_settings(&pid, name, group, &d, &groups) });
-            Ok(json!({"id": pid}))
-        }),
+        cmd!(
+            "preset.create",
+            "Create Preset",
+            ["Photo"],
+            None,
+            "{name, group?, groups?: [settingsGroup], auto?: bool (apply Auto Settings to a photo before the preset)}",
+            has_active,
+            |s, p| {
+                let c = "preset.create";
+                let id = active(s, c)?;
+                let name = str_param(p, "name").ok_or_else(|| bad(c, "missing name"))?;
+                let group = str_param(p, "group").unwrap_or("User Presets");
+                let groups = groups_param(p, c)?.unwrap_or_else(SettingsGroup::default_copy);
+                let d = s.develop_of(id).unwrap_or_default();
+                let pid = format!("user.{}.{}", s.presets.len(), name.to_lowercase().replace(' ', "-"));
+                s.presets.push(Preset { auto: bool_or(p, "auto", false), ..Preset::from_settings(&pid, name, group, &d, &groups) });
+                Ok(json!({"id": pid}))
+            }
+        ),
         cmd!("preset.delete", "Delete Preset", [], None, "{id}", always, |s, p| {
             let pid = str_param(p, "id").ok_or_else(|| bad("preset.delete", "missing id"))?;
             let i = s.presets.iter().position(|x| x.id == pid).ok_or_else(|| bad("preset.delete", "unknown preset"))?;

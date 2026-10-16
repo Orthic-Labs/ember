@@ -216,7 +216,15 @@ pub struct Preset {
 
 impl Preset {
     pub fn from_settings(id: &str, name: &str, group: &str, s: &DevelopSettings, groups: &[SettingsGroup]) -> Preset {
-        Preset { id: id.into(), name: name.into(), group: group.into(), settings: extract_groups(s, groups), favorite: false, builtin: false, auto: false }
+        Preset {
+            id: id.into(),
+            name: name.into(),
+            group: group.into(),
+            settings: extract_groups(s, groups),
+            favorite: false,
+            builtin: false,
+            auto: false,
+        }
     }
     /// Apply at `amount` (1.0 = 100 %). Masks in the preset are added to the photo's own (ones it
     /// already has are skipped), their effect scaled by the amount.

@@ -1062,9 +1062,9 @@ mod tests_color;
 #[cfg(test)]
 mod tests_crop_angle;
 #[cfg(test)]
-mod tests_cull_jobs;
-#[cfg(test)]
 mod tests_cull_import;
+#[cfg(test)]
+mod tests_cull_jobs;
 #[cfg(test)]
 mod tests_cull_review;
 #[cfg(test)]

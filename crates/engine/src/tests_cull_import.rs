@@ -28,10 +28,8 @@ fn write_png(path: &Path, seed: u8) {
 
 fn ids_in(v: &Value, key: &str) -> Vec<u64> {
     // `imported` lists ids; `photos` lists proposal rows keyed by `id`
-    let mut ids: Vec<u64> = v[key]
-        .as_array()
-        .map(|rows| rows.iter().filter_map(|row| row["id"].as_u64().or_else(|| row.as_u64())).collect())
-        .unwrap_or_default();
+    let mut ids: Vec<u64> =
+        v[key].as_array().map(|rows| rows.iter().filter_map(|row| row["id"].as_u64().or_else(|| row.as_u64())).collect()).unwrap_or_default();
     ids.sort_unstable();
     ids
 }
