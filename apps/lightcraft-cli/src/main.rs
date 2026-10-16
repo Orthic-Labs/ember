@@ -133,7 +133,7 @@ USAGE:
       Score read-only culling predictions against explicit shoot-level labels.
   lightcraft-cli cull baseline --manifest FILE [--reject-below 0..100] [--out FILE]
       Measure classical culling on explicit files in a disposable in-memory catalog.
-  lightcraft-cli ai search "TEXT" [--prepare-only] [--today YYYY-MM-DD]
+  lightcraft-cli ai search TEXT [--prepare-only] [--today YYYY-MM-DD]
       Turn a natural-language library search into a library.filter patch via ScaleDown (SCALEDOWN_API_KEY).
       Only the typed text and today's date are sent; --prepare-only prints the request without network.
   lightcraft-cli ai personal extract --manifest FILE --out NEW_MANIFEST
