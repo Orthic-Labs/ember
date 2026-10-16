@@ -48,7 +48,7 @@ pub struct FileSpec<'a> {
 /// Caller bounds input size before reading or hashing it. A digest records identity;
 /// authenticity still requires comparison with an independently pinned value.
 pub fn sha256_bytes(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Verify already-read bytes so callers parse exactly what was hashed, without reopening files.

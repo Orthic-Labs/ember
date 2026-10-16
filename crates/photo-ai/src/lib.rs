@@ -22,7 +22,7 @@ pub const SCHEMA: &str = include_str!("../assessment.schema.json");
 pub const MODELS: &str = include_str!("../models.json");
 pub const VERSION: &str = "photo-assessment-v1";
 pub fn digest(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
 }
 pub const MAX_PROXY_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_OUTPUT_TOKENS: u64 = 2048;

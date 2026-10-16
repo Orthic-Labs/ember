@@ -964,10 +964,18 @@ Tests that use a corpus skip cleanly when it is absent.
 
 fn file_sha256(path: &Path) -> Result<String, String> {
     use sha2::{Digest, Sha256};
+    use std::io::Read;
     let mut file = std::fs::File::open(path).map_err(|e| format!("open {}: {e}", path.display()))?;
     let mut hash = Sha256::new();
-    std::io::copy(&mut file, &mut hash).map_err(|e| format!("read {}: {e}", path.display()))?;
-    Ok(format!("{:x}", hash.finalize()))
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = file.read(&mut buf).map_err(|e| format!("read {}: {e}", path.display()))?;
+        if n == 0 {
+            break;
+        }
+        hash.update(buf.get(..n).unwrap_or(&[]));
+    }
+    Ok(hash.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
 #[cfg(test)]
