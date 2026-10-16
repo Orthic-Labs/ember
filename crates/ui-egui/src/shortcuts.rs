@@ -416,7 +416,7 @@ pub fn handle(app: &mut LightcraftApp, ctx: &egui::Context) {
             }
         }
         for (m, k, sc, id) in &classic {
-            if matches(i, *m, *k) && !native(*sc) {
+            if matches(i, *m, *k) && !native(sc) {
                 fire.push(id.to_string());
             }
         }

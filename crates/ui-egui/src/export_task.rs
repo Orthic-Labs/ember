@@ -408,6 +408,8 @@ mod contact_sheet_tests {
 }
 
 #[cfg(test)]
+// The offload hook hands a declined batch back whole, so the fallback can run it.
+#[allow(clippy::result_large_err)]
 mod offload_tests {
     use super::*;
     use std::cell::RefCell;
