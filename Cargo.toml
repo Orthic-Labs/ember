@@ -44,6 +44,7 @@ lightcraft-av1dec = { path = "crates/av1dec" }
 lightcraft-segment = { path = "crates/segment" }
 lightcraft-photo-ai = { path = "crates/photo-ai" }
 lightcraft-geocode = { path = "crates/geocode" }
+lightcraft-video = { path = "crates/video" }
 
 # foundation
 thiserror = "2"

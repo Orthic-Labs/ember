@@ -46,6 +46,20 @@ pub enum MediaKind {
     Video,
 }
 
+/// What probing a video found beyond the duration, size and creation time that the photo record keeps in its own fields
+/// ([`Photo::duration`], [`Photo::width`] / [`Photo::height`] as shown, [`Photo::captured`]).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct VideoMeta {
+    /// The video codec's name as ffprobe gives it (`h264`, `hevc`).
+    pub codec: String,
+    /// Frames per second.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_rate: Option<f64>,
+    /// The display rotation in degrees (0, 90, 180, 270); the photo's width and height are already as displayed.
+    #[serde(default)]
+    pub rotation: i32,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Flag {
@@ -284,6 +298,9 @@ pub struct Photo {
     /// Video duration in seconds.
     #[serde(default)]
     pub duration: Option<f64>,
+    /// A video's probe facts; `None` for a video imported without the ffmpeg sidecar to probe it, and for every other file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video: Option<VideoMeta>,
     /// Raw files: the camera's as-shot white balance (Kelvin, tint).
     #[serde(default)]
     pub as_shot_wb: Option<(f64, f64)>,
@@ -388,6 +405,7 @@ impl Photo {
             deleted: false,
             local: false,
             duration: None,
+            video: None,
             as_shot_wb: None,
             content_hash: None,
             embedded_lens: None,

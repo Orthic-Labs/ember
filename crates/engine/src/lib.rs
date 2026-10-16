@@ -76,6 +76,7 @@ pub mod sidecar;
 pub mod slideshow;
 pub mod smart;
 pub mod sync;
+pub mod video;
 mod view;
 pub mod walk;
 
@@ -1147,5 +1148,7 @@ mod tests_settings_files;
 mod tests_spots;
 #[cfg(test)]
 mod tests_sync;
+#[cfg(test)]
+mod tests_video;
 #[cfg(test)]
 mod tests_xmp;

@@ -1,0 +1,20 @@
+[package]
+name = "lightcraft-video"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Ember video: probe and poster frames through the verified LGPL ffmpeg sidecar (L1)"
+
+[lints]
+workspace = true
+
+[dependencies]
+lightcraft-raster = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+# The verified ffmpeg/ffprobe sidecar (RightKit owner of the approved-binary catalog and child-process runner). Windows and macOS
+# only: Linux ships without video for now (docs/video.md) and wasm32 has no processes. The crate's own default `native` feature
+# (a native-library catalog) is not used.
+[target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
+rightkit-ffmpeg = { version = "=0.2.6", default-features = false }

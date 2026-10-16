@@ -185,6 +185,8 @@ pub fn probe_bytes(name: &str, bytes: &[u8]) -> Result<ProbeInfo, String> {
             content_hash,
             xmp: lightcraft_meta::embedded(bytes).xmp,
             preview_only: None,
+            duration: None,
+            video: None,
         });
     }
     let fmt = lightcraft_codecs::sniff(bytes).ok_or("unrecognized file format")?;
@@ -219,6 +221,8 @@ pub fn probe_bytes(name: &str, bytes: &[u8]) -> Result<ProbeInfo, String> {
         embedded_lens: None,
         xmp: None,
         preview_only: None,
+        duration: None,
+        video: None,
     })
 }
 
@@ -1045,6 +1049,11 @@ pub fn fs_pair_loader() -> PairLoader {
 /// ([`load_vec_raw_denoised`]) when `strength` is above zero.
 fn fs_loader(detail: bool, strength: f64) -> FileLoader {
     Arc::new(move |path: &str, max_edge: usize| {
+        // a video is never read whole: its source is a poster frame cut by the ffmpeg sidecar (a photo's own loader,
+        // `video::poster_loader`, also knows the poster time chosen for it)
+        if crate::video::is_video(path) {
+            return crate::video::load_poster(path, None, None, None, max_edge, None);
+        }
         let len = std::fs::metadata(path).map(|m| usize::try_from(m.len()).unwrap_or(usize::MAX)).unwrap_or(0);
         // (the raw-domain denoise holds more planes of the mosaic at once)
         let weight = len * if max_edge <= crate::media::SourceLevel::Thumb.max_edge() { 3 } else if strength > 0.0 { 8 } else { 6 };
@@ -1085,6 +1094,10 @@ pub fn fs_raw_denoise_loader() -> crate::media::RawDenoiseLoader {
 pub fn fs_hooks() -> (FileLoader, FileProbe) {
     let loader = fs_loader(false, 0.0);
     let probe: FileProbe = Arc::new(|path: &str| {
+        // a video is probed by the ffprobe sidecar, never read
+        if crate::video::is_video(path) {
+            return crate::video::probe_file(path);
+        }
         let before = std::fs::metadata(path).map_err(|e| format!("{path}: {e}"))?;
         let len = usize::try_from(before.len()).map_err(|_| format!("{path}: file too large"))?;
         let _permit = crate::memory::work_gate().acquire(len);
@@ -1107,7 +1120,7 @@ pub fn fs_hooks() -> (FileLoader, FileProbe) {
 
 /// `path`'s modification time as ISO 8601 (see [`ProbeInfo::file_modified`]); `None` when the
 /// filesystem doesn't say or the time is before 1970.
-fn file_modified(path: &str) -> Option<String> {
+pub(crate) fn file_modified(path: &str) -> Option<String> {
     let t = std::fs::metadata(path).ok()?.modified().ok()?;
     let secs = i64::try_from(t.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs()).ok()?;
     Some(crate::import::civil(secs))

@@ -41,6 +41,9 @@ pub const EXTENSIONS: &[&str] = &[
     // failed with the reason ("HEIC/HEIF support isn't included in this build").
     "heic", "heif", "avif", // AVIF is decoded (rav1d) on native targets with the `avif` feature, else reported as failed too
     "iiq", "crw", "mrw", "x3f", "kdc", "mos", "erf", "3fr", "fff",
+    // video: catalogued with its ffprobe facts and shown by a poster frame, both from the ffmpeg sidecar (docs/video.md);
+    // `lightcraft_video::EXTENSIONS` lists the same
+    "mp4", "m4v", "mov", "mkv", "webm", "avi", "mts", "m2ts",
 ];
 
 /// File-system choices used by import review. Empty extension lists retain all supported formats.
@@ -1713,6 +1716,8 @@ pub fn commit_prepared(s: &mut Session, opts: &ImportOptions, now: &str, prepare
                 let name = Path::new(&stored).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| path.clone());
                 let mut p = Photo::new(id, Source::File { path: stored }, &name, &info.format, info.width, info.height, &now);
                 p.kind = info.kind;
+                p.duration = info.duration;
+                p.video = info.video;
                 p.file_size = info.file_size;
                 p.captured = info.captured;
                 p.meta = info.meta;

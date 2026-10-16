@@ -134,6 +134,8 @@ pub struct SourceKey {
     pub detail: bool,
     /// The raw-domain denoise strength, quantised to whole numbers `1..=100`; 0 = not denoised.
     pub raw_denoise: u8,
+    /// A video's chosen poster time (the bits of its seconds): its source is the frame there. `None` is the default poster.
+    pub poster: Option<u64>,
 }
 
 impl SourceKey {
@@ -724,7 +726,8 @@ impl MediaCache {
         } else {
             SourceKey::raw_denoise_of(&p.develop)
         };
-        SourceKey { detail: p.develop.enhance.raw_details && self.file_loader_detailed.is_some(), raw_denoise }
+        let poster = p.develop.poster_time.filter(|_| p.kind == MediaKind::Video).map(f64::to_bits);
+        SourceKey { detail: p.develop.enhance.raw_details && self.file_loader_detailed.is_some(), raw_denoise, poster }
     }
 
     /// The photos whose settings are being dragged (see [`Self::held`]): until they are let go, a changed raw denoise
@@ -748,6 +751,9 @@ impl MediaCache {
         let key = self.source_key(p);
         if key != SourceKey::default() {
             h.u64(u64::from(key.detail) | (u64::from(key.raw_denoise) << 1));
+            if let Some(bits) = key.poster {
+                h.u64(bits);
+            }
         }
         h.finish()
     }
@@ -807,6 +813,11 @@ impl MediaCache {
         }
         if let (SourceRef::File { denoise, .. }, Some((spec, loader))) = (&mut r, self.denoise.get(p.id)) {
             *denoise = Some((spec.clone(), loader.clone()));
+        }
+        // a video's source is its poster frame, cut by the ffmpeg sidecar: its own loader knows the poster time, and the
+        // loaders of still images never read the clip
+        if p.kind == MediaKind::Video && let SourceRef::File { loader, .. } = &mut r {
+            *loader = Some(crate::video::poster_loader(p, self.activity.clone()));
         }
         r
     }
@@ -1779,6 +1790,10 @@ pub struct ProbeInfo {
     /// A raw variant that can't be decoded yet: why. The file is described (and will be shown and
     /// edited) from its embedded preview; see [`lightcraft_catalog::Photo::preview_only`].
     pub preview_only: Option<String>,
+    /// A video's duration in seconds ([`lightcraft_catalog::Photo::duration`]).
+    pub duration: Option<f64>,
+    /// A video's probe facts ([`lightcraft_catalog::Photo::video`]); `None` for a video that could not be probed.
+    pub video: Option<lightcraft_catalog::VideoMeta>,
 }
 
 pub type FileProbe = Arc<dyn Fn(&str) -> Result<ProbeInfo, String> + Send + Sync>;
@@ -1959,7 +1974,7 @@ mod thumbnail_hash_tests {
         set(&mut s, 1, 40.0);
         assert_eq!(key_of(&s, 1), SourceKey::default(), "no loader, no key");
         s.media.raw_denoise_loader = Some(denoising);
-        assert_eq!(key_of(&s, 1), SourceKey { detail: false, raw_denoise: 40 });
+        assert_eq!(key_of(&s, 1), SourceKey { raw_denoise: 40, ..Default::default() });
         assert_ne!(key_of(&s, 1), SourceKey::default());
         assert_eq!(key_of(&s, 2), SourceKey::default(), "another photo keeps the old key");
         // whole numbers: 40.3 is the key of 40, 41 is another

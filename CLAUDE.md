@@ -60,7 +60,7 @@ of it. Full standard: `../craftrules/standards/never-crash.md`
 
 ## Non-negotiables
 - **Research & original implementation.** Read-only internal analysis of installed reference applications is permitted for maintainer-authorized research. Keep research outside this repository & preserve personal libraries without imports, edits, ratings or deletions. Do not copy proprietary code, icons, presets, profiles, camera matrices, fonts or model weights into Ember. Never copy GPL/LGPL/AGPL code (darktable, RawTherapee, ART, LibRaw, rawspeed, rawloader, rawler, lensfun, dcraw-derived GPL code…).
-- **Pure Rust** in the product. No C/C++ dependencies.
+- **Pure Rust** in the product, except the verified LGPL ffmpeg sidecar run through rightkit-ffmpeg (decision 2026-10-17). No C/C++ dependencies.
 - **Layering** (`plan/architecture.md` §3, enforced by `cargo xtask layers`): nothing below L5 depends on egui/eframe/winit/rfd.
 - **Everything is a command** (`crates/engine`): id, label, menu path, shortcut, params, enabled(), run(). UI, CLI, control channel and MCP all dispatch by id. Every slider is a `develop` control spec.
 - **Long-running work shows in the activity stack** ([`docs/background-tasks.md`](docs/background-tasks.md)): anything

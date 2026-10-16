@@ -67,12 +67,13 @@ impl DevelopSettings {
     }
 
     /// True if nothing differs from a fresh default (ignoring white balance "as shot" values, and
-    /// the rendering process: that is not an edit).
+    /// the rendering process and a video's poster time: those are not edits).
     pub fn is_unedited(&self) -> bool {
         let mut a = self.clone();
         let d = DevelopSettings::default();
         a.wb = d.wb;
         a.process = d.process;
+        a.poster_time = d.poster_time;
         a == d
     }
 
@@ -272,6 +273,18 @@ mod tests {
         assert!(on.to_json().get("hdr").is_some());
         assert_ne!(on.hash64(), s.hash64());
         assert_eq!(DevelopSettings::from_json(&on.to_json()).unwrap(), on);
+    }
+
+    #[test]
+    fn an_unset_poster_time_is_not_serialized_so_existing_hashes_stay() {
+        let s = DevelopSettings::default();
+        assert!(s.to_json().get("poster_time").is_none(), "no poster must not change the settings JSON or hash64");
+        let mut on = s.clone();
+        on.poster_time = Some(3.5);
+        assert_eq!(on.to_json().get("poster_time").and_then(serde_json::Value::as_f64), Some(3.5));
+        assert_ne!(on.hash64(), s.hash64());
+        assert_eq!(DevelopSettings::from_json(&on.to_json()).unwrap(), on);
+        assert!(on.is_unedited(), "a poster time is a choice of frame, not an edit");
     }
 
     #[test]

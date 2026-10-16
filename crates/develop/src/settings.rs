@@ -151,6 +151,11 @@ pub struct DevelopSettings {
     pub calibration: Calibration,
     /// Section on/off toggles (the "eye" buttons on panel headers): section id → enabled.
     pub disabled_sections: Vec<String>,
+    /// A video's poster frame: the time (seconds) its thumbnail and preview are cut at (`video.setPoster`); `None` is the
+    /// default, 10 % into the clip. Not written while unset, so settings without one keep their JSON and `hash64` (and every
+    /// cached preview stays valid).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub poster_time: Option<f64>,
 }
 
 impl Default for DevelopSettings {
@@ -185,6 +190,7 @@ impl Default for DevelopSettings {
             enhance: Enhance::default(),
             calibration: Calibration::default(),
             disabled_sections: Vec::new(),
+            poster_time: None,
         }
     }
 }

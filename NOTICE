@@ -106,3 +106,18 @@ downloads cities15000.zip, admin1CodesASCII.txt and countryInfo.txt from GeoName
 (https://download.geonames.org/export/dump/) into the settings folder. GeoNames data is licensed
 under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/);
 attribution: "GeoNames, geonames.org". The lookup code (crates/geocode) is our own.
+
+FFmpeg (LGPL sidecar, video)
+
+Ember reads video (probe and poster frames) by running the FFmpeg and FFprobe command-line programs as separate child processes
+(crates/video, through rightkit-ffmpeg). FFmpeg is Copyright (c) the FFmpeg developers and is licensed under the GNU Lesser General
+Public License, version 2.1 or later (https://ffmpeg.org/legal.html). The programs are not part of this repository and are not
+linked into Ember. Release bundles ship only builds that the rightkit-ffmpeg approved catalog lists: configured with
+--disable-gpl --disable-nonfree --disable-autodetect (no GPL and no non-free code), identified by content SHA-256 and checked
+before they run. Ember has no video support where they are not bundled (Linux ships without video for now); see docs/video.md.
+
+Source offer: for every release bundle that includes these programs, Orthic Labs offers the corresponding FFmpeg source code, the
+build recipe, and the licence texts of the components statically linked into the shipped build (all recorded in the
+rightkit-ffmpeg catalog entry for that build), on request, for at least three years after the release, at no more than the cost of
+distribution. Request them by opening an issue at https://github.com/Orthic-Labs/ember. The release bundle carries the FFmpeg
+licence notice beside the programs. Nothing in Ember's own MIT or Apache-2.0 licence changes the terms of the LGPL for FFmpeg.

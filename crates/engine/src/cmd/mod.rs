@@ -42,6 +42,7 @@ mod print;
 mod query;
 mod slideshow;
 mod sync;
+mod video;
 mod xmp;
 
 use serde::Serialize;
@@ -182,6 +183,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(book::specs());
         v.extend(print::specs());
         v.extend(calibrate::specs());
+        v.extend(video::specs());
         v
     })
 }
