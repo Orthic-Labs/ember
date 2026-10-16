@@ -8,7 +8,7 @@ still apply.
 ## Prepare and start a release
 
 1. Merge the release-ready changes into `release`.
-2. Set the workspace version in `Cargo.toml` (for example, with `cargo xtask version set 1.2.0`).
+2. Set the workspace version in `Cargo.toml` (for example, with `cargo run -p xtask -- version set 1.2.0`).
    For a manual workflow run, the version input can override the workspace version for that run.
    Use a semantic version such as `1.2.0` or `1.2.0-rc.1`; versions containing a hyphen are
    marked as prereleases.

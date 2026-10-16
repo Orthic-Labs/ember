@@ -1,5 +1,5 @@
 //! GoPro GPR (DNG with VC-5 coded raw data): the five public sample files of GoPro's reference implementation
-//! (<https://github.com/gopro/gpr>, `data/samples`, Apache-2.0 OR MIT: not CC0, so not in `cargo xtask corpus`).
+//! (<https://github.com/gopro/gpr>, `data/samples`, Apache-2.0 OR MIT: not CC0, so not in `cargo run -p xtask -- corpus`).
 //!
 //! Copy them into `corpus/raw/` (or under `LIGHTCRAFT_CORPUS`) with the names below to run this test; each file that is
 //! absent is skipped. A file is identified by its SHA-256 and must decode to the sensor mosaic whose FNV-1a hash (over the

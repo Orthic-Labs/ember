@@ -1,5 +1,5 @@
 //! Corpus test over `corpus/raw/**` (git-ignored CC0 samples from raw.pixls.us, fetched with
-//! `cargo xtask corpus --download`; `LIGHTCRAFT_CORPUS` overrides the corpus root). Skips cleanly when absent.
+//! `cargo run -p xtask -- corpus --download`; `LIGHTCRAFT_CORPUS` overrides the corpus root). Skips cleanly when absent.
 //!
 //! Every file must be recognised, carry an embedded JPEG preview (optional for DNG, older Panasonic RAW and HEVC-preview CR3), and either decode to a valid image or report
 //! `Unsupported` for one of the variants we know we don't decode yet. Prints decode times
@@ -320,7 +320,7 @@ fn corpus_dngs_carry_profile_looks() {
 }
 
 /// iPhone ProRAW (`dng-apple-iphone12pro-proraw.dng`, iPhone 12 Pro, CC0 from raw.pixls.us, see
-/// `cargo xtask corpus`) carries a lossy-JPEG sky matte at half resolution as a DNG semantic mask:
+/// `cargo run -p xtask -- corpus`) carries a lossy-JPEG sky matte at half resolution as a DNG semantic mask:
 /// it decodes, and it is a sky. The matte is stored like the raw (landscape; the photo is shown
 /// rotated 90° clockwise), so the sky is on its left and the lake and shore on its right.
 #[test]
@@ -903,7 +903,7 @@ fn corpus_fujifilm_compressed_samples() {
 }
 
 /// Checks each available `(name, width, height, sum, weighted)` case against the decoder's sensor array (the file's
-/// identity is checked by `cargo xtask corpus --download`); absent corpus files are skipped. Returns how many were verified.
+/// identity is checked by `cargo run -p xtask -- corpus --download`); absent corpus files are skipped. Returns how many were verified.
 fn verify_sensor_arrays(cases: &[(&str, usize, usize, u64, u64)]) -> usize {
     let dir = corpus_root().join("raw");
     let mut seen = 0;

@@ -4,7 +4,7 @@
 # Usage: packaging/web/package.sh [--skip-build]
 #
 # Needs: the wasm32-unknown-unknown target and the wasm-bindgen CLI at the version in Cargo.lock
-# (see docs/web.md); `cargo xtask web` builds it. The zip holds a self-contained static site in lightcraft-web-<version>/ that works
+# (see docs/web.md); `cargo run -p xtask -- web` builds it. The zip holds a self-contained static site in lightcraft-web-<version>/ that works
 # from any URL path and inside an <iframe>. Hosting notes: packaging/web/README.md.
 set -euo pipefail
 # shellcheck source=../env.sh
@@ -12,7 +12,7 @@ set -euo pipefail
 HERE="$ROOT/packaging/web"
 
 if [ "${1:-}" != "--skip-build" ]; then
-  (cd "$ROOT" && cargo xtask web)
+  (cd "$ROOT" && cargo run -p xtask -- web)
 fi
 
 SITE="$CARGO_TARGET_DIR/web-site"

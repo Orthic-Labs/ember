@@ -1,4 +1,4 @@
-//! `cargo xtask web`: build `apps/lightcraft-web` for wasm32 and bundle it with `wasm-bindgen`
+//! `cargo run -p xtask -- web`: build `apps/lightcraft-web` for wasm32 and bundle it with `wasm-bindgen`
 //! into `<target>/web-site/` (index.html + worker.js + lightcraft_web.js + lightcraft_web_bg.wasm),
 //! with gzip and brotli precompressed copies (`*.gz`, `*.br`) next to each file.
 //! `--serve [port]` then serves that folder with a tiny static HTTP server (std only) that sends
@@ -166,7 +166,7 @@ pub fn run(args: &[&str]) -> Result<(), String> {
     match serve {
         Some(port) => serve_dir(&out, port),
         None => {
-            println!("serve it with `cargo xtask web --serve` (or any static HTTP server; see docs/web.md) and open http://127.0.0.1:8080/");
+            println!("serve it with `cargo run -p xtask -- web --serve` (or any static HTTP server; see docs/web.md) and open http://127.0.0.1:8080/");
             Ok(())
         }
     }

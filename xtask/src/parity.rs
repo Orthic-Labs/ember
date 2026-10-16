@@ -1,4 +1,4 @@
-//! `cargo xtask parity`: the Lightroom parity tracker (`docs/parity-checklist.md`).
+//! `cargo run -p xtask -- parity`: the Lightroom parity tracker (`docs/parity-checklist.md`).
 //!
 //! - **Reference check** (in `ci`): every `` `cmd:<id>` `` must be a registered command (engine command specs, as
 //!   listed by `lightcraft-cli commands --json`, or a UI command from `UI_COMMANDS`), every `` `ctl:<id>` `` a develop
@@ -303,7 +303,7 @@ pub fn run(root: &Path, write: bool) -> Result<(), String> {
             println!("\nupdated the summary in {DOC}");
         }
     } else if with_summary(&md, &table).is_some_and(|new| new != md) {
-        println!("\nnote: the summary in {DOC} is stale — run `cargo xtask parity --write`");
+        println!("\nnote: the summary in {DOC} is stale — run `cargo run -p xtask -- parity --write`");
     }
     // Ids from the local Lightroom reference that have no row yet (plan/ is local-only, so only a warning).
     let catalog = root.join("plan/lightroom/03-feature-catalog.md");

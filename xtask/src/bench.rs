@@ -1,4 +1,4 @@
-//! `cargo xtask bench [FILE] [--strict] [--threshold PCT]`: run the end-to-end render benchmark, record
+//! `cargo run -p xtask -- bench [FILE] [--strict] [--threshold PCT]`: run the end-to-end render benchmark, record
 //! the results in `target/bench/history.jsonl` (one JSON object per run, with git revision and load
 //! average) and compare with the previous run.
 //!

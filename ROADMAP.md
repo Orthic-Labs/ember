@@ -115,7 +115,7 @@ yet guarantee original-pixel detail; visible-region rendering remains a gap (LR-
 
 ## Parity estimate (feature count updated 2026-10-08; effort estimate from 2026-10-02)
 
-**By feature count** — from `docs/parity.md` (one row per reference editor feature, menu item and shortcut; `cargo xtask
+**By feature count** — from `docs/parity.md` (one row per reference editor feature, menu item and shortcut; `cargo run -p xtask --
 parity` prints this line on every run, so it stays current):
 
 | Scope | Weighted completion | Rows | 2026-10-02 |
@@ -189,7 +189,7 @@ private 3:2 & 4:3 examples verified through native rendering & full-resolution 1
 
 CR3 lossless Bayer and version 0x100/0x200 C-RAW sensor decoding is verified pixel-exactly on Canon M50, R100 and R8; any other CR3, or one that fails to decode, opens from its embedded JPEG as before. See [`docs/cr3.md`](docs/cr3.md) for coding limits, reference provenance and colour limitations.
 
-Decoded (CC0 corpus from raw.pixls.us, `cargo xtask corpus --download`, `crates/raw/tests/corpus.rs`): DNG (uncompressed,
+Decoded (CC0 corpus from raw.pixls.us, `cargo run -p xtask -- corpus --download`, `crates/raw/tests/corpus.rs`): DNG (uncompressed,
 LJ92, lossy JPEG / Smart Previews, Deflate, float, linear), CR2, ARW (uncompressed, ARW2, LJ92; as-shot white balance and black level of pre-2017 bodies from the enciphered
 maker-note `Tag2010` and the encrypted `SR2SubIFD`, both recovered by black-box analysis, `crates/raw/src/vendor/arw.rs`), NEF/NRW uncompressed and Huffman-compressed (lossless, lossy type 1/2, 12/14-bit), RAF uncompressed and lossless/lossy compressed (Bayer and
 X-Trans, 14/16-bit real-file verification), RW2 / Leica RWL / Panasonic RAW in every raw format (compressed formats 4 and 6, the prefix-coded strips of format 8,

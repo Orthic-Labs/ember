@@ -45,7 +45,7 @@ CDN bucket.
   `file://`.
 - **Isolation headers are optional.** The current build doesn't use `SharedArrayBuffer`, so
   `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` aren't needed (a future
-  wasm-threads build will need them; `cargo xtask web --serve` already sends them). If your site
+  wasm-threads build will need them; `cargo run -p xtask -- web --serve` already sends them). If your site
   sends COEP `require-corp`, also send `Cross-Origin-Resource-Policy: same-origin` (or
   `cross-origin` when the files live on a CDN) on the app's files.
 

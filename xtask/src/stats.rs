@@ -1,4 +1,4 @@
-//! `cargo xtask stats`: tests and lines of Rust per crate.
+//! `cargo run -p xtask -- stats`: tests and lines of Rust per crate.
 
 use std::path::Path;
 

@@ -12,15 +12,15 @@ rustup target add wasm32-unknown-unknown
 cargo install wasm-bindgen-cli --version <the wasm-bindgen version in Cargo.lock> --locked
 ```
 
-`cargo xtask web` checks the CLI against `Cargo.lock` and prints the exact install command if
+`cargo run -p xtask -- web` checks the CLI against `Cargo.lock` and prints the exact install command if
 it's missing or a different version.
 
 Build, then serve:
 
 ```sh
-cargo xtask web            # → <target>/web-site/{index.html, worker.js, lightcraft_web.js, lightcraft_web_bg.wasm}
-cargo xtask web --serve    # build, then serve on http://127.0.0.1:8080/ (or `--serve 9000`)
-cargo xtask web --dev      # unoptimized build with debug info (faster to compile, slow to run)
+cargo run -p xtask -- web            # → <target>/web-site/{index.html, worker.js, lightcraft_web.js, lightcraft_web_bg.wasm}
+cargo run -p xtask -- web --serve    # build, then serve on http://127.0.0.1:8080/ (or `--serve 9000`)
+cargo run -p xtask -- web --dev      # unoptimized build with debug info (faster to compile, slow to run)
 ```
 
 `<target>` is `target/` unless `CARGO_TARGET_DIR` is set. Any static HTTP server works, as long as
@@ -54,7 +54,7 @@ gzip size (5.25 MB). `wasm-opt -Oz`, when installed, shrinks it further.
 
 **Fonts.** The browser has no system fonts to fall back on, so CJK text comes from
 [craft-fonts](https://github.com/storytold/craft-fonts), the optional `CRAFT_FONTS_DIR` build
-input (`CRAFT_FONTS_DIR=../craft-fonts cargo xtask web`; release builds always set it). On wasm32
+input (`CRAFT_FONTS_DIR=../craft-fonts cargo run -p xtask -- web`; release builds always set it). On wasm32
 `crates/engine/build.rs` embeds only BIZ UDPGothic Regular (UI and watermark fallback). The web
 bundle also ships Noto Sans CJK SC Regular as `lightcraft_zh_hans.otf` and loads it before the UI
 starts. Keeping the 16 MB Chinese face separate leaves the module under Cloudflare's 25 MiB
@@ -63,7 +63,7 @@ web build still works, but Chinese and Japanese text lack glyphs. **Korean (Hang
 
 ## Deploying: headers
 
-`cargo xtask web --serve` sends these on every response. A production server may send them too;
+`cargo run -p xtask -- web --serve` sends these on every response. A production server may send them too;
 today they are optional:
 
 ```

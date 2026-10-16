@@ -15,13 +15,13 @@ Ember is Orthic Labs' independently maintained, open-source, pure-Rust photo lib
    tracker is [`docs/parity-checklist.md`](docs/parity-checklist.md) (one row per feature, menu item and shortcut).
    When you land a feature, update its row(s) and the gap entry in the same commit, and the numbers in `ROADMAP.md` /
    `docs/target-app-parity.md` when a listed gap closes (bump each doc's *Last updated* line and revision history, per
-   craftrules `standards/progress-docs.md`); `cargo xtask parity` (part of `ci`) checks that every `cmd:`/`ctl:` id and
-   path the tracker cites still exists, and `cargo xtask parity --write` refreshes its summary.
+   craftrules `standards/progress-docs.md`); `cargo run -p xtask -- parity` (part of `ci`) checks that every `cmd:`/`ctl:` id and
+   path the tracker cites still exists, and `cargo run -p xtask -- parity --write` refreshes its summary.
 5. Follow the autonomous operation protocol (`plan/execution-plan.md` §7). Don't stop to ask unless §7 lists the decision as the user's.
 
 `plan/` is gitignored (local-only).
 
-**Merging agent branches:** merge one branch, run `cargo xtask ci`, fix, commit — then the next. Two individually green
+**Merging agent branches:** merge one branch, run `cargo run -p xtask -- ci`, fix, commit — then the next. Two individually green
 branches can still break each other (e.g. a new struct field vs. a new constructor).
 
 **Resuming after a crash / another session:** check `git status` on main, `git worktree list`, and each worktree's
@@ -59,10 +59,10 @@ of it. Full standard: `../craftrules/standards/never-crash.md`
 ## Non-negotiables
 - **Research & original implementation.** Read-only internal analysis of installed reference applications is permitted for maintainer-authorized research. Keep research outside this repository & preserve personal libraries without imports, edits, ratings or deletions. Do not copy proprietary code, icons, presets, profiles, camera matrices, fonts or model weights into Ember. Never copy GPL/LGPL/AGPL code (darktable, RawTherapee, ART, LibRaw, rawspeed, rawloader, rawler, lensfun, dcraw-derived GPL code…).
 - **Processing stays Rust.** React/TypeScript presentation & Tauri/RightKit system-webview hosting are permitted for macOS/Windows desktop migration. Existing Rust RAW, develop, catalog, preview & export engine remains authoritative. Linux/web/CLI hosts retain their current architecture.
-- **Layering** (`plan/architecture.md` §3, enforced by `cargo xtask layers`): nothing below L5 depends on egui/eframe/winit/rfd.
+- **Layering** (`plan/architecture.md` §3, enforced by `cargo run -p xtask -- layers`): nothing below L5 depends on egui/eframe/winit/rfd.
 - **Everything is a command** (`crates/engine`): id, label, menu path, shortcut, params, enabled(), run(). UI, CLI, control channel and MCP all dispatch by id. Every slider is a `develop` control spec.
 - **Resolution independence:** settings use normalized image coordinates and relative radii; previews and exports must match.
-- **Quality gates:** public Orthic builds/tests/packages run through generated RightKit GitHub Actions only (`.rightgit.json`). Source snapshots may be pushed for CI; only qualified green revisions may become desktop default. CI retains `cargo xtask ci` (fmt, clippy -D warnings, tests, parity, layers, assets, wasm), frontend typecheck/build & target-native qualification. Local work stays source/static-only.
+- **Quality gates:** public Orthic builds/tests/packages run through generated RightKit GitHub Actions only (`.rightgit.json`). Source snapshots may be pushed for CI; only qualified green revisions may become desktop default. CI retains `cargo run -p xtask -- ci` (fmt, clippy -D warnings, tests, parity, layers, assets, wasm), frontend typecheck/build & target-native qualification. Local work stays source/static-only.
 - **Commits:** one task id per commit (`M2.3: local Laplacian highlights/shadows`). Only green states. End messages with the attribution line required by the environment.
 
 ## Assets: icons, images, fonts (ABSOLUTE RULE — never violate)
@@ -80,7 +80,7 @@ of it. Full standard: `../craftrules/standards/never-crash.md`
   font files here (Inter, already in `assets/fonts/`, is the one exception); add new fonts to craft-fonts. Ember
   uses it as the optional build input `CRAFT_FONTS_DIR`: `git clone https://github.com/storytold/craft-fonts ../craft-fonts`
   then `CRAFT_FONTS_DIR=../craft-fonts cargo run -p lightcraft` (or any cargo/xtask command). `crates/engine/build.rs`
-  embeds the manifest's fonts as `lightcraft_engine::CRAFT_FONTS` (wasm32: BIZ UDPGothic Regular only); `cargo xtask web`
+  embeds the manifest's fonts as `lightcraft_engine::CRAFT_FONTS` (wasm32: BIZ UDPGothic Regular only); `cargo run -p xtask -- web`
   ships Noto Sans CJK SC Regular as a separate asset loaded by the UI before startup. The UI
   (`theme::font_definitions`) and the export watermark renderer use CJK faces (picked by script) as fallbacks after Inter. Unset,
   `CRAFT_FONTS` is empty: everything builds, tests and runs, but Chinese and Japanese text lack glyphs. Releases always build
@@ -89,7 +89,7 @@ of it. Full standard: `../craftrules/standards/never-crash.md`
   [`standards/fonts.md`](https://github.com/storytold/craftrules/blob/main/standards/fonts.md).
 - Icons drawn in code (e.g. `crates/ui-egui/src/icons.rs`) are original work and are recorded in `assets/ATTRIBUTION.md` as such; do not trace them from reference-product icons.
 - Demo/test images: generated procedurally by `lightcraft-scenes`, or CC0 downloads kept in the gitignored `corpus/` with their source recorded. Reference-product screenshots & comparative research stay outside this repository and are never committed or published.
-- **Enforced:** `cargo xtask assets` (in `ci`) fails when an image/icon/font/sound/video/raw/ICC/XMP file is not matched
+- **Enforced:** `cargo run -p xtask -- assets` (in `ci`) fails when an image/icon/font/sound/video/raw/ICC/XMP file is not matched
   by a path pattern in the first column of `assets/ATTRIBUTION.md`, when a referenced licence file is missing, when a
   file name suggests excluded publisher material, or when a proprietary profile/template format (`.dcp`, `.lcp`, `.lrtemplate`, …) appears.
   Never weaken this check to make a commit pass — fix the attribution or remove the asset.
@@ -111,15 +111,15 @@ of it. Full standard: `../craftrules/standards/never-crash.md`
   `crates/ui-egui/src/menus.rs`.
 - Shell gotcha: `mv`/`cp` are aliased interactive here — use `/bin/mv -f` / `/bin/cp -f`.
 - Parallel agents: use explicit file ownership or separate worktrees; public builds use generated RightKit Actions caches, never local `CARGO_TARGET_DIR` overrides; each agent uses its **own control port** (pick one in 18000–19999, never the default 7980) and its own scratch subfolder (`<scratch>/<agent-name>/`) — never `rm -rf` shared paths; delete your target dir when done (disk is shared); keep every `Cargo.toml` valid at all times (the `crates/*` glob means one broken manifest breaks everyone).
-- Test corpora: `cargo xtask corpus --download` into `corpus/` (gitignored, CC0 only). Never commit media.
-- Shared real-file test corpora (Photoshop-authored PSDs, etc.) live in [`storytold/photocraft-corpus`](https://github.com/storytold/photocraft-corpus), explained in [craftrules `standards/test-corpora.md`](https://github.com/storytold/craftrules/blob/main/standards/test-corpora.md). Never commit large binary fixtures to this repo; fetch them pinned by commit and sha256-verified, as PhotoCraft does with `cargo xtask corpus`.
+- Test corpora: `cargo run -p xtask -- corpus --download` into `corpus/` (gitignored, CC0 only). Never commit media.
+- Shared real-file test corpora (Photoshop-authored PSDs, etc.) live in [`storytold/photocraft-corpus`](https://github.com/storytold/photocraft-corpus), explained in [craftrules `standards/test-corpora.md`](https://github.com/storytold/craftrules/blob/main/standards/test-corpora.md). Never commit large binary fixtures to this repo; fetch them pinned by commit and sha256-verified, as PhotoCraft does with `cargo run -p xtask -- corpus`.
 
 ## Testing & performance (do this often)
 - Unit/property tests next to the code; end-to-end tests drive real binaries (`crates/mcp/tests/e2e.rs`,
   `apps/lightcraft-cli/tests/`). New features need at least one test that would fail without them.
 - **Run the app after every user-visible change**: launch with `--control 7980`, drive it with a JSON-lines script
   (`docs/showcase/run.py file.jsonl`), take `ui.screenshot`, and look at it. Check `ui.inspect` → `perf`.
-- **Benchmarks:** `cargo xtask bench` (24 MP raw from corpus; CPU and GPU columns) appends to `target/bench/history.jsonl`
+- **Benchmarks:** `cargo run -p xtask -- bench` (24 MP raw from corpus; CPU and GPU columns) appends to `target/bench/history.jsonl`
   and flags CPU-time regressions > 20 % vs the previous run (`--strict` to fail). Run it before and after perf work.
 - **Measure, don't guess**: `LIGHTCRAFT_PROFILE=1` prints per-stage pipeline timings to stderr; time CLI renders
   with `/usr/bin/time`. Record numbers in `plan/STATUS.md` → Metrics. Budgets: slider update ≤ 16 ms (draft) / loupe

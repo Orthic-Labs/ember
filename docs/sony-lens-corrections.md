@@ -99,7 +99,7 @@ model names, and every other model remain unsupported by this distortion decoder
 numbers and table lengths do not establish the scale, interpolation or crop normalization on another
 body. Support can expand after independent geometry validation; do not add model-name prefix matching.
 
-The current `cargo xtask corpus --download` manifest contains 23 Sony CC0 samples across 17 bodies,
+The current `cargo run -p xtask -- corpus --download` manifest contains 23 Sony CC0 samples across 17 bodies,
 including samples 4822 (A7R IVA / 24–105 mm) and 3989 (A9 II / 200–600 mm). All 23 files have
 pinned SHA-256 hashes and are checked with `sony_embedded_distortion_is_limited_to_validated_models`:
 

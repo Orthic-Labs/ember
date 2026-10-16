@@ -74,7 +74,7 @@ Target languages Ember lacks: Italian, Dutch, Polish, Swedish, Norwegian Bokmål
 
 - Route lower-layer error messages (catalog, raw, codecs, engine) through translatable message ids
   instead of English `format!` strings (~12–20 h).
-- A check in `cargo xtask ci` that every user-visible literal reaches a catalog (~4–8 h).
+- A check in `cargo run -p xtask -- ci` that every user-visible literal reaches a catalog (~4–8 h).
 - A user manual / help pages beyond What's New and the shortcut sheet (reference editor links to online
   help; ~4–8 h for a translatable in-app help index).
 - Native-speaker review passes (human; cannot be done by agents).

@@ -8,7 +8,7 @@ on 2026-10-10 (≈ 202,000 tracked lines in 505 files: 24 library crates, 3 apps
 
 ## Layers
 
-`cargo xtask layers` (part of `cargo xtask ci`, `xtask/src/layers.rs`) enforces that nothing below
+`cargo run -p xtask -- layers` (part of `cargo run -p xtask -- ci`, `xtask/src/layers.rs`) enforces that nothing below
 L5 depends on egui, eframe, winit or rfd, and that each crate only uses lower layers.
 
 | Layer | Crates (lines) | Role |
@@ -58,7 +58,7 @@ dispatch by id, and headless snapshots render the UI without a window.
 
 ## Quality gates
 
-`cargo xtask ci`: fmt, clippy `-D warnings` with the never-crash lints, the HEIF build, tests,
+`cargo run -p xtask -- ci`: fmt, clippy `-D warnings` with the never-crash lints, the HEIF build, tests,
 `parity` (every id and path cited in [parity-checklist.md](parity-checklist.md) exists), `layers`,
 `assets` (every asset attributed, no reference publisher formats) and the WASM build. Other workflows build and
 test FreeBSD and Windows ARM64, lint packaging, and build releases.

@@ -1,5 +1,5 @@
 //! [`lightcraft_raw::sparse::header_plan`] over `corpus/raw/**` (git-ignored CC0 samples from
-//! raw.pixls.us, fetched with `cargo xtask corpus --download`; `LIGHTCRAFT_CORPUS` overrides the
+//! raw.pixls.us, fetched with `cargo run -p xtask -- corpus --download`; `LIGHTCRAFT_CORPUS` overrides the
 //! corpus root). Skips cleanly when absent.
 //!
 //! For every file the plan reaches `Ready` on, probing the partly loaded buffer must give exactly

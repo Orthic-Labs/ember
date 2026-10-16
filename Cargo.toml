@@ -156,7 +156,7 @@ lto = "thin"
 codegen-units = 1
 debug = false
 
-# `cargo xtask web`: the browser build. Size matters more than build time: fat LTO, one codegen
+# `cargo run -p xtask -- web`: the browser build. Size matters more than build time: fat LTO, one codegen
 # unit, no symbols, abort on panic (wasm32 can't unwind anyway), size-optimized code — except the
 # crates that do per-pixel work, which stay at opt-level 3 (opt-level "s"/"z" there costs ~50 %/
 # ~130 % render time; measured in docs/web.md → Bundle size).

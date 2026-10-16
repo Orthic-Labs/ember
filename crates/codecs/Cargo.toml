@@ -44,7 +44,7 @@ parallel = ["dep:rayon", "lightcraft-raster/parallel", "jpeg-decoder/rayon"]
 jxl = ["dep:jxl-oxide", "dep:jixel"]
 # HEIC/HEIF decode via the optional lightcraft-heif crate (heic-rs, pure Rust). Off by default so
 # distributors choose it at build time (HEVC patents are a distributor's call, same policy as
-# PhotoCraft); `cargo xtask ci` clippies and tests it (`--features heif`), releases don't ship it yet.
+# PhotoCraft); `cargo run -p xtask -- ci` clippies and tests it (`--features heif`), releases don't ship it yet.
 heif = ["dep:lightcraft-heif"]
 ## AVIF encoding via ravif/rav1e (pure Rust, BSD) and decoding via rav1d (lightcraft-av1dec, BSD-2-Clause).
 ## Native targets only; a no-op on wasm32.

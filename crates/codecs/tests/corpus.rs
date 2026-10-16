@@ -1,5 +1,5 @@
 //! Corpus tests over `corpus/images/**`, `corpus/pngsuite/**` and `corpus/raw/**` (git-ignored; fetched
-//! with `cargo xtask corpus --download`). Each test skips cleanly when its directory is absent.
+//! with `cargo run -p xtask -- corpus --download`). Each test skips cleanly when its directory is absent.
 //! `LIGHTCRAFT_CORPUS` overrides the corpus root.
 
 use lightcraft_codecs::*;

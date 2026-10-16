@@ -1,4 +1,4 @@
-//! `cargo xtask version [set X.Y.Z[-pre]]`: the workspace version, the single source of truth.
+//! `cargo run -p xtask -- version [set X.Y.Z[-pre]]`: the workspace version, the single source of truth.
 //!
 //! The version lives in `[workspace.package] version` in the root `Cargo.toml`; every crate
 //! inherits it with `version.workspace = true`, and the packaging scripts read it from here.
@@ -102,7 +102,7 @@ pub fn run(root: &Path, args: &[&str]) -> Result<(), String> {
             println!("version: {old} -> {new}");
             Ok(())
         }
-        _ => Err("usage: cargo xtask version [set X.Y.Z[-pre]]".into()),
+        _ => Err("usage: cargo run -p xtask -- version [set X.Y.Z[-pre]]".into()),
     }
 }
 

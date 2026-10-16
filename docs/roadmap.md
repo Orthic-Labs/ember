@@ -4,8 +4,8 @@
 
 Forward-looking plan. The summary with the headline numbers is [ROADMAP.md](../ROADMAP.md); the
 ranked shortfalls are [gaps.md](gaps.md); the numbers come from [target-app-parity.md](target-app-parity.md).
-Ember has no `cargo xtask scorecard`; the measured checklist is
-[parity-checklist.md](parity-checklist.md) (`cargo xtask parity`).
+Ember has no `cargo run -p xtask -- scorecard`; the measured checklist is
+[parity-checklist.md](parity-checklist.md) (`cargo run -p xtask -- parity`).
 
 ## Current focus
 

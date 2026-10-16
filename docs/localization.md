@@ -47,7 +47,7 @@ are in [`localization-zh-hans.md`](localization-zh-hans.md), [`localization-zh-h
    language whose script has no face in the build shows boxes (the test says so instead of failing).
    Fonts live in [storytold/craft-fonts](https://github.com/storytold/craft-fonts), never here; a
    missing face is added there, not worked around in this repository.
-4. Run `cargo xtask ci` (it includes `fmt`, `clippy`, the tests, `parity` and the wasm check).
+4. Run `cargo run -p xtask -- ci` (it includes `fmt`, `clippy`, the tests, `parity` and the wasm check).
 
 ## How a message is found
 

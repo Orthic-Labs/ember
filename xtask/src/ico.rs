@@ -1,4 +1,4 @@
-//! `cargo xtask ico <out.ico> <in.png>…`: pack PNG images into a Windows `.ico`.
+//! `cargo run -p xtask -- ico <out.ico> <in.png>…`: pack PNG images into a Windows `.ico`.
 //!
 //! Vista and later read PNG-compressed icon entries, so each PNG is stored as is. The size comes
 //! from the PNG's IHDR chunk; 256 px is written as 0, per the ICO format.
@@ -47,7 +47,7 @@ pub fn pack(pngs: &[Vec<u8>]) -> Result<Vec<u8>, String> {
 
 pub fn run(args: &[&str]) -> Result<(), String> {
     let [out, inputs @ ..] = args else {
-        return Err("usage: cargo xtask ico <out.ico> <in.png>…".into());
+        return Err("usage: cargo run -p xtask -- ico <out.ico> <in.png>…".into());
     };
     let pngs = inputs.iter().map(|p| std::fs::read(p).map_err(|e| format!("read {p}: {e}"))).collect::<Result<Vec<_>, _>>()?;
     let ico = pack(&pngs)?;

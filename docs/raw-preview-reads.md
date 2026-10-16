@@ -70,7 +70,7 @@ those:
   import path's own partial read uses), or a window that does not decode all answer `None`, and the
   loader reads the file whole exactly as before: the plan can cost bytes but never the picture.
 
-Measured over the CC0 corpus (111 raws, `cargo xtask corpus --download`): **52 files take the plan
+Measured over the CC0 corpus (111 raws, `cargo run -p xtask -- corpus --download`): **52 files take the plan
 route**, reading a median **7.8 %** of their bytes (0.9 %–27.7 %) — by format RW2 3.3 %, Leica RWL
 4.1 %, ARW 7.5 %, CR3 8.4 %, DNG 9.7 %, CR2 14.3 % — while the 21 RAFs stay on the header route
 (median 4.5 %). The remaining 38 read whole: NEF, NRW, ORF, PEF and Samsung SRW because the planner

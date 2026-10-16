@@ -10,7 +10,7 @@
 #     flake input); without it everything builds and runs, but Japanese and Chinese text have no glyphs;
 #   * the desktop file, hicolor icons and AppStream metadata are the same files the .deb/.rpm ship
 #     (packaging/linux/), so `apt` and NixOS users see one identical Ember;
-#   * `doCheck` runs `cargo test --workspace`, what `cargo xtask ci` runs. `nix build` runs it too;
+#   * `doCheck` runs `cargo test --workspace`, what `cargo run -p xtask -- ci` runs. `nix build` runs it too;
 #     `pkgs.lightcraft.overrideAttrs { doCheck = false; }` skips it for a faster, build-only install.
 #
 # Everything in the product is pure Rust (no C/C++ dependencies), so this needs no build system
@@ -69,7 +69,7 @@ let
     vulkan-loader
   ];
 
-  # The two native binaries. The wasm app (apps/lightcraft-web) is built by `cargo xtask web`, not
+  # The two native binaries. The wasm app (apps/lightcraft-web) is built by `cargo run -p xtask -- web`, not
   # here; xtask is tooling.
   binaries = [
     "lightcraft"
@@ -109,8 +109,8 @@ rustPlatform.buildRustPackage {
     "lightcraft-cli"
   ];
 
-  # `cargo xtask ci` runs `cargo test --workspace`. Tests that need what the sandbox cannot have
-  # skip themselves with a note: corpus/ (gitignored, `cargo xtask corpus --download`) and the GPU
+  # `cargo run -p xtask -- ci` runs `cargo test --workspace`. Tests that need what the sandbox cannot have
+  # skip themselves with a note: corpus/ (gitignored, `cargo run -p xtask -- corpus --download`) and the GPU
   # equivalence tests (no adapter).
   cargoTestFlags = [ "--workspace" ];
 

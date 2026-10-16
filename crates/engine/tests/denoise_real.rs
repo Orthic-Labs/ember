@@ -7,7 +7,7 @@
 //!   cargo test --release -p lightcraft-engine --features denoise --test denoise_real -- --ignored --nocapture
 //! ```
 //!
-//! `LC_DENOISE_RAW` is a folder of CC0 raw files (`cargo xtask corpus --download` → `corpus/raw`); every file in it is
+//! `LC_DENOISE_RAW` is a folder of CC0 raw files (`cargo run -p xtask -- corpus --download` → `corpus/raw`); every file in it is
 //! tried. Optional: `LC_DENOISE_ONLY` (a file name to try alone), `LC_DENOISE_RUN_ON=cpu|gpu|auto` (where the model runs; `cpu` to compare with the card).
 #![cfg(feature = "denoise")]
 

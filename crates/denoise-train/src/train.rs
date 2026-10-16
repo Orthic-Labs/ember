@@ -183,7 +183,7 @@ fn write_contract(cfg: &TrainConfig, manifest: &SplitManifest) -> Result<()> {
         sigma_scale: SIGMA_SCALE,
         loss: "mean over samples of |pred - clean| / (sqrt(clamp(clean, 0, 1)) + 0.03)",
         domain: "demosaiced camera RGB (not the product scene-linear Rec.2020: an unresolved item of the learned-RGB gate)",
-        clean_source: format!("CC0 raws recorded at ISO <= {} (cargo xtask corpus --download), train split only", crate::data::MAX_SOURCE_ISO),
+        clean_source: format!("CC0 raws recorded at ISO <= {} (cargo run -p xtask -- corpus --download), train split only", crate::data::MAX_SOURCE_ISO),
         noise: serde_json::json!({
             "model": "y = a*Poisson(x/a) + sqrt(b)*N(0,1) on the raw mosaic, clipped at white; var = a*x + b",
             "a": "base_iso-relative gain / full_well_e",

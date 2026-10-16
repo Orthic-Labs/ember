@@ -1,4 +1,4 @@
-//! Workspace tooling: `cargo xtask <command>`.
+//! Workspace tooling: `cargo run -p xtask -- <command>`.
 //!
 //! Pure Rust (std + serde_json; flate2/brotli for the web bundle). External tools (`cargo`, `curl`, `tar`) are
 //! invoked through `std::process::Command`.
@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 const USAGE: &str = "\
-usage: cargo xtask <command>
+usage: cargo run -p xtask -- <command>
 
 commands:
   assets          every image/icon/font/media file is attributed in assets/ATTRIBUTION.md; no Adobe assets
@@ -340,7 +340,7 @@ fn cmd_ci() -> Result<(), String> {
 
 /// CC0 raw samples (raw.pixls.us). Small, representative set; extend freely (CC0 only).
 /// CC0 raw samples from raw.pixls.us (each verified CC0 on the site).
-/// The third field is the SHA-256 of the file as downloaded; `cargo xtask corpus --download` checks it.
+/// The third field is the SHA-256 of the file as downloaded; `cargo run -p xtask -- corpus --download` checks it.
 /// One per format / compression variant we decode or deliberately report as unsupported (preview only).
 const RAW_SAMPLES: &[(&str, &str, &str)] = &[
     (

@@ -212,7 +212,7 @@ pub fn build_manifest_from_hashes(files: Vec<(PathBuf, Hash)>, cfg: &SplitConfig
 pub fn build_manifest(dir: &Path, cfg: &SplitConfig) -> Result<SplitManifest> {
     let paths = scan_raws(dir)?;
     if paths.is_empty() {
-        return Err(Error::Split(format!("no raw files under {} (run `cargo xtask corpus --download`)", dir.display())));
+        return Err(Error::Split(format!("no raw files under {} (run `cargo run -p xtask -- corpus --download`)", dir.display())));
     }
     let mut hashed = Vec::with_capacity(paths.len());
     for p in paths {

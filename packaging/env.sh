@@ -13,7 +13,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export ROOT
 
 # The version lives in exactly one place: `[workspace.package] version` in the root Cargo.toml.
-# (`cargo xtask version` prints the same thing; awk avoids compiling xtask here.)
+# (`cargo run -p xtask -- version` prints the same thing; awk avoids compiling xtask here.)
 workspace_version() {
   awk '
     /^\[/ { in_pkg = ($0 == "[workspace.package]") ; next }

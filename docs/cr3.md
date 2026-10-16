@@ -51,7 +51,7 @@ tile/plane layout as full decoding.
 
 `crates/raw/tests/cr3_corpus.rs` checks every full-sensor sample against a
 black-box reference, before cropping or colour processing. Public CC0 files
-are downloaded by `cargo xtask corpus --download` and kept outside version
+are downloaded by `cargo run -p xtask -- corpus --download` and kept outside version
 control. The exact inputs and reference hashes are:
 
 | File | Input SHA-256 | Sensor FNV-1a (u16 little-endian) |

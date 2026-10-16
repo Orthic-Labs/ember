@@ -57,7 +57,7 @@ Status, 2026-10-16: tooling written and unit-tested in source; **nothing has bee
 ### Run it
 
 ```text
-cargo xtask corpus --download                                  # CC0 raws into corpus/raw (gitignored)
+cargo run -p xtask -- corpus --download                                  # CC0 raws into corpus/raw (gitignored)
 denoise-train splits --corpus corpus/raw                       # show the hash split; warns on an empty split
 denoise-train train  --corpus corpus/raw --out D:\scratch\ember-denoise\run1 --steps 200000 --device cpu
 denoise-train train  --corpus corpus/raw --out D:\scratch\ember-denoise\run1 --resume --steps 200000

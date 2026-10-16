@@ -2,7 +2,7 @@
 
 Every asset shipped in this repository is listed here (see the asset rules in `AGENTS.md`). Reference-product
 assets are excluded. Add an entry in the same commit as the asset.
-`cargo xtask assets` (part of `cargo xtask ci`) fails if any image, icon, font, sound, video, raw file or colour profile
+`cargo run -p xtask -- assets` (part of `cargo run -p xtask -- ci`) fails if any image, icon, font, sound, video, raw file or colour profile
 in the repository is not matched by a path pattern in the first column (`*` = any characters except `/`; a trailing `/`
 covers a whole directory), or if a licence file referenced in the Licence column is missing.
 
