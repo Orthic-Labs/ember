@@ -8,10 +8,10 @@ other tools), and let Ember pick up edits made elsewhere.
 
 | | |
 |---|---|
-| Name | `<stem>.xmp` by default (`IMG_0001.CR3` → `IMG_0001.xmp`); `<file>.xmp` (`IMG_0001.CR3.xmp`) with `naming: "full"`. Reading accepts either (preferred first) and `.XMP`. With stem naming, files sharing a stem don't share a sidecar: see *Shared names* below. |
+| Name | `<stem>.xmp` by default (`IMG_0001.CR3` → `IMG_0001.xmp`); `<file>.xmp` (`IMG_0001.CR3.xmp`) with `naming: "full"`; with `naming: "split"` every file that shares its stem with another gets its own `<file>.xmp`, and a file without a partner keeps `<stem>.xmp`. Reading accepts either (preferred first) and `.XMP`. With stem naming, files sharing a stem don't share a sidecar: see *Shared names* below. |
 | Write | `photo.saveMetadataToFile {ids?}` (Photo ▸ Save Metadata to File, ⌘S), or automatically after every change with `library.xmpPreferences {autoWrite: true}` (File ▸ Automatically Write Changes into XMP). Slider drags are written once, when the drag ends; undo/redo rewrite the sidecar. An existing sidecar is **merged into, never replaced** (see *Saving into an existing sidecar*). Written atomically (temp file, fsync, rename). The result lists `written`, `merged` and `backups`. |
 | Read | On import (`library.import`, the report counts `sidecars`), and `photo.readMetadataFromFile {ids?}` (one undo step). For raw/DNG files without a sidecar, the XMP embedded in the file is used. `photo.readMetadataFromFile` never writes the sidecar, even with auto-write on: writing back what it has just read would add `lc:settings`, which later reads prefer over another app's `crs:` edits (issue #934). |
-| Preferences | `library.xmpPreferences {autoWrite?, naming?: stem\|full}`, stored in the library's `prefs.json`. |
+| Preferences | `library.xmpPreferences {autoWrite?, naming?: stem\|full\|split}`, stored in the library's `prefs.json`. |
 
 What we write (standard namespaces, so other tools can read the metadata):
 
@@ -73,6 +73,12 @@ With stem naming, `IMG_0001.CR3` and `IMG_0001.JPG` map to the same `IMG_0001.xm
 library share a stem, the stem sidecar belongs to one of them — a raw first, otherwise the first by file name — and
 the others write and read `<file>.xmp` (`IMG_0001.JPG.xmp`), falling back to the stem sidecar for reading when they
 have none. So saving one photo never overwrites the other's metadata (`Session::sidecar_naming`).
+
+**Per file variant (`naming: "split"`, issue #38).** Each file that shares a stem with another catalogued file (a RAW
+and its JPEG, say) writes and reads only `<file>.xmp`: `IMG_0001.CR3.xmp` and `IMG_0001.JPG.xmp`. The shared
+`IMG_0001.xmp` is never written again. It is still read, for a file that has no sidecar of its own. The first save of
+such a file starts its sidecar from that legacy packet, so the other application's `crs:` settings and history carry
+over, and the legacy file stays byte for byte. A file with no stem partner keeps `IMG_0001.xmp`.
 
 ## Face regions (MWG)
 

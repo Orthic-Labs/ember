@@ -70,7 +70,8 @@ fn prefs(s: &mut Session, p: &Value) -> Result<Value> {
         s.xmp.naming = match n {
             "stem" => SidecarNaming::Stem,
             "full" => SidecarNaming::Full,
-            other => return Err(bad("library.xmpPreferences", format!("unknown naming `{other}` (stem|full)"))),
+            "split" => SidecarNaming::Split,
+            other => return Err(bad("library.xmpPreferences", format!("unknown naming `{other}` (stem|full|split)"))),
         };
     }
     if p.as_object().is_some_and(|o| !o.is_empty()) {

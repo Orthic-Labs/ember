@@ -43,6 +43,11 @@ pub enum SidecarNaming {
     Stem,
     /// `IMG_0001.CR3.xmp` (unambiguous when raw+JPEG pairs live side by side).
     Full,
+    /// One sidecar per file variant (issue #38): a file that shares its stem with another
+    /// catalogued file gets `IMG_0001.CR3.xmp` and `IMG_0001.JPG.xmp`, never the shared
+    /// `IMG_0001.xmp`; a file with no stem partner keeps `IMG_0001.xmp`. A legacy shared
+    /// sidecar is still read, and seeds the first variant sidecar written for its files.
+    Split,
 }
 
 /// Library preferences for XMP sidecars.
@@ -58,7 +63,7 @@ pub struct XmpPrefs {
 pub fn sidecar_path(original: &str, naming: SidecarNaming) -> PathBuf {
     match naming {
         SidecarNaming::Stem => Path::new(original).with_extension("xmp"),
-        SidecarNaming::Full => PathBuf::from(format!("{original}.xmp")),
+        SidecarNaming::Full | SidecarNaming::Split => PathBuf::from(format!("{original}.xmp")),
     }
 }
 
@@ -468,12 +473,23 @@ pub struct SidecarSaved {
     pub backup: Option<PathBuf>,
 }
 
-/// The new contents for the sidecar at `path`: `fresh` merged into the existing file, if any.
-/// Returns (contents, merged, backup).
-fn sidecar_contents(path: &Path, fresh: String, stamp: &str) -> std::io::Result<(String, bool, Option<PathBuf>)> {
-    let bytes = match std::fs::read(path) {
-        Ok(b) => b,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((fresh, false, None)),
+/// The legacy shared `<stem>.xmp` (either spelling) of `original`, if there is one.
+fn legacy_stem_sidecar(original: &str) -> Option<PathBuf> {
+    let stem = sidecar_path(original, SidecarNaming::Stem);
+    [stem.with_extension("XMP"), stem].into_iter().find(|p| p.is_file())
+}
+
+/// The new contents for the sidecar at `path`: `fresh` merged into the existing file, if any. When
+/// `path` does not exist yet, `seed` (a legacy sidecar) stands in for it; a seed that can't be read
+/// as XMP is left alone and `fresh` is written instead. Returns (contents, merged, backup).
+fn sidecar_contents(path: &Path, seed: Option<&Path>, fresh: String, stamp: &str) -> std::io::Result<(String, bool, Option<PathBuf>)> {
+    let (bytes, seeded) = match std::fs::read(path) {
+        Ok(b) => (b, false),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => match seed.map(std::fs::read) {
+            Some(Ok(b)) => (b, true),
+            Some(Err(read_err)) => return Err(read_err),
+            None => return Ok((fresh, false, None)),
+        },
         // can't see what is there: never overwrite it blindly
         Err(e) => return Err(e),
     };
@@ -491,6 +507,7 @@ fn sidecar_contents(path: &Path, fresh: String, stamp: &str) -> std::io::Result<
         .and_then(|old| lightcraft_meta::merge_xmp(old, &fresh, rules).map_err(|e| e.to_string()))
     {
         Ok(merged) => Ok((merged, true, None)),
+        Err(_) if seeded => Ok((fresh, false, None)),
         Err(why) => {
             let b = backup(path, stamp)?;
             log::warn!("{}: not readable as XMP ({why}); kept a copy as {} before replacing it", path.display(), b.display());
@@ -626,6 +643,9 @@ impl StemOwners {
     fn naming(&self, p: &Photo, naming: SidecarNaming) -> SidecarNaming {
         match (naming, file_path(p)) {
             (SidecarNaming::Stem, Some(path)) if self.0.get(&stem_key(path)).is_some_and(|owner| *owner != p.id) => SidecarNaming::Full,
+            // Split: whoever owns a shared stem, each of its files has its own sidecar
+            (SidecarNaming::Split, Some(path)) if self.0.contains_key(&stem_key(path)) => SidecarNaming::Full,
+            (SidecarNaming::Split, Some(_)) => SidecarNaming::Stem,
             _ => naming,
         }
     }
@@ -634,7 +654,7 @@ impl StemOwners {
 /// How the sidecar of each of photos `ids` is named in library `cat`, whose naming is `naming`
 /// ([`Session::sidecar_namings`], for a thread that has the library and not the session).
 pub(crate) fn namings_in(cat: &lightcraft_catalog::Catalog, naming: SidecarNaming, ids: &[PhotoId]) -> Vec<SidecarNaming> {
-    let owners = (naming == SidecarNaming::Stem).then(|| StemOwners::among(cat, ids));
+    let owners = (naming != SidecarNaming::Full).then(|| StemOwners::among(cat, ids));
     ids.iter()
         .map(|id| match (cat.photo(*id), &owners) {
             (Some(p), Some(o)) => o.naming(p, naming),
@@ -656,7 +676,7 @@ impl Session {
 
     pub fn sidecar_naming(&self, id: PhotoId) -> SidecarNaming {
         match self.catalog.photo(id) {
-            Some(p) if self.xmp.naming == SidecarNaming::Stem => StemOwners::among(&self.catalog, &[id]).naming(p, self.xmp.naming),
+            Some(p) if self.xmp.naming != SidecarNaming::Full => StemOwners::among(&self.catalog, &[id]).naming(p, self.xmp.naming),
             _ => self.xmp.naming,
         }
     }
@@ -675,9 +695,15 @@ impl Session {
         let naming = owners.naming(p, self.xmp.naming);
         let preferred = sidecar_path(orig, naming);
         let other = if naming == SidecarNaming::Stem { SidecarNaming::Full } else { SidecarNaming::Stem };
+        // The stem sidecar is this photo's own when it owns the stem (Stem naming) or the photo has no
+        // stem partner (Split naming); otherwise it is another file's and is never written.
+        let own_stem = match self.xmp.naming {
+            SidecarNaming::Split => naming == SidecarNaming::Stem,
+            _ => owners.naming(p, SidecarNaming::Stem) == SidecarNaming::Stem,
+        };
         let candidates: Vec<PathBuf> = [naming, other]
             .into_iter()
-            .filter(|n| *n != SidecarNaming::Stem || owners.naming(p, SidecarNaming::Stem) == SidecarNaming::Stem)
+            .filter(|n| *n != SidecarNaming::Stem || own_stem)
             .flat_map(|n| {
                 let path = sidecar_path(orig, n);
                 [path.clone(), path.with_extension("XMP")]
@@ -698,7 +724,11 @@ impl Session {
         self.validate_sidecar_packets_for_paths(std::slice::from_ref(&path), &crate::rename::RealFs)?;
         let p = self.catalog.photo(id).ok_or(lightcraft_catalog::CatalogError::NoPhoto(id))?;
         let err = |e: std::io::Error| EngineError::Other(format!("{}: {e}", path.display()));
-        let (data, merged, backup) = sidecar_contents(&path, sidecar_save_packet(p, &self.catalog), &(self.clock)()).map_err(err)?;
+        // A new variant sidecar starts from the legacy shared one, so the foreign data in it is kept.
+        let seed = (self.xmp.naming == SidecarNaming::Split && naming == SidecarNaming::Full && !path.is_file())
+            .then(|| legacy_stem_sidecar(orig))
+            .flatten();
+        let (data, merged, backup) = sidecar_contents(&path, seed.as_deref(), sidecar_save_packet(p, &self.catalog), &(self.clock)()).map_err(err)?;
         write_atomic(&path, data.as_bytes()).map_err(err)?;
         self.note_sidecar_write(&path, data.as_bytes());
         Ok(SidecarSaved { path, merged, backup })

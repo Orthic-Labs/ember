@@ -1533,3 +1533,103 @@ fn files_sharing_a_stem_get_their_own_sidecars() {
     let _ = std::fs::remove_dir_all(&src);
     let _ = std::fs::remove_dir_all(&lib);
 }
+
+/// Issue #38: each naming form writes the sidecar its name says, and reads it back.
+#[test]
+fn naming_forms_write_and_read_their_own_sidecar() {
+    let src = temp_dir("naming-forms");
+    let lib = temp_dir("naming-forms-lib");
+    write_png(&src.join("IMG_2.png"), 4);
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    s.execute("library.import", &json!({"paths": [src.to_string_lossy()]})).unwrap();
+    let id = only(&s);
+    s.execute("photo.rate", &json!({"ids": [id.0], "rating": 3})).unwrap();
+    for (naming, expected) in [("stem", "IMG_2.xmp"), ("full", "IMG_2.png.xmp"), ("split", "IMG_2.xmp")] {
+        s.execute("library.xmpPreferences", &json!({"naming": naming})).unwrap();
+        let r = s.execute("photo.saveMetadataToFile", &json!({"ids": [id.0]})).unwrap();
+        assert_eq!(r["written"].as_array().unwrap().len(), 1, "{naming}: {r}");
+        assert!(src.join(expected).is_file(), "{naming} writes {expected}");
+        s.execute("photo.rate", &json!({"ids": [id.0], "rating": 0})).unwrap();
+        s.execute("photo.readMetadataFromFile", &json!({"ids": [id.0]})).unwrap();
+        assert_eq!(s.catalog.photo(id).unwrap().rating, 3, "{naming} reads {expected} back");
+        std::fs::remove_file(src.join(expected)).unwrap();
+    }
+    let _ = std::fs::remove_dir_all(&src);
+    let _ = std::fs::remove_dir_all(&lib);
+}
+
+fn write_jpg(path: &Path) {
+    let img = lightcraft_raster::Rgba8::from_fn(40, 24, |x, y| [(x * 6) as u8, (y * 9) as u8, 7, 255]);
+    let options = crate::export::ExportOptions { format: crate::export::ExportFormat::Jpeg, ..Default::default() };
+    std::fs::write(path, crate::export::encode_image(&img, &options).unwrap()).unwrap();
+}
+
+fn rating_in(path: &Path) -> Option<u8> {
+    lightcraft_meta::parse_xmp(&std::fs::read_to_string(path).unwrap()).unwrap().metadata.rating
+}
+
+/// Issue #38: under Split naming a RAW+JPEG-style pair (`IMG_3.png` + `IMG_3.jpg`) has one sidecar
+/// per file, `IMG_3.png.xmp` and `IMG_3.jpg.xmp`; neither writes the shared `IMG_3.xmp`.
+#[test]
+fn split_naming_gives_each_file_variant_its_own_sidecar() {
+    let src = temp_dir("split-pair");
+    let lib = temp_dir("split-pair-lib");
+    write_png(&src.join("IMG_3.png"), 1);
+    write_jpg(&src.join("IMG_3.jpg"));
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    s.execute("library.xmpPreferences", &json!({"naming": "split"})).unwrap();
+    s.execute("library.import", &json!({"paths": [src.to_string_lossy()]})).unwrap();
+    let id = |name: &str| s.catalog.photos().find(|p| p.file_name == name).unwrap().id;
+    let (png, jpg) = (id("IMG_3.png"), id("IMG_3.jpg"));
+    assert_eq!(s.sidecar_naming(png), crate::sidecar::SidecarNaming::Full);
+    assert_eq!(s.sidecar_naming(jpg), crate::sidecar::SidecarNaming::Full);
+    s.execute("photo.rate", &json!({"ids": [png.0], "rating": 5})).unwrap();
+    s.execute("photo.rate", &json!({"ids": [jpg.0], "rating": 2})).unwrap();
+    let r = s.execute("photo.saveMetadataToFile", &json!({"ids": [png.0, jpg.0]})).unwrap();
+    assert_eq!(r["written"].as_array().unwrap().len(), 2, "{r}");
+    assert_eq!(rating_in(&src.join("IMG_3.png.xmp")), Some(5));
+    assert_eq!(rating_in(&src.join("IMG_3.jpg.xmp")), Some(2));
+    assert!(!src.join("IMG_3.xmp").exists(), "no shared stem sidecar");
+    // each reads its own back
+    s.execute("photo.rate", &json!({"ids": [png.0, jpg.0], "rating": 0})).unwrap();
+    s.execute("photo.readMetadataFromFile", &json!({"ids": [png.0, jpg.0]})).unwrap();
+    assert_eq!((s.catalog.photo(png).unwrap().rating, s.catalog.photo(jpg).unwrap().rating), (5, 2));
+    let _ = std::fs::remove_dir_all(&src);
+    let _ = std::fs::remove_dir_all(&lib);
+}
+
+/// Issue #38: a legacy shared `IMG_4.xmp` (another application's, with `crs:` develop settings) is
+/// read for both files of the pair until each has a sidecar of its own. The first save of one file
+/// starts its own sidecar from the legacy packet, so its foreign data is kept; the legacy file is
+/// never changed.
+#[test]
+fn legacy_shared_sidecar_is_read_and_seeds_split_sidecars() {
+    let src = temp_dir("split-legacy");
+    let lib = temp_dir("split-legacy-lib");
+    write_png(&src.join("IMG_4.png"), 2);
+    write_jpg(&src.join("IMG_4.jpg"));
+    std::fs::write(src.join("IMG_4.xmp"), FOREIGN).unwrap();
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    s.execute("library.xmpPreferences", &json!({"naming": "split"})).unwrap();
+    s.execute("library.import", &json!({"paths": [src.to_string_lossy()]})).unwrap();
+    let id = |name: &str| s.catalog.photos().find(|p| p.file_name == name).unwrap().id;
+    let (png, jpg) = (id("IMG_4.png"), id("IMG_4.jpg"));
+    s.execute("photo.readMetadataFromFile", &json!({"ids": [png.0, jpg.0]})).unwrap();
+    assert_eq!((s.catalog.photo(png).unwrap().rating, s.catalog.photo(jpg).unwrap().rating), (3, 3), "legacy packet is read");
+    s.execute("photo.rate", &json!({"ids": [png.0], "rating": 5})).unwrap();
+    let r = s.execute("photo.saveMetadataToFile", &json!({"ids": [png.0]})).unwrap();
+    assert_eq!(r["written"].as_array().unwrap().len(), 1, "{r}");
+    assert_eq!(rating_in(&src.join("IMG_4.png.xmp")), Some(5));
+    let own = std::fs::read_to_string(src.join("IMG_4.png.xmp")).unwrap();
+    assert!(own.contains("crs:Exposure2012=\"+1.10\""), "the legacy develop settings seed the new sidecar: {own}");
+    assert_eq!(std::fs::read_to_string(src.join("IMG_4.xmp")).unwrap(), FOREIGN, "the legacy sidecar is untouched");
+    // the other file has no sidecar of its own yet, so it still reads the legacy one
+    s.execute("photo.rate", &json!({"ids": [jpg.0], "rating": 0})).unwrap();
+    s.execute("photo.readMetadataFromFile", &json!({"ids": [jpg.0]})).unwrap();
+    assert_eq!(s.catalog.photo(jpg).unwrap().rating, 3);
+    let _ = std::fs::remove_dir_all(&src);
+    let _ = std::fs::remove_dir_all(&lib);
+}

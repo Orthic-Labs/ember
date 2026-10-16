@@ -347,8 +347,12 @@ fn import_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
     row(ui, t, crate::i18n::tr("Sidecar names"), |ui| {
         use lightcraft_engine::sidecar::SidecarNaming as N;
         let mut n = xmp.naming;
-        if choices(ui, "settingsXmpNaming", &[(N::Stem, "IMG_1.xmp"), (N::Full, "IMG_1.CR3.xmp")], &mut n) {
-            let naming = if n == N::Full { "full" } else { "stem" };
+        if choices(ui, "settingsXmpNaming", &[(N::Stem, "IMG_1.xmp"), (N::Full, "IMG_1.CR3.xmp"), (N::Split, "Per file")], &mut n) {
+            let naming = match n {
+                N::Stem => "stem",
+                N::Full => "full",
+                N::Split => "split",
+            };
             let _ = app.run("library.xmpPreferences", json!({"naming": naming}));
         }
     });
