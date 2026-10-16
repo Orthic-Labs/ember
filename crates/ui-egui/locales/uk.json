@@ -2309,5 +2309,7 @@
   "Pause": "Пауза",
   "Playing Video": "Відтворення відео",
   "Video support isn't installed": "Підтримку відео не встановлено",
-  "Playback position": "Позиція відтворення"
+  "Playback position": "Позиція відтворення",
+  "Set Poster Frame": "Задати кадр постера",
+  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Використати поточний кадр як постер цього кліпу в сітці, лупі та експорті"
 }

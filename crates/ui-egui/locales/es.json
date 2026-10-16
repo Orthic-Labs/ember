@@ -2308,5 +2308,7 @@
   "Pause": "Pausa",
   "Playing Video": "Reproduciendo vídeo",
   "Video support isn't installed": "La compatibilidad con vídeo no está instalada",
-  "Playback position": "Posición de reproducción"
+  "Playback position": "Posición de reproducción",
+  "Set Poster Frame": "Establecer fotograma de póster",
+  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Usar el fotograma en pantalla como póster de este clip en la cuadrícula, la lupa y las exportaciones"
 }

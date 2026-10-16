@@ -2311,5 +2311,7 @@
   "Pause": "一時停止",
   "Playing Video": "動画を再生中",
   "Video support isn't installed": "動画のサポートがインストールされていません",
-  "Playback position": "再生位置"
+  "Playback position": "再生位置",
+  "Set Poster Frame": "ポスターフレームを設定",
+  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "表示中のフレームを、グリッド、ルーペ、書き出しでのこのクリップのポスターにします"
 }

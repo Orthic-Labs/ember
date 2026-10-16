@@ -32,9 +32,15 @@ fn set_poster(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "the photo is not a video"));
     }
     let duration = photo.duration.filter(|d| d.is_finite() && *d > 0.0);
-    let t = match p.get("t").ok_or_else(|| bad(C, "missing `t`: seconds into the clip, or null for the default"))? {
-        Value::Null => None,
-        v => {
+    let t = match p.get("t") {
+        // no time named: the one the player is at (the menu item, which cannot name one), when this clip is loaded in it
+        None if s.video.photo() == Some(id) => {
+            let at = s.video_position_now();
+            Some(duration.map_or(at, |d| at.min(d)))
+        }
+        None => return Err(bad(C, "missing `t`: seconds into the clip, or null for the default (or play or scrub the clip to a frame first)")),
+        Some(Value::Null) => None,
+        Some(v) => {
             let t = v.as_f64().ok_or_else(|| bad(C, "`t` must be a number of seconds, or null for the default"))?;
             if !t.is_finite() || t < 0.0 {
                 return Err(bad(C, "`t` must be zero or more seconds"));
@@ -109,9 +115,9 @@ pub fn specs() -> Vec<CommandSpec> {
         named(cmd!(
             "video.setPoster",
             "Set Poster Frame",
-            [],
+            ["Photo"],
             None,
-            "{id? (default: the active photo, a video), t: seconds into the clip, or null for the default (10 % into the clip, 1 s when its duration is unknown)}: the frame that stands for a video in the grid, the loupe and exports; one undo step → {id, t, poster (seconds used), changed}",
+            "{id? (default: the active photo, a video), t? (default: where the clip is in the player): seconds into the clip, or null for the default (10 % into the clip, 1 s when its duration is unknown)}: the frame that stands for a video in the grid, the loupe and exports; one undo step → {id, t, poster (seconds used), changed}",
             has_video,
             set_poster
         )),

@@ -206,3 +206,38 @@ fn the_poster_loader_gives_a_placeholder_without_the_sidecar_and_never_reads_the
     let (img, _) = loader("/no/such/clip.mov", 128).unwrap();
     assert_eq!((img.width, img.height), (128, 72));
 }
+
+/// `video.setPoster` with no `t` takes the time the player is at (the Photo menu item, which cannot name one); with no clip in the
+/// player there is none to take. A seek puts the clock there whether or not a frame can be fetched (no sidecar needed).
+#[test]
+fn set_poster_without_a_time_takes_the_one_the_player_is_at() {
+    let (mut s, id) = session_with_clip(Some(20.0));
+    s.selection.active = Some(id);
+    let err = s.execute("video.setPoster", &json!({})).unwrap_err();
+    assert!(err.to_string().contains("missing `t`"), "{err}");
+    assert_eq!(poster_of(&s, id), None);
+
+    let _ = s.execute("video.seek", &json!({"t": 7.5}));
+    let r = s.execute("video.setPoster", &json!({})).unwrap();
+    assert_eq!((r["t"].as_f64(), r["changed"].as_bool()), (Some(7.5), Some(true)), "{r}");
+    assert_eq!(poster_of(&s, id), Some(7.5));
+
+    // held inside the clip like any other time
+    let _ = s.execute("video.seek", &json!({"t": 500.0}));
+    let r = s.execute("video.setPoster", &json!({})).unwrap();
+    assert!(r["t"].as_f64().is_some_and(|t| t <= 20.0 && t > 19.0), "{r}");
+
+    // another clip in the player is not this one's time
+    let other = {
+        let id = s.catalog.alloc_photo_id();
+        let mut p = Photo::new(id, Source::File { path: "/clips/other.mov".into() }, "other.mov", "MOV", 1920, 1080, "2026-10-17T10:00:00");
+        p.kind = MediaKind::Video;
+        p.duration = Some(30.0);
+        s.commit("add", Op::AddPhoto { photo: Box::new(p) }).unwrap();
+        id
+    };
+    let err = s.execute("video.setPoster", &json!({"id": other.0})).unwrap_err();
+    assert!(err.to_string().contains("missing `t`"), "{err}");
+    assert_eq!(poster_of(&s, other), None);
+    s.execute("video.stop", &json!({})).unwrap();
+}

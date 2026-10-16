@@ -214,6 +214,7 @@ const LAYOUT: &[(&str, &[&str])] = &[
             "dialog.rename",
             "dialog.captureTime",
             "photo.tagFromTracklog",
+            "video.setPoster",
             "---",
             "photo.delete",
             "photo.restore",

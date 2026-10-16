@@ -35,7 +35,7 @@ humans pick work from **[Top gaps](#top-gaps)**; whoever lands a feature updates
 | O. Merge (MERGE) | 4 | 0 | 0 | 0 | — | — |
 | P. Enhance (ENH) | 0 | 0 | 2 | 0 | — | — |
 | Q. HDR (HDR) | 2 | 3 | 0 | 0 | — | — |
-| R. Video (VID) | 0 | 3 | 2 | 1 | — | 0/2 (0%) |
+| R. Video (VID) | 1 | 3 | 1 | 1 | — | 0/2 (0%) |
 | S. Export (EXP) | 15 | 3 | 0 | 0 | 7/7 (100%) | 7/7 (100%) |
 | T. Share (SHARE) | 0 | 0 | 0 | 4 | — | — |
 | U. Map & location (MAP) | 0 | 1 | 1 | 0 | — | 0/1 (0%) |
@@ -45,9 +45,9 @@ humans pick work from **[Top gaps](#top-gaps)**; whoever lands a feature updates
 | Y. Menus | 84 | 0 | 4 | 8 | 47/47 (100%) | 23/23 (100%) |
 | Z. Keyboard shortcuts (desktop) | 76 | 3 | 3 | 1 | 49/52 (94%) | 23/24 (96%) |
 | reference catalog editor extras | 34 | 16 | 35 | 8 | — | 24/26 (92%) |
-| **Total** | 408 | 54 | 68 | 35 | 192/200 (96%) | 146/157 (93%) |
+| **Total** | 409 | 54 | 67 | 35 | 192/200 (96%) | 146/157 (93%) |
 
-Weighted completion (✅ = 1, 🟡 = ½, 🚫 left out): **82.1%** of 530 in-scope rows — P0 98.0% of 200 · P1 96.2% of 157 · P2 50.6% of 172.
+Weighted completion (✅ = 1, 🟡 = ½, 🚫 left out): **82.3%** of 530 in-scope rows — P0 98.0% of 200 · P1 96.2% of 157 · P2 51.2% of 172.
 <!-- /parity:summary -->
 
 ## Top gaps and shortcut notes
@@ -430,7 +430,7 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 | LR-VID-PLAY | Video playback | P1 | 🟡 | `cmd:video.play`, `cmd:video.pause`, `cmd:video.togglePlay`, `cmd:video.seek`, `cmd:video.stop`, `cmd:video.state`, `crates/video/src/stream.rs`, `crates/engine/src/video_player.rs`, `crates/ui-egui/src/panels/video_player.rs` | silent playback in the loupe: Space or the play button, a transport bar (play or pause, time and duration, scrubber), frames timed by their index over the frame rate on a bounded queue that drops frames when the display is behind, the child killed when playback stops or the stream is dropped, an activity row with a stop button, held to the trim, "Video support isn't installed" without the sidecar; tests `stream` (frame chunking, back-pressure, kill on drop), `tests_video_player` (state transitions, trim, errors); missing: audio, the sidecar in the installers, colour management and the photo's edits on playing frames, handles on the scrubber [#73](https://github.com/Orthic-Labs/ember/issues/73) |
 | LR-VID-TRIM | Trim | P1 | 🟡 | `cmd:video.setTrim`, `cmd:video.clearTrim`, `crates/video/src/trim.rs`, `crates/ui-egui/src/video_trim.rs` | non-destructive in and out points kept in the develop settings (seconds, held inside the clip, in before out, one undo step, absent from the JSON while unset so no hash changes); the loupe has a Trim row with Set In and Set Out at the frame on screen (the poster frame until the player exists) and Clear Trim; tests `set_trim_stores_the_points_as_one_undo_step`, `a_trim_is_refused_outside_the_clip_and_changes_nothing`; playback is held to the range (`playback_starts_inside_the_trim_and_stops_at_its_out_point`); the loupe's Set In and Set Out take the player's time once the clip is loaded there; missing: draggable handles on the player's scrubber ([#73](https://github.com/Orthic-Labs/ember/issues/73)) [#74](https://github.com/Orthic-Labs/ember/issues/74) |
 | LR-VID-EDIT | Edits on video | P2 | ⬜ | | [#75](https://github.com/Orthic-Labs/ember/issues/75) |
-| LR-VID-COVER | Cover frame | P2 | ⬜ | | [#76](https://github.com/Orthic-Labs/ember/issues/76) |
+| LR-VID-COVER | Cover frame | P2 | ✅ | `cmd:video.setPoster`, `crates/ui-egui/src/panels/video_player.rs`, `crates/engine/src/cmd/video.rs` | the poster frame is chosen in the player: the transport bar's Set Poster Frame button and Photo > Set Poster Frame call `video.setPoster` with the time the player is at (a call with no `t` takes it); one undo step, kept in the develop settings, changes the thumbnail and preview; tests `the_button_sets_the_poster_to_the_time_the_player_is_at`, `set_poster_frame_is_in_the_photo_menu_and_takes_the_players_time`, `set_poster_without_a_time_takes_the_one_the_player_is_at` [#76](https://github.com/Orthic-Labs/ember/issues/76) |
 | LR-VID-EXPORT | Video export | P2 | 🟡 | `cmd:app.export` (`format: video`, `videoReencode`, `videoKbps`, `frameTime`), `crates/engine/src/export/clip.rs`, `crates/video/src/clip.rs` | `format: video` writes a clip cut to its trim through the export batch: a stream copy by default (fast, lossless, same container; the cut starts on the keyframe at or before the in point) or `videoReencode` (H.264 and AAC in MP4: `h264_mf` on Windows with an explicit `videoKbps`, `h264_videotoolbox` on macOS); the approved `decode` build of the sidecar links neither encoder, so a re-encode there says so and only the copy works; the child runs under an activity row whose ✕ kills it, the file is staged and moved atomically, a removed or private location is never copied into the clip; a picture format of a video exports one frame (`frameTime`, else the poster) through the still pipeline; tests `a_staged_clip_is_placed_atomically_with_a_free_name_and_leaves_no_temp`, `a_reencode_on_windows_is_media_foundation_with_an_explicit_rate`, `a_copy_seeks_before_the_input_limits_after_it_and_changes_no_stream`; missing: an export build of the sidecar with an encoder, the Export dialog's Video entry, global edits on video [#77](https://github.com/Orthic-Labs/ember/issues/77) |
 | LR-VID-PHOTO2VIDEO | Photo to video (generative) | OOS | 🚫 | | |
 
@@ -843,6 +843,7 @@ Latin stays upright. Advanced Japanese composition remains open. Regression cove
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | LR-VID-COVER ⬜→✅ (#76): the player's Set Poster Frame (button and Photo menu item) calls `video.setPoster` with the time the player is at |
 | 2026-10-17 | minor | LR-VID-PLAY ⬜→🟡 (#73): silent playback in the loupe (`cmd:video.play`, `cmd:video.pause`, `cmd:video.togglePlay`, `cmd:video.seek`, `cmd:video.stop`, `cmd:video.state`; Space, a transport bar, frames on a bounded queue, held to the trim); audio and the sidecar in the installers remain; LR-VID-TRIM: playback is held to the range and Set In and Set Out take the player's time, handles on the scrubber remain |
 | 2026-10-17 | minor | LR-VID-EXPORT ⬜→🟡 (#77): `app.export {format: video}` writes a clip cut to its trim (stream copy; re-encode through `h264_mf` / `h264_videotoolbox` with an explicit rate, which the approved `decode` sidecar build cannot do yet), staged and placed atomically with a killable activity row; `frameTime` exports one frame as a still |
 | 2026-10-17 | minor | LR-VID-TRIM ⬜→🟡 (#74): `video.setTrim` and `video.clearTrim` keep non-destructive in and out points in the develop settings, and the loupe has a Trim row (Set In, Set Out, Clear Trim); handles on the player's scrubber wait for the player |

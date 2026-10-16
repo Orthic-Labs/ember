@@ -1,6 +1,6 @@
 # Video
 
-*Last updated: 2026-10-17 (foundation: probe and poster frame; trim; clip and frame export; silent playback; issues #73, #74, #76, #77).*
+*Last updated: 2026-10-17 (foundation: probe and poster frame; trim; clip and frame export; silent playback; poster chooser; issues #73, #74, #76, #77).*
 
 Ember catalogues videos, shows a poster frame for each in the grid, the loupe and exports, lets you choose which frame that is, and
 plays a clip silently in the loupe. Audio comes next (#73); this page records what exists and how it is built.
@@ -59,9 +59,11 @@ the sidecar; tests that need a real clip skip without it.
   time (zone dropped; the file's date when absent), and codec, frame rate and rotation (`Photo::video`).
 - The thumbnail and preview levels come from the **poster frame**. By default that is 10 % into the clip, or 1 s when the duration is
   unknown, always kept inside the clip.
-- `video.setPoster {id?, t}` stores a poster time (seconds, held to the duration; `null` returns to the default) in the photo's develop
-  settings (`poster_time`). It is one undo step (a History entry, "Set Poster Frame"). The field is absent from the JSON while unset,
+- `video.setPoster {id?, t?}` stores a poster time (seconds, held to the duration; `null` returns to the default; a call with no `t`
+  takes where the player is, when the clip is loaded in it) in the photo's develop settings (`poster_time`). It is one undo step (a History entry, "Set Poster Frame"). The field is absent from the JSON while unset,
   so no existing settings hash changes; once set, the thumbnail cache key changes and the decoded sources are dropped.
+- The player's **Set Poster Frame** (a button at the right of the transport bar, and Photo > Set Poster Frame) calls `video.setPoster` with
+  the time the player is at. It needs the clip loaded in the player (played, or scrubbed to a frame), so the button is disabled until then.
 - Frames larger than a thumbnail show as "Reading Video Frame" in the activity stack, with a stop button that kills the child process.
 
 ## Silent playback
@@ -145,6 +147,6 @@ decision in `CLAUDE.md` ("Pure Rust ... except the verified LGPL ffmpeg sidecar"
 
 ## Not yet
 
-Audio, draggable trim handles on the player's scrubber, a grid badge and duration label, a poster chooser in the UI, the Export dialog's Video entry, an export build of the sidecar with an H.264
+Audio, draggable trim handles on the player's scrubber, a grid badge and duration label, the Export dialog's Video entry, an export build of the sidecar with an H.264
 encoder (so a re-encode works; until then only stream copy does) and the bundling of the sidecar into the installers (release tooling),
 and Linux.

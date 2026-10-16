@@ -2308,5 +2308,7 @@
   "Pause": "Pause",
   "Playing Video": "Lecture de la vidéo",
   "Video support isn't installed": "La prise en charge de la vidéo n'est pas installée",
-  "Playback position": "Position de lecture"
+  "Playback position": "Position de lecture",
+  "Set Poster Frame": "Définir l'image d'affiche",
+  "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Utiliser l'image affichée comme image d'affiche de ce clip dans la grille, la loupe et les exports"
 }

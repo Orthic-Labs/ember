@@ -1,5 +1,5 @@
-//! The video player in the loupe (issue #73): the playing picture over the poster, the transport bar (play or pause, time and
-//! scrubber), and the "Video support isn't installed" message.
+//! The video player in the loupe (issues #73 and #76): the playing picture over the poster, the transport bar (play or pause, time,
+//! scrubber, Set Poster Frame), and the "Video support isn't installed" message.
 //!
 //! The playback itself is the engine's (`video.play`, `video.pause`, `video.seek`, `video.togglePlay`; `lightcraft_engine::video_player`):
 //! this module asks it for the frame due once per UI frame ([`lightcraft_engine::Session::video_tick_now`], which times frames by
@@ -180,6 +180,18 @@ pub fn transport(app: &mut LightcraftApp, ui: &mut egui::Ui, canvas: Rect, photo
     }
     let clicked_play = play.on_hover_text(label).clicked();
 
+    // Set Poster Frame, at the right end: the clip must be loaded (played or scrubbed) to have a current time
+    let poster_label = crate::i18n::tr("Set Poster Frame");
+    let poster_w = (p.layout_no_wrap(poster_label.to_string(), t.semibold(11.5), t.text).size().x + 18.0).max(37.0);
+    let show_poster = width >= 440.0;
+    let poster_rect = Rect::from_min_size(pos2(bar.right() - 6.0 - poster_w, bar.center().y - 12.0), vec2(poster_w, 24.0));
+    let mut set_poster = false;
+    if show_poster {
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(poster_rect));
+        let r = child.add_enabled_ui(mine, |ui| crate::widgets::text_button(ui, "videoPoster", "Set Poster Frame", false)).inner;
+        set_poster = r.on_hover_text(crate::i18n::tr("Use the frame on screen as this clip's poster in the grid, the loupe and exports")).clicked();
+    }
+
     // time, then the scrubber across what is left
     let shown_t = view.scrub.unwrap_or(position);
     let clock = match duration {
@@ -190,7 +202,7 @@ pub fn transport(app: &mut LightcraftApp, ui: &mut egui::Ui, canvas: Rect, photo
     let clock_galley = p.layout_no_wrap(clock, t.font(12.0), Color32::from_gray(225));
     let clock_w = clock_galley.size().x;
     p.galley(pos2(clock_x, bar.center().y - clock_galley.size().y / 2.0), clock_galley, Color32::from_gray(225));
-    let right_edge = bar.right() - 12.0;
+    let right_edge = if show_poster { poster_rect.left() - 10.0 } else { bar.right() - 12.0 };
     let track = Rect::from_min_max(pos2(clock_x + clock_w + 12.0, bar.center().y - 10.0), pos2(right_edge, bar.center().y + 10.0));
     let mut seek_to = None;
     if track.width() > 30.0 {
@@ -239,6 +251,11 @@ pub fn transport(app: &mut LightcraftApp, ui: &mut egui::Ui, canvas: Rect, photo
     }
     if let Some(t) = seek_to {
         let _ = app.run("video.seek", json!({"id": photo.id.0, "t": t}));
+    }
+    if set_poster {
+        // the time on the bar: the clip's clock now (a scrub in progress has already been let go above)
+        let now = app.session.video_position_now();
+        let _ = app.run("video.setPoster", json!({"id": photo.id.0, "t": now}));
     }
 }
 

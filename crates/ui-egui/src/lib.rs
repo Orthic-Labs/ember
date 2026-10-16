@@ -142,6 +142,8 @@ mod tests_unsaved;
 #[cfg(test)]
 mod tests_video_player;
 #[cfg(test)]
+mod tests_video_poster;
+#[cfg(test)]
 mod tests_wb_selector;
 #[cfg(test)]
 mod tests_zoom;
