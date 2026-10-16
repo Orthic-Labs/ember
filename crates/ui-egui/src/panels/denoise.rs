@@ -291,8 +291,18 @@ fn work_section(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, list: &V
     heading(ui, t, "Speed");
     let current = list["runOn"].as_str().unwrap_or("auto").to_string();
     let mut run_on = current.as_str();
-    let options = [("auto", "Automatic"), ("gpu", "Graphics card"), ("cpu", "Processor")];
-    if ui.horizontal(|ui| choices(ui, "denoiseRunOn", &options, &mut run_on)).inner {
+    let mut options = vec![("auto", "Automatic"), ("gpu", "Graphics card"), ("cpu", "Processor")];
+    if !crate::early_access::on(&app.ui.settings, "denoiseGpu") {
+        options.retain(|(v, _)| *v != "gpu");
+    }
+    let changed = ui
+        .horizontal(|ui| {
+            let changed = choices(ui, "denoiseRunOn", &options[..], &mut run_on);
+            crate::early_access::badge(ui);
+            changed
+        })
+        .inner;
+    if changed {
         let _ = app.run("denoise.settings", json!({"runOn": run_on}));
         app.caches.denoise.epoch += 1;
     }

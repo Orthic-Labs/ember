@@ -115,6 +115,7 @@ mod tests {
     #[test]
     fn toggle_command_flips_and_reports() {
         let mut app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), Services { png: None, ..Default::default() });
+        app.run(crate::early_access::COMMAND, serde_json::json!({"feature": "hdrDisplay", "enabled": true})).expect("early access on");
         let on = app.run("view.hdrDisplay", serde_json::json!({})).expect("toggles");
         assert_eq!(on["on"], true);
         assert_eq!(on["active"], false, "no HDR surface in tests");

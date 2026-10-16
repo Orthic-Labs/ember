@@ -214,6 +214,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("app.clearRecentLibraries", "Clear Recent Libraries", None, ""),
     // Settings ▸ Display
     ("app.displayProfile", "Display Profile", None, ""),
+    // Settings ▸ Early Access: turns one early-access feature on or off (`crate::early_access`)
+    ("app.earlyAccess", "Early Access Feature", None, ""),
     ("app.about", "About Ember", None, "Help"),
     ("app.systemInfo", "System Info…", None, "Help"),
     ("app.openLogFolder", "Open Log Folder", None, "Help"),

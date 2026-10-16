@@ -26,6 +26,7 @@ pub const TABS: &[(&str, &str)] = &[
     ("interface", "Interface"),
     ("faces", "Faces"),
     ("denoise", "AI Denoise"),
+    ("earlyaccess", "Early Access"),
 ];
 
 /// Thumbnail cache sizes offered (MB).
@@ -54,6 +55,7 @@ pub fn body(app: &mut LightcraftApp, ui: &mut egui::Ui, tab: &mut String) {
         "interface" => interface_tab(app, ui, &t),
         "faces" => super::faces::settings_tab(app, ui, &t),
         "denoise" => super::denoise::settings_tab(app, ui, &t),
+        "earlyaccess" => early_access_tab(app, ui, &t),
         _ => general_tab(app, ui, &t),
     }
 }
@@ -96,6 +98,27 @@ pub(super) fn choices<V: PartialEq + Copy>(ui: &mut egui::Ui, id: &str, options:
         }
     }
     changed
+}
+
+/// Settings ▸ Early Access: one row per feature (its toggle, badge and what it is). A change goes
+/// through `app.earlyAccess`, so the menus and the gate follow at once.
+fn early_access_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
+    heading(ui, t, "Early Access");
+    hint(ui, t, "Features still being built or checked. Off hides a feature and refuses its commands; turn one on to try it.");
+    for f in crate::early_access::FEATURES {
+        let mut on = crate::early_access::is_on(&app.ui.settings, f);
+        let changed = ui
+            .horizontal(|ui| {
+                let changed = check(ui, &format!("earlyAccess-{}", f.key), &mut on, f.label);
+                crate::early_access::badge(ui);
+                changed
+            })
+            .inner;
+        hint(ui, t, f.note);
+        if changed && let Err(e) = app.run(crate::early_access::COMMAND, json!({"feature": f.key, "enabled": on})) {
+            app.toast(ui.ctx(), e);
+        }
+    }
 }
 
 // ------------------------------------------------------------------------------------- General

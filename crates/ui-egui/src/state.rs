@@ -289,6 +289,9 @@ pub struct AppSettings {
     /// The monitor's ICC profile previews are shown through (`app.displayProfile`; "" = none:
     /// the display is treated as sRGB).
     pub display_profile: String,
+    /// Early-access features the user turned on or off (feature key → on); a feature without a key
+    /// takes its default ([`crate::early_access`]).
+    pub early_access: std::collections::BTreeMap<String, bool>,
 }
 
 impl Default for AppSettings {
@@ -315,6 +318,7 @@ impl Default for AppSettings {
             light_theme: LightTheme::Silver,
             favorite_themes: Vec::new(),
             display_profile: String::new(),
+            early_access: Default::default(),
         }
     }
 }

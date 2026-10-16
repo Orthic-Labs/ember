@@ -13,6 +13,7 @@ pub mod control;
 pub mod credits;
 pub mod date_picker;
 pub mod docking;
+pub mod early_access;
 pub mod export_task;
 pub mod hdr_view;
 pub mod headless;
@@ -532,6 +533,9 @@ impl LightcraftApp {
     /// [`LightcraftApp::run`], keeping what kind of error a refusal is: for code that decides on it
     /// (offer a model's download, treat a cancel as one) instead of reading the message.
     pub fn run_typed(&mut self, id: &str, params: Value) -> Result<Value, CommandError> {
+        if let Some(result) = early_access::intercept(&mut self.ui.settings, id, &params) {
+            return result.map_err(CommandError::from);
+        }
         if let Some(result) = model_setup::intercept(self, id, &params) {
             return result.map_err(CommandError::from);
         }

@@ -365,6 +365,7 @@ fn live_label(app: &LightcraftApp, id: &str, label: &str) -> String {
         "photo.virtualCopy" if n > 1 => crate::i18n::tr_format!("Create {n} Virtual Copies", n = n),
         "dialog.rename" if n > 1 => crate::i18n::tr_format!("Rename {n} Photos…", n = n),
         "app.showInFinder" => crate::i18n::tr(crate::menus::reveal_label()).to_string(),
+        _ if crate::early_access::owns(id) => format!("{label} (Early Access)"),
         _ => label.to_string(),
     }
 }
@@ -703,8 +704,10 @@ fn tidy(v: Vec<MenuNode>) -> Vec<MenuNode> {
 
 /// The whole menu bar: (title, items) per menu in [`MENUS`] order.
 pub fn menu_bar(app: &LightcraftApp) -> Vec<(String, Vec<MenuNode>)> {
-    let entries: Vec<MenuEntry> =
-        crate::menus::menu_entries(app).into_iter().filter(|e| !HIDDEN.contains(&e.id.as_str()) && host_supports(app, &e.id)).collect();
+    let entries: Vec<MenuEntry> = crate::menus::menu_entries(app)
+        .into_iter()
+        .filter(|e| !HIDDEN.contains(&e.id.as_str()) && host_supports(app, &e.id) && crate::early_access::menu_shows(&app.ui.settings, &e.id))
+        .collect();
     let mut used = vec![false; entries.len()];
     let mut bar = Vec::new();
     for title in MENUS {
