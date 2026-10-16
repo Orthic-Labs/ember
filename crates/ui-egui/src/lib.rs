@@ -315,6 +315,9 @@ pub struct LightcraftApp {
     /// A text field had the keyboard at the end of the last frame. egui drops the focus as Esc
     /// arrives, before the shortcuts are read, so this is how Esc there stays the field's own.
     pub text_focus: bool,
+    /// Ctrl+Tab walks keyboard focus this frame: the press reaches egui as a plain Tab and the shortcuts stay quiet
+    /// (see `focus_traversal_keys`).
+    pub focus_traversal: bool,
     /// The host is [`headless::Headless`] (it answers viewport screenshot commands itself).
     pub headless_host: bool,
     /// Warnings to show one at a time (damaged settings files…, issue #103).
@@ -454,6 +457,7 @@ impl LightcraftApp {
             native_shortcuts: Default::default(),
             recording_shortcut: None,
             text_focus: false,
+            focus_traversal: false,
             headless_host: false,
             notices: vec![],
             quit_prompt: None,
@@ -1241,6 +1245,7 @@ impl LightcraftApp {
             raw.events.push(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
         }
         if self.synthetic.is_empty() {
+            self.focus_traversal_keys(raw);
             return;
         }
         let n = match self.synthetic[0] {
@@ -1266,6 +1271,25 @@ impl LightcraftApp {
             self.synthetic_mods_release = ends;
         }
         raw.events.extend(self.synthetic.drain(..n));
+        self.focus_traversal_keys(raw);
+    }
+
+    /// Ctrl+Tab / Ctrl+Shift+Tab walk keyboard focus between controls. Plain Tab stays the panel toggle
+    /// (`view.panels`), so the Ctrl press is re-sent to egui as a plain Tab and the shortcuts stay quiet this frame.
+    fn focus_traversal_keys(&mut self, raw: &mut egui::RawInput) {
+        let mut shift = None;
+        raw.events.retain(|e| match e {
+            egui::Event::Key { key: egui::Key::Tab, pressed: true, modifiers, .. } if modifiers.ctrl && !modifiers.alt => {
+                shift = Some(modifiers.shift);
+                false
+            }
+            _ => true,
+        });
+        self.focus_traversal = shift.is_some();
+        if let Some(shift) = shift {
+            let modifiers = egui::Modifiers { shift, ..egui::Modifiers::NONE };
+            raw.events.push(egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers });
+        }
     }
 
     /// Lights Out: veil everything but the photo (the loupe's image, or the grid / Compare /

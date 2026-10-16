@@ -335,6 +335,10 @@ fn grid_bracket_command(keymap: &Keymap, grid: bool, masking: bool, id: &'static
 /// Content widgets keep keyboard ownership, including text fields and arrow-driven sliders.
 /// Dock chrome owns activation, traversal, resizing and cancellation; its other keys reach commands.
 fn keyboard_owned(app: &LightcraftApp, ctx: &egui::Context) -> bool {
+    // the focus step of Ctrl+Tab reaches egui as a plain Tab: it is navigation, not a shortcut
+    if app.focus_traversal {
+        return true;
+    }
     if !ctx.egui_wants_keyboard_input() {
         // Escape drops egui focus before shortcuts run; keep the numeric edit's whole input batch.
         return ctx.input(|input| input.key_pressed(Key::Escape))
@@ -804,6 +808,38 @@ mod tests {
         assert!(h.app.ui.left_panel);
         assert_eq!(h.app.ui.right, RightPanel::Edit);
         assert!(h.app.ui.top_bar && h.app.ui.filmstrip);
+    }
+
+    /// The first button or icon on screen (after a frame): a click focuses it.
+    fn first_control(h: &crate::headless::Headless) -> String {
+        h.app.widgets.iter().find(|(w, _)| w.starts_with("button:") || w.starts_with("icon:")).map(|(w, _)| w.clone()).expect("a control on screen")
+    }
+
+    fn click(h: &mut crate::headless::Headless, id: &str) {
+        let r = h.request("ui.clickWidget", json!({"id": id}), std::time::Duration::from_secs(20));
+        assert_eq!(r["ok"], true, "{r}");
+    }
+
+    fn focused(h: &crate::headless::Headless) -> Option<egui::Id> {
+        h.view.ctx.memory(|m| m.focused())
+    }
+
+    #[test]
+    fn ctrl_tab_walks_focus_between_controls_and_plain_tab_keeps_the_panel_toggle() {
+        let mut h = library();
+        h.step();
+        let first = first_control(&h);
+        click(&mut h, &first);
+        let before = focused(&h);
+        assert!(before.is_some(), "clicking {first} gives it keyboard focus");
+        let (top, left) = (h.app.ui.top_bar, h.app.ui.left_panel);
+        let r = h.request("ui.key", json!({"key": "Tab", "ctrl": true}), std::time::Duration::from_secs(20));
+        assert_eq!(r["ok"], true, "{r}");
+        let after = focused(&h);
+        assert!(after.is_some() && after != before, "Ctrl+Tab moves focus from {before:?} to {after:?}");
+        assert_eq!((h.app.ui.top_bar, h.app.ui.left_panel), (top, left), "Ctrl+Tab is not a panel toggle");
+        key(&mut h, "Tab", false);
+        assert!(!h.app.ui.top_bar && !h.app.ui.left_panel, "plain Tab still toggles all panels");
     }
 
     #[test]

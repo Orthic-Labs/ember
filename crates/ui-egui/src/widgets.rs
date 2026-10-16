@@ -492,6 +492,7 @@ pub fn text_button(ui: &mut Ui, id: &str, label: &str, active: bool) -> Response
     let p = ui.painter();
     p.rect(r, CornerRadius::same(4), fill, Stroke::new(1.0, t.button_border), StrokeKind::Inside);
     p.galley(r.center() - galley.size() / 2.0, galley, t.text);
+    focus_ring(ui, &resp, r);
     resp
 }
 
@@ -522,6 +523,7 @@ pub fn segmented(ui: &mut Ui, id: &str, items: &[(&str, &str)], active: Option<u
                 let p = ui.painter();
                 p.rect(r, CornerRadius::same(4), fill, Stroke::new(1.0, t.button_border), StrokeKind::Inside);
                 p.text(r.center(), Align2::CENTER_CENTER, label, t.semibold(11.5), t.text);
+                focus_ring(ui, &resp, r);
                 if resp.clicked() {
                     clicked = Some(i);
                 }
@@ -529,6 +531,14 @@ pub fn segmented(ui: &mut Ui, id: &str, items: &[(&str, &str)], active: Option<u
         });
     }
     clicked
+}
+
+/// A visible ring around a custom-painted control while it holds keyboard focus (egui paints none for these).
+fn focus_ring(ui: &Ui, resp: &Response, rect: Rect) {
+    if resp.has_focus() {
+        let t = Tokens::get(ui.ctx());
+        ui.painter().rect(rect.expand(2.0), CornerRadius::same(5), Color32::TRANSPARENT, Stroke::new(2.0, t.accent), StrokeKind::Outside);
+    }
 }
 
 /// An icon-only button. `active` draws the selected background (tool strip).
@@ -556,6 +566,7 @@ pub fn icon_button(ui: &mut Ui, id: &str, icon: Icon, size: egui::Vec2, active: 
     };
     let glyph = (size.x.min(size.y) * 0.62).min(22.0);
     paint(p, Rect::from_center_size(r.center(), vec2(glyph, glyph)), icon, c);
+    focus_ring(ui, &resp, sq);
     if !tooltip.is_empty() { resp.on_hover_text(tooltip) } else { resp }
 }
 
