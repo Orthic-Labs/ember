@@ -8,6 +8,8 @@ pub enum Error {
     Candle(#[from] candle_core::Error),
     #[error("json: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("model: {0}")]
+    Model(#[from] lightcraft_nafnet::Error),
     #[error("raw decode of {path}: {why}")]
     Raw { path: String, why: String },
     #[error("data: {0}")]

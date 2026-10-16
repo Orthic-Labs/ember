@@ -4543,6 +4543,7 @@ version = "0.7.0"
 dependencies = [
  "faer-core",
  "lightcraft-denoise-core",
+ "lightcraft-nafnet",
  "lightcraft-raster",
  "miniz_oxide 0.8.9",
  "proptest",
@@ -4583,6 +4584,7 @@ version = "0.7.0"
 dependencies = [
  "candle-core",
  "candle-nn",
+ "lightcraft-nafnet",
  "lightcraft-raw",
  "rayon",
  "serde",
@@ -4806,6 +4808,17 @@ dependencies = [
  "quick-xml 0.38.4",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "lightcraft-nafnet"
+version = "0.7.0"
+dependencies = [
+ "candle-core",
+ "candle-nn",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

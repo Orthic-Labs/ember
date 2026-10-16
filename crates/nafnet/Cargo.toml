@@ -1,0 +1,20 @@
+[package]
+name = "lightcraft-nafnet"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Ember NAFNet (L1): the pure candle model definition, safetensors plus contract.json loading and tiled inference, shared by the product denoiser and the training tooling"
+
+[lib]
+name = "lightcraft_nafnet"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

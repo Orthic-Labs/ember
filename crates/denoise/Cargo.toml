@@ -11,11 +11,15 @@ workspace = true
 [features]
 default = []
 runtime = ["dep:faer"]
+# Candle NAFNet backend for a model installed as `model.safetensors` + `contract.json` (issue #200). Off by default;
+# without it the ONNX path is the only one and behaviour is unchanged.
+nafnet = ["dep:lightcraft-nafnet"]
 # Product-policy switch: absent by default; users may install their own model.
 rawnind-model = ["lightcraft-denoise-core/rawnind-model"]
 
 [dependencies]
 lightcraft-denoise-core = { workspace = true }
+lightcraft-nafnet = { workspace = true, optional = true }
 # Safe matrix views over the pure-Rust GEMM backend; no BLAS, cc/build scripts
 # or inner thread pool. Its dependencies include architecture-specific assembly.
 faer = { package = "faer-core", version = "=0.17.1", default-features = false, features = ["std"], optional = true }

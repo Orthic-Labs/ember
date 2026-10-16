@@ -15,6 +15,7 @@ craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "5c874d51eeb
 lightcraft-denoise-core = { path = "crates/denoise-core" }
 lightcraft-denoise = { path = "crates/denoise", default-features = false }
 lightcraft-denoise-onnx = { path = "crates/denoise-onnx" }
+lightcraft-nafnet = { path = "crates/nafnet" }
 lightcraft-geom = { path = "crates/geom" }
 lightcraft-faces = { path = "crates/faces" }
 lightcraft-sysmem = { path = "crates/sysmem" }
