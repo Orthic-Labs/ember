@@ -102,9 +102,10 @@
 
 /* Astra library pass: quiet hierarchy, justified rows, contextual display controls. */
 .lc-library-main { grid-template-rows: auto auto minmax(0, 1fr); }
-/* An explicit theme-token colour: WebKit kept the header's inherited ink stale after a restart into dark mode. */
+/* Explicit theme-token colours on the header, its title and actions: WebKit kept their inherited ink stale after a restart into dark mode. */
 .lc-library-header { min-height: 52px; padding: 8px 18px 7px 22px; border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent); color: var(--lc-text, var(--rk-ink)); }
-.lc-library-title h1 { font-size: 17px; font-weight: 650; letter-spacing: -.012em; }
+.lc-library-title h1 { font-size: 17px; font-weight: 650; letter-spacing: -.012em; color: var(--lc-text, var(--rk-ink)); }
+.lc-library-header .lc-header-action, .lc-library-header .lc-view-toggle { color: var(--lc-text, var(--rk-ink)); }
 .lc-library-title span { font-size: 12px; color: color-mix(in srgb, currentColor 66%, transparent); }
 .lc-library-actions { gap: 7px; }
 .lc-header-action, .lc-view-toggle { min-height: 29px; border-radius: 7px; border-color: color-mix(in srgb, currentColor 16%, transparent); font-size: 11px; }
