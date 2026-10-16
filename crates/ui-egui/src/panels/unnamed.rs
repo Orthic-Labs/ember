@@ -88,7 +88,16 @@ pub fn faces(app: &mut LightcraftApp, now: f64) -> Arc<Unnamed> {
     }
     let v = app.session.execute("faces.unnamed", &json!({})).unwrap_or(Value::Null);
     let groups = app.session.execute("faces.clusters", &json!({})).unwrap_or(Value::Null);
-    let list = Arc::new(Unnamed { clusters: clusters_of(&groups), ..parse(&v) });
+    let mut list = Unnamed { clusters: clusters_of(&groups), ..parse(&v) };
+    // the groups do not say what each face is suggested, so a group's faces take it from the unnamed list
+    let suggested: std::collections::HashMap<(u64, usize), Option<String>> =
+        list.faces.iter().map(|f| ((f.photo, f.index), f.suggestion.clone())).collect();
+    for f in list.clusters.iter_mut().flat_map(|c| c.faces.iter_mut()) {
+        if let Some(s) = suggested.get(&(f.photo, f.index)) {
+            f.suggestion = s.clone();
+        }
+    }
+    let list = Arc::new(list);
     // what was selected and has since been named (or removed) is no longer selected
     let present: std::collections::HashSet<(u64, usize)> = list.faces.iter().map(|f| (f.photo, f.index)).collect();
     app.ui.unnamed_selected.retain(|k| present.contains(k));
@@ -115,6 +124,32 @@ fn click(app: &mut LightcraftApp, list: &Unnamed, i: usize, shift: bool) {
     }
     // typing goes to the name box at once
     app.ui.unnamed_focus = !app.ui.unnamed_selected.is_empty();
+}
+
+/// The request that marks `f` "not this person" for its suggested name (`faces.rejectName`), or nothing when it has no
+/// suggestion to reject.
+pub fn reject_request(f: &UnnamedFace) -> Option<Value> {
+    let who = f.suggestion.as_ref()?;
+    Some(json!({"id": f.photo, "index": f.index, "name": who}))
+}
+
+/// A small × in the top right of `picture`, drawn only on a face that has a suggested name: a click marks the face "not
+/// this person" for that name, so the suggestion moves on and a look-alike group no longer holds it.
+fn reject_mark(app: &mut LightcraftApp, ui: &mut egui::Ui, picture: Rect, f: &UnnamedFace) {
+    let (Some(request), Some(who)) = (reject_request(f), f.suggestion.as_ref()) else { return };
+    let r = Rect::from_min_size(pos2(picture.right() - 22.0, picture.top() + 4.0), vec2(18.0, 18.0));
+    let resp = ui.interact(r, egui::Id::new(("unnamed-reject", f.photo, f.index)), Sense::click());
+    register(ui.ctx(), format!("unnamed-reject:{}:{}", f.photo, f.index), r);
+    let hot = resp.hovered();
+    let p = ui.painter();
+    p.rect_filled(r, 4.0, Color32::from_black_alpha(if hot { 210 } else { 160 }));
+    let c = r.center();
+    let cross = Stroke::new(1.6, Color32::WHITE);
+    p.line_segment([pos2(c.x - 4.0, c.y - 4.0), pos2(c.x + 4.0, c.y + 4.0)], cross);
+    p.line_segment([pos2(c.x + 4.0, c.y - 4.0), pos2(c.x - 4.0, c.y + 4.0)], cross);
+    if resp.on_hover_text(crate::i18n::tr_format!("Not this person: {name}", name = who.as_str())).clicked() {
+        let _ = app.run("faces.rejectName", request);
+    }
 }
 
 /// Name `faces` (photo, region) `name`, as one undo step.
@@ -279,6 +314,8 @@ pub fn cluster_card(app: &mut LightcraftApp, ui: &mut egui::Ui, cluster: &Cluste
     p.galley(pill.min + vec2(5.0, 3.0), g, Color32::WHITE);
     let label = crate::i18n::tr_format!("{n} faces", n = cluster.faces.len());
     p.text(pos2(picture.left() + 2.0, picture.bottom() + 18.0), Align2::LEFT_CENTER, label, t.font(12.0), t.text_dim);
+    // the group's top face is the one picture on the card, so the × for "not this person" is on it
+    reject_mark(app, ui, picture, top);
     let b = ui.put(
         Rect::from_min_size(pos2(picture.left(), picture.bottom() + 26.0), vec2(edge.min(160.0), 24.0)),
         egui::Button::new(crate::i18n::tr("Name this person")),
@@ -326,6 +363,7 @@ pub fn tile(app: &mut LightcraftApp, ui: &mut egui::Ui, list: &Unnamed, i: usize
         let label = super::people::fit(p, name, t.font(11.5), r.width() - 18.0);
         p.text(pos2(r.left() + 5.0, strip.center().y), Align2::LEFT_CENTER, format!("{label}?"), t.font(11.5), Color32::from_gray(225));
     }
+    reject_mark(app, ui, r, f);
     if let (Some(a), Some(who)) = (&accept, &f.suggestion)
         && a.clone().on_hover_text(format!("Name this face {who}")).clicked()
     {
@@ -377,5 +415,17 @@ mod tests {
         assert_eq!(groups[0].faces.iter().map(|f| f.photo).collect::<Vec<_>>(), vec![3, 4]);
         assert!(clusters_of(&Value::Null).is_empty());
         assert_eq!(parse(&v).clusters, Vec::new(), "the groups come from faces.clusters, not faces.unnamed");
+    }
+
+    #[test]
+    fn not_this_person_asks_for_the_suggested_name_and_only_then() {
+        let face = |suggestion: Option<&str>| UnnamedFace {
+            photo: 7,
+            index: 2,
+            view: lightcraft_geom::Rect { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 },
+            suggestion: suggestion.map(str::to_string),
+        };
+        assert_eq!(reject_request(&face(Some("Jane Doe"))), Some(json!({"id": 7, "index": 2, "name": "Jane Doe"})));
+        assert_eq!(reject_request(&face(None)), None, "no suggestion, so nothing to reject");
     }
 }

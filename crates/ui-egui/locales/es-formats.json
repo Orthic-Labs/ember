@@ -253,5 +253,6 @@
   "Burst {n}": "Ráfaga {n}",
   "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested} sugerencias, {accepted} aceptadas. No se marca nada hasta que apliques.",
   "Applied {n} culling flags": "Se aplicaron {n} marcas de selección",
-  "{n} faces": "{n} rostros"
+  "{n} faces": "{n} rostros",
+  "Not this person: {name}": "No es esta persona: {name}"
 }

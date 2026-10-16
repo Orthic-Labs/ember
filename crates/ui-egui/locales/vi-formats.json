@@ -203,6 +203,7 @@
   "{n} change{} saved in memory but not written to disk: {e}\nEmber retries automatically; quitting now would lose {}.": "{n} thay đổi{} được lưu trong bộ nhớ nhưng chưa ghi xuống đĩa: {e}\nEmber tự động thử lại; thoát ngay bây giờ sẽ làm mất {}.",
   "{n} change{} saved in memory but not written to disk: {e} — Ember will retry": "{n} thay đổi{} được lưu trong bộ nhớ nhưng chưa ghi xuống đĩa: {e} — Ember sẽ thử lại",
   "{n} faces": "{n} khuôn mặt",
+  "Not this person: {name}": "Không phải người này: {name}",
   "{n} found · {sel} selected": "Đã tìm thấy {n} · đã chọn {sel}",
   "{n} photos": "{n} ảnh",
   "{n} photos in {} are hidden by the filters above": "{n} ảnh trong {} bị ẩn bởi các bộ lọc ở trên",

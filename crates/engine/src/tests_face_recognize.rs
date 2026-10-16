@@ -659,6 +659,28 @@ fn not_this_person_is_remembered_for_that_face_and_undoable() {
 }
 
 #[test]
+fn rejecting_a_suggestion_then_naming_skips_that_face_and_undo_restores_the_name() {
+    let d = temp("reject-then-name");
+    let (mut s, _) = setup(&d, 64);
+    let (a, b) = two_photos(&s);
+    set_regions(&mut s, a, vec![region(0.1, None)]);
+    set_regions(&mut s, b, vec![region(0.1, None)]);
+    let face = region(0.1, None).rect;
+    s.execute("faces.rejectName", &json!({"id": a.0, "index": 0, "name": "Ann"})).unwrap();
+    // naming both faces as Ann: the one marked not Ann is skipped, the other is named
+    let list = json!([{"photo": a.0, "index": 0}, {"photo": b.0, "index": 0}]);
+    let r = s.execute("faces.nameFaces", &json!({"faces": list, "name": "Ann"})).unwrap();
+    assert_eq!((r["named"].clone(), r["skipped"].clone()), (json!(1), json!(1)), "{r}");
+    assert!(s.catalog.photo(a).unwrap().meta.regions[0].name.is_none(), "the rejected face stays unnamed");
+    assert_eq!(s.catalog.photo(b).unwrap().meta.regions[0].name.as_deref(), Some("Ann"));
+    // one undo step takes the naming back; the mark itself stays
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.catalog.photo(b).unwrap().meta.regions[0].name.is_none(), "undo takes the naming back");
+    assert!(s.catalog.is_face_rejected(a, &face, "Ann"), "undoing the naming keeps the mark");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
 fn unnamed_faces_are_grouped_by_likeness_and_a_group_is_named_in_one_step() {
     let d = temp("groups");
     let (mut s, _) = setup(&d, 64);

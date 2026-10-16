@@ -253,5 +253,6 @@
   "Burst {n}": "連写 {n}",
   "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested}件の提案、{accepted}件を承認。適用するまでフラグは付きません。",
   "Applied {n} culling flags": "{n}件の選別フラグを適用しました",
-  "{n} faces": "{n} 件の顔"
+  "{n} faces": "{n} 件の顔",
+  "Not this person: {name}": "この人物ではない: {name}"
 }

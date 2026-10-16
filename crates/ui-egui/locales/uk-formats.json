@@ -253,5 +253,6 @@
   "Burst {n}": "Серія {n}",
   "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "Пропозицій: {suggested}, прийнято: {accepted}. Нічого не позначається, доки ви не застосуєте.",
   "Applied {n} culling flags": "Застосовано позначок відбору: {n}",
-  "{n} faces": "{n} облич"
+  "{n} faces": "{n} облич",
+  "Not this person: {name}": "Не ця людина: {name}"
 }

@@ -203,6 +203,7 @@
   "{n} change{} saved in memory but not written to disk: {e}\nEmber retries automatically; quitting now would lose {}.": "{n} perubahan{} disimpan di memori tetapi belum ditulis ke disk: {e}\nEmber mencoba ulang otomatis; keluar sekarang akan menghilangkan {}.",
   "{n} change{} saved in memory but not written to disk: {e} — Ember will retry": "{n} perubahan{} disimpan di memori tetapi belum ditulis ke disk: {e} — Ember akan mencoba lagi",
   "{n} faces": "{n} wajah",
+  "Not this person: {name}": "Bukan orang ini: {name}",
   "{n} found · {sel} selected": "{n} ditemukan · {sel} dipilih",
   "{n} photos": "{n} foto",
   "{n} photos in {} are hidden by the filters above": "{n} foto di {} disembunyikan oleh filter di atas",

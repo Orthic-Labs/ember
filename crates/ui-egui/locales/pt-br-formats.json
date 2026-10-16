@@ -253,5 +253,6 @@
   "Burst {n}": "Sequência {n}",
   "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested} sugestões, {accepted} aceitas. Nada é marcado até você aplicar.",
   "Applied {n} culling flags": "{n} marcações de seleção aplicadas",
-  "{n} faces": "{n} rostos"
+  "{n} faces": "{n} rostos",
+  "Not this person: {name}": "Não é esta pessoa: {name}"
 }
