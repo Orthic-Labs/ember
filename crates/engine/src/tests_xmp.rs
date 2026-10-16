@@ -660,8 +660,11 @@ fn a_rotated_files_regions_are_written_in_its_stored_frame() {
     let out = std::fs::read_to_string(src.join("portrait.xmp")).unwrap();
     assert!(out.contains("mwg-rs:Rotation"), "the box is written in the stored frame: {out}");
     let back = lightcraft_meta::parse_xmp(&out).unwrap().metadata.regions;
-    assert!(same_regions(&have, &back), "{have:?} written as {back:?}
-{out}");
+    assert!(
+        same_regions(&have, &back),
+        "{have:?} written as {back:?}
+{out}"
+    );
     let _ = std::fs::remove_dir_all(&src);
     let _ = std::fs::remove_dir_all(&lib);
 }

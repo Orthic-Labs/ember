@@ -785,10 +785,9 @@ fn folder_header(app: &mut LightcraftApp, ui: &mut egui::Ui, b: &lightcraft_engi
                     let local: Vec<u64> = ids.iter().filter(|id| app.session.catalog.photo(**id).is_some_and(|p| p.local)).map(|id| id.0).collect();
                     let n = local.len();
                     match app.run("photo.addToLibrary", json!({"ids": local})) {
-                        Ok(_) => app.toast(
-                            ui.ctx(),
-                            crate::i18n::tr_format!("Added {n} photo{} to My Photos", crate::i18n::plural_suffix(n == 1), n = n),
-                        ),
+                        Ok(_) => {
+                            app.toast(ui.ctx(), crate::i18n::tr_format!("Added {n} photo{} to My Photos", crate::i18n::plural_suffix(n == 1), n = n))
+                        }
                         Err(e) => app.toast(ui.ctx(), e),
                     }
                 }

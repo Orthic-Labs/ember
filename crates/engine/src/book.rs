@@ -217,7 +217,10 @@ impl Model {
         }
         let (s, t, x, g) = (&self.settings, &self.typography, &self.text, &self.guides);
         check((50.0..=1000.0).contains(&s.width_mm) && (50.0..=1000.0).contains(&s.height_mm), "width and height must be 50–1000 mm")?;
-        check((0.0..=50.0).contains(&s.margin_mm) && 2.0 * s.margin_mm < s.width_mm.min(s.height_mm), "margin must be 0–50 mm and leave room for the cells")?;
+        check(
+            (0.0..=50.0).contains(&s.margin_mm) && 2.0 * s.margin_mm < s.width_mm.min(s.height_mm),
+            "margin must be 0–50 mm and leave room for the cells",
+        )?;
         check((0.0..=20.0).contains(&s.cell_padding_mm), "cellPaddingMm must be 0–20")?;
         check(s.colour_space.eq_ignore_ascii_case("srgb"), "only sRGB output is available (colourSpace \"srgb\")")?;
         check(s.cover.title.chars().count() <= MAX_TEXT, "text must be at most 500 characters")?;
