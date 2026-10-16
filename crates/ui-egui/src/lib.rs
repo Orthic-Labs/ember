@@ -32,6 +32,7 @@ pub mod merge;
 mod model_setup;
 pub mod panels;
 pub mod pick;
+pub mod print_view;
 pub mod region;
 pub mod render;
 pub mod shortcuts;
@@ -1346,6 +1347,13 @@ impl LightcraftApp {
         self.hover_preview = None;
         self.ai_mask_detail(&ctx);
         self.place_names_outcome(&ctx);
+        if self.ui.classic_print.is_some() {
+            // Classic Print: one print page at a time, with its settings beside it
+            egui::CentralPanel::default().show(ui, |ui| print_view::show(self, &ctx, ui));
+            self.widgets = widgets::take_registry(&ctx);
+            self.end_frame(&ctx, t0);
+            return;
+        }
         if self.ui.classic_slideshow.is_some() {
             // Classic Slideshow playback: the frame alone on black, until it ends or Escape
             egui::CentralPanel::default().frame(egui::Frame::NONE.fill(egui::Color32::BLACK)).show(ui, |ui| slideshow_view::show(self, &ctx, ui));
