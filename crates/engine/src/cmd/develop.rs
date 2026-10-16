@@ -533,7 +533,6 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?, dryRun?: bool} — recomputes the stale AI masks (Subject, Sky, Background, People, Landscape) of each target photo (`ids`, else the selection) as one undo step. A mask is stale when an older AI algorithm made it or the photo's crop, rotation or lens changed since. Object and Describe masks need the SAM 3 model: they stay stale and are counted in `pending` → {stale, updated, pending, changed}",
             has_selection,
             |s, p| {
-                let c = "develop.updateAi";
                 let dry = bool_or(p, "dryRun", false);
                 let ids: Vec<PhotoId> = s.targets(p)?.into_iter().filter(|id| s.catalog.photo(*id).is_some()).collect();
                 let (mut stale, mut updated, mut pending, mut changed) = (0, 0, 0, 0);
