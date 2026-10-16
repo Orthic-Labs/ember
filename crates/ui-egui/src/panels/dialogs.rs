@@ -243,6 +243,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
         Dialog::FaceModel { .. } => "Add Face Model",
         Dialog::WhatsNew => "What's New",
         Dialog::Cull { .. } => "Assisted Culling",
+        Dialog::Enhance { .. } => "Enhance",
         Dialog::SmartRules { id: None, .. } => "New Smart Album",
         Dialog::SmartRules { .. } => "Edit Smart Album",
         Dialog::AutoStack { .. } => "Auto-Stack by Capture Time",
@@ -324,6 +325,27 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     crate::widgets::register(ui.ctx(), "check:cullPick", r.rect);
                     ui.label(egui::RichText::new(crate::i18n::tr("Scores stay on the photos: filter or make smart albums with Focus and Best of Similar Shots.")).color(t.text_dim));
                     ui.label(egui::RichText::new(crate::i18n::tr("Suggestions are reviewed before anything is flagged.")).color(t.text_dim));
+                }
+                Dialog::Enhance { denoise, amount, raw_details } => {
+                    let n = app.session.selection.ids.len();
+                    let scope = if n > 1 { crate::i18n::tr_format!("the {n} selected photos", n = n) } else { crate::i18n::tr("the active photo").to_string() };
+                    ui.label(egui::RichText::new(crate::i18n::tr_format!("Enhances {scope} in place: the originals are never changed and nothing is exported. Photos that are not raw are skipped.", scope = scope)).color(t.text_label));
+                    ui.add_space(6.0);
+                    let r = ui.checkbox(denoise, crate::i18n::tr("Denoise with AI"));
+                    crate::widgets::register(ui.ctx(), "check:enhanceDenoise", r.rect);
+                    if *denoise {
+                        let r = ui.add(egui::Slider::new(amount, 0.0..=100.0).text(crate::i18n::tr("Amount")).step_by(1.0));
+                        crate::widgets::register(ui.ctx(), "field:enhanceAmount", r.rect);
+                    }
+                    let r = ui.checkbox(raw_details, crate::i18n::tr("Raw Details: the higher-quality demosaic of the sensor data"));
+                    crate::widgets::register(ui.ctx(), "check:enhanceRaw", r.rect);
+                    let sr = lightcraft_engine::denoise::super_resolution_available();
+                    let mut super_resolution = false;
+                    let r = ui.add_enabled(sr, egui::Checkbox::new(&mut super_resolution, crate::i18n::tr("Super Resolution")));
+                    crate::widgets::register(ui.ctx(), "check:enhanceSuperResolution", r.rect);
+                    if !sr {
+                        ui.label(egui::RichText::new(crate::i18n::tr("Not available yet: no super resolution model ships with this build.")).color(t.text_dim));
+                    }
                 }
                 Dialog::WhatsNew => {
                     egui::ScrollArea::vertical().max_height(list_height(ui, 460.0)).auto_shrink([false, true]).show(ui, |ui| {
@@ -1727,6 +1749,11 @@ pub fn confirm_dialog(app: &mut LightcraftApp, dlg: &Dialog) -> Result<serde_jso
         Dialog::AllMetadata { .. } | Dialog::SystemInfo { .. } | Dialog::WhatsNew => Ok(serde_json::Value::Null),
         // the analysis runs in the background; its proposal is reviewed before anything is flagged (#44)
         Dialog::Cull { reject_below, pick_best } => crate::cull_review::start(app, *reject_below, *pick_best),
+        Dialog::Enhance { denoise, amount, raw_details } => {
+            let ids: Vec<u64> = app.session.selection.ids.iter().map(|id| id.0).collect();
+            let denoise = if *denoise { serde_json::json!(*amount) } else { serde_json::Value::Null };
+            app.run("photo.enhance", serde_json::json!({"ids": ids, "denoise": denoise, "rawDetails": *raw_details}))
+        }
         Dialog::SmartRules { id, name, rules, parent } => {
             // refused before anything changes (not even the name)
             if let Some(problem) = rules.check_for(&app.session.catalog, id.map(lightcraft_catalog::AlbumId)).first() {

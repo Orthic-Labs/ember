@@ -934,6 +934,13 @@ pub enum Dialog {
         reject_below: f32,
         pick_best: bool,
     },
+    /// Photo ▸ Enhance…: AI Denoise (on, at `amount`) and Raw Details for the selected photos, applied by `photo.enhance`.
+    /// Super Resolution is shown disabled: no such model ships yet.
+    Enhance {
+        denoise: bool,
+        amount: f64,
+        raw_details: bool,
+    },
     /// Help ▸ System Info: (label, value) rows.
     DenoiseModel {
         info: serde_json::Value,

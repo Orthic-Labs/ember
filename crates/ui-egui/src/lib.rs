@@ -65,6 +65,8 @@ mod tests_crop_tool;
 #[cfg(test)]
 mod tests_cull_review;
 #[cfg(test)]
+mod tests_enhance;
+#[cfg(test)]
 mod tests_curve;
 #[cfg(test)]
 mod tests_date_picker;

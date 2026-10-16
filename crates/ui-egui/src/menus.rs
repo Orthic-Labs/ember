@@ -1354,6 +1354,14 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             app.ui.dialog = Some(Dialog::Cull { reject_below: 0.0, pick_best: true });
             Ok(Value::Null)
         }
+        "dialog.enhance" => {
+            let (denoise, amount, raw_details) = match app.session.active().and_then(|id| app.session.develop_of(id)) {
+                Some(d) => (d.enhance.denoise_enabled(), if d.enhance.denoise > 0.0 { d.enhance.denoise } else { 50.0 }, d.enhance.raw_details),
+                None => (false, 50.0, false),
+            };
+            app.ui.dialog = Some(Dialog::Enhance { denoise, amount, raw_details });
+            Ok(Value::Null)
+        }
         "app.whatsNew" => {
             app.ui.dialog = Some(Dialog::WhatsNew);
             Ok(json!({"text": crate::panels::dialogs::WHATS_NEW}))
