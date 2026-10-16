@@ -205,6 +205,7 @@ const LAYOUT: &[(&str, &[&str])] = &[
             "develop.reset",
             "develop.updateProcess",
             "develop.updateAi",
+            "dialog.enhance",
             "dialog.createPreset",
             "---",
             "photo.saveMetadataToFile",
@@ -1553,6 +1554,29 @@ mod tests {
         assert!(enabled, "a selected photo can be updated");
         let r = run_item(&mut app, "develop.updateAi", json!({})).unwrap();
         assert_eq!(r["stale"], 0, "{r}");
+    }
+
+    #[test]
+    fn enhance_is_in_the_photo_menu_and_opens_its_dialog() {
+        let mut app = app();
+        let id = app.session.visible()[0].0;
+        app.session.execute("library.select", &json!({"ids": [id]})).unwrap();
+        let photo_menu = menu_bar(&app).into_iter().find(|(t, _)| t == "Photo").unwrap().1;
+        let Some(MenuNode::Item { enabled, .. }) = find(&photo_menu, "dialog.enhance") else { panic!("not in the Photo menu") };
+        assert!(enabled, "a selected photo can be enhanced");
+        run_item(&mut app, "dialog.enhance", json!({})).unwrap();
+        assert!(matches!(app.ui.dialog, Some(crate::state::Dialog::Enhance { .. })), "the Enhance dialog opens");
+    }
+
+    #[test]
+    fn hdr_display_options_are_in_the_view_menu_only_while_early_access_is_on() {
+        let mut app = app();
+        let view_menu = |app: &LightcraftApp| menu_bar(app).into_iter().find(|(t, _)| t == "View").unwrap().1;
+        assert!(find(&view_menu(&app), "view.hdrDisplay").is_none(), "hidden while the feature is off");
+        app.run(crate::early_access::COMMAND, json!({"feature": "hdrDisplay", "enabled": true})).expect("early access on");
+        let view = view_menu(&app);
+        assert!(find(&view, "view.hdrDisplay").is_some(), "View > HDR Display");
+        assert!(find(&view, "view.previewSdr").is_some(), "View > Preview SDR Rendition");
     }
 
     #[test]
