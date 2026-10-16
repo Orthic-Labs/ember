@@ -36,7 +36,9 @@ fn look_one(s: &mut Session, id: PhotoId, look: &lightcraft_pipeline::look::Look
     let src = s.source_now(id, SourceLevel::Thumb)?;
     let info = s.source_info(id);
     let d = s.develop_of(id).unwrap_or_default();
-    let a = lightcraft_pipeline::look::apply(&src, &info, &d, look)?;
+    // the photo's face regions (#203) only weigh the match when the look asks for face weighting
+    let faces = auto_measure::auto_faces(s, id);
+    let a = lightcraft_pipeline::look::apply_with(&src, &info, &d, look, &faces)?;
     let next = lightcraft_pipeline::look::settings_with(&d, a);
     Ok((a, next))
 }
@@ -743,7 +745,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Look Target",
             [],
             None,
-            "{look?: {schema, samples, luminance, clip, chroma}, path?: string, ids?: [photoId] (batch, max 512, one undo step), dryRun?: bool}",
+            "{look?: {schema, samples, luminance, clip, chroma, grid?, weighting?}, path?: string, ids?: [photoId] (batch, max 512, one undo step), dryRun?: bool}",
             has_selection,
             |s, p| {
                 // A look target (`lightcraft-cli look extract`) is the rendered statistics of
@@ -769,7 +771,8 @@ pub fn specs() -> Vec<CommandSpec> {
                 let src = s.source_now(id, SourceLevel::Thumb).map_err(|e| bad(c, e))?;
                 let info = s.source_info(id);
                 let d = s.develop_of(id).unwrap_or_default();
-                let a = lightcraft_pipeline::look::apply(&src, &info, &d, &look).map_err(|e| bad(c, e))?;
+                let faces = auto_measure::auto_faces(s, id);
+                let a = lightcraft_pipeline::look::apply_with(&src, &info, &d, &look, &faces).map_err(|e| bad(c, e))?;
                 if !bool_or(p, "dryRun", false) {
                     edit(s, c, "Apply Look", |d| {
                         *d = lightcraft_pipeline::look::settings_with(d, a);
