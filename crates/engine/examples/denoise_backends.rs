@@ -92,7 +92,7 @@ fn main() -> Result<(), String> {
     let cpu = lightcraft_denoise::runtime::CpuRunner::load(&path, &manifest(tile)).map_err(|e| e.to_string())?;
     let input = lightcraft_denoise::runtime::check_tile(tile);
     println!("model {} tile {tile} ({} cells in, {} pixels out), best of {runs} warm runs\n", path.display(), input.len(), 3 * 4 * tile * tile);
-    println!("{:<10} {:>10} {:>10}   {:>9} {:>8}   {}", "backend", "first ms", "best ms", "worst/max", "SNR dB", "provider");
+    println!("{:<10} {:>10} {:>10}   {:>9} {:>8}   provider", "backend", "first ms", "best ms", "worst/max", "SNR dB");
 
     let cpu_result = time(&cpu, &input, runs.min(2))?;
     let want = cpu_result.2.clone();
