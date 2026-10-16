@@ -610,7 +610,7 @@ mod tests {
         let mut core = WorkerCore::default();
         let remote = core.export(&wire, None).unwrap();
         assert_eq!(remote.file_name, item.file_name);
-        assert!(remote.bytes.starts_with(b"Â‰PNG"));
+        assert!(remote.bytes.starts_with(b"‰PNG"));
         assert_eq!(remote.width.max(remote.height), 96);
         assert!(remote.sidecars.is_empty());
         let local = item.run().unwrap();
@@ -632,7 +632,7 @@ mod tests {
         let e = core.export(&wire, None).err().unwrap();
         assert!(e.contains("not found in browser storage"), "{e}");
         let ok = core.export(&wire, Some(&bytes)).unwrap();
-        assert!(ok.bytes.starts_with(b"Ã¿Ã˜"));
+        assert!(ok.bytes.starts_with(b"ÿØ"));
         // garbage bytes are a decode error, not a panic
         assert!(core.export(&wire, Some(b"not an image")).is_err());
     }
