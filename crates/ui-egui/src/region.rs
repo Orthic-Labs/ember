@@ -75,8 +75,8 @@ pub struct ViewSizes {
     /// 1.0, or less while a slider is dragged (a draft of the whole-frame render).
     pub draft_scale: f32,
     /// Whether a window can be drawn over the whole-frame render (not with a diagnostic overlay
-    /// that needs whole-frame context, soft proofing, or a read too far for one window). Mask
-    /// overlays are window-safe.
+    /// that needs whole-frame context, or a read too far for one window). Mask overlays and soft
+    /// proofing are window-safe.
     pub windows: bool,
 }
 
@@ -99,7 +99,7 @@ pub fn plan(settings: &crate::state::AppSettings, v: ViewSizes) -> LoupePlan {
     let drawn_long = if v.drawn_long.is_finite() { v.drawn_long.max(8.0) } else { canvas_long };
     let scale = if v.draft_scale.is_finite() { v.draft_scale.clamp(0.1, 1.0) } else { 1.0 };
     if !v.windows {
-        // the whole frame at the size it is drawn (soft proof or a whole-frame diagnostic has no
+        // the whole frame at the size it is drawn (a whole-frame diagnostic has no
         // window); while a slider drags, a canvas-sized draft as with windows: a drag at 1:1 must
         // not render the photo's every pixel each frame
         let long = if scale < 1.0 { drawn_long.min(canvas_long) } else { drawn_long };
@@ -292,7 +292,7 @@ mod tests {
         assert_eq!(drag.window_edge, still.window_edge);
     }
 
-    // Given no window (a whole-frame diagnostic or soft proofing), the view at rest renders the
+    // Given no window (a whole-frame diagnostic), the view at rest renders the
     // whole frame at the size it is drawn, but a slider drag drafts at the canvas size like the
     // windowed path
     #[test]
@@ -343,7 +343,7 @@ mod tests {
         }
     }
 
-    // Given a mode whose picture can't be a window (soft proofing, a whole-frame diagnostic, or a
+    // Given a mode whose picture can't be a window (a whole-frame diagnostic, or a
     // spot read too far for one render), the whole-frame render is as big as the view
     #[test]
     fn without_windows_the_whole_frame_is_rendered_at_the_drawn_size() {

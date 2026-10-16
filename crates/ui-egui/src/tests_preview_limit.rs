@@ -727,16 +727,26 @@ mod in_the_loupe {
         assert_eq!(h.app.region_tiles.len(), 2, "{:?}", h.app.region_tiles.keys().collect::<Vec<_>>());
     }
 
-    // Given soft proofing at 1:1 (a mode that draws one image, so no window), the whole-frame
-    // render is as big as the view, not a canvas-sized upscale
+    // Given soft proofing at 1:1, the view is a window of the photo's own pixels over a
+    // canvas-sized whole-frame render (issue #45), not the whole frame at full size, and turning
+    // the proof off gives the plain window back
     #[test]
-    fn soft_proofing_at_one_to_one_renders_the_whole_frame_at_full_size() {
+    fn soft_proofing_at_one_to_one_is_a_window() {
         let (mut h, native) = detail();
-        h.app.ui.soft_proof = true;
         h.request("engine.execute", json!({"command": "view.zoom100"}), T);
         h.settle(SETTLE);
-        assert_eq!(h.app.region_view, None);
-        assert_eq!(rendered_long_edge(&h), native);
+        let plain = h.app.region_view.expect("a window render without the proof");
+        h.app.ui.soft_proof = true;
+        h.settle(SETTLE);
+        let shown = h.app.region_view.expect("a window render with the proof");
+        assert_eq!(shown.full.0.max(shown.full.1), native, "cut from the photo's own pixels");
+        assert_eq!(shown.window, plain.window, "the same part of the photo");
+        assert_ne!(shown.settings, plain.settings, "the proof is part of the window's look");
+        let main = rendered_long_edge(&h);
+        assert!(main < native, "native {native}: the whole-frame render is {main}");
+        h.app.ui.soft_proof = false;
+        h.settle(SETTLE);
+        assert_eq!(h.app.region_view.map(|r| r.settings), Some(plain.settings));
     }
 
     // Given a window the photo's spots make too big for one render (refused), the loupe falls back

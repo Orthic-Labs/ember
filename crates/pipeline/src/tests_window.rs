@@ -246,6 +246,29 @@ fn a_mask_overlay_window_matches_the_whole_render() {
     }
 }
 
+// Given soft proofing (with the destination gamut warning, a per-pixel decision), a window of the
+// proofed render matches the same pixels of the whole proofed render, so the zoomed loupe can draw
+// a proof as a window instead of a whole frame at 1:1 (issue #45)
+#[test]
+fn a_soft_proof_window_matches_the_whole_proof() {
+    use crate::{OutputSpace, Proof};
+    // saturated ramps: part of the picture is outside sRGB when rendered for Display P3
+    let src = Rgb32f::from_fn(480, 320, |x, y| [x as f32 / 480.0, (y as f32 / 320.0) * 0.1, 1.0 - x as f32 / 480.0]);
+    let s = DevelopSettings::default();
+    let proof = Proof { space: OutputSpace::Srgb, dest_warning: true, display_warning: false, profile: 0 };
+    let base = RenderRequest { space: OutputSpace::DisplayP3, proof: Some(proof), ..RenderRequest::fit(W, H) };
+    let plain = render(&src, &SourceInfo::default(), &s, &RenderRequest { proof: None, ..base }).image;
+    let f = render(&src, &SourceInfo::default(), &s, &base).image;
+    assert_ne!(plain.data, f.data, "the proof changes the picture, or the comparison proves nothing");
+    for (x, y) in [(0, 0), (W - 400, 0), (0, H - 300), (W - 400, H - 300), (300, 180)] {
+        let win = PixelWindow { x, y, w: 400, h: 300 };
+        let w = render(&src, &SourceInfo::default(), &s, &RenderRequest { window: Some(win), ..base }).image;
+        assert_eq!((w.width, w.height), (win.w, win.h), "the window's own size");
+        let (max, mean) = compare_inset(&f, &w, win, 0);
+        assert!(max <= 1 && mean <= 0.1, "proof window at {x},{y}: max {max} (≤ 1), mean {mean:.3} (≤ 0.1)");
+    }
+}
+
 // Given a Subject mask, windows at the corners and in the middle select the same region as the whole
 // render, not the one their own pixels would give: the decision comes from the whole-frame proxy.
 // Tolerance as for the other masks (max 3 of 255 = 1.2 % alpha on white-on-black): both
