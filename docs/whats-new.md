@@ -2,10 +2,9 @@
 
 ## 2026-10-17
 
-### Keys: P opens the Photos panel, ⌘0 shows the Histogram
-- In the default keymap, P opens and closes the Photos panel (it was ⌘⇧L), and ⌘0 shows the Histogram (it was ⌘⇧H).
-  Z still picks in the grids. P picks only with the Classic keymap (Settings ▸ Interface), where ⌘0 still fits the photo.
-- Zoom to Fit has no key by default now. Use View ▸ Zoom to Fit.
+### Keys: P opens the Photos panel
+- In the default keymap, P opens and closes the Photos panel (it was ⌘⇧L). Z still picks in the grids.
+  P picks only with the Classic keymap (Settings ▸ Interface).
 
 ### Crash reports come from RightKit
 - A panic now leaves a redacted JSON report (owner-only, bounded retention) in `lightcraft-crash-reports`,

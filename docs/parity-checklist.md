@@ -101,7 +101,7 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 |---|---|---|---|
 | Pick flag | Z (grids) | Z | Z is Toggle Zoom in Detail; P picks only with the Classic keymap |
 | Expand/collapse edit sections | ⌘⌥1–5 | ⌘1–6 | ⌘0 = Zoom to Fit, ⌘1 = Zoom 100 %; Geometry lives in the Crop panel |
-| Histogram | ⌘0 | ⌘0 | Zoom to Fit has no default key (View menu); Classic keeps ⌘0 = Zoom to Fit |
+| Histogram | ⌘⇧H | ⌘0 | ⌘0 = Zoom to Fit |
 | Square Grid | ⇧G | (none; ⇧G = Guided Upright) | Guided Upright is a button in the Crop panel |
 | Export dialog | ⌘⇧E (+ ⇧E) | ⇧E | ⌘⇧E is "Edit in Photoshop" there; no external-editor command yet |
 | Crop overlay cycle | ⇧O | O | O = mask overlay; ⇧O (mask colour / overlay orientation) unused otherwise |
@@ -668,7 +668,7 @@ From `06-shortcuts.md` part 1. Evidence is our binding; conflicts are explained 
 | KEY-SEARCH | Search — ⌘F | P0 | ✅ | `cmd:view.focusSearch` | |
 | KEY-VISUALIZESPOTS | Visualize spots — A | P1 | ✅ | `cmd:view.visualizeSpots` | |
 | KEY-CYCLEOVERLAY | Cycle overlay — O | P0 | ✅ | `cmd:view.maskOverlay`, `cmd:view.maskOverlayMode`, `cmd:view.cropOverlay` | O toggles the mask overlay; ⇧O cycles mask overlay modes while masking, crop overlays elsewhere |
-| KEY-PHOTOSPANEL | Photos panel — P | P0 | ✅ | `cmd:view.leftPanel`, `crates/ui-egui/src/shortcuts.rs` (test `default_keymap_p_opens_the_photos_panel_and_cmd0_shows_the_histogram`), `crates/ui-egui/src/shortcuts/tests_classic_keys.rs` (`classic_keymap_p_picks_and_cmd0_fits_the_photo`) | P in the default keymap (⌘⇧L removed); with the Classic keymap P = Pick [#100](https://github.com/Orthic-Labs/ember/issues/100) |
+| KEY-PHOTOSPANEL | Photos panel — P | P0 | ✅ | `cmd:view.leftPanel`, `crates/ui-egui/src/shortcuts.rs` (test `default_keymap_p_opens_the_photos_panel_and_cmd_shift_h_toggles_the_histogram`), `crates/ui-egui/src/shortcuts/tests_classic_keys.rs` (`classic_keymap_p_picks_and_keeps_cmd0_and_cmd_shift_h`) | P in the default keymap (⌘⇧L removed); with the Classic keymap P = Pick [#100](https://github.com/Orthic-Labs/ember/issues/100) |
 | KEY-LINEAR | Linear gradient — L | P0 | ✅ | `cmd:tool.linear` | |
 | KEY-RADIAL | Radial gradient — R | P0 | ✅ | `cmd:tool.radial` | |
 | KEY-CLIPPING | Clipping — J | P0 | ✅ | `cmd:view.clipping` | |
@@ -691,7 +691,7 @@ From `06-shortcuts.md` part 1. Evidence is our binding; conflicts are explained 
 | KEY-VERSIONS | Versions panel — ⇧V | P1 | ✅ | `cmd:panel.versions` | |
 | KEY-SECTIONS | Expand/collapse edit sections — ⌘1…⌘6 | P1 | ✅ | `cmd:section.light`, `cmd:section.color`, `cmd:section.effects`, `cmd:section.detail`, `cmd:section.optics` | ⌘1–⌘5 (Light, Color, Effects, Detail, Optics) as observed; our Edit panel has no Lens Blur / Geometry section for ⌘6 / ⌘7; Zoom 100% moved to ⌥⌘0 |
 | KEY-PRESETS | Presets panel — ⇧P | P0 | ✅ | `cmd:panel.presets` | Shift+P opens Presets outside the two library grids; in grids it picks and advances (Classic convention). Menu hides the Presets key there; shortcut help follows the view |
-| KEY-HISTOGRAM | Histogram — ⌘0 | P0 | ✅ | `cmd:view.histogram`, `crates/ui-egui/src/shortcuts.rs` (test `default_keymap_p_opens_the_photos_panel_and_cmd0_shows_the_histogram`), `crates/ui-egui/src/tests_zoom_keys.rs` | ⌘0 in the default keymap (⌘⇧H removed); Classic keeps ⌘0 = Zoom to Fit. Zoom to Fit has no default key now (View ▸ Zoom to Fit) [#101](https://github.com/Orthic-Labs/ember/issues/101) |
+| KEY-HISTOGRAM | Histogram — ⌘0 | P0 | 🟡 | `cmd:view.histogram`, `crates/ui-egui/src/shortcuts.rs` (test `default_keymap_p_opens_the_photos_panel_and_cmd_shift_h_toggles_the_histogram`) | bound to ⌘⇧H; ⌘0 stays Zoom to Fit. Ember's docs conflict on the reference binding (docs/ui-parity.md says the reference's ⌘0 is Zoom to Fit), so this needs a reference check [#101](https://github.com/Orthic-Labs/ember/issues/101) |
 | KEY-BRUSHSIZE | Brush size — `[` / `]` | P0 | ✅ | `cmd:brush.smaller`, `cmd:brush.larger` | Masking brush and Remove tool (and its selected spot) |
 | KEY-BRUSHFEATHER | Brush feather — ⇧`[` / ⇧`]` | P0 | ✅ | `cmd:brush.featherLess`, `cmd:brush.featherMore` | |
 | KEY-BRUSH | Brush — B | P0 | ✅ | `cmd:tool.brush` | |

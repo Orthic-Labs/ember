@@ -1,4 +1,4 @@
-//! Headless tests of the View ▸ Zoom shortcuts and modifier-wheel zoom: Cmd+= / Cmd+-
+//! Headless tests of the View ▸ Zoom shortcuts and modifier-wheel zoom: Cmd+= / Cmd+- / Cmd+0
 //! (Ctrl on Windows and Linux) zoom the photo and never egui's interface scale, which would
 //! otherwise take the same keys at the end of the frame; Ctrl+wheel over the photo in the Edit
 //! view zooms it.
@@ -50,15 +50,14 @@ fn zoom_shortcuts_zoom_the_photo_and_leave_the_interface_scale_alone() {
     key(&mut h, "-");
     assert_eq!(h.app.ui.zoom, Zoom::Fit, "{:?}", h.app.ui.zoom);
     assert_eq!(h.view.ctx.zoom_factor(), scale, "Cmd+- scaled the interface");
-    // Cmd+0 is the Histogram in the default keymap; egui would reset its interface scale with the same key
+    // Cmd+0 is Zoom to Fit; egui would reset its interface scale with the same key
     h.app.run("view.navigate", json!({"zoom": {"percent": 200.0}})).unwrap();
     h.view.ctx.set_zoom_factor(1.2);
     h.step();
     h.step();
     assert!((h.view.ctx.zoom_factor() - 1.2).abs() < 0.001);
-    let histogram = h.app.ui.histogram;
     key(&mut h, "0");
-    assert_eq!(h.app.ui.histogram, !histogram, "Cmd+0 shows the Histogram");
+    assert_eq!(h.app.ui.zoom, Zoom::Fit, "{:?}", h.app.ui.zoom);
     assert!((h.view.ctx.zoom_factor() - 1.2).abs() < 0.001, "Cmd+0 reset the interface scale");
 }
 

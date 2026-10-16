@@ -128,7 +128,7 @@ fn keyc_panels_keys_dispatch_the_panel_commands() {
     );
 }
 
-/// KEYC-VIEWS: E, G, C, N, L, F, I, ⇧R, ⌘⌥0 and ⌘0 (E, C, L, I and ⌘0 come from the Classic layer).
+/// KEYC-VIEWS: E, G, C, N, L, F, I, ⇧R and ⌘⌥0 (E, C, L and I come from the Classic layer).
 #[test]
 fn keyc_views_keys_dispatch_the_view_commands() {
     assert_dispatch(
@@ -143,7 +143,6 @@ fn keyc_views_keys_dispatch_the_view_commands() {
             ("I", "view.infoOverlay"),
             ("Shift+R", "view.reference"),
             ("Cmd+Alt+0", "view.zoom100"),
-            ("Cmd+0", "view.zoomFit"),
         ],
     );
 }
@@ -176,10 +175,10 @@ fn classic_module_keys_switch_between_library_and_develop() {
     assert_eq!(h.app.ui.view, ViewMode::PhotoGrid, "⌘⌥1 opens Library (the photo grid)");
 }
 
-/// KEYC-RATING and KEYC-VIEWS under the Classic keymap: P picks and ⌘0 fits the photo, where the default keymap
-/// has the Photos panel and the Histogram.
+/// KEYC-RATING under the Classic keymap: P picks (the default keymap has the Photos panel there), and the keys the
+/// Classic layer leaves (⌘0 Zoom to Fit, ⌘⇧H Histogram) keep their default meaning.
 #[test]
-fn classic_keymap_p_picks_and_cmd0_fits_the_photo() {
+fn classic_keymap_p_picks_and_keeps_cmd0_and_cmd_shift_h() {
     use crate::state::Zoom;
     use lightcraft_catalog::{Flag, PhotoId};
     let mut h = library();
@@ -191,7 +190,8 @@ fn classic_keymap_p_picks_and_cmd0_fits_the_photo() {
     h.app.run("view.navigate", json!({"zoom": {"percent": 200.0}})).unwrap();
     press(&mut h, "0", true, false, false);
     assert_eq!(h.app.ui.zoom, Zoom::Fit, "{:?}", h.app.ui.zoom);
-    assert_eq!(h.app.ui.histogram, histogram, "⌘0 fits the photo with the Classic keymap, not the Histogram");
+    press(&mut h, "H", true, false, true);
+    assert_eq!(h.app.ui.histogram, !histogram, "⌘⇧H toggles the Histogram with the Classic keymap");
 }
 
 /// KEYC-MODULE-OUTPUT: the Map, Slideshow and Print module keys (Book and Web are missing).

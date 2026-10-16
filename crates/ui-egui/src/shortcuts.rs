@@ -95,9 +95,8 @@ pub const CLASSIC_KEYS: &[(&str, &str)] = &[
     ("Shift+W", "tool.pointColor"),
     // Q: Spot Removal, the Remove panel (the primary keymap has it on H)
     ("Q", "panel.remove"),
-    // P: Pick (the primary P is the Photos panel); ⌘0: Zoom to Fit (the primary ⌘0 is the Histogram)
+    // P: Pick (the primary P is the Photos panel)
     ("P", "photo.pick"),
-    ("Cmd+0", "view.zoomFit"),
     // ⌘⌥1–7 switch modules: Library, Develop, Map, Slideshow, Print. Book (⌘⌥4) and Web (⌘⌥7) have no module yet.
     ("Cmd+Alt+1", "view.photoGrid"),
     ("Cmd+Alt+2", "view.detail"),
@@ -1195,7 +1194,8 @@ mod tests {
     }
 
     #[test]
-    fn default_keymap_p_opens_the_photos_panel_and_cmd0_shows_the_histogram() {
+    fn default_keymap_p_opens_the_photos_panel_and_cmd_shift_h_toggles_the_histogram() {
+        use crate::state::Zoom;
         use lightcraft_catalog::{Flag, PhotoId};
         let mut h = library();
         h.app.ui.left_panel = false;
@@ -1205,9 +1205,13 @@ mod tests {
         key(&mut h, "P", false);
         assert!(!h.app.ui.left_panel, "P closes the Photos panel again");
         let histogram = h.app.ui.histogram;
+        let r = h.request("ui.key", json!({"key": "H", "cmd": true, "shift": true}), std::time::Duration::from_secs(20));
+        assert_eq!(r["ok"], true, "{r}");
+        assert_eq!(h.app.ui.histogram, !histogram, "Cmd+Shift+H toggles the Histogram");
+        h.app.run("view.navigate", json!({"zoom": {"percent": 200.0}})).unwrap();
         let r = h.request("ui.key", json!({"key": "0", "cmd": true}), std::time::Duration::from_secs(20));
         assert_eq!(r["ok"], true, "{r}");
-        assert_eq!(h.app.ui.histogram, !histogram, "Cmd+0 shows the Histogram");
+        assert_eq!(h.app.ui.zoom, Zoom::Fit, "Cmd+0 fits the photo");
     }
 
     #[test]
@@ -1443,8 +1447,8 @@ mod tests {
             seen.push((m, k, b.id));
         }
         assert_eq!(shortcut_of(&keymap, "view.leftPanel"), Some("P"));
-        assert_eq!(shortcut_of(&keymap, "view.histogram"), Some("Cmd+0"));
-        assert_eq!(shortcut_of(&keymap, "view.zoomFit"), None, "Zoom to Fit has no default key (View menu)");
+        assert_eq!(shortcut_of(&keymap, "view.histogram"), Some("Cmd+Shift+H"));
+        assert_eq!(shortcut_of(&keymap, "view.zoomFit"), Some("Cmd+0"));
         assert_eq!(shortcut_of(&keymap, "photo.pick"), None, "Z picks in the grids; photo.pick has no key of its own");
     }
 
