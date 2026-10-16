@@ -28,6 +28,7 @@ pub enum Section {
     Calibration,
     PointColor,
     RedEye,
+    LensBlur,
 }
 
 impl Section {
@@ -49,6 +50,7 @@ impl Section {
             Section::Calibration => "Calibration",
             Section::PointColor => "Point Color",
             Section::RedEye => "Red Eye",
+            Section::LensBlur => "Lens Blur",
         }
     }
 }
@@ -289,6 +291,11 @@ controls! {
     "calibration.greenSat" => calibration.green_sat, "Green Saturation", Calibration, -100, 100, 0, 1, 0, Gradient { from: "#7a7a7a", to: "#40b050" };
     "calibration.blueHue" => calibration.blue_hue, "Blue Hue", Calibration, -100, 100, 0, 1, 0, Gradient { from: "#30a0d0", to: "#8040d0" };
     "calibration.blueSat" => calibration.blue_sat, "Blue Saturation", Calibration, -100, 100, 0, 1, 0, Gradient { from: "#7a7a7a", to: "#3a60e0" };
+    "lensBlur.amount" => lens_blur.amount, "Amount", LensBlur, 0, 100, 0, 1, 0, Plain;
+    "lensBlur.focalNear" => lens_blur.focal_near, "Focal Range Near", LensBlur, 0, 100, 0, 1, 0, Plain;
+    "lensBlur.focalFar" => lens_blur.focal_far, "Focal Range Far", LensBlur, 0, 100, 40, 1, 0, Plain;
+    "lensBlur.shape" => lens_blur.shape, "Bokeh Shape", LensBlur, 0, 100, 0, 1, 0, Plain;
+    "lensBlur.highlightBoost" => lens_blur.highlight_boost, "Highlight Boost", LensBlur, 0, 100, 30, 1, 0, Plain;
     "crop.angle" => crop.geometry.angle, "Straighten", Geometry, -45, 45, 0, 0.01, 2, Centered;
 }
 

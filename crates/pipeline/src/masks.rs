@@ -21,6 +21,11 @@ pub(crate) use sky::{scene_proxy, uses_scene};
 pub use subject::SubjectProxy;
 pub(crate) use subject::{subject_proxy, uses_subject};
 
+/// The Subject alpha plane of `img` / `log_l` (before exposure): Lens Blur's depth proxy.
+pub(crate) fn subject_matte(frame: &Frame, w: usize, h: usize, img: &Rgb32f, log_l: &Plane) -> Plane {
+    subject::subject_alpha(frame, w, h, img, log_l)
+}
+
 /// What an embedded segmentation matte selects.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MatteKind {

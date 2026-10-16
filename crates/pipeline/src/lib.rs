@@ -30,6 +30,7 @@ pub mod cull;
 pub mod dust;
 pub mod finish;
 pub mod geometry;
+pub mod lens_blur;
 pub mod local;
 pub mod local_tone;
 pub mod look;
@@ -412,7 +413,7 @@ pub fn plan<'a>(src: &Rgb32f, info: &SourceInfo, s: &'a DevelopSettings, req: &R
     let mut keep = None;
     // Subject / Background are decided once on the whole frame, so a window selects what the whole
     // render does (the proxy is taken through the frame before it is narrowed to the window)
-    let subject = masks::uses_subject(s).then(|| masks::subject_proxy(src, info, s, &frame, full_w, full_h));
+    let subject = (masks::uses_subject(s) || lens_blur::active(s)).then(|| masks::subject_proxy(src, info, s, &frame, full_w, full_h));
     // Sky / Landscape classes likewise
     let scene = masks::uses_scene(s).then(|| masks::scene_proxy(src, info, s, &frame, full_w, full_h));
     let (mut frame, w, h) = match req.window {
@@ -425,6 +426,8 @@ pub fn plan<'a>(src: &Rgb32f, info: &SourceInfo, s: &'a DevelopSettings, req: &R
             }
             // (spots grow the rendered window; only 8-bit renders are cut back to the request)
             let work = if req.depth == OutputDepth::U8 { spots::window_for_reads(s, &frame, full_w, full_h, px_per_long, win) } else { win };
+            // (Lens Blur gathers from a blur radius around each pixel)
+            let work = if req.depth == OutputDepth::U8 { lens_blur::grow_window(s, px_per_long, work, full_w, full_h) } else { work };
             if work != win {
                 keep = Some(PixelWindow { x: win.x - work.x, y: win.y - work.y, ..win });
             }
@@ -448,6 +451,8 @@ pub fn plan<'a>(src: &Rgb32f, info: &SourceInfo, s: &'a DevelopSettings, req: &R
         format!("{:?}", s.optics),
         // and the local tone mapping
         local_tone::enabled(info, s),
+        // and Lens Blur
+        lens_blur::active(s).then(|| format!("{:?}", s.lens_blur)),
         src_long,
     ));
     let lin_key = hash_of((
@@ -462,7 +467,7 @@ pub fn plan<'a>(src: &Rgb32f, info: &SourceInfo, s: &'a DevelopSettings, req: &R
 pub fn lin_needs_cpu(s: &DevelopSettings, info: &SourceInfo) -> bool {
     let o = &s.optics;
     let defringe = s.section_enabled("optics") && (o.defringe_purple_amount > 0.0 || o.defringe_green_amount > 0.0);
-    defringe || !s.spots.is_empty() || local_tone::enabled(info, s)
+    defringe || !s.spots.is_empty() || local_tone::enabled(info, s) || lens_blur::active(s)
 }
 
 /// The white-balanced, defringed, retouched image (before noise reduction): the CPU part of the
@@ -475,6 +480,9 @@ pub fn lin_cpu(img: &mut Rgb32f, info: &SourceInfo, p: &Plan<'_>) {
     optics::defringe(img, s, p.px_per_long / optics::DEFRINGE_REF_LONG);
     spots::apply(img, &s.spots, &p.frame, p.px_per_long);
     redeye::apply(img, &p.eyes);
+    if lens_blur::active(s) {
+        lens_blur::apply(img, &s.lens_blur, &p.frame, p.px_per_long);
+    }
 }
 
 /// The settings a render of `s` for `req` uses: the HDR edit for an [`OutputDepth::F32Hdr`]

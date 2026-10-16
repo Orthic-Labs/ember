@@ -1122,13 +1122,39 @@ impl Default for RedEye {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+/// Lens Blur: a depth-aware bokeh blur. Every number is 0..100 (see `docs/lens-blur.md`). The depth
+/// is a proxy (subject in front, background behind) until a depth model exists; `focal_near` and
+/// `focal_far` bound the band of that depth that stays sharp.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LensBlur {
-    pub enabled: bool,
+    /// `None`: on whenever `amount` is above zero; `Some(false)`: switched off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    /// Blur radius at full distance from the focal band (0 = no blur), as a share of 2 % of the long edge.
     pub amount: f64,
-    pub focal_distance: f64,
-    pub focal_range: f64,
+    /// Near edge of the in-focus depth band (0 = the subject's side, 100 = the farthest background).
+    pub focal_near: f64,
+    /// Far edge of the in-focus depth band.
+    pub focal_far: f64,
+    /// Bokeh shape: 0 = round discs; towards 100 the discs turn into cat's eyes (lemon shapes
+    /// squeezed along the radius) towards the frame's edges.
+    pub shape: f64,
+    /// How much brighter points weigh in the blur, so highlights bloom into bright discs.
+    pub highlight_boost: f64,
+}
+
+impl Default for LensBlur {
+    fn default() -> Self {
+        Self { enabled: None, amount: 0.0, focal_near: 0.0, focal_far: 40.0, shape: 0.0, highlight_boost: 30.0 }
+    }
+}
+
+impl LensBlur {
+    /// Whether the blur does anything: `amount` above zero and not switched off.
+    pub fn active(&self) -> bool {
+        self.enabled != Some(false) && self.amount.is_finite() && self.amount > 0.0
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
