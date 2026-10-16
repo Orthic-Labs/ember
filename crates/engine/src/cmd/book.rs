@@ -1,5 +1,6 @@
 //! `book.*`: the Classic Book settings, pages, auto layout, page rendering and export (see
-//! [`crate::book`]). The desktop app's page view is UI (`book.view`).
+//! [`crate::book`]). The desktop app's page view is UI (`book.view`). Every change is saved with the
+//! library preferences (`prefs.json`).
 
 use serde_json::{Value, json};
 
@@ -53,6 +54,7 @@ fn rgb(v: &Value) -> std::result::Result<[u8; 3], String> {
 fn set(s: &mut Session, p: &Value) -> Result<Value> {
     const ID: &str = "book.set";
     s.book = book::merged(&s.book, p).map_err(|e| bad(ID, e))?;
+    s.save_prefs()?;
     Ok(json!({"model": s.book}))
 }
 
@@ -62,6 +64,7 @@ fn add_page(s: &mut Session, p: &Value) -> Result<Value> {
     let mut m = s.book.clone();
     let pages = book::add_page(&mut m, template).map_err(|e| bad(ID, e))?;
     s.book = m;
+    s.save_prefs()?;
     Ok(json!({"pages": pages, "index": pages - 1}))
 }
 
@@ -71,6 +74,7 @@ fn remove_page(s: &mut Session, p: &Value) -> Result<Value> {
     let mut m = s.book.clone();
     book::remove_page(&mut m, index).map_err(|e| bad(ID, e))?;
     s.book = m;
+    s.save_prefs()?;
     Ok(json!({"pages": s.book.pages.len()}))
 }
 
@@ -101,6 +105,7 @@ fn set_page(s: &mut Session, p: &Value) -> Result<Value> {
     }
     m.validate().map_err(|e| bad(ID, e))?;
     s.book = m;
+    s.save_prefs()?;
     let page = &s.book.pages[index];
     Ok(json!({"index": index, "page": page}))
 }
@@ -117,6 +122,7 @@ fn set_cell(s: &mut Session, p: &Value) -> Result<Value> {
     let page = m.pages.get_mut(index).ok_or_else(|| bad(ID, format!("no page {index}")))?;
     book::set_cell(page, cell, photo).map_err(|e| bad(ID, e))?;
     s.book = m;
+    s.save_prefs()?;
     Ok(json!({"page": index, "cell": cell, "photo": photo}))
 }
 
@@ -128,6 +134,7 @@ fn auto_layout(s: &mut Session, p: &Value) -> Result<Value> {
     let mut m = s.book.clone();
     let added = book::auto_layout(&mut m, template, &ids, replace).map_err(|e| bad(ID, e))?;
     s.book = m;
+    s.save_prefs()?;
     Ok(json!({"pages": s.book.pages.len(), "added": added, "photos": ids.len()}))
 }
 

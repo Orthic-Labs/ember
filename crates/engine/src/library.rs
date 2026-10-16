@@ -228,6 +228,8 @@ struct PrefsFile {
     curve_presets: Vec<crate::cmd::curves::CurvePreset>,
     /// Classic Print templates.
     print_templates: Vec<crate::print::PrintTemplate>,
+    /// The Classic Book in use (missing = an empty book).
+    book: crate::book::Model,
     /// Colour-label name sets.
     label_sets: Vec<crate::cmd::manage::LabelSet>,
     /// Imported LUT profiles.
@@ -463,6 +465,7 @@ impl Session {
         self.filter_presets = prefs.filter_presets;
         self.curve_presets = prefs.curve_presets;
         self.print_templates = prefs.print_templates;
+        self.book = prefs.book;
         self.label_sets = prefs.label_sets;
         self.lut_profiles = prefs.lut_profiles;
         crate::cmd::lut_profiles::register_all(self);
@@ -711,6 +714,7 @@ impl Session {
             filter_presets: self.filter_presets.clone(),
             curve_presets: self.curve_presets.clone(),
             print_templates: self.print_templates.clone(),
+            book: self.book.clone(),
             label_sets: self.label_sets.clone(),
             lut_profiles: self.lut_profiles.clone(),
             keyword_sets: self.keyword_sets.clone(),

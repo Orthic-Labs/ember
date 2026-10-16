@@ -1,7 +1,8 @@
 //! Classic Book: pages of photos laid out in millimetres and rendered through the export pipeline
 //! ([`Session::export_job`]). Geometry is in millimetres and converted to pixels at the render DPI,
 //! so a page keeps its proportions at any resolution (resolution independence). Text is drawn in
-//! the bundled Inter face only. The book lives with the session; it is not saved with the library.
+//! the bundled Inter face only. The book lives with the session and is saved with the library
+//! preferences (`prefs.json`), so it reopens with the library.
 use crate::Session;
 use crate::contact_sheet::{Pdf, blit};
 use crate::export::{Anchor, Watermark, draw_watermark, encode_image};

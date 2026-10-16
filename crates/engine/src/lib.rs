@@ -291,7 +291,7 @@ pub struct Session {
     pub slideshow: slideshow::Model,
     /// The user's Classic Slideshow templates (`slideshow.saveTemplate`), persisted in prefs.json.
     pub slideshow_templates: Vec<slideshow::Template>,
-    /// The Classic Book in use (`book.set`, `book.setPage`, ...); not persisted.
+    /// The Classic Book in use (`book.set`, `book.setPage`, ...); saved with the library preferences.
     pub book: book::Model,
     /// The Classic Print job in use (`print.set`, `print.applyTemplate`, ...); not persisted.
     pub print: print::Model,

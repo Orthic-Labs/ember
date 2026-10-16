@@ -371,3 +371,39 @@ fn print_templates_are_saved_with_the_library_preferences() {
     assert_eq!(s.print_templates[0].layout.columns, 2);
     let _ = std::fs::remove_dir_all(&lib);
 }
+
+#[test]
+fn book_is_saved_with_the_library_preferences() {
+    let lib = temp_dir("book");
+    {
+        let mut s = Session::new().with_fs();
+        s.open_library(&lib, true).unwrap();
+        let patch = json!({"settings": {"widthMm": 200.0, "cellPaddingMm": 5.0}, "typography": {"sizePt": 14.0, "align": "center"}});
+        s.execute("book.set", &patch).unwrap();
+        s.execute("book.addPage", &json!({"template": "Two Across"})).unwrap();
+        s.execute("book.setPage", &json!({"index": 0, "text": "Our trip"})).unwrap();
+        s.close_library().unwrap();
+    }
+    {
+        let mut s = Session::new().with_fs();
+        s.open_library(&lib, false).unwrap();
+        assert_eq!(s.book.settings.width_mm, 200.0);
+        assert_eq!(s.book.settings.cell_padding_mm, 5.0);
+        assert_eq!(s.book.typography.size_pt, 14.0);
+        assert_eq!(s.book.typography.align, "center");
+        assert_eq!(s.book.pages.len(), 1);
+        assert_eq!(s.book.pages[0].template, "Two Across");
+        assert_eq!(s.book.pages[0].text, "Our trip");
+        s.close_library().unwrap();
+    }
+    // a prefs.json written before the book was saved still opens, with an empty book
+    let path = lib.join("prefs.json");
+    let mut v: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert!(v.get("book").is_some(), "the book is in prefs.json");
+    v.as_object_mut().unwrap().remove("book");
+    std::fs::write(&path, serde_json::to_vec(&v).unwrap()).unwrap();
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    assert_eq!(s.book, crate::book::Model::default());
+    let _ = std::fs::remove_dir_all(&lib);
+}
