@@ -227,10 +227,11 @@ pub mod fit {
     /// Furthest a slider moves in one pass (in steps).
     const MAX_MOVES: usize = 6;
 
-    /// Auto's slider ranges: highlights only recover. Shadows may deepen (down to -30) and blacks
-    /// no longer lift (at most +5): on 7,524 finished photos the photographer deepens the low end,
-    /// and an Auto that only lifts moved the 10th percentile the right way on 46 % of them (#28).
-    const AUTO_BOUNDS: [(f32, f32); 5] = [(-20.0, 30.0), (-90.0, 0.0), (-30.0, 70.0), (-30.0, 40.0), (-35.0, 5.0)];
+    /// Auto's slider ranges: highlights only recover and blacks never lift: on 7,524 finished photos
+    /// the photographer keeps or deepens the low end, and an Auto that lifted it moved the 10th
+    /// percentile the right way on 46 % of them (#28). Shadows stay non-negative: a negative Shadows
+    /// darkened saturated scenes into more rendered chroma; the 10th-percentile guard limits lifts.
+    const AUTO_BOUNDS: [(f32, f32); 5] = [(-20.0, 30.0), (-90.0, 0.0), (0.0, 70.0), (-30.0, 40.0), (-35.0, 0.0)];
     /// Ranges for measured look targets ([`fit_with`]): a look may ask for lifted, faded blacks.
     const LOOK_BOUNDS: [(f32, f32); 5] = [(-20.0, 30.0), (-90.0, 0.0), (0.0, 70.0), (-30.0, 40.0), (-35.0, 20.0)];
 
@@ -412,7 +413,7 @@ pub mod fit {
         }
         let neutral = tone_map(info, 0.0, 0.0, 0.0);
         let p10 = stats(&sample(ev_sorted, exposure), [0.0; 5], &neutral).p[2];
-        let weight = 2.0 * (1.0 - key.backlit).clamp(0.0, 1.0);
+        let weight = 8.0 * (1.0 - key.backlit).clamp(0.0, 1.0);
         fit_core(ev_sorted, exposure, t, info, &AUTO_BOUNDS, Some(Guard { p10, weight }))
     }
 

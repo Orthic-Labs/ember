@@ -237,7 +237,7 @@ fn key_target_is_pinned_and_fades_the_ordinary_offset_for_keyed_scenes() {
 #[test]
 fn a_deep_shadow_tail_is_not_lifted_by_default() {
     // 30 % of the frame is near black, the body sits a stop under grey, a bright part above it:
-    // an ordinary scene whose deep shadows Auto used to lift (shadows >= 0, blacks up to +20).
+    // an ordinary scene whose deep shadows Auto used to lift (blacks up to +20).
     let src = Rgb32f::from_fn(64, 64, |x, _| {
         if x < 19 {
             [0.003, 0.003, 0.003]
@@ -249,7 +249,7 @@ fn a_deep_shadow_tail_is_not_lifted_by_default() {
     });
     for info in [SourceInfo::default(), SourceInfo { raw: true, ..Default::default() }] {
         let a = auto_tone(&src, &info, &DevelopSettings::default());
-        assert!(a.shadows <= 0.0, "shadows must not lift a deep tail: {a:?}");
+        assert!(a.shadows <= 10.0, "shadows may lift a deep tail only slightly: {a:?}");
         assert!(a.blacks <= 0.0, "blacks must not lift a deep tail: {a:?}");
     }
 }
