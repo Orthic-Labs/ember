@@ -8,6 +8,7 @@
 
 pub mod album_picker;
 pub mod auto_task;
+pub mod book_view;
 pub mod brush_live;
 mod command_error;
 pub mod control;
@@ -1419,6 +1420,13 @@ impl LightcraftApp {
         if self.ui.classic_slideshow.is_some() {
             // Classic Slideshow playback: the frame alone on black, until it ends or Escape
             egui::CentralPanel::default().frame(egui::Frame::NONE.fill(egui::Color32::BLACK)).show(ui, |ui| slideshow_view::show(self, &ctx, ui));
+            self.widgets = widgets::take_registry(&ctx);
+            self.end_frame(&ctx, t0);
+            return;
+        }
+        if self.ui.classic_book.is_some() {
+            // Classic Book: one page at a time, with its guides and text fields
+            egui::CentralPanel::default().show(ui, |ui| book_view::show(self, &ctx, ui));
             self.widgets = widgets::take_registry(&ctx);
             self.end_frame(&ctx, t0);
             return;

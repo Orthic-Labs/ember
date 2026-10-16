@@ -2317,5 +2317,11 @@
   "Select Depth Range": "Sélectionner une plage de profondeur",
   "Near": "Proche",
   "Far": "Loin",
-  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "Cette photo n’a pas de carte de profondeur sur laquelle sélectionner. Plage de profondeur demande une photo qui en contient une, par exemple un portrait pris avec un Pixel ou un iPhone."
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "Cette photo n’a pas de carte de profondeur sur laquelle sélectionner. Plage de profondeur demande une photo qui en contient une, par exemple un portrait pris avec un Pixel ou un iPhone.",
+  "Classic Book": "Livre classique",
+  "Previous": "Précédente",
+  "Next": "Suivante",
+  "Photo text": "Texte de photo",
+  "Page text": "Texte de page",
+  "The book has no pages yet: auto layout photos into it first (book.autoLayout).": "Le livre n’a pas encore de pages : disposez d’abord des photos avec book.autoLayout."
 }

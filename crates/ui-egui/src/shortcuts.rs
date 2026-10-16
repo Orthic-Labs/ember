@@ -77,6 +77,8 @@ pub const CONTEXTUAL: &[(&str, &str)] = &[("photo.reject", "crop.rotateAspect")]
 /// to a command. Lights Out, Compare and the info overlay have commands; the rest of the Classic
 /// view keys are listed in docs/parity-checklist.md (KEYC-VIEWS).
 pub const CLASSIC_KEYS: &[(&str, &str)] = &[
+    // Cmd+Alt+4: the Classic Book view
+    ("Cmd+Alt+4", "book.view"),
     ("E", "view.detail"),
     ("C", "view.compare"),
     ("L", "view.lightsOut"),

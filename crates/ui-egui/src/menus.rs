@@ -174,6 +174,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("slideshow.view", "Slideshow Module", None, "View"),
     ("print.view", "Classic Print", None, "View"),
     ("map.view", "Classic Map", None, "View"),
+    ("book.view", "Classic Book", None, "View"),
     ("map.online", "Online Map", None, ""),
     ("map.tileUrl", "Map Tile Address", None, ""),
     ("map.style", "Map Style", None, ""),
@@ -619,6 +620,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             app.toast(&ctx, if app.ui.auto_advance { "Auto Advance On" } else { "Auto Advance Off" });
             Ok(json!({"autoAdvance": app.ui.auto_advance}))
         }
+        "book.view" => crate::book_view::open(app),
         "slideshow.play" => {
             // Classic Slideshow: the selected photos (or the visible ones), full screen
             let r = crate::slideshow_view::start(app, &ctx);
@@ -653,6 +655,8 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 app.ui.classic_slideshow = None;
             } else if app.ui.classic_slideshow_view.is_some() {
                 app.ui.classic_slideshow_view = None;
+            } else if app.ui.classic_book.is_some() {
+                app.ui.classic_book = None;
             } else if app.ui.classic_map.is_some() {
                 app.ui.classic_map = None;
             } else if app.ui.classic_print.is_some() {

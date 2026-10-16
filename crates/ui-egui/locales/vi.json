@@ -2318,5 +2318,11 @@
   "Select Depth Range": "Chọn dải độ sâu",
   "Near": "Gần",
   "Far": "Xa",
-  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "Ảnh này không có bản đồ độ sâu để chọn. Dải độ sâu cần một ảnh có nhúng bản đồ độ sâu, chẳng hạn ảnh chân dung chụp bằng Pixel hoặc iPhone."
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "Ảnh này không có bản đồ độ sâu để chọn. Dải độ sâu cần một ảnh có nhúng bản đồ độ sâu, chẳng hạn ảnh chân dung chụp bằng Pixel hoặc iPhone.",
+  "Classic Book": "Sách Classic",
+  "Previous": "Trước",
+  "Next": "Tiếp",
+  "Photo text": "Chữ trên ảnh",
+  "Page text": "Chữ trên trang",
+  "The book has no pages yet: auto layout photos into it first (book.autoLayout).": "Sách chưa có trang nào: hãy xếp ảnh vào sách bằng book.autoLayout trước."
 }

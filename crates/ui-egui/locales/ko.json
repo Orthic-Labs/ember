@@ -2318,5 +2318,11 @@
   "Select Depth Range": "깊이 범위 선택",
   "Near": "가까이",
   "Far": "멀리",
-  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "이 사진에는 선택에 사용할 깊이 맵이 없습니다. 깊이 범위에는 깊이 맵이 포함된 사진이 필요합니다(예: Pixel이나 iPhone의 인물 사진 모드로 찍은 사진)."
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "이 사진에는 선택에 사용할 깊이 맵이 없습니다. 깊이 범위에는 깊이 맵이 포함된 사진이 필요합니다(예: Pixel이나 iPhone의 인물 사진 모드로 찍은 사진).",
+  "Classic Book": "클래식 북",
+  "Previous": "이전",
+  "Next": "다음",
+  "Photo text": "사진 텍스트",
+  "Page text": "페이지 텍스트",
+  "The book has no pages yet: auto layout photos into it first (book.autoLayout).": "책에 아직 페이지가 없습니다. 먼저 book.autoLayout으로 사진을 배치하세요."
 }

@@ -885,6 +885,9 @@ pub struct UiState {
     /// A Classic Slideshow playback (`slideshow.play`), drawn full screen; not saved.
     #[serde(skip)]
     pub classic_slideshow: Option<crate::slideshow_view::Run>,
+    /// The Classic Book view (`book.view`), drawn full window; not saved.
+    #[serde(skip)]
+    pub classic_book: Option<crate::book_view::Run>,
     /// The Classic Slideshow module view (`slideshow.view`), drawn full window; not saved.
     #[serde(skip)]
     pub classic_slideshow_view: Option<crate::slideshow_view::Module>,
@@ -1337,6 +1340,7 @@ impl Default for UiState {
             lights_out: LightsOut::On,
             slideshow: None,
             classic_slideshow: None,
+            classic_book: None,
             classic_slideshow_view: None,
             classic_print: None,
             classic_map: None,

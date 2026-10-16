@@ -2317,5 +2317,11 @@
   "Select Depth Range": "Selecionar intervalo de profundidade",
   "Near": "Perto",
   "Far": "Longe",
-  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "Esta foto não tem um mapa de profundidade para selecionar. Intervalo de profundidade precisa de uma foto que incorpore um, como uma foto em modo retrato de um Pixel ou iPhone."
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "Esta foto não tem um mapa de profundidade para selecionar. Intervalo de profundidade precisa de uma foto que incorpore um, como uma foto em modo retrato de um Pixel ou iPhone.",
+  "Classic Book": "Livro Clássico",
+  "Previous": "Anterior",
+  "Next": "Próxima",
+  "Photo text": "Texto da foto",
+  "Page text": "Texto da página",
+  "The book has no pages yet: auto layout photos into it first (book.autoLayout).": "O livro ainda não tem páginas: primeiro distribua fotos com book.autoLayout."
 }

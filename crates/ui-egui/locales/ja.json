@@ -2320,5 +2320,11 @@
   "Select Depth Range": "深度範囲を選択",
   "Near": "手前",
   "Far": "奥",
-  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "この写真には選択に使える深度マップがありません。深度範囲には深度マップが埋め込まれた写真が必要です（PixelやiPhoneのポートレートモードで撮影した写真など）。"
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "この写真には選択に使える深度マップがありません。深度範囲には深度マップが埋め込まれた写真が必要です（PixelやiPhoneのポートレートモードで撮影した写真など）。",
+  "Classic Book": "クラシック・ブック",
+  "Previous": "前へ",
+  "Next": "次へ",
+  "Photo text": "写真のテキスト",
+  "Page text": "ページのテキスト",
+  "The book has no pages yet: auto layout photos into it first (book.autoLayout).": "ブックにまだページがありません。先に book.autoLayout で写真を配置してください。"
 }

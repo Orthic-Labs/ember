@@ -2318,5 +2318,11 @@
   "Select Depth Range": "Tiefenbereich auswählen",
   "Near": "Nah",
   "Far": "Fern",
-  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "Dieses Foto hat keine Tiefenkarte, nach der sich auswählen ließe. Tiefenbereich braucht ein Foto mit eingebetteter Tiefenkarte, etwa ein Porträtfoto von einem Pixel oder iPhone."
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "Dieses Foto hat keine Tiefenkarte, nach der sich auswählen ließe. Tiefenbereich braucht ein Foto mit eingebetteter Tiefenkarte, etwa ein Porträtfoto von einem Pixel oder iPhone.",
+  "Classic Book": "Classic-Buch",
+  "Previous": "Zurück",
+  "Next": "Weiter",
+  "Photo text": "Fototext",
+  "Page text": "Seitentext",
+  "The book has no pages yet: auto layout photos into it first (book.autoLayout).": "Das Buch hat noch keine Seiten: Fotos zuerst mit book.autoLayout einfügen."
 }

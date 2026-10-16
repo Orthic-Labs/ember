@@ -2318,5 +2318,11 @@
   "Select Depth Range": "Выбрать диапазон глубины",
   "Near": "Ближе",
   "Far": "Дальше",
-  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "В этом фото нет карты глубины, по которой можно выбирать. Диапазону глубины нужно фото со встроенной картой глубины, например портретный снимок с Pixel или iPhone."
+  "This photo has no depth map to select on. Depth Range needs a photo that embeds one, such as a portrait-mode photo from a Pixel or an iPhone.": "В этом фото нет карты глубины, по которой можно выбирать. Диапазону глубины нужно фото со встроенной картой глубины, например портретный снимок с Pixel или iPhone.",
+  "Classic Book": "Классическая книга",
+  "Previous": "Назад",
+  "Next": "Далее",
+  "Photo text": "Текст фото",
+  "Page text": "Текст страницы",
+  "The book has no pages yet: auto layout photos into it first (book.autoLayout).": "В книге пока нет страниц: сначала расставьте фотографии командой book.autoLayout."
 }
