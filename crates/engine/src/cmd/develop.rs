@@ -131,6 +131,25 @@ fn apply_auto(c: &str, d: &mut DevelopSettings, r: &RegionAuto) -> Result<()> {
     Ok(())
 }
 
+/// The AI stamps of photos: the source file's, and the photo's geometry, as a selection computed now records them.
+impl Session {
+    /// The source stamp of photo `id` now ([`lightcraft_develop::source_stamp`]); 0 for an unknown photo.
+    pub fn ai_source_of(&self, id: PhotoId) -> u64 {
+        self.catalog.photo(id).map_or(0, |p| lightcraft_develop::source_stamp(p.content_hash.as_deref(), p.file_size, p.width, p.height))
+    }
+
+    /// The (source, geometry) stamps of photo `id` now.
+    pub fn ai_stamps(&self, id: PhotoId) -> (u64, u64) {
+        let g = self.develop_of(id).map_or(0, |d| lightcraft_develop::geometry_stamp(&d));
+        (self.ai_source_of(id), g)
+    }
+
+    /// How many AI masks of photo `id` Update AI Settings would recompute or report (the masking panel and grid badge).
+    pub fn ai_stale_count(&self, id: PhotoId) -> usize {
+        self.develop_of(id).map_or(0, |d| lightcraft_develop::ai_stale_in(&d, self.ai_source_of(id)))
+    }
+}
+
 fn section_param(p: &Value, c: &str) -> Result<Section> {
     let v = p.get("section").cloned().ok_or_else(|| bad(c, "missing `section`"))?;
     serde_json::from_value(v).map_err(|e| bad(c, e.to_string()))
@@ -587,7 +606,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update AI Settings",
             ["Photo"],
             None,
-            "{ids?, dryRun?: bool} — recomputes the stale AI masks (Subject, Sky, Background, People, Landscape) of each target photo (`ids`, else the selection) as one undo step. A mask is stale when an older AI algorithm made it or the photo's crop, rotation or lens changed since. Object and Describe masks need the SAM 3 model: they stay stale and are counted in `pending` → {stale, updated, pending, changed}",
+            "{ids?, dryRun?: bool} — recomputes the stale AI masks (Subject, Sky, Background, People, Landscape) of each target photo (`ids`, else the selection) as one undo step. A mask is stale when an older AI algorithm made it, its source file changed since, or (Object and Describe) the photo's orientation, flips, lens or transform changed since. Object and Describe masks need the SAM 3 model: they stay stale and are counted in `pending` → {stale, updated, pending, changed}",
             has_selection,
             |s, p| {
                 let dry = bool_or(p, "dryRun", false);
@@ -596,13 +615,13 @@ pub fn specs() -> Vec<CommandSpec> {
                 let mut ops = Vec::new();
                 for id in ids {
                     let base = s.develop_of(id).unwrap_or_default();
-                    let g = lightcraft_develop::geometry_stamp(&base);
-                    stale += lightcraft_develop::ai_stale_count(&base.masks, g);
+                    let (src, g) = s.ai_stamps(id);
+                    stale += lightcraft_develop::ai_stale_count(&base.masks, src, g);
                     let mut d = (*base).clone();
                     let mut photo_changed = false;
-                    for m in d.masks.iter_mut().filter(|m| m.ai_stale(g)) {
+                    for m in d.masks.iter_mut().filter(|m| m.ai_stale(src, g)) {
                         if m.ai_recomputable() {
-                            m.restamp(g);
+                            m.restamp(src, g);
                             updated += 1;
                             photo_changed = true;
                         } else {
@@ -1301,12 +1320,13 @@ pub fn specs() -> Vec<CommandSpec> {
             for id in ids {
                 let Some(d) = s.develop_of(id) else { continue };
                 let mut base = (*d).clone();
+                let source = s.ai_source_of(id);
                 if preset.auto {
                     // "apply Auto": Auto Settings first, the preset's own settings on top
                     let r = auto_values(s, "preset.apply", id, false)?;
                     apply_auto("preset.apply", &mut base, &r)?;
                 }
-                ops.extend(s.develop_op(id, preset.apply(&base, amount), &label));
+                ops.extend(s.develop_op(id, preset.apply_to_photo(&base, amount, Some(source)), &label));
             }
             s.commit(&label, Op::Batch { ops })?;
             ok()

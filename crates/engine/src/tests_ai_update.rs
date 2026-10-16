@@ -36,6 +36,28 @@ fn select(s: &mut Session, ids: &[PhotoId]) {
     s.execute("library.select", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
 }
 
+/// Stamp `m` as computed now for photo `id`: its source and its geometry.
+fn stamped(s: &Session, id: PhotoId, mut m: Mask) -> Mask {
+    let (source, geometry) = s.ai_stamps(id);
+    m.restamp(source, geometry);
+    m
+}
+
+/// An Object selection (a stored segmentation the model has not computed yet).
+fn object() -> Mask {
+    Mask {
+        id: 2,
+        name: "Object".into(),
+        components: vec![MaskComponent {
+            name: None,
+            op: MaskOp::Add,
+            invert: false,
+            shape: MaskShape::Object { hint: vec![], exclude: vec![], seg: None, detail: vec![], edge: 0.0 },
+        }],
+        ..Default::default()
+    }
+}
+
 #[test]
 fn a_mask_from_an_older_algorithm_is_reported_stale() {
     let mut s = demo();
@@ -58,7 +80,7 @@ fn update_restamps_the_stale_mask_as_one_undo_step() {
     let m = masks_of(&s, id).remove(0);
     assert_eq!(m.ai_version, AI_MASK_VERSION);
     assert_eq!(m.ai_geometry, Some(geometry_stamp(&s.develop_of(id).unwrap_or_default())));
-    assert!(!m.ai_stale(geometry_stamp(&s.develop_of(id).unwrap_or_default())));
+    assert!(!m.ai_stale(s.ai_source_of(id), geometry_stamp(&s.develop_of(id).unwrap_or_default())));
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(masks_of(&s, id)[0].ai_version, 0, "one undo restores the stale stamp");
 }
@@ -119,23 +141,68 @@ fn an_object_mask_needs_the_model_and_stays_stale() {
 }
 
 #[test]
-fn a_crop_change_makes_a_stamped_ai_mask_stale_but_an_unstamped_one_is_not() {
+fn a_source_or_model_change_stales_an_ai_mask_but_a_slider_does_not() {
     let mut s = demo();
     let id = s.visible_cloned()[0];
     select(&mut s, &[id]);
-    let mut d = (*s.develop_of(id).unwrap_or_default()).clone();
-    let mut stamped = subject(AI_MASK_VERSION);
-    stamped.ai_geometry = Some(geometry_stamp(&d));
-    let mut unstamped = subject(AI_MASK_VERSION);
-    unstamped.id = 2;
-    d.masks = vec![stamped, unstamped];
-    s.set_develop(id, d, "setup").unwrap();
-    assert_eq!(s.execute("develop.updateAi", &json!({"dryRun": true})).unwrap()["stale"], 0, "same geometry: current");
-    let mut d = (*s.develop_of(id).unwrap_or_default()).clone();
-    d.crop.flip_h = !d.crop.flip_h;
-    s.set_develop(id, d, "flip").unwrap();
-    let r = s.execute("develop.updateAi", &json!({"dryRun": true})).unwrap();
-    assert_eq!(r["stale"], 1, "the crop changed under the stamped mask; the unstamped one is never geometry-stale");
+    let m = stamped(&s, id, subject(AI_MASK_VERSION));
+    set_masks(&mut s, id, vec![m]);
+    let d = s.develop_of(id).unwrap_or_default();
+    let (source, g) = s.ai_stamps(id);
+    let m = masks_of(&s, id).remove(0);
+    assert!(!m.ai_stale(source, g), "freshly stamped");
+    assert_eq!(s.ai_stale_count(id), 0);
+    let mut light = (*d).clone();
+    light.light.exposure = 0.5;
+    assert!(!m.ai_stale(source, geometry_stamp(&light)), "an exposure slider is not a geometry change");
+    assert!(m.ai_stale(source ^ 1, g), "a changed source file makes it stale");
+    let mut older = m.clone();
+    older.ai_version = 0;
+    assert!(older.ai_stale(source, g), "an older model version makes it stale");
+}
+
+#[test]
+fn a_crop_or_straighten_stales_no_ai_mask_and_a_transform_or_flip_stales_only_a_segmentation() {
+    let mut s = demo();
+    let id = s.visible_cloned()[0];
+    select(&mut s, &[id]);
+    let sel = stamped(&s, id, subject(AI_MASK_VERSION));
+    let seg = stamped(&s, id, object());
+    set_masks(&mut s, id, vec![sel, seg]);
+    let d = (*s.develop_of(id).unwrap_or_default()).clone();
+    let (source, _) = s.ai_stamps(id);
+    let masks = masks_of(&s, id);
+    let (sel, seg) = (&masks[0], &masks[1]);
+    let mut cropped = d.clone();
+    cropped.crop.geometry.angle = 5.0;
+    cropped.crop.aspect = Some((1, 1));
+    assert!(!sel.ai_stale(source, geometry_stamp(&cropped)), "a semantic selection is evaluated on render");
+    assert!(!seg.ai_stale(source, geometry_stamp(&cropped)), "a crop or straighten moves nothing in a stored segmentation");
+    let mut transformed = d.clone();
+    transformed.geometry.rotate = 3.0;
+    assert!(seg.ai_stale(source, geometry_stamp(&transformed)), "a Transform change moves the segmentation");
+    let mut flipped = d.clone();
+    flipped.crop.flip_h = !flipped.crop.flip_h;
+    assert!(seg.ai_stale(source, geometry_stamp(&flipped)), "a flip moves the segmentation");
+    assert!(!sel.ai_stale(source, geometry_stamp(&flipped)), "a semantic selection survives a flip");
+}
+
+#[test]
+fn updating_a_source_change_clears_it_as_one_undo_step() {
+    let mut s = demo();
+    let id = s.visible_cloned()[0];
+    select(&mut s, &[id]);
+    let mut m = stamped(&s, id, subject(AI_MASK_VERSION));
+    m.ai_source = Some(s.ai_source_of(id) ^ 1);
+    set_masks(&mut s, id, vec![m]);
+    assert_eq!(s.ai_stale_count(id), 1, "a source that changed since the mask was made");
+    let commits = s.commits();
+    let r = s.execute("develop.updateAi", &json!({})).unwrap();
+    assert_eq!((r["stale"].as_u64(), r["updated"].as_u64()), (Some(1), Some(1)));
+    assert_eq!(s.ai_stale_count(id), 0, "the update clears the staleness");
+    assert_eq!(s.commits(), commits + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.ai_stale_count(id), 1, "one undo restores the staleness");
 }
 
 #[test]
@@ -154,9 +221,9 @@ fn the_indicator_clears_when_the_stale_ai_masks_are_updated() {
     let mut s = demo();
     let id = s.visible_cloned()[0];
     select(&mut s, &[id]);
-    assert_eq!(lightcraft_develop::ai_stale_in(&s.develop_of(id).unwrap_or_default()), 0);
+    assert_eq!(s.ai_stale_count(id), 0);
     set_masks(&mut s, id, vec![subject(0)]);
-    assert_eq!(lightcraft_develop::ai_stale_in(&s.develop_of(id).unwrap_or_default()), 1, "the badge shows");
+    assert_eq!(s.ai_stale_count(id), 1, "the badge shows");
     s.execute("develop.updateAi", &json!({"ids": [id.0]})).unwrap();
-    assert_eq!(lightcraft_develop::ai_stale_in(&s.develop_of(id).unwrap_or_default()), 0, "the badge clears");
+    assert_eq!(s.ai_stale_count(id), 0, "the badge clears");
 }

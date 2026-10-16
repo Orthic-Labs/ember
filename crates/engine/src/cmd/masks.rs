@@ -184,15 +184,15 @@ pub fn specs() -> Vec<CommandSpec> {
                     return Ok(json!({"pending": true}));
                 }
                 let next = s.active().and_then(|id| s.develop_of(id)).map(|d| d.next_mask_id()).unwrap_or(1);
-                // an AI selection is stamped with the photo's geometry now (Update AI Settings compares it after a crop)
-                let ai_geometry =
-                    if shape.is_ai() { s.active().and_then(|id| s.develop_of(id)).map(|d| lightcraft_develop::geometry_stamp(&d)) } else { None };
+                // an AI selection is stamped with the photo's source and geometry now (Update AI Settings compares them later)
+                let stamps = if shape.is_ai() { s.active().map(|id| s.ai_stamps(id)) } else { None };
                 let out = masks_edit(s, "mask.add", "Add Mask", |masks, active| {
                     masks.push(Mask {
                         id: next,
                         name: name.unwrap_or_else(|| format!("Mask {next}")),
                         components: vec![MaskComponent { name: None, op: MaskOp::Add, invert: false, shape }],
-                        ai_geometry,
+                        ai_source: stamps.map(|x| x.0),
+                        ai_geometry: stamps.map(|x| x.1),
                         ..Default::default()
                     });
                     *active = Some(next);
@@ -225,13 +225,14 @@ pub fn specs() -> Vec<CommandSpec> {
                     segment(s, |s| s.segment_text_later(id, Some(mid), op, None, text))?;
                     return Ok(json!({"pending": true}));
                 }
-                let ai_geometry = if shape.is_ai() { s.develop_of(id).map(|d| lightcraft_develop::geometry_stamp(&d)) } else { None };
+                let stamps = if shape.is_ai() { Some(s.ai_stamps(id)) } else { None };
                 let mut comp = 0;
                 let out = masks_edit(s, "mask.addComponent", "Edit Mask", |masks, _| {
                     let i = find(masks, mid, "mask.addComponent")?;
                     masks[i].components.push(MaskComponent { name: None, op, invert: bool_or(p, "invert", false), shape });
-                    if masks[i].ai_geometry.is_none() {
-                        masks[i].ai_geometry = ai_geometry;
+                    if masks[i].ai_source.is_none() && masks[i].ai_geometry.is_none() {
+                        masks[i].ai_source = stamps.map(|x| x.0);
+                        masks[i].ai_geometry = stamps.map(|x| x.1);
                     }
                     comp = masks[i].components.len() - 1;
                     Ok(())

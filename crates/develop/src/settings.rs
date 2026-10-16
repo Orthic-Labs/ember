@@ -1070,6 +1070,10 @@ pub struct Mask {
     /// mask is never stale for its geometry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ai_geometry: Option<u64>,
+    /// [`source_stamp`] of the photo's source file when the AI selections were computed. `None` when not recorded:
+    /// such a mask is never stale for its source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ai_source: Option<u64>,
 }
 
 /// The AI mask algorithms: Subject, Sky, Background, People and Landscape (evaluated on render) and the SAM 3
@@ -1108,6 +1112,7 @@ impl Default for Mask {
             auto: false,
             ai_version: AI_MASK_VERSION,
             ai_geometry: None,
+            ai_source: None,
         }
     }
 }
@@ -1118,21 +1123,32 @@ impl Mask {
         self.components.iter().any(|c| c.shape.is_ai())
     }
 
-    /// Whether Update AI Settings must recompute the AI selections: another algorithm version made them, or the
-    /// photo's geometry has changed since (`geometry` is the photo's current [`geometry_stamp`]).
-    pub fn ai_stale(&self, geometry: u64) -> bool {
-        self.has_ai() && (self.ai_version != AI_MASK_VERSION || self.ai_geometry.is_some_and(|g| g != geometry))
+    /// Whether Update AI Settings must recompute the AI selections: another algorithm version made them, the source
+    /// file changed since (`source` is the photo's current [`source_stamp`]), or a stored segmentation (Object,
+    /// Describe) was made for a geometry the photo no longer has (`geometry` is its current [`geometry_stamp`]).
+    /// Semantic selections (Subject, Sky, ...) are evaluated on every render, so a geometry edit never stales them.
+    pub fn ai_stale(&self, source: u64, geometry: u64) -> bool {
+        self.has_ai()
+            && (self.ai_version != AI_MASK_VERSION
+                || self.ai_source.is_some_and(|s| s != source)
+                || (self.has_segmentation() && self.ai_geometry.is_some_and(|g| g != geometry)))
+    }
+
+    /// Whether a component is a stored model segmentation (Object, Describe): pixels only the model can recompute.
+    pub fn has_segmentation(&self) -> bool {
+        self.components.iter().any(|c| matches!(c.shape, MaskShape::Object { .. } | MaskShape::Prompt { .. }))
     }
 
     /// Whether Update AI Settings can recompute every AI selection here. Object and Describe selections hold a
     /// SAM 3 segmentation that only the model can recompute.
     pub fn ai_recomputable(&self) -> bool {
-        !self.components.iter().any(|c| matches!(c.shape, MaskShape::Object { .. } | MaskShape::Prompt { .. }))
+        !self.has_segmentation()
     }
 
-    /// Stamp the AI selections as computed now, for `geometry`.
-    pub fn restamp(&mut self, geometry: u64) {
+    /// Stamp the AI selections as computed now, for `source` and `geometry`.
+    pub fn restamp(&mut self, source: u64, geometry: u64) {
         self.ai_version = AI_MASK_VERSION;
+        self.ai_source = Some(source);
         self.ai_geometry = Some(geometry);
     }
 }
@@ -1159,24 +1175,46 @@ impl MaskShape {
     }
 }
 
-/// How many of `masks` are stale for a photo whose current geometry stamp is `geometry`.
-pub fn ai_stale_count(masks: &[Mask], geometry: u64) -> usize {
-    masks.iter().filter(|m| m.ai_stale(geometry)).count()
+/// How many of `masks` are stale for a photo whose current source and geometry stamps are `source` and `geometry`.
+pub fn ai_stale_count(masks: &[Mask], source: u64, geometry: u64) -> usize {
+    masks.iter().filter(|m| m.ai_stale(source, geometry)).count()
 }
 
-/// How many AI masks of a photo's settings need Update AI Settings (no geometry stamp is computed without an AI mask).
-pub fn ai_stale_in(d: &DevelopSettings) -> usize {
+/// How many AI masks of a photo's settings need Update AI Settings (`source`: the photo's [`source_stamp`]).
+pub fn ai_stale_in(d: &DevelopSettings, source: u64) -> usize {
     if !d.masks.iter().any(Mask::has_ai) {
         return 0;
     }
-    ai_stale_count(&d.masks, geometry_stamp(d))
+    ai_stale_count(&d.masks, source, geometry_stamp(d))
 }
 
-/// A stable 64-bit FNV-1a of the photo's crop, rotation, orientation and lens override: the geometry an AI
-/// selection was computed for. Stable across runs and builds (unlike `DefaultHasher`), so it can be stored.
+/// A stable stamp of a photo's source file: its content hash when known, else its size and decoded dimensions.
+/// A replaced file, or one that decodes to another size, changes it.
+pub fn source_stamp(content_hash: Option<&str>, file_size: u64, width: u32, height: u32) -> u64 {
+    fnv1a(&serde_json::to_vec(&(content_hash, file_size, width, height)).unwrap_or_default())
+}
+
+/// A stable stamp of the settings that place a stored segmentation: the orientation, the flips, the lens correction,
+/// and the Upright and Transform settings (when their sections are on). Crop, straighten and the crop's aspect move
+/// nothing in a stored segmentation, which covers the uncropped, unrotated image, so they are left out.
 pub fn geometry_stamp(d: &DevelopSettings) -> u64 {
-    let json = serde_json::to_vec(&(&d.geometry, &d.crop, &d.orientation, &d.lens_override)).unwrap_or_default();
-    json.iter().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0000_0100_0000_01b3))
+    let g = &d.geometry;
+    let json = serde_json::to_vec(&(
+        &d.orientation,
+        d.crop.flip_h,
+        d.crop.flip_v,
+        (&g.upright, &g.guides, &g.upright_transform, g.vertical, g.horizontal, g.rotate, g.aspect, g.scale, g.offset_x, g.offset_y),
+        &d.lens_override,
+        &d.optics,
+        (d.section_enabled("geometry"), d.section_enabled("optics")),
+    ))
+    .unwrap_or_default();
+    fnv1a(&json)
+}
+
+/// FNV-1a of `bytes`, kept to 53 bits so that a JavaScript reader of the saved JSON keeps the stamp exact.
+fn fnv1a(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0000_0100_0000_01b3)) & ((1_u64 << 53) - 1)
 }
 
 // ---------------------------------------------------------------------------------------------

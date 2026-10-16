@@ -11,7 +11,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::{DevelopSettings, Mask, geometry_stamp};
+use crate::{AI_MASK_VERSION, DevelopSettings, Mask, geometry_stamp};
 
 /// Groups shown in "Choose settings to copy" / "Create preset" (Lightroom's checklist).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -279,6 +279,12 @@ impl Preset {
     /// already has are skipped), their effect scaled by the amount. A semantic mask is stamped as computed for
     /// this photo's geometry now, so it is not stale the moment it is added.
     pub fn apply(&self, s: &DevelopSettings, amount: f64) -> DevelopSettings {
+        self.apply_to_photo(s, amount, None)
+    }
+
+    /// [`Preset::apply`] for a photo whose source has the stamp `source`: the preset's semantic masks carry it, so the
+    /// first Update AI Settings after a source change finds them stale.
+    pub fn apply_to_photo(&self, s: &DevelopSettings, amount: f64, source: Option<u64>) -> DevelopSettings {
         let Some(masks) = self.settings.get("masks").and_then(Value::as_array).filter(|m| !m.is_empty()) else {
             return apply_partial(s, &self.settings, amount);
         };
@@ -298,7 +304,9 @@ impl Preset {
             m.id = next;
             m.adjust.amount = (m.adjust.amount * amount).clamp(0.0, 200.0);
             if is_semantic_mask(&m) {
-                m.restamp(stamp);
+                m.ai_version = AI_MASK_VERSION;
+                m.ai_source = source;
+                m.ai_geometry = Some(stamp);
             }
             out.masks.push(m);
         }
@@ -392,7 +400,7 @@ mod tests {
 
         let plain = DevelopSettings::default();
         let mut cropped = DevelopSettings::default();
-        cropped.crop.geometry.angle = 5.0;
+        cropped.geometry.rotate = 5.0;
         let on_plain = p.apply(&plain, 1.0);
         let on_cropped = p.apply(&cropped, 1.0);
         let (m1, m2) = (&on_plain.masks[0], &on_cropped.masks[0]);
@@ -402,7 +410,7 @@ mod tests {
         assert_eq!(m1.ai_geometry, Some(geometry_stamp(&on_plain)));
         assert_eq!(m2.ai_geometry, Some(geometry_stamp(&on_cropped)));
         assert_ne!(m1.ai_geometry, m2.ai_geometry, "each photo has its own stamp");
-        assert!(!m1.ai_stale(geometry_stamp(&on_plain)));
+        assert!(!m1.ai_stale(0, geometry_stamp(&on_plain)));
     }
 
     /// Presets saved before the flag existed load, keep their pixel masks, and apply as they did.

@@ -1955,11 +1955,11 @@ fn an_adaptive_preset_stores_semantic_masks_and_computes_them_per_photo() {
     let stored = s.presets.iter().find(|p| p.id == pid).unwrap();
     assert!(stored.adaptive && stored.is_adaptive());
 
-    // the source photo is clean again; the second photo has a crop, so its geometry stamp differs
+    // the source photo is clean again; the second photo is rotated (Transform), so its geometry stamp differs
     s.set_develop(ids[0], plain, "setup").unwrap();
     s.execute("library.select", &json!({"ids": [ids[1].0]})).unwrap();
     let mut other = active_dev(&s);
-    other.crop.geometry.angle = 5.0;
+    other.geometry.rotate = 5.0;
     s.set_develop(ids[1], other, "setup").unwrap();
     let before: Vec<DevelopSettings> = ids.iter().map(|id| (*s.develop_of(*id).unwrap()).clone()).collect();
 
