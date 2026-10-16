@@ -16,8 +16,8 @@ lightcraft-cli run --library "Ember Library" library.importLightroom path="Light
 ```
 
 Original files are referenced in place. Ratings, picks/rejects, color labels, XMP metadata,
-hierarchical keywords, regular collections/collection sets, virtual copies and mapped develop
-settings are imported. Missing originals remain catalogued for relinking. Existing Ember
+hierarchical keywords, regular collections/collection sets, smart collections whose rules map
+(as smart albums), virtual copies, mapped develop settings, develop history steps and snapshots are imported. Missing originals remain catalogued for relinking. Existing Ember
 edits are preserved by default; `updateExisting=true` explicitly replaces them. Persistent import
 identity prevents reimport from duplicating virtual copies and collections. One undo step reverses
 catalog changes; any saved recovery archives remain available.
@@ -45,8 +45,33 @@ models, some masking/retouch fields and process-version algorithms are not repro
 fields are reported. reference editor's `ProcessVersion` is not mapped: newly imported photos are on
 Ember's latest rendering process, and photos already in the library keep theirs
 ([process-versions.md](process-versions.md)). When a recovery archive is saved, it retains source settings/history/snapshots
-and original smart-collection rules. Smart collections become regular albums with current
-membership. Archived history and snapshots are source data, not native Ember history yet.
+and original smart-collection rules.
+
+Smart collections: the criteria table is read as data, never executed. A smart collection becomes an Ember smart
+album when every criterion has an Ember rule of the same meaning: rating, pick flag, colour label, capture date
+(is, after, before, between), ISO, focal length, file type (raw, video), and text criteria (filename, copy name,
+title, caption, creator, copyright, camera, lens, city, state, country, keywords), with the catalog's intersect,
+union and exclude modes as match all, any and none, nested groups included. One criterion without an equivalent
+(or a multi-word phrase match, which has no single Ember rule) keeps the whole collection a regular album with its
+current membership, because dropping it would change what the album holds; the report names each such criterion and
+the rules stay in the recovery archive. The criteria and operator names are those the reference editor is believed
+to write; they are checked against synthetic fixtures only, not a real catalog, and an operator this importer
+doesn't recognise takes the regular album path. Reimport keeps an album the user has already changed.
+
+History and snapshots: each photo's develop history steps are mapped through the same settings translation as its
+current settings and become its Ember History (newest 50 steps, oldest first, step names kept), and its snapshots
+become named versions (newest 20). A virtual copy gets its own steps, never its master's. A photo the import keeps the
+existing edits of (`updateExisting` off) keeps its own History and versions; with `updateExisting=true` its History is
+replaced, and a snapshot already imported is not added again. Steps with unreadable settings are skipped and counted.
+The conversions run while the library is committed, so one import converts at most 20,000 settings; a photo the budget
+can't cover whole keeps its current settings only and the report says so.
+
+Import report: besides counts, `smartAlbums`, `history` (photos, steps, snapshots, photos over budget, left out),
+`warnings` and `unmapped` (develop fields with no Ember control, per photo), `notImported` lists everything left
+behind and why: smart collections that stay regular albums, history and snapshots beyond the limits, and the
+catalog's publish-service tables and detected face / people tables (AI data) when they hold rows. Those two are
+not imported: Ember has no publish-service model, and detected people are not carried over. The source catalog is
+only read, never opened as a database or written.
 A Custom white balance on a raw Ember develops relative to its as-shot look (ARW, NEF, RW2,
 RAF, CR3, CR2, PEF, SRW; reference editor names them all `RAW`) can't be taken as Kelvin: the catalog keeps no
 as-shot white for Custom photos, so the photo stays As Shot and `Temperature, Tint` are reported

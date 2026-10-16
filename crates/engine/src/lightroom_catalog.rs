@@ -9,7 +9,8 @@ use std::sync::{
 };
 
 use crate::lightroom_sqlite::{Database, LiveTable, Value as SqlValue};
-use lightcraft_catalog::{Album, Flag, Op, Photo, PhotoId, Source};
+use lightcraft_catalog::{Album, Flag, HistoryStep, Op, Photo, PhotoId, Source, Version};
+use lightcraft_develop::DevelopSettings;
 use lightcraft_geom::{Affine, Orientation, Point, Rect};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -396,6 +397,7 @@ pub fn read_with_progress(path: &Path, cancel: &AtomicBool, total: &AtomicUsize,
     }
     let reader = Reader { tables: db.live_tables()?, db };
     let mut warnings = Vec::new();
+    warnings.extend(unread_data(&reader));
     let table = |name: &str, required: bool| -> Result<Vec<Row>, String> {
         ensure_read_active(cancel)?;
         let rows = reader.table(name, required)?;
@@ -542,6 +544,93 @@ pub fn read_with_progress(path: &Path, cancel: &AtomicBool, total: &AtomicUsize,
 
 /// How many of the images left out of an import (no file, folder or root record) the warnings name one by one.
 const LEFT_OUT_NAMED: usize = 20;
+
+/// Warnings that name something the import leaves behind start with this; the report lists them under `notImported`.
+const NOT_IMPORTED: &str = "not imported: ";
+
+/// Data the catalog holds that Ember has no equivalent for, named when its tables have rows: publish services keep what
+/// the other editor rendered and uploaded; face tables keep the people it detected (AI data).
+fn unread_data(reader: &Reader) -> Vec<String> {
+    let mut out = Vec::new();
+    for (prefix, what) in [
+        ("AgLibraryPublished", "publish-service data (published collections and the renditions the other editor uploaded)"),
+        ("AgLibraryFace", "detected face regions and people (AI data)"),
+    ] {
+        let mut names: Vec<&str> = reader.tables.iter().map(|t| t.name.as_str()).filter(|n| n.starts_with(prefix)).collect();
+        names.sort_unstable();
+        let found: Vec<String> = names
+            .into_iter()
+            .filter_map(|name| match reader.table(name, false) {
+                Ok(rows) if rows.is_empty() => None,
+                Ok(rows) => Some(format!("{name} ({} rows)", rows.len())),
+                Err(_) => Some(format!("{name} (unreadable)")),
+            })
+            .collect();
+        if !found.is_empty() {
+            out.push(format!("{NOT_IMPORTED}{what}; {} are not read", found.join(", ")));
+        }
+    }
+    out
+}
+
+/// Most history steps and snapshots of one photo replayed, and most settings conversions of a whole import (the conversions
+/// run while the library is locked for the commit, so the work is bounded).
+const REPLAY_STEPS: usize = 50;
+const REPLAY_SNAPSHOTS: usize = 20;
+const REPLAY_BUDGET: usize = 20_000;
+
+/// A photo's develop history and snapshots, translated to Ember's History steps and named versions.
+struct Replay {
+    history: Vec<HistoryStep>,
+    versions: Vec<Version>,
+    /// Steps and snapshots left out: unreadable settings, or older than the most recent that are kept.
+    left_out: usize,
+}
+
+/// The catalog rows in creation order (their row ids), keeping the newest `keep`; the second value is how many were dropped.
+fn newest(rows: &[Row], keep: usize) -> (Vec<&Row>, usize) {
+    let mut rows: Vec<&Row> = rows.iter().filter(|r| !text(r, "text").trim().is_empty()).collect();
+    rows.sort_by_key(|r| number(r, "id_local"));
+    let dropped = rows.len().saturating_sub(keep);
+    (rows.split_off(dropped), dropped)
+}
+
+/// Replay `src`'s history steps and snapshots through the same settings mapping as its current settings. `None` when
+/// the photo has none, or when the import's conversion `budget` can't cover them (the photo then keeps its settings only).
+fn replay(src: &CatalogPhoto, p: &Photo, now: &str, budget: &mut usize) -> Option<Replay> {
+    let (steps, old_steps) = newest(&src.history, REPLAY_STEPS);
+    let (snaps, old_snaps) = newest(&src.snapshots, REPLAY_SNAPSHOTS);
+    let need = steps.len() + snaps.len();
+    if need == 0 || need > *budget {
+        return None;
+    }
+    *budget -= need;
+    let target = crate::crs::Target::for_photo(p);
+    let aspect = p.width.max(1) as f64 / p.height.max(1) as f64;
+    let orientation = lightroom_orientation(text(&src.image, "orientation")).unwrap_or_default();
+    let stored = stored_aspect(&src.image);
+    let convert = |row: &Row| {
+        let (partial, _) = mapped_settings(text(row, "text"), target, aspect, orientation, stored).ok()?;
+        Some(Arc::new(lightcraft_develop::apply_partial(&DevelopSettings::default(), &partial, 1.0)))
+    };
+    let named = |row: &Row, fallback: String| Some(text(row, "name").trim()).filter(|n| !n.is_empty()).map_or(fallback, String::from);
+    let mut out = Replay { history: Vec::new(), versions: Vec::new(), left_out: old_steps + old_snaps };
+    for (i, row) in steps.iter().enumerate() {
+        match convert(row) {
+            Some(settings) => out.history.push(HistoryStep { label: named(row, format!("Imported step {}", i + 1)), settings }),
+            None => out.left_out += 1,
+        }
+    }
+    for (i, row) in snaps.iter().enumerate() {
+        match convert(row) {
+            Some(settings) => {
+                out.versions.push(Version { name: named(row, format!("Snapshot {}", i + 1)), created: now.to_string(), settings, auto: false })
+            }
+            None => out.left_out += 1,
+        }
+    }
+    Some(out)
+}
 
 fn ensure_read_active(cancel: &AtomicBool) -> Result<(), String> {
     if cancel.load(Ordering::Relaxed) { Err("LRCAT import cancelled".into()) } else { Ok(()) }
@@ -806,6 +895,9 @@ pub(crate) fn apply_prepared(s: &mut crate::Session, data: CatalogImport, contex
     let mut missing = Vec::new();
     let mut unmapped = BTreeMap::new();
     let mut preserved = 0;
+    // History replay: photos, steps, snapshots, photos over the conversion budget, steps and snapshots left out.
+    let mut replayed = (0usize, 0usize, 0usize, 0usize, 0usize);
+    let mut budget = REPLAY_BUDGET;
     // Masters precede their virtual copies.
     let mut photos: Vec<_> = data.photos.iter().collect();
     photos.sort_by_key(|p| number(&p.image, "masterImage") != 0);
@@ -912,6 +1004,37 @@ pub(crate) fn apply_prepared(s: &mut crate::Session, data: CatalogImport, contex
         if keep_develop {
             (p.develop, p.edited) = previous_develop;
         }
+        // History steps and snapshots replace what a copy or a fresh photo inherited from its master. An existing photo keeps
+        // its own steps (a user's edits stay) unless `updateExisting` replaces its edits too; imported snapshots never repeat.
+        let mut history_ops = Vec::new();
+        let has_rows = !src.history.is_empty() || !src.snapshots.is_empty();
+        if !keep_develop && (has_rows || existing_id.is_none()) {
+            if existing_id.is_none() {
+                p.history.clear();
+                p.versions.clear();
+                p.history_cursor = None;
+            }
+            if let Some(r) = replay(src, &p, &now, &mut budget) {
+                replayed.0 += 1;
+                replayed.1 += r.history.len();
+                replayed.2 += r.versions.len();
+                replayed.4 += r.left_out;
+                p.history = r.history;
+                p.history_cursor = None;
+                for v in r.versions {
+                    if !p.versions.iter().any(|o| !o.auto && o.name == v.name && o.settings == v.settings) {
+                        p.versions.push(v);
+                    }
+                }
+            } else if has_rows {
+                replayed.3 += 1;
+            }
+            history_ops.extend([
+                Op::SetHistory { id: p.id, history: p.history.clone() },
+                Op::SetHistoryCursor { id: p.id, cursor: None },
+                Op::SetVersions { id: p.id, versions: p.versions.clone() },
+            ]);
+        }
         if s.catalog.photo(p.id).is_some() {
             ops.extend([
                 Op::SetRating { id: p.id, rating: p.rating },
@@ -921,6 +1044,7 @@ pub(crate) fn apply_prepared(s: &mut crate::Session, data: CatalogImport, contex
                 Op::SetCaptured { id: p.id, captured: p.captured.clone() },
             ]);
             ops.push(Op::SetDevelop { id: p.id, settings: p.develop.clone(), label: "LRCAT catalog".into(), edited: p.edited.clone() });
+            ops.extend(history_ops);
         } else {
             ops.push(Op::AddPhoto { photo: Box::new(p.clone()) });
         }
@@ -928,6 +1052,13 @@ pub(crate) fn apply_prepared(s: &mut crate::Session, data: CatalogImport, contex
         planned.insert(p.id, p);
     }
     let mut albums = HashMap::new();
+    let mut smart_albums = 0usize;
+    let mut criteria: HashMap<i64, &str> = HashMap::new();
+    for row in &data.collection_content {
+        if text(row, "content").contains("criteria") {
+            criteria.entry(number(row, "collection")).or_insert_with(|| text(row, "content"));
+        }
+    }
     for collection in &data.collections {
         if number(collection, "systemOnly") != 0 {
             continue;
@@ -966,10 +1097,33 @@ pub(crate) fn apply_prepared(s: &mut crate::Session, data: CatalogImport, contex
         let mut album = Album::new(id, text(collection, "name"));
         album.parent = albums.get(&number(collection, "parent")).copied();
         album.folder = text(collection, "creationId").contains("group");
-        if text(collection, "creationId").contains("smart") {
-            warnings.push(format!("{}: smart rules preserved in archive; imported current membership", album.name));
+        if text(collection, "creationId").contains("smart") && !album.folder {
+            // A smart collection becomes a smart album only when every criterion maps; otherwise it stays a regular album.
+            let translated = match criteria.get(&number(collection, "id_local")) {
+                Some(content) => crate::lightroom_smart::translate(content),
+                None => Err(vec!["no criteria stored".to_string()]),
+            };
+            let filter = match translated {
+                Ok(rules) => {
+                    let problems = rules.check(&s.catalog);
+                    let filter = lightcraft_catalog::Filter { rule_set: Some(rules), ..Default::default() };
+                    if problems.is_empty() { Ok(filter) } else { Err(problems.iter().map(|p| p.to_string()).collect::<Vec<_>>()) }
+                }
+                Err(why) => Err(why),
+            };
+            match filter {
+                Ok(filter) => {
+                    album.smart = Some(Box::new(filter));
+                    smart_albums += 1;
+                }
+                Err(why) => warnings.push(format!(
+                    "{NOT_IMPORTED}smart collection {} has rules Ember can't express ({}); it is a regular album with its current membership, and its rules stay in the recovery archive",
+                    album.name,
+                    why.join("; ")
+                )),
+            }
         }
-        if !album.folder {
+        if !album.folder && album.smart.is_none() {
             album.photos = grouped_members
                 .get(&number(collection, "id_local"))
                 .into_iter()
@@ -997,8 +1151,21 @@ pub(crate) fn apply_prepared(s: &mut crate::Session, data: CatalogImport, contex
         s.commit("Import LRCAT Catalog", Op::Batch { ops })?;
     }
     s.merge_undo(s.undo.len().saturating_sub(undo0), "Import LRCAT Catalog");
+    if replayed.3 > 0 {
+        warnings.push(format!(
+            "{NOT_IMPORTED}develop history and snapshots of {} photos: the import's budget of {REPLAY_BUDGET} replayed settings was used up; they keep their current settings, and their history stays in the recovery archive",
+            replayed.3
+        ));
+    }
+    if replayed.4 > 0 {
+        warnings.push(format!(
+            "{NOT_IMPORTED}{} history steps and snapshots: older than the newest {REPLAY_STEPS} steps / {REPLAY_SNAPSHOTS} snapshots of a photo, or with settings that could not be read",
+            replayed.4
+        ));
+    }
+    let not_imported: Vec<&str> = warnings.iter().filter_map(|w| w.strip_prefix(NOT_IMPORTED)).collect();
     Ok(AppliedImport {
-        report: json!({"source":data.source,"photos":ids.len(),"imported":files.imported.len(),"collections":albums.len(),"preservedExistingEdits":preserved,"missing":missing,"failed":files.failed,"warnings":warnings,"unmapped":unmapped,"archive":archive_path,"mapping":ids}),
+        report: json!({"source":data.source,"photos":ids.len(),"imported":files.imported.len(),"collections":albums.len(),"smartAlbums":smart_albums,"history":{"photos":replayed.0,"steps":replayed.1,"snapshots":replayed.2,"photosOverBudget":replayed.3,"leftOut":replayed.4},"preservedExistingEdits":preserved,"missing":missing,"failed":files.failed,"warnings":warnings,"notImported":not_imported,"unmapped":unmapped,"archive":archive_path,"mapping":ids}),
         index: index.clone(),
     })
 }
@@ -1381,7 +1548,8 @@ mod tests {
     /// A SQLite file with one page of rows per table: `(name, columns, rows)` each.
     fn native_catalog_rows(tables: &[(&str, &str, Vec<Vec<SqlValue>>)]) -> Vec<u8> {
         use SqlValue::{Integer as I, Text as T};
-        let mut bytes = vec![0u8; 5 * 2048];
+        let pages = tables.len() + 1;
+        let mut bytes = vec![0u8; pages * 2048];
         bytes[..16].copy_from_slice(b"SQLite format 3\0");
         bytes[16..18].copy_from_slice(&2048u16.to_be_bytes());
         bytes[18] = 1;
@@ -1389,7 +1557,7 @@ mod tests {
         bytes[21] = 64;
         bytes[22] = 32;
         bytes[23] = 32;
-        bytes[28..32].copy_from_slice(&5u32.to_be_bytes());
+        bytes[28..32].copy_from_slice(&(pages as u32).to_be_bytes());
         bytes[44..48].copy_from_slice(&4u32.to_be_bytes());
         bytes[56..60].copy_from_slice(&1u32.to_be_bytes());
         let mut schema = Vec::new();
@@ -1640,5 +1808,125 @@ mod tests {
             let (w, h) = (r.width() * ow, r.height() * oh);
             assert!((w - export.0).abs() <= 3.0 && (h - export.1).abs() <= 3.0, "{o:?}: {w:.1} × {h:.1}, LRCAT exported {export:?}");
         }
+    }
+
+    fn smart_row(id: i64, name: &str) -> Row {
+        row(json!({"id_local":id,"name":name,"creationId":"com.adobe.ag.library.smart_collection"}))
+    }
+
+    #[test]
+    fn a_smart_collection_whose_rules_map_becomes_a_smart_album_and_others_stay_regular_with_a_report_entry() {
+        let mut s = crate::Session::new();
+        let mut data = sample();
+        data.collections.extend([smart_row(11, "Four stars"), smart_row(12, "By preset"), smart_row(13, "Empty rules")]);
+        data.collection_content.extend([
+            row(json!({"collection":11,"content":"s = { { criteria = \"rating\", operation = \">=\", value = 4, value2 = 0 }, combine = \"intersect\" }"})),
+            row(json!({"collection":12,"content":"s = { { criteria = \"rating\", operation = \">=\", value = 4 }, { criteria = \"develop_preset\", operation = \"==\", value = \"x\" }, combine = \"intersect\" }"})),
+        ]);
+        data.members.push(row(json!({"collection":12,"image":1,"positionInCollection":"a"})));
+        let r = apply(&mut s, data, false).unwrap();
+        let master = PhotoId(r["mapping"]["1"].as_u64().unwrap());
+        let smart = s.catalog.albums().find(|a| a.name == "Four stars").unwrap();
+        assert!(smart.is_smart() && smart.photos.is_empty());
+        assert_eq!(s.catalog.album_photos(smart.id), vec![master], "only the 5-star master has rating >= 4");
+        let plain = s.catalog.albums().find(|a| a.name == "By preset").unwrap();
+        assert!(!plain.is_smart());
+        assert_eq!(plain.photos, vec![master]);
+        assert!(!s.catalog.albums().find(|a| a.name == "Empty rules").unwrap().is_smart());
+        assert_eq!(r["smartAlbums"], 1);
+        let left: Vec<_> = r["notImported"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        assert!(left.iter().any(|w| w.contains("By preset") && w.contains("develop_preset")), "{left:?}");
+        assert!(left.iter().any(|w| w.contains("Empty rules") && w.contains("no criteria")), "{left:?}");
+        assert!(!left.iter().any(|w| w.contains("Four stars")), "{left:?}");
+        assert_eq!(s.undo.len(), 1);
+        s.undo_step().unwrap();
+        assert!(s.catalog.albums().next().is_none());
+    }
+
+    #[test]
+    fn history_steps_and_snapshots_replay_as_history_and_named_versions_without_repeating() {
+        let mut s = crate::Session::new();
+        let mut data = sample();
+        let master = data.photos.iter_mut().find(|p| p.source_id == 1).unwrap();
+        master.history = vec![
+            row(json!({"id_local":30,"name":"Exposure +1","text":"s = { Exposure2012 = 1 }"})),
+            row(json!({"id_local":10,"name":"Import","text":"s = { Exposure2012 = 0 }"})),
+            row(json!({"id_local":20,"name":"broken","text":"s = { Exposure2012 = "})),
+            row(json!({"id_local":40,"text":"s = { Exposure2012 = 1.25 }"})),
+        ];
+        master.snapshots = vec![row(json!({"id_local":1,"name":"Before crop","text":"s = { Exposure2012 = 0.5 }"}))];
+        let copy = data.photos.iter_mut().find(|p| p.source_id == 2).unwrap();
+        copy.history = Vec::new();
+        copy.snapshots = Vec::new();
+        let r = apply(&mut s, data.clone(), false).unwrap();
+        assert_eq!(r["history"]["photos"], 1);
+        assert_eq!(r["history"]["steps"], 3);
+        assert_eq!(r["history"]["snapshots"], 1);
+        assert_eq!(r["history"]["leftOut"], 1, "the unreadable step is counted");
+        let id = PhotoId(r["mapping"]["1"].as_u64().unwrap());
+        let photo = s.catalog.photo(id).unwrap();
+        let labels: Vec<_> = photo.history.iter().map(|h| h.label.as_str()).collect();
+        assert_eq!(labels, ["Import", "Exposure +1", "Imported step 4"], "oldest first by row id, the unnamed step numbered by its position");
+        assert_eq!(photo.history[1].settings.light.exposure, 1.0);
+        assert_eq!(photo.history[2].settings.light.exposure, 1.25);
+        assert_eq!(photo.history_cursor, None);
+        assert_eq!(photo.versions.len(), 1);
+        assert_eq!((photo.versions[0].name.as_str(), photo.versions[0].auto, photo.versions[0].settings.light.exposure), ("Before crop", false, 0.5));
+        let copy = s.catalog.photos().find(|p| p.copy_of.is_some()).unwrap();
+        assert!(copy.history.is_empty() && copy.versions.is_empty(), "a virtual copy does not inherit its master's imported history");
+        assert!(r["notImported"].as_array().unwrap().iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("1 history steps"))));
+        // Reimport replacing edits: the history is replaced, the snapshot is not repeated.
+        apply(&mut s, data.clone(), true).unwrap();
+        let photo = s.catalog.photo(id).unwrap();
+        assert_eq!((photo.history.len(), photo.versions.len()), (3, 1));
+        // Reimport keeping the user's edits leaves their history alone.
+        s.set_develop(id, DevelopSettings::default(), "Personal edit").unwrap();
+        let mine = s.catalog.photo(id).unwrap().history.clone();
+        apply(&mut s, data, false).unwrap();
+        assert_eq!(s.catalog.photo(id).unwrap().history, mine);
+    }
+
+    #[test]
+    fn history_replay_is_bounded_per_photo_and_by_the_import_budget() {
+        let photo = |n: usize| {
+            let mut p = sample().photos.remove(1);
+            p.history = (0..n)
+                .map(|i| row(json!({"id_local":i,"name":format!("step {i}"),"text":format!("s = {{ Exposure2012 = {} }}", i % 5)})))
+                .collect();
+            p.snapshots = Vec::new();
+            p
+        };
+        let src = photo(REPLAY_STEPS + 7);
+        let base = Photo::new(PhotoId(1), Source::File { path: src.path.clone() }, "test.ARW", "ARW", 20, 10, "now");
+        let mut budget = 1000;
+        let r = replay(&src, &base, "now", &mut budget).unwrap();
+        assert_eq!(r.history.len(), REPLAY_STEPS);
+        assert_eq!(r.left_out, 7);
+        assert_eq!(r.history.last().unwrap().label, format!("step {}", REPLAY_STEPS + 6), "the newest steps are kept");
+        assert_eq!(budget, 1000 - REPLAY_STEPS);
+        let mut small = REPLAY_STEPS - 1;
+        assert!(replay(&src, &base, "now", &mut small).is_none(), "a photo the budget can't cover is skipped whole");
+        assert_eq!(small, REPLAY_STEPS - 1);
+        assert!(replay(&photo(0), &base, "now", &mut budget).is_none());
+    }
+
+    #[test]
+    fn publish_and_face_data_is_named_in_the_report_when_present() {
+        use SqlValue::{Integer as I, Null as N, Text as T};
+        let mut tables: Vec<(&str, &str, Vec<Vec<SqlValue>>)> =
+            photo_tables(("/catalog/", "")).into_iter().map(|(n, c, row)| (n, c, vec![row])).collect();
+        tables.push(("AgLibraryFace", "id_local INTEGER PRIMARY KEY, image, name", vec![vec![N, I(1), T("Someone".into())]]));
+        tables.push(("AgLibraryFaceCluster", "id_local INTEGER PRIMARY KEY, name", Vec::new()));
+        tables.push(("AgLibraryPublishedCollection", "id_local INTEGER PRIMARY KEY, name", vec![vec![N, T("Web".into())]]));
+        let path = std::env::temp_dir().join(format!("lightcraft-unread-catalog-{}.lrcat", std::process::id()));
+        std::fs::write(&path, native_catalog_rows(&tables)).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        let catalog = read(&path).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), before, "the source catalog is never modified");
+        let left: Vec<_> = catalog.warnings.iter().filter(|w| w.starts_with(NOT_IMPORTED)).collect();
+        assert_eq!(left.len(), 2, "{left:?}");
+        assert!(left.iter().any(|w| w.contains("face") && w.contains("AgLibraryFace (1 rows)") && !w.contains("AgLibraryFaceCluster")), "{left:?}");
+        assert!(left.iter().any(|w| w.contains("publish-service") && w.contains("AgLibraryPublishedCollection (1 rows)")), "{left:?}");
+        std::fs::remove_file(path).unwrap();
     }
 }
