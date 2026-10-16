@@ -208,9 +208,11 @@ impl<'a> AlbumPicker<'a> {
         egui::Popup::from_toggle_button_response(&button).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             ui.set_min_width(width.max(260.0));
             ui.set_max_width(width.max(260.0) + 120.0);
-            let search_box =
-                ui.add(egui::TextEdit::singleline(&mut state.query).hint_text(crate::i18n::tr("Search albums")).desired_width(f32::INFINITY));
-            register(ui.ctx(), format!("albumPickerSearch:{id}"), search_box.rect);
+            let search_box = crate::text_field::TextField::singleline(&format!("albumPickerSearch:{id}"), &mut state.query)
+                .hint(crate::i18n::tr("Search albums"))
+                .width(f32::INFINITY)
+                .show(ui)
+                .response;
             if state.focus {
                 search_box.request_focus();
                 state.focus = false;

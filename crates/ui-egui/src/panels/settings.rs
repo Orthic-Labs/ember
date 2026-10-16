@@ -302,8 +302,7 @@ fn import_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
         row(ui, t, label, |ui| {
             let id = egui::Id::new(("settingsMeta", key));
             let mut text: String = ui.data(|m| m.get_temp(id)).unwrap_or(value.clone());
-            let r = ui.add(egui::TextEdit::singleline(&mut text).hint_text(hint_text).desired_width(240.0));
-            register(ui.ctx(), format!("field:settings.{key}"), r.rect);
+            let r = crate::text_field::TextField::singleline(&format!("field:settings.{key}"), &mut text).hint(hint_text).width(240.0).show(ui).response;
             if r.lost_focus() && text.trim() != value {
                 let _ = app.run("library.preferences", json!({"import": {key: text.trim()}}));
             }
@@ -378,7 +377,7 @@ fn import_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
             row(ui, t, crate::i18n::tr("Album"), |ui| {
                 let id = egui::Id::new("auto-album");
                 let mut name = ui.data(|m| m.get_temp::<String>(id)).unwrap_or_else(|| d.auto_album.clone().unwrap_or_default());
-                let r = ui.add(egui::TextEdit::singleline(&mut name).hint_text(crate::i18n::tr("None")).desired_width(180.0));
+                let r = crate::text_field::TextField::singleline("field:autoAlbum", &mut name).hint(crate::i18n::tr("None")).width(180.0).show(ui).response;
                 if r.lost_focus() {
                     let _ = app.run("library.autoImport", json!({"album": name.trim()}));
                 }

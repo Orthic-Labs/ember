@@ -113,11 +113,9 @@ fn custom_aspect(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     let mut apply = false;
     ui.horizontal(|ui| {
         ui.label(crate::i18n::tr("Custom"));
-        let a = ui.add(egui::TextEdit::singleline(&mut w).desired_width(34.0));
-        register(ui.ctx(), "field:cropCustomW", a.rect);
+        let a = crate::text_field::TextField::singleline("field:cropCustomW", &mut w).width(34.0).show(ui).response;
         ui.label("×");
-        let b = ui.add(egui::TextEdit::singleline(&mut h).desired_width(34.0));
-        register(ui.ctx(), "field:cropCustomH", b.rect);
+        let b = crate::text_field::TextField::singleline("field:cropCustomH", &mut h).width(34.0).show(ui).response;
         let go = text_button(ui, "cropCustomApply", "Apply", false);
         apply = go.clicked() || ((a.lost_focus() || b.lost_focus()) && ui.input(|i| i.key_pressed(egui::Key::Enter)));
     });
@@ -643,8 +641,7 @@ fn info(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
         let gid = egui::Id::new("info-gps");
         ui.label(egui::RichText::new("GPS").size(11.5).color(t.text_dim));
         let mut text: String = ui.data(|d| d.get_temp(gid)).unwrap_or_else(|| gps.clone());
-        let r = ui.add(egui::TextEdit::singleline(&mut text).hint_text(crate::i18n::tr("latitude, longitude")).desired_width(f32::INFINITY));
-        register(ui.ctx(), "field:gps", r.rect);
+        let r = crate::text_field::TextField::singleline("field:gps", &mut text).hint(crate::i18n::tr("latitude, longitude")).width(f32::INFINITY).show(ui).response;
         if r.has_focus() {
             ui.data_mut(|d| d.insert_temp(gid, text.clone()));
         } else {
