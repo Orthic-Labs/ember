@@ -1732,3 +1732,48 @@ fn malformed_photo_targets_are_refused_not_widened() {
     let preset = s.presets.first().unwrap().id.clone();
     s.execute("preset.apply", &json!({"id": preset})).unwrap();
 }
+
+#[test]
+fn auto_slider_sets_only_that_slider_to_auto_and_undoes_in_one_step() {
+    let mut s = demo();
+    s.execute("mask.add", &json!({"kind": "radial", "center": [0.3, 0.3], "name": "mine"})).unwrap();
+    let before = active_dev(&s);
+    let auto = s.execute("develop.auto", &json!({"dryRun": true, "regions": false})).unwrap();
+    let r = s.execute("develop.autoControl", &json!({"control": "light.exposure"})).unwrap();
+    assert_eq!(r["value"], auto["exposure"], "the slider takes Auto's value for it");
+    let mut expected = before.clone();
+    expected.light.exposure = auto["exposure"].as_f64().unwrap();
+    assert_eq!(active_dev(&s), expected, "every other setting and mask stays");
+    // one undo step puts the slider back
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(active_dev(&s), before);
+    // a control Auto does not set is refused and changes nothing
+    assert!(s.execute("develop.autoControl", &json!({"control": "effects.clarity"})).is_err());
+    assert!(s.execute("develop.autoControl", &json!({})).is_err());
+    assert_eq!(active_dev(&s), before);
+}
+
+#[test]
+fn auto_slider_covers_each_of_auto_s_eight_values() {
+    let mut s = demo();
+    let auto = s.execute("develop.auto", &json!({"dryRun": true, "regions": false})).unwrap();
+    let pairs = [
+        ("light.exposure", "exposure"),
+        ("light.contrast", "contrast"),
+        ("light.highlights", "highlights"),
+        ("light.shadows", "shadows"),
+        ("light.whites", "whites"),
+        ("light.blacks", "blacks"),
+        ("color.vibrance", "vibrance"),
+        ("color.saturation", "saturation"),
+    ];
+    for (control, key) in pairs {
+        let r = s.execute("develop.autoControl", &json!({"control": control})).unwrap();
+        assert_eq!(r["value"], auto[key], "{control}");
+    }
+    // each slider holds its own value once all eight have run
+    let d = active_dev(&s);
+    for (control, key) in pairs {
+        assert_eq!(lightcraft_develop::controls::get(&d, control), auto[key].as_f64(), "{control} is set");
+    }
+}

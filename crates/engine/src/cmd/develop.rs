@@ -3,6 +3,8 @@
 use lightcraft_catalog::{Op, PhotoId, Version};
 use lightcraft_develop::{DevelopSettings, Preset, ProcessVersion, Section, SettingsGroup, Treatment, Upright, WbMode, controls};
 use lightcraft_geom::{CropGeometry, CropHandle, Point, Rect, crop_fit_angle, drag_crop};
+use lightcraft_pipeline::auto::regions::{RegionAuto, is_auto_mask, region_auto_with};
+use lightcraft_pipeline::auto::{AutoHints, AutoTone, auto_tone_with};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -20,6 +22,51 @@ fn edit(s: &mut Session, c: &str, label: &str, f: impl FnOnce(&mut DevelopSettin
     f(&mut d)?;
     s.set_develop(id, d, label)?;
     ok()
+}
+
+/// Auto's value for one control, `None` for a control Auto does not set.
+fn auto_control_value(a: &AutoTone, id: &str) -> Option<f64> {
+    Some(match id {
+        "light.exposure" => a.exposure,
+        "light.contrast" => a.contrast,
+        "light.highlights" => a.highlights,
+        "light.shadows" => a.shadows,
+        "light.whites" => a.whites,
+        "light.blacks" => a.blacks,
+        "color.vibrance" => a.vibrance,
+        "color.saturation" => a.saturation,
+        _ => return None,
+    })
+}
+
+/// What Auto finds for photo `id` from its source, its settings and its face regions (regions
+/// on: the subject, background and sky too). Reads only; nothing is written.
+fn auto_values(s: &mut Session, c: &str, id: PhotoId, regions: bool) -> Result<RegionAuto> {
+    let src = s.source_now(id, SourceLevel::Thumb).map_err(|e| bad(c, e))?;
+    let info = s.source_info(id);
+    let d = s.develop_of(id).unwrap_or_default();
+    // cached face regions (a Detect Faces run, or the file's own) meter the key; none = as before
+    let faces = s.catalog.photo(id).map(|ph| super::face_detect::auto_face_boxes(&ph.meta.regions)).unwrap_or_default();
+    let hints = AutoHints { faces: &faces, clipped_share: None };
+    Ok(if regions { region_auto_with(&src, &info, &d, &hints) } else { RegionAuto::global_only(auto_tone_with(&src, &info, &d, &hints)) })
+}
+
+/// Write Auto's result into `d`: the eight global values, and its region masks in place of the
+/// ones Auto made last time (the user's masks stay).
+fn apply_auto(c: &str, d: &mut DevelopSettings, r: &RegionAuto) -> Result<()> {
+    let a = r.global;
+    d.light.exposure = a.exposure;
+    d.light.contrast = a.contrast;
+    d.light.highlights = a.highlights;
+    d.light.shadows = a.shadows;
+    d.light.whites = a.whites;
+    d.light.blacks = a.blacks;
+    d.color.vibrance = a.vibrance;
+    d.color.saturation = a.saturation;
+    d.masks.retain(|m| !is_auto_mask(m));
+    let masks = r.masks_for(&d.masks).ok_or_else(|| bad(c, "no free Auto mask IDs"))?;
+    d.masks.extend(masks);
+    Ok(())
 }
 
 fn section_param(p: &Value, c: &str) -> Result<Section> {
@@ -411,37 +458,11 @@ pub fn specs() -> Vec<CommandSpec> {
             "{regions?: bool (default true: the subject, background and sky get their own masks, \"Auto: …\", replaced on the next run), dryRun?: bool}",
             has_active,
             |s, p| {
-                use lightcraft_pipeline::auto::regions::{RegionAuto, is_auto_mask, region_auto_with};
                 let c = "develop.auto";
                 let id = active(s, c)?;
-                let src = s.source_now(id, SourceLevel::Thumb).map_err(|e| bad(c, e))?;
-                let info = s.source_info(id);
-                let d = s.develop_of(id).unwrap_or_default();
-                // cached face regions (a Detect Faces run, or the file's own) meter the key; none = as before
-                let faces = s.catalog.photo(id).map(|ph| super::face_detect::auto_face_boxes(&ph.meta.regions)).unwrap_or_default();
-                let hints = lightcraft_pipeline::auto::AutoHints { faces: &faces, clipped_share: None };
-                let r = if bool_or(p, "regions", true) {
-                    region_auto_with(&src, &info, &d, &hints)
-                } else {
-                    RegionAuto::global_only(lightcraft_pipeline::auto::auto_tone_with(&src, &info, &d, &hints))
-                };
+                let r = auto_values(s, c, id, bool_or(p, "regions", true))?;
                 if !bool_or(p, "dryRun", false) {
-                    let a = r.global;
-                    let regions = r.regions.clone();
-                    edit(s, c, "Auto", |d| {
-                        d.light.exposure = a.exposure;
-                        d.light.contrast = a.contrast;
-                        d.light.highlights = a.highlights;
-                        d.light.shadows = a.shadows;
-                        d.light.whites = a.whites;
-                        d.light.blacks = a.blacks;
-                        d.color.vibrance = a.vibrance;
-                        d.color.saturation = a.saturation;
-                        d.masks.retain(|m| !is_auto_mask(m));
-                        let masks = RegionAuto { global: a, regions }.masks_for(&d.masks).ok_or_else(|| bad(c, "no free Auto mask IDs"))?;
-                        d.masks.extend(masks);
-                        Ok(())
-                    })?;
+                    edit(s, c, "Auto", |d| apply_auto(c, d, &r))?;
                     if let Some(active) = s.active_mask
                         && !s.develop_of(id).is_some_and(|d| d.masks.iter().any(|m| m.id == active))
                     {
@@ -449,6 +470,27 @@ pub fn specs() -> Vec<CommandSpec> {
                     }
                 }
                 Ok(serde_json::to_value(&r).unwrap_or_default())
+            }
+        ),
+        // One slider at Auto's value (Shift+double-click a slider name); the other settings and masks stay.
+        cmd!(
+            "develop.autoControl",
+            "Auto Slider",
+            [],
+            None,
+            "{control: develop control id (light.exposure, light.contrast, light.highlights, light.shadows, light.whites, light.blacks, color.vibrance or color.saturation)} — set that one slider of the active photo to Auto's value; other settings and masks stay → {control, value}",
+            has_active,
+            |s, p| {
+                let c = "develop.autoControl";
+                let ctl = str_param(p, "control").ok_or_else(|| bad(c, "missing control"))?.to_string();
+                let id = active(s, c)?;
+                let a = auto_values(s, c, id, false)?.global;
+                let value = auto_control_value(&a, &ctl).ok_or_else(|| bad(c, format!("Auto does not set `{ctl}`")))?;
+                let label = format!("Auto {}", controls::find(&ctl).map_or(ctl.as_str(), |spec| spec.label));
+                let mut d = (*s.develop_of(id).unwrap_or_default()).clone();
+                controls::set(&mut d, &ctl, value);
+                s.set_develop(id, d, &label)?;
+                Ok(json!({"control": ctl, "value": value}))
             }
         ),
         // Thin wrappers (Classic ⌘U / ⇧⌘U): the same runs as Auto Settings and White Balance ▸ Auto.

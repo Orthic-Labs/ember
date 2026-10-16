@@ -90,10 +90,26 @@ fn lens_picker(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &DevelopSettings) 
     }
 }
 
+/// The sliders Auto Settings sets; Shift+double-click one of them runs `develop.autoControl` for it.
+const AUTO_SLIDERS: [&str; 8] = [
+    "light.exposure",
+    "light.contrast",
+    "light.highlights",
+    "light.shadows",
+    "light.whites",
+    "light.blacks",
+    "color.vibrance",
+    "color.saturation",
+];
+
 pub(crate) fn control(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &DevelopSettings, id: &str, enabled: bool) {
     let Some(spec) = controls::find(id) else { return };
     let v = controls::get(d, id).unwrap_or(spec.default);
     let out = slider(ui, spec, v, enabled, None);
+    if out.reset && enabled && AUTO_SLIDERS.contains(&id) && ui.input(|i| i.modifiers.shift) {
+        let _ = app.run("develop.autoControl", json!({"control": id}));
+        return;
+    }
     apply_slider_out(app, spec, out, |app, v| app.run("develop.set", json!({"control": id, "value": v})));
 }
 
