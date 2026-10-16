@@ -359,6 +359,24 @@ mod tests {
     }
 
     #[test]
+    fn a_known_position_reads_its_place_and_malformed_positions_are_refused() {
+        let mut s = Session::with_demo();
+        let ids = s.visible_cloned();
+        let dir = dataset("known");
+        // the Paris centre in the test gazetteer
+        set_gps(&mut s, ids[0], Some((48.85341, 2.3488)), "");
+        s.execute("metadata.reverseGeocode", &json!({"ids": [ids[0].0], "dataset": dir})).unwrap();
+        let m = &s.catalog.photo(ids[0]).unwrap().meta;
+        assert_eq!((m.city.as_str(), m.state.as_str(), m.country.as_str()), ("Paris", "Île-de-France", "France"));
+        // malformed coordinates are errors and leave the stored position alone
+        for bad in ["91, 0", "abc", "[200, 0]", "1,2,3,4,5"] {
+            assert!(s.execute("photo.setMeta", &json!({"ids": [ids[0].0], "gps": bad})).is_err(), "{bad} must be refused");
+        }
+        assert!(s.execute("photo.setMeta", &json!({"ids": [ids[0].0], "gps": [200.0, 0.0]})).is_err());
+        assert_eq!(s.catalog.photo(ids[0]).unwrap().meta.gps, Some((48.85341, 2.3488)));
+    }
+
+    #[test]
     fn the_gazetteer_is_cached_until_its_file_changes() {
         let dir = dataset("cache");
         let mut names = PlaceNames::default();
