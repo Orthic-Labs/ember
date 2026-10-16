@@ -94,6 +94,24 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"id": id.0}))
 }
 
+/// `location.setCircle`: `{id, lat?, lon?, radiusM?, name?}` moves the centre, changes the radius or renames the location;
+/// the parts not given stay as they are. One undo step. The Map view uses it when a centre is dragged or a circle edited.
+fn set_circle(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "location.setCircle";
+    let id = location_id(p, C)?;
+    let current = existing(s, id, C)?;
+    let location = SavedLocation {
+        name: if p.get("name").is_some() { name_param(p, C)? } else { current.name.clone() },
+        lat: if p.get("lat").is_some() { f64_req(p, "lat", C)? } else { current.lat },
+        lon: if p.get("lon").is_some() { f64_req(p, "lon", C)? } else { current.lon },
+        radius_m: if p.get("radiusM").is_some() { f64_req(p, "radiusM", C)? } else { current.radius_m },
+        private: current.private,
+    };
+    let (lat, lon, radius_m) = (location.lat, location.lon, location.radius_m);
+    save(s, C, "Edit Saved Location", id, location)?;
+    Ok(json!({"id": id.0, "lat": lat, "lon": lon, "radiusM": radius_m}))
+}
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(query "location.list", "Saved Locations", [], None, "{} → {locations: [{id, name, lat, lon, radiusM, private, photos}]} — saved locations by name; photos = library photos inside the circle", always, list),
@@ -107,6 +125,15 @@ pub fn specs() -> Vec<CommandSpec> {
             add
         ),
         cmd!("location.rename", "Rename Saved Location", [], None, "{id, name} → {id} — renames a saved location; one undo step", always, rename),
+        cmd!(
+            "location.setCircle",
+            "Edit Saved Location",
+            [],
+            None,
+            "{id, lat?, lon?, radiusM?, name?} → {id, lat, lon, radiusM} — moves a saved location's centre, changes its radius or renames it (the parts not given stay); one undo step",
+            always,
+            set_circle
+        ),
         cmd!(
             "location.setPrivate",
             "Set Location Privacy",
@@ -181,6 +208,43 @@ mod tests {
         assert_eq!(list_names(&mut s), vec![("Home".to_string(), 0)]);
         s.undo_step().unwrap();
         assert!(list_names(&mut s).is_empty());
+    }
+
+    #[test]
+    fn a_circle_is_moved_resized_and_renamed_each_as_one_undo_step() {
+        let mut s = Session::with_demo();
+        let id = add_home(&mut s, false);
+        let undo_before = s.undo.len();
+        s.execute("location.setCircle", &json!({"id": id, "lat": 49.0, "lon": 3.0})).unwrap();
+        let moved = s.catalog.saved_location(LocationId(id)).cloned().unwrap();
+        assert_eq!((moved.lat, moved.lon, moved.radius_m, moved.name.as_str()), (49.0, 3.0, 500.0, "Home"));
+        s.execute("location.setCircle", &json!({"id": id, "radiusM": 2000.0, "name": "Flat"})).unwrap();
+        let resized = s.catalog.saved_location(LocationId(id)).cloned().unwrap();
+        assert_eq!((resized.lat, resized.lon, resized.radius_m, resized.name.as_str()), (49.0, 3.0, 2000.0, "Flat"), "the parts not given stay");
+        assert_eq!(s.undo.len(), undo_before + 2, "one step for the move, one for the edit");
+        s.undo_step().unwrap();
+        assert_eq!(s.catalog.saved_location(LocationId(id)).unwrap().radius_m, 500.0);
+        s.undo_step().unwrap();
+        assert_eq!(s.catalog.saved_location(LocationId(id)).unwrap().lat, 43.0, "undo brings the centre back");
+    }
+
+    #[test]
+    fn a_circle_that_makes_no_sense_or_a_location_that_is_not_there_is_refused() {
+        let mut s = Session::with_demo();
+        let id = add_home(&mut s, false);
+        let before = s.catalog.saved_location(LocationId(id)).cloned();
+        let undo_before = s.undo.len();
+        for bad in [
+            json!({"id": id, "radiusM": 0.0}),
+            json!({"id": id, "lat": 95.0}),
+            json!({"id": id, "name": "  "}),
+            json!({"id": 99, "lat": 1.0}),
+            json!({"lat": 1.0}),
+        ] {
+            assert!(s.execute("location.setCircle", &bad).is_err(), "{bad}");
+        }
+        assert_eq!(s.catalog.saved_location(LocationId(id)).cloned(), before);
+        assert_eq!(s.undo.len(), undo_before);
     }
 
     #[test]
