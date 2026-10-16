@@ -187,6 +187,11 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                     if fav {
                         paint(ui.painter(), Rect::from_center_size(pos2(r.right() - 20.0, r.center().y), vec2(12.0, 12.0)), Icon::StarFilled, t.star);
                     }
+                    if pr.is_adaptive() {
+                        // a badge: its masks are computed for each photo the preset is applied to
+                        let badge_x = r.right() - if fav { 36.0 } else { 12.0 };
+                        ui.painter().text(pos2(badge_x, r.center().y), Align2::RIGHT_CENTER, crate::i18n::tr("Adaptive"), t.font(10.0), t.text_dim);
+                    }
                     // resting on a preset previews it in the loupe (no history entry)
                     if resp.hovered()
                         && let Some(s) = look

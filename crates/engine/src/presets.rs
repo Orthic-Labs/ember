@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use lightcraft_develop::Preset;
+use lightcraft_develop::{LocalAdjustments, Mask, MaskComponent, MaskOp, MaskShape, Preset};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -242,6 +242,24 @@ pub struct PresetBytesImport {
 
 fn p(group: &str, id: &str, name: &str, settings: serde_json::Value) -> Preset {
     Preset { id: format!("lc.{id}"), name: name.into(), group: group.into(), settings, favorite: false, builtin: true, auto: false, adaptive: false }
+}
+
+/// An adaptive preset: one semantic mask (`shape`, computed for each photo it is applied to) with `adjust`.
+/// Its settings hold no pixels, so the same preset fits every photo.
+fn adaptive(id: &str, name: &str, mask_name: &str, shape: MaskShape, adjust: LocalAdjustments) -> Preset {
+    let component = MaskComponent { name: None, op: MaskOp::Add, invert: false, shape };
+    let mask = Mask { name: mask_name.into(), components: vec![component], adjust, ..Mask::default() };
+    let masks = serde_json::to_value(vec![mask]).unwrap_or_default();
+    Preset {
+        id: format!("lc.{id}"),
+        name: name.into(),
+        group: "Adaptive".into(),
+        settings: json!({ "masks": masks }),
+        favorite: false,
+        builtin: true,
+        auto: false,
+        adaptive: true,
+    }
 }
 
 pub fn builtin() -> Vec<Preset> {
@@ -494,6 +512,21 @@ pub fn builtin() -> Vec<Preset> {
             "Sepia Tone",
             json!({"treatment": "bw", "grading": {"shadows": {"hue": 32.0, "sat": 22.0, "lum": 0.0}, "highlights": {"hue": 42.0, "sat": 18.0, "lum": 0.0}}, "curve": {"shadows": 10.0}}),
         ),
+        // ---- Adaptive: the mask is computed for each photo it is applied to
+        adaptive(
+            "adaptive-sky",
+            "Adaptive: Sky",
+            "Sky",
+            MaskShape::Sky,
+            LocalAdjustments { exposure: -0.3, dehaze: 15.0, saturation: 10.0, ..LocalAdjustments::default() },
+        ),
+        adaptive(
+            "adaptive-subject",
+            "Adaptive: Subject",
+            "Subject",
+            MaskShape::Subject,
+            LocalAdjustments { exposure: 0.25, contrast: 8.0, ..LocalAdjustments::default() },
+        ),
     ]
 }
 
@@ -614,6 +647,28 @@ mod tests {
             let out = pr.apply(&base, 1.0);
             assert_ne!(out, base, "{} had no effect", pr.id);
         }
+    }
+
+    /// The Adaptive pair is semantic (it stores no pixels), groups under Adaptive, and each application adds its mask
+    /// stamped for the photo it lands on, with the preset's adjustments.
+    #[test]
+    fn adaptive_builtins_are_semantic_and_stamp_each_photo() {
+        use lightcraft_develop::{MaskShape, geometry_stamp};
+        let base = lightcraft_develop::DevelopSettings::default();
+        let all = builtin();
+        for (id, shape, exposure) in [("lc.adaptive-sky", MaskShape::Sky, -0.3), ("lc.adaptive-subject", MaskShape::Subject, 0.25)] {
+            let pr = all.iter().find(|p| p.id == id).expect("the adaptive built-in");
+            assert!(pr.builtin && pr.is_adaptive(), "{id}");
+            assert_eq!(pr.group, "Adaptive");
+            let out = pr.apply(&base, 1.0);
+            let m = out.masks.first().expect("the adaptive mask");
+            assert_eq!(m.components.len(), 1);
+            assert_eq!(m.components[0].shape, shape, "{id}");
+            assert_eq!(m.adjust.exposure, exposure, "{id}: its adjustments");
+            assert_eq!(m.ai_geometry, Some(geometry_stamp(&out)), "{id}: stamped for this photo");
+            assert!(!m.ai_stale(geometry_stamp(&out)), "{id}");
+        }
+        assert!(all.iter().any(|p| p.id == "lc.warm-glow" && !p.is_adaptive()), "ordinary presets are not adaptive");
     }
 
     #[test]
