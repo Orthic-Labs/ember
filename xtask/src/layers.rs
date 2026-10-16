@@ -41,6 +41,7 @@ pub const TABLE: &[(&str, Class)] = &[
     ("fetch", Class::Layer(0)),
     ("denoise-core", Class::Layer(1)),
     ("denoise", Class::Layer(1)),
+    ("denoise-onnx", Class::Layer(2)),
     ("heif", Class::Layer(0)),
     ("raw", Class::Layer(1)),
     ("codecs", Class::Layer(1)),

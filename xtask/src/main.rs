@@ -33,7 +33,7 @@ commands:
   web [--serve [port]] [--dev]
                   build the browser app (apps/lightcraft-web) into <target>/web-site/;
                   --serve serves it on http://127.0.0.1:<port> (default 8080)
-  ci              fmt --check, clippy -D warnings, heif, test, parity refs, layers, assets, wasm (stops at first failure)
+  ci              fmt --check, clippy -D warnings, heif, onnx-accel, test, parity refs, layers, assets, wasm (stops at first failure)
   corpus [--download]
                   show where test corpora live; --download fetches PngSuite and CC0 raw samples (raw.pixls.us) into corpus/ and checks their sha256
   stats [--exact] count tests and lines per crate (--exact: ask the test harness via `-- --list`)
@@ -278,6 +278,31 @@ fn cmd_ci() -> Result<(), String> {
                 let mut c = cargo();
                 c.args(["test", "-p", "lightcraft-engine", "--lib", "--features", "lightcraft-codecs/heif", "heic"]);
                 run(c, "cargo test -p lightcraft-engine --lib --features lightcraft-codecs/heif heic")
+            }),
+        ),
+        (
+            "onnx-accel",
+            Box::new(|| {
+                // the opt-in ONNX Runtime denoise backend is off in the workspace build above. ONNX Runtime itself is loaded at
+                // run time (load-dynamic), so linting and unit-testing it needs no runtime library; the tests that do are #[ignore]
+                let mut c = cargo();
+                c.args([
+                    "clippy",
+                    "-p",
+                    "lightcraft-denoise-onnx",
+                    "-p",
+                    "lightcraft-engine",
+                    "--features",
+                    "lightcraft-denoise-onnx/onnx-accel,lightcraft-engine/onnx-accel",
+                    "--all-targets",
+                    "--",
+                    "-D",
+                    "warnings",
+                ]);
+                run(c, "cargo clippy -p lightcraft-denoise-onnx -p lightcraft-engine --features onnx-accel --all-targets -- -D warnings")?;
+                let mut c = cargo();
+                c.args(["test", "-p", "lightcraft-denoise-onnx", "--features", "onnx-accel"]);
+                run(c, "cargo test -p lightcraft-denoise-onnx --features onnx-accel")
             }),
         ),
         (

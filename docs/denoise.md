@@ -121,6 +121,32 @@ LC_DENOISE_MODEL=<model.onnx> LC_DENOISE_RAW=<corpus/raw> cargo test --release -
 LC_DENOISE_MODEL=<model.onnx> LC_DENOISE_RAW=<corpus/raw> cargo test --release -p lightcraft-engine --features rawnind-model --test denoise_real -- --ignored --nocapture
 ```
 
+## Opt-in ONNX Runtime backend (`onnx-accel`)
+
+An experimental third backend runs the same model file through ONNX Runtime with DirectML (Windows) or CoreML (macOS), for
+the accelerators the wgpu runner does not reach (issue #31). It is **off by default**: the cargo feature `onnx-accel` of
+`lightcraft-engine` (crate `lightcraft-denoise-onnx`, built on RightKit's `rightkit-onnx`) is in no default feature set and the
+desktop app does not enable it. Without the feature the code and behaviour are those of the sections above.
+
+- **Runtime library.** Nothing is bundled. Set `LIGHTCRAFT_ONNXRUNTIME_DIR` to a folder holding `onnxruntime.dll` (Windows, with
+  `DirectML.dll` beside it) or `libonnxruntime.dylib` (macOS). A build with the feature but without the variable does not try
+  the backend (`onnx: {state: "off"}` in the device report); a folder without the library, or a wrong file, is an error that
+  begins "ONNX Runtime not found" or "ONNX Runtime ... could not be loaded", and the CPU and wgpu runners carry on.
+- **Selection.** When the variable is set the backend is set up beside the card on the first photo that may use it: the
+  session is built with the platform accelerator and no CPU fallback inside ONNX Runtime (a failed accelerator is an error),
+  the check tile runs on it and on the CPU, and its answer must be within 2e-3 of the CPU's largest value (`ONNX_AGREE`; the
+  card's `GPU_AGREE` stays 1e-3, because DirectML and CoreML may compute in half precision) or it is not used. It is then
+  timed like the card; a photo runs on it when it beats the CPU at this pace (`auto`) and the card (a tie stays with the card). A
+  tile it gets wrong runs on the CPU and three such tiles stop it, as for the card. A crash during its set-up leaves
+  `onnx-setup.marker` beside the model and keeps it off until the user chooses where denoise runs.
+- **What ran.** The device report gains `onnx: {state, provider, ms, cpuMs, fellBack}`; when a photo runs on it `kind` is `gpu`,
+  `adapter` is `ONNX Runtime (DirectML)` or `(CoreML)` and `backend` is `onnx`. ONNX Runtime may still run unsupported operators
+  on the CPU inside a session; that share is not reported yet (the ORT verbose log shows it).
+- **Measure.** `denoise_backends` times one tile on the CPU, wgpu and ONNX Runtime backends and prints the provider, the worst
+  difference from the CPU (the number the gate uses) and the SNR in dB, for the synthetic model or an installed one:
+  `LIGHTCRAFT_ONNXRUNTIME_DIR=... <release run of the lightcraft-engine example denoise_backends with --features onnx-accel> -- --model <model.onnx> --tile 512 [--onnx-cpu]`.
+  Compare `best ms` with the wgpu row: the plan keeps wgpu unless ONNX Runtime wins by about 1.5x.
+
 ## Another computer's graphics card
 
 A laptop can hand tiles to a desktop with a bigger graphics card over a LAN or a VPN. The server runs the installed,

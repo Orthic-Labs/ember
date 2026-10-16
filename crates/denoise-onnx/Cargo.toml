@@ -1,0 +1,23 @@
+[package]
+name = "lightcraft-denoise-onnx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Ember AI denoise (L2): opt-in tile runner on ONNX Runtime with DirectML / CoreML (feature `onnx-accel`, off by default)"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# The ONNX Runtime backend. Off by default and not enabled by the desktop app: without it this crate holds only the
+# tensor-shape checks. ONNX Runtime itself is never linked or bundled (load-dynamic); see the crate docs.
+onnx-accel = ["dep:rightkit-onnx"]
+
+[dependencies]
+lightcraft-denoise = { workspace = true }
+
+# RightKit's one owner of ONNX Runtime resolution, environment and sessions (wraps ort with load-dynamic, DirectML on
+# Windows, CoreML on Apple). Native only: the web build has no dynamic libraries.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rightkit-onnx = { version = "=0.2.3", default-features = false, features = ["session"], optional = true }

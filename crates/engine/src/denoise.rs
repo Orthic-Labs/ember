@@ -138,6 +138,24 @@ const GPU_SLOW: &str = "setting up the graphics card took longer than";
 #[cfg(feature = "denoise")]
 const GPU_STUCK: &str = "the graphics card is still setting up from before (it took too long)";
 
+#[cfg(all(feature = "onnx-accel", target_arch = "wasm32"))]
+compile_error!("the `onnx-accel` feature loads a native ONNX Runtime library and cannot be built for the web");
+
+/// The file beside a model while ONNX Runtime is set up for it (the same crash guard as [`GPU_SETUP_MARKER`]).
+#[cfg(feature = "onnx-accel")]
+pub(crate) const ONNX_SETUP_MARKER: &str = "onnx-setup.marker";
+/// How far ONNX Runtime's answer on the check tile may be from the CPU's (of the answer's largest value) before it is not
+/// used. Its own constant, because an execution provider may compute in half precision (DirectML, CoreML) where the
+/// wgpu kernels use `f32`, so [`GPU_AGREE`] could reject honest providers. 2e-3 is half a step of an 8-bit output at
+/// full scale: drift under it cannot show in an export, while a provider that returns near zero (a known ONNX
+/// Runtime DirectML fault on static shapes) or garbage is far above it. Provisional until measured on real hardware
+/// with the `denoise_backends` example of this crate.
+#[cfg(feature = "onnx-accel")]
+const ONNX_AGREE: f32 = 2e-3;
+/// Where to find ONNX Runtime; the backend is tried only when this names a folder (`docs/denoise-qualification.md`).
+#[cfg(feature = "onnx-accel")]
+const ONNX_ENV: &str = lightcraft_denoise_onnx::RUNTIME_DIR_ENV;
+
 /// A set-up that may work another time (a crash, the time limit), unlike one the card or the model cannot do.
 #[cfg(feature = "denoise")]
 fn worth_retrying(why: &str) -> bool {
@@ -163,6 +181,31 @@ struct Network {
     remote: Option<RemoteSide>,
     /// Whether this computer's share runs on the card (else the CPU), as chosen for the photo started last.
     local_card: AtomicBool,
+    /// The opt-in ONNX Runtime backend, a third candidate beside the card (`onnx-accel` builds only).
+    #[cfg(feature = "onnx-accel")]
+    onnx: OnnxState,
+}
+
+/// The ONNX Runtime candidate of a [`Network`]: set up and checked against the CPU like the card, and used only where
+/// it beats both the processor and the card.
+#[cfg(feature = "onnx-accel")]
+#[derive(Default)]
+struct OnnxState {
+    /// Whether it is tried at all: `LIGHTCRAFT_ONNXRUNTIME_DIR` names a folder.
+    enabled: bool,
+    /// The set-up, once tried: the runner (`adapter` names the provider), or why not.
+    side: OnceLock<Result<GpuSide, String>>,
+    /// Tiles it got wrong (an error, numbers that are not finite) and the CPU ran.
+    fallbacks: AtomicUsize,
+    /// Whether the photo started last runs on it.
+    chosen: AtomicBool,
+}
+
+#[cfg(feature = "onnx-accel")]
+impl OnnxState {
+    fn from_env() -> OnnxState {
+        OnnxState { enabled: std::env::var_os(ONNX_ENV).is_some_and(|v| !v.is_empty()), ..OnnxState::default() }
+    }
 }
 
 #[cfg(feature = "denoise")]
@@ -376,6 +419,132 @@ fn make_gpu(cpu: &lightcraft_denoise::runtime::CpuRunner, path: &Path, tile: usi
     Ok(GpuSide { adapter: runner.adapter(), runner: Box::new(runner), card_ms, cpu_ms })
 }
 
+/// Set ONNX Runtime up for the model at `path` on this computer's accelerator: the session built (no CPU fallback inside
+/// it), the check tile run on it and on the CPU and compared against [`ONNX_AGREE`], both timed. The runner's
+/// `adapter` is the provider's name.
+#[cfg(feature = "onnx-accel")]
+fn make_onnx(cpu: &lightcraft_denoise::runtime::CpuRunner, path: &Path, tile: usize) -> Result<GpuSide, String> {
+    let input = Arc::new(lightcraft_denoise::runtime::check_tile(tile));
+    let (on_accelerator, model) = (input.clone(), path.to_path_buf());
+    let accelerator = move || -> Result<_, String> {
+        let runner = lightcraft_denoise_onnx::OnnxRunner::load(&model, tile).map_err(|e| e.to_string())?;
+        let got = runner.run(&on_accelerator).map_err(|e| format!("ONNX Runtime could not run the check tile: {e}"))?;
+        let ms = card_tile_ms(&runner, &on_accelerator);
+        Ok((runner, got, ms))
+    };
+    let on_cpu = || {
+        let started = web_time::Instant::now();
+        (cpu.run(&input), started.elapsed().as_secs_f64() * 1000.0)
+    };
+    let ((runner, got, card_ms), (want, cpu_ms)) = set_up_card(&path.with_file_name(ONNX_SETUP_MARKER), GPU_SETUP_LIMIT, accelerator, on_cpu)?;
+    let want = want.map_err(|e| format!("the CPU could not check ONNX Runtime: {e}"))?;
+    let scale = want.iter().fold(0f32, |m, v| m.max(v.abs())).max(1e-12);
+    let worst = want.iter().zip(&got).fold(0f32, |m, (a, b)| m.max((a - b).abs())) / scale;
+    if got.len() != want.len() || !got.iter().all(|v| v.is_finite()) || worst > ONNX_AGREE {
+        return Err(format!(
+            "{}'s answer on the check tile is not the CPU's (off by {worst:.1e} of the largest value): not used",
+            runner.provider_name()
+        ));
+    }
+    Ok(GpuSide { adapter: format!("ONNX Runtime ({})", runner.provider_name()), runner: Box::new(runner), card_ms, cpu_ms })
+}
+
+/// The ONNX Runtime candidate (`onnx-accel` builds).
+#[cfg(feature = "onnx-accel")]
+impl Network {
+    /// ONNX Runtime when it can be used now, else why not. `start` sets it up when that has not been tried yet.
+    fn onnx_side(&self, start: bool) -> Result<&GpuSide, String> {
+        if !self.onnx.enabled {
+            return Err(format!("{ONNX_ENV} is not set"));
+        }
+        let side = if start {
+            Some(self.onnx.side.get_or_init(|| {
+                let made = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| make_onnx(&self.cpu, &self.path, self.tile)))
+                    .unwrap_or_else(|_| Err("ONNX Runtime gave up".into()));
+                match &made {
+                    Ok(g) => log::info!("denoise: ONNX Runtime ready ({}: {:.0} ms a tile, the CPU {:.0} ms)", g.adapter, g.card_ms, g.cpu_ms),
+                    Err(why) => log::info!("denoise: ONNX Runtime is not used ({why})"),
+                }
+                made
+            }))
+        } else {
+            self.onnx.side.get()
+        };
+        match side {
+            None => Err("ONNX Runtime is not set up yet".into()),
+            Some(Err(why)) => Err(why.clone()),
+            Some(Ok(_)) if self.onnx.fallbacks.load(Ordering::Relaxed) >= GPU_MAX_FALLBACKS => {
+                Err(format!("ONNX Runtime got {GPU_MAX_FALLBACKS} tiles wrong"))
+            }
+            Some(Ok(g)) => Ok(g),
+        }
+    }
+
+    /// Decide whether the photo about to start runs on ONNX Runtime, and remember it: it must be set up and agree with the
+    /// CPU, be faster than the CPU at this pace when the setting is `auto` (as [`Network::choose`] asks of the card), and be
+    /// faster than the card when the card is also in use (`card_ms`; a tie stays with the card).
+    fn pick_onnx(&self, run_on: RunOn, threads: usize, card_ms: Option<f64>) -> bool {
+        self.onnx.chosen.store(false, Ordering::Relaxed);
+        if run_on == RunOn::Cpu {
+            return false;
+        }
+        let Ok(g) = self.onnx_side(true) else { return false };
+        if run_on == RunOn::Auto && !card_is_faster(g.card_ms, g.cpu_ms, threads) {
+            return false;
+        }
+        if card_ms.is_some_and(|c| c <= g.card_ms) {
+            return false;
+        }
+        self.onnx.chosen.store(true, Ordering::Relaxed);
+        true
+    }
+
+    /// The time of a tile on ONNX Runtime when the photo started last runs on it.
+    fn onnx_ms(&self) -> Option<f64> {
+        let g = self.onnx.side.get()?.as_ref().ok()?;
+        self.onnx.chosen.load(Ordering::Relaxed).then_some(g.card_ms)
+    }
+
+    fn onnx_fell_back(&self, why: &str) {
+        let n = self.onnx.fallbacks.fetch_add(1, Ordering::Relaxed) + 1;
+        if n == 1 {
+            log::warn!("denoise: a tile came back wrong from ONNX Runtime ({why}); the CPU runs it");
+        } else if n == GPU_MAX_FALLBACKS {
+            log::warn!("denoise: ONNX Runtime got {n} tiles wrong; the CPU does the rest");
+        }
+    }
+
+    /// What the device report says about it: `onnx: {state, ...}`, and `kind: "gpu"`, its provider as the `adapter`, its
+    /// times and `backend: "onnx"` when this photo runs on it.
+    fn describe_onnx(&self, v: &mut Value) {
+        let Some(o) = v.as_object_mut() else { return };
+        let side = if self.onnx.enabled { self.onnx.side.get() } else { None };
+        let chosen = self.onnx.chosen.load(Ordering::Relaxed);
+        let info = match side {
+            _ if !self.onnx.enabled => json!({"state": "off"}),
+            None => json!({"state": "pending"}),
+            Some(Err(why)) => json!({"state": "unavailable", "reason": why}),
+            Some(Ok(g)) => json!({
+                "state": if chosen { "used" } else { "idle" },
+                "provider": g.adapter,
+                "ms": g.card_ms,
+                "cpuMs": g.cpu_ms,
+                "fellBack": self.onnx.fallbacks.load(Ordering::Relaxed),
+            }),
+        };
+        o.insert("onnx".into(), info);
+        if let (Some(Ok(g)), true) = (side, chosen) {
+            o.insert("kind".into(), json!("gpu"));
+            o.insert("adapter".into(), json!(g.adapter));
+            o.insert("backend".into(), json!("onnx"));
+            o.insert("cardMs".into(), json!(g.card_ms));
+            o.insert("cpuMs".into(), json!(g.cpu_ms));
+            o.remove("reason");
+            o.remove("retry");
+        }
+    }
+}
+
 #[cfg(feature = "denoise")]
 impl Network {
     /// The card when it can be used now, else why not. `start` sets it up when that has not been tried yet; without it
@@ -442,6 +611,20 @@ impl TileRunner for Network {
         if !self.local_card.load(Ordering::Relaxed) {
             return self.cpu.run(input);
         }
+        #[cfg(feature = "onnx-accel")]
+        {
+            if self.onnx.chosen.load(Ordering::Relaxed) {
+                // chosen over the card for this photo, so a tile it gets wrong goes to the CPU, as the card's would
+                if let Ok(g) = self.onnx_side(false) {
+                    match g.runner.run(input) {
+                        Ok(out) if out.iter().all(|v| v.is_finite()) => return Ok(out),
+                        Ok(_) => self.onnx_fell_back("numbers that are not finite"),
+                        Err(e) => self.onnx_fell_back(&e.to_string()),
+                    }
+                }
+                return self.cpu.run(input);
+            }
+        }
         if let Ok(g) = self.card(false) {
             match g.runner.run(input) {
                 Ok(out) if out.iter().all(|v| v.is_finite()) => return Ok(out),
@@ -465,6 +648,12 @@ impl Model for Network {
             Ok(_) => (true, threads.min(GPU_PARALLEL)),
             Err(_) => (false, threads),
         };
+        #[cfg(feature = "onnx-accel")]
+        let (card, local) = {
+            let card_ms = if card { self.card(false).ok().map(|g| g.card_ms) } else { None };
+            let onnx = self.pick_onnx(run_on, threads, card_ms);
+            (card || onnx, if onnx { threads.min(GPU_PARALLEL) } else { local })
+        };
         self.local_card.store(card, Ordering::Relaxed);
         if let Some(r) = &self.remote {
             // this computer's time for a tile: the card's, or the CPU's with `threads` tiles sharing it (as
@@ -474,6 +663,8 @@ impl Model for Network {
                 Some(Ok(g)) => g.cpu_ms / (1.0 + 0.5 * threads.saturating_sub(1) as f64),
                 _ => f64::INFINITY,
             };
+            #[cfg(feature = "onnx-accel")]
+            let local_ms = self.onnx_ms().map_or(local_ms, |ms| local_ms.min(ms));
             let share = match (r.usable(true), r.tile_ms()) {
                 (Ok(_), Some(ms)) if ms < local_ms => {
                     *r.slower.lock().unwrap_or_else(PoisonError::into_inner) = None;
@@ -504,6 +695,8 @@ impl Model for Network {
         // the card is set up and checked here, so the test says where the work will run
         if run_on != RunOn::Cpu {
             let _ = self.card(true);
+            #[cfg(feature = "onnx-accel")]
+            let _ = self.onnx_side(true);
         }
         if let Some(o) = v.as_object_mut() {
             o.insert("device".into(), self.device(run_on));
@@ -530,6 +723,8 @@ impl Model for Network {
             o.insert("cpuMs".into(), json!(g.cpu_ms));
             o.insert("fellBack".into(), json!(self.fallbacks.load(Ordering::Relaxed)));
         }
+        #[cfg(feature = "onnx-accel")]
+        self.describe_onnx(&mut v);
         if let (Some(r), Some(o)) = (&self.remote, v.as_object_mut()) {
             o.insert("remote".into(), r.describe());
         }
@@ -571,6 +766,8 @@ fn network(path: &Path, manifest: &DenoiserManifest, remote: Option<RemoteSide>)
         gpu: OnceLock::new(),
         fallbacks: AtomicUsize::new(0),
         last_threads: AtomicUsize::new(0),
+        #[cfg(feature = "onnx-accel")]
+        onnx: OnnxState::from_env(),
     })
 }
 
@@ -740,6 +937,8 @@ pub(crate) fn installed_models(dir: &Path) -> Vec<Installed> {
 pub(crate) fn forget_gpu_set_ups(dir: &Path) {
     for i in installed_models(dir) {
         let _ = std::fs::remove_file(i.onnx.with_file_name(GPU_SETUP_MARKER));
+        #[cfg(feature = "onnx-accel")]
+        let _ = std::fs::remove_file(i.onnx.with_file_name(ONNX_SETUP_MARKER));
     }
 }
 
@@ -1827,6 +2026,8 @@ mod gpu_tests {
             last_threads: AtomicUsize::new(0),
             remote: None,
             local_card: AtomicBool::new(true),
+            #[cfg(feature = "onnx-accel")]
+            onnx: OnnxState::default(),
         };
         let (input, _) = lightcraft_denoise::runtime::test_tile(64);
         let want = cpu.run(&input).unwrap();
@@ -1857,6 +2058,8 @@ mod gpu_tests {
             last_threads: AtomicUsize::new(0),
             remote: None,
             local_card: AtomicBool::new(true),
+            #[cfg(feature = "onnx-accel")]
+            onnx: OnnxState::default(),
         };
         assert_eq!(model.runner(RunOn::Auto, 16).1, 16, "sixteen threads beat it");
         let device = model.device(RunOn::Auto);
