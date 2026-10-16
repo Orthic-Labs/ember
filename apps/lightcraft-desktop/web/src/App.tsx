@@ -48,15 +48,36 @@ function sourceId(snapshot: { source: unknown } | null): string {
   return 'all';
 }
 
-function ShortcutBindings({ commands }: { commands: Command[] }) {
-  useShortcuts(commands.filter((command) => command.chord).map((command) => ({
-    id: command.id,
-    chord: String(command.chord).replace(/Cmd/g, 'mod').replace(/Ctrl/g, 'mod'),
-    label: command.label,
-    group: command.group,
-    run: () => { command.run(); },
-    preventDefault: true,
-  })));
+/** Classic keys for commands the palette already lists (the egui shortcut table has the same ones). Tab is
+ * left to keyboard focus here: hiding panels stays a palette command (`view.panels`). */
+const CLASSIC_CHORDS: Array<{ chord: string; id: string }> = [
+  { chord: 'F1', id: 'app.shortcuts' },
+  { chord: 'F8', id: 'view.rightPanel' },
+];
+
+/** `[` / `]` rate in the library grids and resize the brush elsewhere, as in the egui app. */
+function ShortcutBindings({ commands, gridView }: { commands: Command[]; gridView: boolean }) {
+  const bound = commands.filter((command) => command.chord);
+  const taken = new Set(bound.map((command) => String(command.chord)));
+  const aliases = [
+    ...CLASSIC_CHORDS,
+    { chord: '[', id: gridView ? 'photo.decreaseRating' : 'brush.smaller' },
+    { chord: ']', id: gridView ? 'photo.increaseRating' : 'brush.larger' },
+  ].filter((alias) => !taken.has(alias.chord)).flatMap(({ chord, id }) => {
+    const command = commands.find((candidate) => candidate.id === id);
+    return command ? [{ id: `${id}@${chord}`, chord, label: command.label, group: command.group, run: () => { command.run(); }, preventDefault: true }] : [];
+  });
+  useShortcuts([
+    ...bound.map((command) => ({
+      id: command.id,
+      chord: String(command.chord).replace(/Cmd/g, 'mod').replace(/Ctrl/g, 'mod'),
+      label: command.label,
+      group: command.group,
+      run: () => { command.run(); },
+      preventDefault: true,
+    })),
+    ...aliases,
+  ]);
   return null;
 }
 
@@ -121,7 +142,7 @@ function Workspace() {
     return () => { live = false; };
   }, [native]);
   return <>
-    <ShortcutBindings commands={commands} />
+    <ShortcutBindings commands={commands} gridView={ui.view === 'photoGrid' || ui.view === 'squareGrid'} />
     <AppShell
       groups={navGroups}
       activeId={sourceId(snapshot)}

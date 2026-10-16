@@ -1328,7 +1328,9 @@ impl LightcraftApp {
         }
         // Order matters: earlier panels take the full edge (top bar spans the window; the tool strip,
         // right panels and left panel run to the bottom; the bottom bar sits between them).
-        panels::topbar::show(self, ui);
+        if self.ui.top_bar {
+            panels::topbar::show(self, ui);
+        }
         panels::library_problem::banner(self, ui);
         panels::strip::show(self, ui);
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| docking::show(self, ui));

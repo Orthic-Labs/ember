@@ -221,6 +221,26 @@ fn change_rating(s: &mut Session, p: &Value, delta: i8, label: &str) -> Result<V
     Ok(json!({"changed": n}))
 }
 
+/// Step each target's flag from its own state (unflagged → pick → reject → unflagged); one undo step.
+fn cycle_flag(s: &mut Session, p: &Value) -> Result<Value> {
+    let mut ops = Vec::new();
+    for id in s.targets(p)? {
+        let flag = s.catalog.photo(id).ok_or(lightcraft_catalog::CatalogError::NoPhoto(id))?.flag;
+        let next = match flag {
+            Flag::None => Flag::Pick,
+            Flag::Pick => Flag::Reject,
+            Flag::Reject => Flag::None,
+        };
+        ops.push(Op::SetFlag { id, flag: next });
+    }
+    let n = ops.len();
+    if n > 0 {
+        s.commit("Cycle Flag", Op::Batch { ops })?;
+    }
+    advance_if(s, p);
+    Ok(json!({"changed": n}))
+}
+
 fn advance_if(s: &mut Session, p: &Value) {
     if bool_or(p, "advance", false) {
         let _ = step(s, 1);
@@ -721,6 +741,15 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("photo.unflag", "Unflag", ["Photo", "Set Flag"], Some("U"), "{ids?}", has_selection, |s, p| {
             for_targets(s, p, "Unflag", |id| Some(Op::SetFlag { id, flag: Flag::None }))
         }),
+        cmd!(
+            "photo.cycleFlag",
+            "Cycle Flag",
+            ["Photo", "Set Flag"],
+            None,
+            "{ids?, advance?: bool} — each photo steps from its own flag: unflagged → pick → reject → unflagged (Classic's flag cycle; no default key)",
+            has_selection,
+            cycle_flag
+        ),
         cmd!(
             "photo.label",
             "Set Color Label",

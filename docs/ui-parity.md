@@ -65,11 +65,10 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 | Create Version | ⌘⇧S (+ ⇧M) | ⇧M (Windows: Ctrl+⇧S) | — |
 | Select None | ⌘⇧A (+ ⌘D) | ⌘D | — |
 
-**Library culling (KEYC-RATING):** `0–5`, `6–9` and `P/X/U` reach egui on macOS even when displayed in the native menu (adapted from PR #261; issue #283). `Shift+0–9` applies and advances once; `Shift+P` picks and advances in Photo Grid / Square Grid and retains Presets elsewhere. See [library shortcuts](library-shortcuts.md) for the verified Classic mapping and regression coverage. Remaining Classic gaps: rating `[` / `]`, flag cycling and filter-bar keys.
+**Library culling (KEYC-RATING):** `0–5`, `6–9` and `P/X/U` reach egui on macOS even when displayed in the native menu (adapted from PR #261; issue #283). `Shift+0–9` applies and advances once; `Shift+P` picks and advances in Photo Grid / Square Grid and retains Presets elsewhere. See [library shortcuts](library-shortcuts.md) for the verified Classic mapping and regression coverage. In egui, `[` / `]` rate the grid selection and `\` toggles the filter bar in grids; `photo.cycleFlag` has no key yet. The desktop app has `[` / `]`, Tab, F1 and F8 but not `\`.
 
 **Still missing / broken:**
-- No command yet: F1 help (verify the rest of the old list: full screen, settings, stacks,
-  visualize spots and merges have commands now).
+- F1 opens the keyboard shortcut list; Ember Help has no key. Classic F5 (top bar), F8 (right panel) and Tab (all panels) are in egui. The desktop app has F8 but no top bar, and leaves Tab to keyboard focus (hide-all-panels is the palette command `view.panels`).
 - `H` opens Remove; reference editor also uses it (Classic) to hide pins — pins toggle from View → Show Mask Pins.
 - ⌘M / ⌘H / ⌘Q / ⌘W rely on the platform window defaults (unverified).
 
@@ -78,5 +77,6 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-16 | minor | Shortcuts: F1, Tab, F5, F8 and the grid `\` filter bar added; `[` / `]` grid ratings and `photo.cycleFlag` recorded |
 | 2026-10-11 | minor | Zoom row: Compare and Reference get zoom windows; what remains of LR-VIEW-ZOOM is overlays and soft proofing |
 | 2026-10-10 | major | Created: measured command and shortcut counts, assessment by area, estimates; moved the shortcut conflicts section here from the checklist |

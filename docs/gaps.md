@@ -1,6 +1,6 @@
 # Gaps: where Ember falls short of reference editor
 
-> **Last reviewed:** 2026-10-11 · **Last updated:** 2026-10-15 · **Change:** minor (upstream absorb 2026-10-14: gap 10 at 236 verified models; gap entries 1, 8, 14 and 25 updated)
+> **Last reviewed:** 2026-10-16 · **Last updated:** 2026-10-16 · **Change:** minor (gap 28 shrunk: F1, Tab, F5, F8, `[` `]` and the grid `\` filter bar in egui)
 
 Every known shortfall, one entry each, ranked by user impact (how many reference editor users hit it, and
 how hard it blocks them), then by effort. **Agents pick work from the top** (the first entry nobody is
@@ -46,7 +46,7 @@ numeric tone labels alone do not complete corpus preparation. See [format & comp
 | 25 | **File writes**: lossy DNG; AVIF import; Render to DNG; AVIF a catalog command (the export format landed) (PSD export landed with Edit in PhotoCraft, #953) | file-format-parity.md | interchange edge cases | 19–34 | [file-format-parity](file-format-parity.md) |
 | 26 | **Performance at scale**: 85k-photo library opens in 1.7–4.7 s; 100k grid test pending; colour NR at half resolution landed in code (V3; measure with `LIGHTCRAFT_PROFILE=1`, `nr colour` / `nr_col` stages) | ROADMAP log, gpu-pipeline.md | large-catalog users | 15–30 | [target-app-parity](target-app-parity.md#by-dimension) |
 | 27 | **Windows / Linux runtime coverage**: Windows installer UI unverified on Windows (#79); GPU path proven on Apple only; the Linux riscv64 tarball (new in 0.6.0, #844) is cross-compiled and never run beyond a QEMU smoke test | ROADMAP, issues, `release.yml` | non-Mac users find bugs first | 15–30 | [hardware-parity](hardware-parity.md) |
-| 28 | **Small Classic shortcuts and keys**: rating `[` `]`, flag cycling, filter-bar keys, F1 help, panel keys (Tab, F5–F8) | [ui-parity](ui-parity.md#shortcuts) | Classic muscle memory | 4–8 | [ui-parity](ui-parity.md) |
+| 28 | **Small Classic shortcuts and keys**: flag cycle has no key (`photo.cycleFlag`); desktop app lacks F5 top bar and `\` filter bar; ⇧Tab and T (toolbar) missing | [ui-parity](ui-parity.md#shortcuts) | Classic muscle memory | 4–8 | [ui-parity](ui-parity.md) |
 
 Beta-blocking gaps (B) total **~230–430 h**; with the stability and platform work they need around them,
 **~340–600 h** to beta (incl. 40–80 h for the ~92 open core-path user issues) (see [target-app-parity.md](target-app-parity.md#stage)).

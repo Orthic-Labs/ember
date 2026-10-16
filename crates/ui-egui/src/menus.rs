@@ -73,6 +73,10 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("compare.makeSelect", "Make Candidate the Select", None, "View"),
     ("view.autoAdvance", "Auto Advance", None, "Photo"),
     ("view.filmstrip", "Filmstrip", Some("/"), "View"),
+    // Classic panel keys: F5 top bar, F8 right panel, Tab every panel at once (restored by Tab again)
+    ("view.topPanel", "Top Bar", Some("F5"), "View"),
+    ("view.rightPanel", "Right Panel", Some("F8"), "View"),
+    ("view.panels", "Toggle All Panels", Some("Tab"), "View"),
     ("view.leftPanel", "My Photos Panel", Some("Cmd+Shift+L"), "View"),
     ("view.beforeAfter", "Compare Before and After", Some("Y"), "View"),
     ("view.beforeAfterSplit", "Before/After Split", Some("Shift+Y"), "View"),
@@ -202,7 +206,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("app.openLogFolder", "Open Log Folder", None, "Help"),
     ("app.whatsNew", "What's New", None, "Help"),
     ("dialog.cull", "Assisted Culling…", None, "Photo"),
-    ("app.help", "Ember Help", Some("F1"), "Help"),
+    ("app.help", "Ember Help", None, "Help"),
     ("app.discord", "Ember Community…", None, "Help"),
     ("app.feedback", "Send Feedback…", None, "Help"),
     ("app.website", "Ember Project", None, "Help"),
@@ -677,6 +681,33 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         }
         "view.leftPanel" => {
             app.ui.left_panel = !app.ui.left_panel;
+            Ok(Value::Null)
+        }
+        "view.topPanel" => {
+            app.ui.top_bar = !app.ui.top_bar;
+            Ok(Value::Null)
+        }
+        "view.rightPanel" => {
+            app.ui.right = if app.ui.right == RightPanel::None { RightPanel::Edit } else { RightPanel::None };
+            Ok(Value::Null)
+        }
+        "view.panels" => {
+            // Tab hides the top bar, both side panels and the filmstrip; Tab again puts back what it hid
+            match app.ui.panels_hidden.take() {
+                Some((top, left, filmstrip, right)) => {
+                    app.ui.top_bar = top;
+                    app.ui.left_panel = left;
+                    app.ui.filmstrip = filmstrip;
+                    app.ui.right = right;
+                }
+                None => {
+                    app.ui.panels_hidden = Some((app.ui.top_bar, app.ui.left_panel, app.ui.filmstrip, app.ui.right));
+                    app.ui.top_bar = false;
+                    app.ui.left_panel = false;
+                    app.ui.filmstrip = false;
+                    app.ui.right = RightPanel::None;
+                }
+            }
             Ok(Value::Null)
         }
         "view.beforeAfter" => {

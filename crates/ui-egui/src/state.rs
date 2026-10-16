@@ -490,6 +490,11 @@ pub enum KeywordingView {
     WillExport,
 }
 
+/// Serde default for settings written before the top bar could be hidden: shown.
+fn top_bar_shown() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct UiState {
@@ -516,6 +521,12 @@ pub struct UiState {
     /// Presets column: show a live thumbnail of the photo with each preset.
     pub preset_thumbs: bool,
     pub filmstrip: bool,
+    /// The top bar (workspace switch and title row; F5 shows or hides it).
+    #[serde(default = "top_bar_shown")]
+    pub top_bar: bool,
+    /// Panels Tab hid, as (top bar, left panel, filmstrip, right panel), so Tab again restores them.
+    #[serde(skip)]
+    pub panels_hidden: Option<(bool, bool, bool, RightPanel)>,
     pub zoom: Zoom,
     /// Pan offset of the loupe when zoomed (image-normalized centre).
     pub pan: (f32, f32),
@@ -1053,6 +1064,8 @@ impl Default for UiState {
             presets: false,
             preset_thumbs: false,
             filmstrip: true,
+            top_bar: true,
+            panels_hidden: None,
             zoom: Zoom::Fit,
             pan: (0.5, 0.5),
             click_zoom: 100,

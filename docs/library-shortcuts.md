@@ -28,6 +28,7 @@ step. AutoWrite uses the normal rating metadata path. In Detail, including Maski
 `[` / `]` keep resizing the brush and shifted brackets keep adjusting feather. Saved overrides,
 remapping and disabling the default brush bindings take precedence over their grid bracket actions.
 The separate Decrease Rating / Increase Rating commands can also be assigned in Help → Keyboard Shortcuts.
+`\` toggles the filter bar in Photo Grid and Square Grid (Show Original elsewhere). Flag cycling (`photo.cycleFlag`: unflagged → Pick → Reject → unflagged, one undo step) is a command without a key yet.
 
 Grid actions apply to all selected photos and support Undo / Redo. In Compare and Survey, culling
 actions apply to the active photo. Auto Advance moves forward after an action; holding Shift with

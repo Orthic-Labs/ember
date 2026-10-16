@@ -202,6 +202,8 @@ pub const ALIASES: &[(&str, &str, &str)] = &[
     // Keep existing primary shortcuts and honour custom keymap assignments.
     ("F6", "view.filmstrip", "{}"),
     ("F7", "view.leftPanel", "{}"),
+    // Classic F1 opens the keyboard shortcut list (Ember Help has no key of its own)
+    ("F1", "app.shortcuts", "{}"),
     ("Shift+M", "version.create", "{}"),
     ("Shift+X", "photo.flag", r#"{"flag": "reject", "advance": true}"#),
     ("Shift+Z", "photo.flag", r#"{"flag": "pick", "advance": true}"#),
@@ -293,12 +295,14 @@ fn matches(i: &egui::InputState, m: Modifiers, k: Key) -> bool {
     })
 }
 
-/// Default brackets rate in grids. Remapped brush keys retain their brush action, and a
-/// saved assignment of either bracket to another command takes precedence over this default.
+/// Grid-only meanings of default keys. Brackets rate in grids (Detail keeps resizing the brush), and
+/// `\` toggles the filter bar in grids (Show Original elsewhere). Remapped brush keys retain their
+/// brush action, and a saved assignment of either key to another command takes precedence over this default.
 fn grid_bracket_command(keymap: &Keymap, grid: bool, id: &'static str, shortcut: (Modifiers, Key)) -> Option<&'static str> {
     let command = match (grid, id, shortcut) {
         (true, "brush.smaller", (m, Key::OpenBracket)) if m == Modifiers::NONE => "photo.decreaseRating",
         (true, "brush.larger", (m, Key::CloseBracket)) if m == Modifiers::NONE => "photo.increaseRating",
+        (true, "view.showOriginal", (m, Key::Backslash)) if m == Modifiers::NONE => "view.filterBar",
         _ => return Some(id),
     };
     if keymap.iter().any(|(other, sc)| other != id && find_bindable(other).is_some() && parse(sc) == Some(shortcut)) { None } else { Some(command) }
@@ -709,6 +713,57 @@ mod tests {
             assert_eq!(h.app.session.catalog.photo(PhotoId(1)).unwrap().flag, Flag::None);
             assert_eq!(h.app.session.active(), Some(PhotoId(1)));
         }
+    }
+
+    #[test]
+    fn classic_panel_keys_toggle_top_bar_right_panel_and_all_panels() {
+        use crate::state::RightPanel;
+        let mut h = library();
+        h.app.ui.top_bar = true;
+        h.app.ui.left_panel = true;
+        h.app.ui.filmstrip = true;
+        h.app.ui.right = RightPanel::Edit;
+        key(&mut h, "F5", false);
+        assert!(!h.app.ui.top_bar);
+        key(&mut h, "F5", false);
+        assert!(h.app.ui.top_bar);
+        key(&mut h, "F8", false);
+        assert_eq!(h.app.ui.right, RightPanel::None);
+        key(&mut h, "F8", false);
+        assert_eq!(h.app.ui.right, RightPanel::Edit);
+        key(&mut h, "Tab", false);
+        assert!(!h.app.ui.top_bar && !h.app.ui.left_panel && !h.app.ui.filmstrip);
+        assert_eq!(h.app.ui.right, RightPanel::None);
+        key(&mut h, "Tab", false);
+        assert!(h.app.ui.top_bar && h.app.ui.left_panel && h.app.ui.filmstrip);
+        assert_eq!(h.app.ui.right, RightPanel::Edit);
+        assert!(h.app.ui.panels_hidden.is_none());
+    }
+
+    #[test]
+    fn f1_opens_the_keyboard_shortcut_list() {
+        let mut h = library();
+        key(&mut h, "F1", false);
+        assert!(matches!(h.app.ui.dialog, Some(crate::state::Dialog::Shortcuts)));
+    }
+
+    #[test]
+    fn backslash_toggles_the_filter_bar_in_grids_and_show_original_elsewhere() {
+        use crate::state::{BeforeAfter, ViewMode};
+        let mut h = library();
+        h.app.ui.view = ViewMode::PhotoGrid;
+        let filter = h.app.ui.filter_bar;
+        key(&mut h, "\\", false);
+        assert_eq!(h.app.ui.filter_bar, !filter);
+        assert_eq!(h.app.ui.before_after, BeforeAfter::Off);
+        key(&mut h, "\\", false);
+        assert_eq!(h.app.ui.filter_bar, filter);
+        h.app.ui.view = ViewMode::Detail;
+        key(&mut h, "\\", false);
+        assert_eq!(h.app.ui.before_after, BeforeAfter::Original);
+        assert_eq!(h.app.ui.filter_bar, filter);
+        key(&mut h, "\\", false);
+        assert_eq!(h.app.ui.before_after, BeforeAfter::Off);
     }
 
     #[test]

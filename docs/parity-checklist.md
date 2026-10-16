@@ -724,7 +724,7 @@ From `06-shortcuts.md` part 1. Evidence is our binding; conflicts are explained 
 | KEY-SLIDER-NUDGE | Nudge slider — ↑/↓ | P1 | ✅ | `crates/ui-egui/src/widgets.rs` (`nudged`), `cmd:develop.adjust` | ↑/↓ over any slider: ≈ 1/200 of its range (exposure 0.05, most sliders 1, temperature 50 K); ⇧ ×5; one undo step each |
 | KEY-SLIDER-TYPE | Type a slider value | P1 | ✅ | `crates/ui-egui/src/widgets.rs` (`typed_value`), `crates/ui-egui/src/text_field.rs`, `crates/ui-egui/src/widgets/tests_numeric_entry.rs` (`opening_release_honors_return_and_escape_immediately`), `crates/ui-egui/src/tests_keymap.rs` (`opening_numeric_release_keeps_keys_in_the_editor`) | click the value next to any slider's name and type one (`1.5`, `+0,25`, `-20`, `5600 K`): Return or clicking away applies it on the control's steps and range as one undo step, Esc keeps the old value; issue #322; Return/Escape take effect on the opening release, retaining the stored value on Escape; typing stays in the editor without triggering global shortcuts |
 | KEY-SHORTCUTS | Shortcut list — ⌘/ | P1 | ✅ | `cmd:app.shortcuts` | |
-| KEY-HELP | Help — F1 | P2 | ✅ | `cmd:app.help` | |
+| KEY-HELP | Help — F1 | P2 | ✅ | `cmd:app.shortcuts` | F1 opens the keyboard shortcut list (`ALIASES`, `crates/ui-egui/src/shortcuts.rs`); Ember Help no longer has a key; test `f1_opens_the_keyboard_shortcut_list` |
 | KEY-VIDEO-PLAY | Play/pause video — Space | P1 | ⬜ | | |
 | KEY-ESC | Leave tool / view — Esc | P0 | ✅ | `cmd:view.back`, `crates/ui-egui/src/icons.rs` (`navigation_arrowheads_have_both_halves`), `crates/ui-egui/src/tests_crop_tool.rs` | top-bar navigation arrowheads render both halves at 1× and 2× scale; in the crop tool Esc closes the tool first (the crop stays), the next Esc goes back to the grid; Esc that ends an edit in a text field does nothing else |
 | KEY-COMMIT | Commit tool — Return | P1 | ✅ | `cmd:tool.done` | Return closes Crop / Remove / Red Eye / Masking back to Edit (edits apply live, as in reference editor) |
@@ -818,18 +818,18 @@ From `08-lightroom-classic-extras.md` (Classic-only features) and part 2 of `06-
 | LRC-WEB-IMAGEINFO | Web gallery image info | OOS | 🚫 | | |
 | LRC-WEB-OUTPUT | Web gallery output | OOS | 🚫 | | |
 | LRC-WEB-UPLOAD | Web gallery upload | OOS | 🚫 | | |
-| KEYC-PANELS | Classic panel keys (Tab, ⇧Tab, T, F5–F8, solo) | P2 | ⬜ | | |
+| KEYC-PANELS | Classic panel keys (Tab, ⇧Tab, T, F5–F8, solo) | P2 | 🟡 | `cmd:view.panels`, `cmd:view.topPanel`, `cmd:view.rightPanel`, `cmd:view.filmstrip`, `cmd:view.leftPanel` | egui: Tab hides/restores top bar, both side panels and filmstrip; F5 top bar; F8 right panel; F6 / F7 filmstrip and left panel (test `classic_panel_keys_toggle_top_bar_right_panel_and_all_panels`). Desktop: Tab, F8, F6 / F7 (no top bar, so F5 is not wired there). Missing: ⇧Tab (side panels only), T (toolbar), solo |
 | KEYC-MODULES | Classic module switching (⌘⌥1–7) | P2 | 🚫 | | no modules in Ember |
 | KEYC-VIEWS | Classic view keys (E, G, C, N, L, F, I, ⇧R, ⌘⌥0) | P2 | 🟡 | `cmd:view.photoGrid`, `cmd:view.zoom100` | G works; E opens Edit (not loupe); no compare/survey/lights-out/screen modes |
 | KEYC-SECONDWINDOW | Classic secondary-window keys | P2 | ⬜ | | |
 | KEYC-CATALOG | Classic photo/catalog keys (⇧⌘I, ⌘', ⌘R, F2, ⌫, ⇧⌘E…) | P2 | ✅ | `cmd:library.import`, `cmd:photo.delete`, `cmd:photo.virtualCopy`, `cmd:app.showInFinder`, `cmd:dialog.rename`, `cmd:photo.editInExternal` | ⇧⌘I add, ⌘' virtual copy, ⌘R show in Finder, F2 rename, ⌫ delete, ⇧⌘E external editor |
 | KEYC-COMPARE | Classic grid/compare keys (Z, Home/End, =/−, ⌘⇧D, S…) | P2 | 🟡 | `cmd:view.zoomToggle` | Z toggles zoom; no compare, stacks, thumbnail-size keys |
-| KEYC-RATING | Classic rating/flag keys (1–5, ⇧1–5, 6–9, P, X, U, ⇧X, ⇧U, `[` `]`, \`) | P2 | 🟡 | `cmd:photo.rate`, `cmd:photo.pick`, `cmd:photo.flag` | 0–5 / Shift+0–5 and 6–9 / Shift+6–9; P/X/U, Shift+X/U and grid Shift+P work; tests cover batch/undo, active Compare candidate and text focus. Missing: Shift+P outside grids (Presets), rating `[` / `]`, flag cycle and filter-bar keys |
+| KEYC-RATING | Classic rating/flag keys (1–5, ⇧1–5, 6–9, P, X, U, ⇧X, ⇧U, `[` `]`, \`) | P2 | 🟡 | `cmd:photo.rate`, `cmd:photo.pick`, `cmd:photo.flag`, `cmd:photo.decreaseRating`, `cmd:photo.increaseRating`, `cmd:view.filterBar`, `cmd:photo.cycleFlag` | 0–5 / Shift+0–5 and 6–9 / Shift+6–9; P/X/U, Shift+X/U and grid Shift+P work; tests cover batch/undo, active Compare candidate and text focus. `[` / `]` rate the grid selection (egui; tests in `shortcuts/tests_relative_ratings.rs`), `\` toggles the filter bar in grids (egui, test `backslash_toggles_the_filter_bar_in_grids_and_show_original_elsewhere`), `cmd:photo.cycleFlag` (engine test `cycle_flag_steps_each_photo_from_its_own_flag_in_one_history_step`) has no key yet. Missing: a flag-cycle key (Classic key unverified), `[` / `]` and `\` on the desktop app; Shift+P outside grids is Presets by design |
 | KEYC-COLLECTIONS | Classic collection keys (⌘N, B…) | P2 | 🟡 | `cmd:dialog.newAlbum` | ⌘N new album; no quick collection |
 | KEYC-METADATA | Classic keyword/metadata keys (⌘K, ⌘S, ⌘⌥⇧C/V…) | P2 | 🟡 | `cmd:photo.saveMetadataToFile` | ⌘S saves metadata; no keyword sets, metadata copy/paste |
 | KEYC-DEVELOP | Classic develop keys (V, ⌘U, ⇧⌘U, R, Q, K, M, ⇧M, ⇧W, ⇧J, ⇧Q…) | P2 | 🟡 | `cmd:develop.treatment`, `cmd:develop.reset`, `cmd:crop.reset` | V, ⇧⌘R, ⌥⌘R, W, J, Y, ⇧Y, \ match; R/K/M/⇧M differ; no Classic keymap layer |
 | KEYC-MODULE-OUTPUT | Book / slideshow / print / map / web keys | P2 | ⬜ | | modules not implemented |
-| KEYC-HELP | Classic help keys (⌘/, F1) | P2 | 🟡 | `cmd:app.shortcuts` | ⌘/ only |
+| KEYC-HELP | Classic help keys (⌘/, F1) | P2 | ✅ | `cmd:app.shortcuts` | ⌘/ and F1 both open the shortcut list |
 
 ### Japanese text watermarks
 
@@ -866,6 +866,7 @@ Latin stays upright. Advanced Japanese composition remains open. Regression cove
 | 2026-10-11 | minor | LR-IMP-FORMATS: EOS R6 Mark III CR3 opens with its as-shot white balance and black level (`ColorData` version 66); status unchanged (🟡) |
 | 2026-10-11 | minor | LR-MERGE-HDR: HDR and panorama merges of raws without colour matrices (CR2, NEF, ARW…) write the colour they open with as DNG tags (upstream issue #965); status unchanged |
 | 2026-10-11 | minor | KEY-SLIDER-TYPE: honor immediate Return/Escape and keep typed keys in the value editor; add regression references |
+| 2026-10-16 | minor | KEY-HELP / KEYC-HELP: F1 opens the shortcut list (Ember Help lost its key); KEYC-PANELS partial (Tab, F5, F8); KEYC-RATING: `[` `]`, `\` filter bar in grids, `photo.cycleFlag` added without a key |
 | 2026-10-11 | minor | LR-PROF-CAMERACOLOR: raws with a black-and-white camera JPEG take its tone curve (issue #577) |
 | 2026-10-11 | minor | LR-VIEW-ZOOM and LR-VIEW-COMPARE: Compare and Reference are sharp at 1:1 (zoom windows per pane, two originals kept decoded while they are open); statuses unchanged |
 | 2026-10-11 | minor | LR-IMP-FORMATS and LR-IMP-CAMERA-COVERAGE: EOS R5 Mark II CR3 decodes from sensor data (57% of its C-RAW files opened as a preview: QP-map escape); status unchanged (🟡) |

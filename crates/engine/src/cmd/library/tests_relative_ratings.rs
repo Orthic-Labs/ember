@@ -1,5 +1,5 @@
 //! Relative ratings dispatch through the real engine, including history and AutoWrite.
-use lightcraft_catalog::{Op, Photo, PhotoId, Source};
+use lightcraft_catalog::{Flag, Op, Photo, PhotoId, Source};
 use serde_json::json;
 
 use crate::{Result, Selection, Session};
@@ -22,6 +22,12 @@ fn session() -> Result<Session> {
     s.execute("library.sort", &json!({"key": "fileName", "ascending": true}))?;
     s.execute("library.select", &json!({"ids": [1, 2, 3], "active": 2}))?;
     Ok(s)
+}
+
+fn flags(s: &Session) -> Result<Vec<Flag>> {
+    (1..=4)
+        .map(|id| s.catalog.photo(PhotoId(id)).map(|p| p.flag).ok_or_else(|| lightcraft_catalog::CatalogError::NoPhoto(PhotoId(id)).into()))
+        .collect()
 }
 
 fn ratings(s: &Session) -> Result<Vec<u8>> {
@@ -99,4 +105,22 @@ fn relative_ratings_and_history_use_auto_write() {
     s.execute("photo.decreaseRating", &json!({})).unwrap();
     assert!(std::fs::read_to_string(dir.join("3.xmp")).unwrap().contains("<xmp:Rating>4</xmp:Rating>"));
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn cycle_flag_steps_each_photo_from_its_own_flag_in_one_history_step() {
+    let mut s = session().unwrap();
+    s.execute("photo.reject", &json!({"ids": [4]})).unwrap();
+    let undo = s.undo.len();
+    assert_eq!(s.execute("photo.cycleFlag", &json!({})).unwrap()["changed"], 3);
+    assert_eq!(flags(&s).unwrap(), [Flag::Pick, Flag::Pick, Flag::Pick, Flag::Reject]);
+    assert_eq!(s.undo.len(), undo + 1);
+    assert_eq!(s.execute("photo.cycleFlag", &json!({})).unwrap()["changed"], 3);
+    assert_eq!(flags(&s).unwrap(), [Flag::Reject, Flag::Reject, Flag::Reject, Flag::Reject]);
+    assert_eq!(s.execute("photo.cycleFlag", &json!({})).unwrap()["changed"], 3);
+    assert_eq!(flags(&s).unwrap(), [Flag::None, Flag::None, Flag::None, Flag::Reject]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(flags(&s).unwrap(), [Flag::Reject, Flag::Reject, Flag::Reject, Flag::Reject]);
+    assert!(s.execute("photo.cycleFlag", &json!({"ids": [1, 999]})).is_err());
+    assert_eq!(flags(&s).unwrap(), [Flag::Reject, Flag::Reject, Flag::Reject, Flag::Reject]);
 }
