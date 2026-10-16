@@ -342,6 +342,11 @@ fn sample_low(low: &[f32], lw: usize, lh: usize, k: usize, x: usize, y: usize) -
 /// membrane fill when the box holds no whole patch to copy from. A box over [`MAX_FILL_PIXELS`] is
 /// completed reduced and scaled back up (only the hole's pixels are written).
 fn fill_box(src: &mut [[f32; 3]], tgt: &[[f32; 3]], alpha: &[f32], bw: usize, bh: usize, seed: u64) {
+    fill_box_within(src, tgt, alpha, bw, bh, seed, MAX_FILL_PIXELS);
+}
+
+/// [`fill_box`] with the pixel budget given (a test passes a small one to reach the reduced path on a small box).
+fn fill_box_within(src: &mut [[f32; 3]], tgt: &[[f32; 3]], alpha: &[f32], bw: usize, bh: usize, seed: u64, max_pixels: usize) {
     let hole: Vec<bool> = alpha.iter().map(|a| *a > 0.0).collect();
     let flat: Vec<f32> = tgt.iter().flatten().copied().collect();
     let params = lightcraft_inpaint::CompleteParams { seed, ..Default::default() };
@@ -349,14 +354,14 @@ fn fill_box(src: &mut [[f32; 3]], tgt: &[[f32; 3]], alpha: &[f32], bw: usize, bh
         lightcraft_inpaint::complete(w, h, 3, img, hole, &params).unwrap_or_else(|| lightcraft_inpaint::membrane_fill(w, h, 3, img, hole))
     };
     let area = bw.saturating_mul(bh);
-    if area <= MAX_FILL_PIXELS {
+    if area <= max_pixels {
         let out = run(&flat, &hole, bw, bh);
         for (d, v) in src.iter_mut().zip(out.as_chunks::<3>().0) {
             *d = *v;
         }
         return;
     }
-    let k = ((area as f64 / MAX_FILL_PIXELS as f64).sqrt().ceil() as usize).max(2);
+    let k = ((area as f64 / max_pixels.max(1) as f64).sqrt().ceil() as usize).max(2);
     let (low, lhole, lw, lh) = reduce_box(&flat, &hole, bw, bh, k);
     let out = run(&low, &lhole, lw, lh);
     for y in 0..bh {
@@ -695,13 +700,16 @@ mod tests {
 
     #[test]
     fn remove_with_a_chosen_source_still_heals_from_it() {
-        // a source offset set: the spot copies from there (here a bright area), not a fill from its surroundings
-        let mut img = Rgb32f::from_fn(100, 100, |x, _| if x < 50 { [0.1; 3] } else { [0.9; 3] });
+        // a source offset set: the spot heals from there, so it takes the source's detail (here fine stripes) and keeps
+        // the target's tone; a fill from the flat surroundings would stay a flat 0.1 (heal never copies the source's tone)
+        let mut img = Rgb32f::from_fn(100, 100, |x, _| if x < 50 { [0.1; 3] } else if x % 2 == 0 { [0.9; 3] } else { [0.5; 3] });
         let frame = Frame::new(100, 100, &DevelopSettings::default(), true);
         let spot =
             Spot { source_offset: Some(Point::new(0.5, 0.0)), feather: 0.0, size: 0.05, points: vec![Point::new(0.25, 0.5)], ..Default::default() };
         apply(&mut img, &[spot], &frame, frame.px_per_long(100));
-        assert!(img.get(25, 50)[0] > 0.3, "{:?}", img.get(25, 50));
+        let row: Vec<f32> = (22..28).map(|x| img.get(x, 50)[0]).collect();
+        let (lo, hi) = row.iter().fold((f32::MAX, f32::MIN), |(lo, hi), v| (lo.min(*v), hi.max(*v)));
+        assert!(hi - lo > 0.15, "the source's stripes are healed in: {row:?}");
     }
 
     #[test]
@@ -724,26 +732,17 @@ mod tests {
 
     #[test]
     fn a_box_over_the_pixel_budget_is_filled_reduced_and_stays_bounded() {
-        // a stroke whose box is over MAX_FILL_PIXELS: filled through the reduced path, every hole pixel written and finite
-        let (w, h) = (1800, 1000);
-        let mut img = Rgb32f::from_fn(w, h, |x, y| [checker(x, y, 8); 3]);
-        let frame = Frame::new(w, h, &DevelopSettings::default(), true);
-        let spot = Spot {
-            mode: SpotMode::Remove,
-            points: vec![Point::new(0.3, 0.5), Point::new(0.7, 0.5)],
-            size: 0.05,
-            feather: 0.0,
-            source_offset: None,
-            ..Default::default()
-        };
-        for y in 450..550 {
-            for x in 540..1260 {
-                img.set(x, y, [0.0; 3]);
-            }
+        // a box over the budget is completed reduced (k = 3 here): every hole pixel is written, finite and texture-valued
+        let (bw, bh) = (120, 80);
+        let in_hole = |x: usize, y: usize| (40..80).contains(&x) && (25..55).contains(&y);
+        let tgt: Vec<[f32; 3]> = (0..bw * bh).map(|i| if in_hole(i % bw, i / bw) { [0.0; 3] } else { [checker(i % bw, i / bw, 4); 3] }).collect();
+        let alpha: Vec<f32> = (0..bw * bh).map(|i| if in_hole(i % bw, i / bw) { 1.0 } else { 0.0 }).collect();
+        let mut src = vec![[0.0f32; 3]; bw * bh];
+        fill_box_within(&mut src, &tgt, &alpha, bw, bh, 7, 2_000);
+        for i in (0..bw * bh).filter(|i| in_hole(i % bw, i / bw)) {
+            assert!(src[i].iter().all(|v| v.is_finite()), "pixel {i}: {:?}", src[i]);
+            assert!(src[i][0] > 0.1 && src[i][0] < 0.8, "the hole is filled at pixel {i}: {:?}", src[i]);
         }
-        apply(&mut img, &[spot], &frame, frame.px_per_long(w));
-        assert!(img.data.iter().flatten().all(|v| v.is_finite()));
-        assert!(img.get(900, 500)[0] > 0.05, "the stroke is filled: {:?}", img.get(900, 500));
     }
 
     #[test]
