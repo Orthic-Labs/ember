@@ -16,7 +16,9 @@ use std::sync::{Arc, Weak};
 use lightcraft_engine::auto_measure::{AutoInput, AutoKind, AutoMeasured, measure_kind, with_lens_pick};
 use lightcraft_engine::catalog::Source;
 use lightcraft_engine::develop::{DevelopSettings, EmbeddedLens};
-use lightcraft_engine::export::{ExportOptions, Exported, RenderParts, encode_gain_map_jpeg, encode_rendered};
+use lightcraft_engine::export::{
+    ExportOptions, Exported, FileParts, FileSpec, RenderParts, dng_preview, encode_gain_map_jpeg, encode_rendered, export_file,
+};
 use lightcraft_engine::media::{DecodedSource, MediaCache, RenderJob, SourceLevel, SourceRef};
 use lightcraft_engine::pipeline::auto::FaceBox;
 use lightcraft_engine::pipeline::{OutputDepth, OutputSpace, Quality, RenderRequest, Rendered, SourceInfo, StageCache};
@@ -160,16 +162,17 @@ pub struct WireExport {
 
 impl WireExport {
     /// The export of a prepared photo, or why a worker can't do it and the main thread must: a
-    /// Denoise edit (its picture is made from the file's raw data in the main instance) or a
     /// source that isn't the photo's own file or demo scene.
+    ///
+    /// A Denoise edit is not a reason: its picture is the AI-denoised one, which exists only where the
+    /// engine has a denoise model and a library on disk to keep it in, and the browser has neither (the
+    /// web build has no `denoise` feature and its session installs no denoise loader), so there the
+    /// edit has nothing to mix in and the photo renders from its plain picture, in a worker as on the
+    /// main thread. A job whose source carries a denoised picture (a native session) stays refused
+    /// below: a worker could not read it.
     pub fn from_parts(parts: &RenderParts<'_>, file_name: &str) -> Result<WireExport, &'static str> {
         let job = parts.job;
-        if job.settings.denoise_amount() > 0.0 {
-            return Err("the photo has a Denoise edit");
-        }
-        if matches!(job.source, SourceRef::Smart { .. } | SourceRef::File { denoise: Some(_), .. }) {
-            return Err("the photo is rendered from a smart preview or a denoised picture");
-        }
+        refuse_unsendable(&job.source)?;
         let mut wire = WireJob::from_job(job, false, "");
         wire.stages = None;
         Ok(WireExport {
@@ -198,6 +201,50 @@ impl WireExport {
 
     fn request(&self, depth: OutputDepth) -> RenderRequest {
         RenderRequest { space: self.space, depth, ..self.job.request() }
+    }
+}
+
+/// Why a worker can't make a job from `source`: a smart preview (not in a worker's reach) or a
+/// denoised picture (made by the engine's model in the instance that owns the library).
+fn refuse_unsendable(source: &SourceRef) -> Result<(), &'static str> {
+    match source {
+        SourceRef::Smart { .. } | SourceRef::File { denoise: Some(_), .. } => Err("the photo is rendered from a smart preview or a denoised picture"),
+        _ => Ok(()),
+    }
+}
+
+/// One photo's Original copy or DNG export for a worker (#192): what the engine does with the file's
+/// bytes ([`FileSpec`]) and, for a DNG, the render of its embedded preview. The worker reads the
+/// original from storage itself, makes the file and sends it back with its XMP sidecar; where it goes
+/// stays with the main thread's batch.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WireFileExport {
+    pub spec: FileSpec,
+    /// The edited photo for a DNG's embedded preview (sRGB, 8-bit, sized for it).
+    #[serde(default)]
+    pub preview: Option<WireJob>,
+    /// The file's name in the batch (the main thread places it).
+    pub file_name: String,
+}
+
+impl WireFileExport {
+    /// The export of a prepared original copy or DNG, or why the main thread must make it.
+    pub fn from_parts(parts: &FileParts<'_>, file_name: &str) -> Result<WireFileExport, &'static str> {
+        let preview = match parts.preview {
+            Some(job) => {
+                refuse_unsendable(&job.source)?;
+                let mut wire = WireJob::from_job(job, false, "");
+                wire.stages = None;
+                Some(wire)
+            }
+            None => None,
+        };
+        Ok(WireFileExport { spec: parts.spec.clone(), preview, file_name: file_name.to_string() })
+    }
+
+    /// The hash of the original a worker reads from storage, if the photo is a stored file.
+    pub fn original_hash(&self) -> Option<String> {
+        hash_of_path(&self.spec.path).map(str::to_string)
     }
 }
 
@@ -348,20 +395,36 @@ impl WorkerCore {
 }
 
 impl WorkerCore {
-    /// Run one export: decode the original (`original` holds the file's bytes for a stored file),
-    /// render at the output size and encode. The source is decoded for this export only: a
-    /// full-size one would push the previews' decoded sources out of the cache.
-    pub fn export(&mut self, x: &WireExport, original: Option<&[u8]>) -> Result<Exported, String> {
-        let job = &x.job;
-        let src = match (&job.origin, original) {
+    /// The source an export decodes: from `original` (the file's bytes, for a stored file) or the
+    /// demo scene, for this export only: a full-size one would push the previews' decoded sources
+    /// out of the cache.
+    fn decode_for_export(&mut self, job: &WireJob, original: Option<&[u8]>) -> Result<DecodedSource, String> {
+        match (&job.origin, original) {
             (Source::File { .. }, Some(bytes)) => {
                 let (image, info) = lightcraft_engine::files::load_bytes(bytes, job.max_edge)?;
-                DecodedSource::new(Arc::new(image), Some(info))
+                Ok(DecodedSource::new(Arc::new(image), Some(info)))
             }
-            (Source::File { path }, None) => return Err(format!("{path}: original not found in browser storage")),
-            (origin @ Source::Demo { .. }, _) => self.media.origin_ref(origin, job.max_edge).load_source()?,
-        };
-        let info = src.info_or(job.info());
+            (Source::File { path }, None) => Err(format!("{path}: original not found in browser storage")),
+            (origin @ Source::Demo { .. }, _) => self.media.origin_ref(origin, job.max_edge).load_source(),
+        }
+    }
+
+    /// What an export develops with: the decoder's facts, and the lens the user picked in place of the
+    /// file's own (as the engine's render job does).
+    fn export_info(src: &DecodedSource, job: &WireJob) -> SourceInfo {
+        let mut info = src.info_or(job.info());
+        if job.settings.lens_override.is_some() {
+            info.lens = job.lens;
+        }
+        info
+    }
+
+    /// Run one export: decode the original (`original` holds the file's bytes for a stored file),
+    /// render at the output size and encode.
+    pub fn export(&mut self, x: &WireExport, original: Option<&[u8]>) -> Result<Exported, String> {
+        let job = &x.job;
+        let src = self.decode_for_export(job, original)?;
+        let info = Self::export_info(&src, job);
         let rendered = lightcraft_engine::pipeline::render(&src.image, &info, &job.settings, &x.request(x.depth));
         let bytes = if x.hdr {
             let hdr = lightcraft_engine::pipeline::render(&src.image, &info, &job.settings, &x.request(OutputDepth::F32Hdr));
@@ -378,6 +441,26 @@ impl WorkerCore {
             sidecars: Vec::new(),
             gpu_fallback: None,
         })
+    }
+
+    /// Run one Original copy or DNG export from the file's bytes (`original`; none: the worker could
+    /// not read it). The engine's own [`export_file`] does the work, so the file is the one
+    /// `PreparedExport::run` makes; a DNG's embedded preview is rendered here from the same bytes.
+    pub fn export_file(&mut self, x: &WireFileExport, original: Option<Vec<u8>>) -> Result<Exported, String> {
+        let bytes = original.ok_or_else(|| format!("{}: original not found in browser storage", x.spec.path))?;
+        // Rendered before the raw data is decoded, but only reported where the engine would have
+        // rendered it, so a file that is no raw photo fails the way it does everywhere else.
+        let preview = match (&x.preview, x.spec.dng.is_some()) {
+            (Some(job), true) => Some(self.render_preview(job, &bytes).map_err(|e| format!("{}: preview: {e}", x.spec.label))),
+            _ => None,
+        };
+        export_file(x.file_name.clone(), bytes, x.spec.clone(), move || preview.map(|r| r.and_then(dng_preview)).transpose())
+    }
+
+    fn render_preview(&mut self, job: &WireJob, bytes: &[u8]) -> Result<Rendered, String> {
+        let src = self.decode_for_export(job, Some(bytes))?;
+        let info = Self::export_info(&src, job);
+        Ok(lightcraft_engine::pipeline::render(&src.image, &info, &job.settings, &job.request()))
     }
 }
 
@@ -775,20 +858,158 @@ mod tests {
     // what a worker can't do stays on the main thread
     #[test]
     fn exports_a_worker_cannot_run_stay_on_the_main_thread() {
-        // an original copy or a DNG only reads the file
+        use lightcraft_engine::media::{DenoiseSpec, PairLoader};
+        // an original copy or a DNG needs a file: a demo photo has none, an error before any job exists
         let copy = ExportOptions { format: lightcraft_engine::export::ExportFormat::Original, ..Default::default() };
         let mut s = Session::with_demo();
         let id = s.visible_cloned()[0];
-        // (a demo photo has no file to copy: that is an error before any job exists)
         assert!(lightcraft_engine::export::prepare_export(&mut s, id, &copy, 1).is_err());
-        // a Denoise edit is made from the raw data in the main instance
+        // a photo whose source carries the engine's denoised picture (a native session) is made where the
+        // library and the model are
         let (_s, item) = prepared(&ExportOptions::default());
-        let mut parts_job = item.render_parts().unwrap().job.clone();
-        let mut settings = (*parts_job.settings).clone();
-        settings.enhance.denoise = 50.0;
-        parts_job.settings = Arc::new(settings);
-        let parts = RenderParts { job: &parts_job, hdr_job: None, meta: None, opts: &ExportOptions::default() };
+        let mut job = item.render_parts().unwrap().job.clone();
+        let pair: PairLoader = Arc::new(|_, _, _| Err("no model in a worker".into()));
+        let spec = DenoiseSpec { product: Default::default(), key: "k".into(), make: None };
+        job.source = SourceRef::File { path: "a.dng".into(), max_edge: 64, loader: None, fallback: None, denoise: Some((spec, pair)) };
+        let parts = RenderParts { job: &job, hdr_job: None, meta: None, opts: &ExportOptions::default() };
         assert!(WireExport::from_parts(&parts, "a.jpg").is_err());
+        // so is a smart preview standing in for a missing original
+        job.source = SourceRef::Smart { path: "a.smart".into() };
+        let parts = RenderParts { job: &job, hdr_job: None, meta: None, opts: &ExportOptions::default() };
+        assert!(WireExport::from_parts(&parts, "a.jpg").is_err());
+    }
+
+    /// A session set up as the web's is, with one stored original: its bytes come from memory by path,
+    /// for the decoder and for the original copy and DNG exports.
+    fn stored_photo(name: &str, bytes: &[u8]) -> (Session, lightcraft_engine::catalog::PhotoId) {
+        // the worker renders on the CPU; so must the session, or a GPU's output differs in the last bits
+        lightcraft_engine::gpu::set_enabled(false);
+        let store = crate::store::Originals::default();
+        let mut s = Session::new();
+        store.install(&mut s);
+        let reader = store.clone();
+        s.media.file_bytes = Some(Arc::new(move |path: &str| reader.get(path).map(|b| b.to_vec()).ok_or_else(|| format!("{path}: not loaded"))));
+        let path = store.added(name, &crate::store::content_hash(bytes), bytes.to_vec().into());
+        let r = s.execute("library.import", &serde_json::json!({"paths": [path]})).unwrap();
+        let id = lightcraft_engine::catalog::PhotoId(r["imported"][0].as_u64().unwrap());
+        s.execute("library.select", &serde_json::json!({"ids": [id.0]})).unwrap();
+        s.execute("develop.set", &serde_json::json!({"control": "light.exposure", "value": 0.7})).unwrap();
+        (s, id)
+    }
+
+    /// A small Bayer DNG from the engine's own writer, standing in for a camera file.
+    fn dng_bytes() -> Vec<u8> {
+        use lightcraft_raw::*;
+        let (w, h) = (32usize, 24usize);
+        let data: Vec<u16> = (0..w * h).map(|i| 256 + ((i % w) * 300 + (i / w) * 200) as u16).collect();
+        let raw = RawImage {
+            format: RawFormat::Dng,
+            width: w,
+            height: h,
+            cpp: 1,
+            data: RawData::U16(data),
+            cfa: Cfa::bayer("RGGB"),
+            bits: 14,
+            black: BlackLevel::uniform(256.0),
+            white: vec![16000.0],
+            active_area: Rect::new(0, 0, w, h),
+            crop: Rect::new(0, 0, w, h),
+            orientation: Orientation::Normal,
+            color: ColorData {
+                illuminant: [17, 21],
+                color_matrix: [
+                    Some(Mat3([[0.9, 0.2, -0.15], [-0.3, 1.25, 0.08], [0.02, -0.12, 0.85]])),
+                    Some(Mat3([[0.7, 0.3, -0.1], [-0.35, 1.3, 0.1], [0.05, -0.2, 1.0]])),
+                ],
+                as_shot_neutral: Some([0.5, 1.0, 0.7]),
+                ..Default::default()
+            },
+            wb_multipliers: None,
+            linearized: false,
+            opcodes: OpcodeLists::default(),
+            metadata: Default::default(),
+        };
+        write_dng(&raw, &DngWriteOptions::default()).unwrap()
+    }
+
+    /// A file-export job as the worker gets it: through JSON.
+    fn file_job(item: &lightcraft_engine::export::PreparedExport) -> WireFileExport {
+        let wire = WireFileExport::from_parts(&item.file_parts().unwrap(), &item.file_name).unwrap();
+        serde_json::from_str(&serde_json::to_string(&wire).unwrap()).unwrap()
+    }
+
+    fn assert_same_file(remote: &Exported, local: &Exported) {
+        assert_eq!(remote.file_name, local.file_name);
+        assert_eq!((remote.width, remote.height), (local.width, local.height));
+        assert_eq!(remote.sidecars, local.sidecars, "the sidecars");
+        assert!(remote.bytes == local.bytes, "the bytes: {} against {}", remote.bytes.len(), local.bytes.len());
+    }
+
+    // Issue #192: an Original copy made in a worker is the file the session makes, sidecar and all
+    #[test]
+    fn a_worker_original_export_makes_the_same_file_as_the_session() {
+        use lightcraft_engine::export::{ExportFormat, prepare_export};
+        let bytes = crate::store::png_bytes(64, 48);
+        let (mut s, id) = stored_photo("shot.png", &bytes);
+        let options = ExportOptions { format: ExportFormat::Original, naming: "{name}".into(), ..Default::default() };
+        let item = prepare_export(&mut s, id, &options, 1).unwrap();
+        assert!(item.render_parts().is_none(), "a copy is not a render");
+        let wire = file_job(&item);
+        assert!(wire.spec.dng.is_none() && wire.preview.is_none());
+        assert_eq!(wire.original_hash(), Some(crate::store::content_hash(&bytes)), "the worker reads the original from storage");
+        let remote = WorkerCore::default().export_file(&wire, Some(bytes.clone())).unwrap();
+        assert_eq!(remote.bytes, bytes, "the original, byte for byte");
+        assert_eq!(remote.sidecars.len(), 1);
+        assert_same_file(&remote, &item.run().unwrap());
+        // an original the worker could not read is an error for that photo
+        let e = WorkerCore::default().export_file(&wire, None).err().unwrap();
+        assert!(e.contains("not found in browser storage"), "{e}");
+    }
+
+    // Issue #192: a DNG written in a worker is the file the session writes, preview and all
+    #[test]
+    fn a_worker_dng_export_makes_the_same_file_as_the_session() {
+        use lightcraft_engine::export::{DngPreviewSize, ExportFormat, prepare_export};
+        let dng = dng_bytes();
+        let (mut s, id) = stored_photo("raw.dng", &dng);
+        for preview in [DngPreviewSize::Medium, DngPreviewSize::None] {
+            let options = ExportOptions { format: ExportFormat::Dng, dng_preview: preview, naming: "{name}".into(), ..Default::default() };
+            let item = prepare_export(&mut s, id, &options, 1).unwrap();
+            let wire = file_job(&item);
+            assert_eq!(wire.preview.is_some(), preview != DngPreviewSize::None, "{preview:?}");
+            let remote = WorkerCore::default().export_file(&wire, Some(dng.clone())).unwrap();
+            assert!(lightcraft_raw::decode(&remote.bytes).is_ok(), "{preview:?}: a DNG");
+            assert!(remote.sidecars.is_empty());
+            assert_same_file(&remote, &item.run().unwrap());
+        }
+        // a file that is no raw photo fails with the engine's own message
+        let png = crate::store::png_bytes(64, 48);
+        let (mut s, id) = stored_photo("shot.png", &png);
+        let options = ExportOptions { format: ExportFormat::Dng, ..Default::default() };
+        let item = prepare_export(&mut s, id, &options, 1).unwrap();
+        let wire = file_job(&item);
+        let remote = WorkerCore::default().export_file(&wire, Some(png)).err().unwrap();
+        assert!(remote.contains("needs a raw photo"), "{remote}");
+        assert_eq!(remote, item.run().err().unwrap());
+    }
+
+    // Issue #192: a photo with a Denoise edit is exported by a worker, as the session exports it. Where the
+    // engine has no denoise model (the browser) the edit has no picture to mix in and the photo renders plain.
+    #[test]
+    fn a_worker_exports_a_photo_with_a_denoise_edit_like_the_session() {
+        use lightcraft_engine::export::{ExportFormat, Resize, prepare_export};
+        let bytes = crate::store::png_bytes(64, 48);
+        let (mut s, id) = stored_photo("shot.png", &bytes);
+        s.execute("develop.set", &serde_json::json!({"control": "enhance.denoise", "value": 50.0})).unwrap();
+        assert!(s.catalog.photo(id).unwrap().develop.denoise_amount() > 0.0);
+        for format in [ExportFormat::Jpeg, ExportFormat::Png] {
+            let options = ExportOptions { format, resize: Some(Resize::long_edge(40)), ..Default::default() };
+            let item = prepare_export(&mut s, id, &options, 1).unwrap();
+            let wire = WireExport::from_parts(&item.render_parts().unwrap(), &item.file_name).unwrap();
+            let wire: WireExport = serde_json::from_str(&serde_json::to_string(&wire).unwrap()).unwrap();
+            let remote = WorkerCore::default().export(&wire, Some(&bytes)).unwrap();
+            assert_same_file(&remote, &item.run().unwrap());
+        }
     }
 
     #[test]

@@ -1708,17 +1708,30 @@ enum Work {
     /// [`ExportFormat::Original`] (the file's bytes + an XMP sidecar) or [`ExportFormat::Dng`] (the
     /// raw data re-encoded as a lossless DNG with the edits in its XMP).
     File {
-        path: String,
+        spec: FileSpec,
         read: Option<crate::merge::ByteReader>,
-        packet: String,
-        dng: Option<DngCompression>,
         /// The edited photo for the DNG's embedded preview ([`ExportOptions::dng_preview`]).
         preview: Option<Box<crate::media::RenderJob>>,
-        /// The original must not carry a location ([`removes_location`]).
-        remove_location: bool,
-        label: String,
-        size: (usize, usize),
     },
+}
+
+/// What an [`ExportFormat::Original`] or [`ExportFormat::Dng`] export does with the file's bytes: owned and
+/// serializable, so a host that reads the file somewhere else (the web build's workers, #192) can make the
+/// export with [`export_file`] and get what [`PreparedExport::run`] makes.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FileSpec {
+    /// The photo's original (a catalog path).
+    pub path: String,
+    /// The XMP packet with the edits: the sidecar of an original, embedded in a DNG.
+    pub packet: String,
+    /// `Some`: write the raw data as a DNG; `None`: copy the file.
+    pub dng: Option<DngCompression>,
+    /// The original must not carry a location ([`removes_location`]).
+    pub remove_location: bool,
+    /// The photo's name, for messages.
+    pub label: String,
+    /// The size reported for a copy.
+    pub size: (usize, usize),
 }
 
 /// Set up the export of photo `id` at 1-based position `seq` of a batch. (For a whole batch use
@@ -1815,7 +1828,7 @@ fn prepare_guarded(
         if let (Some(job), Some((w, h))) = (&preview, preview_size) {
             weight = weight.saturating_add(render_weight(full_px, long, job.level, w.saturating_mul(h)));
         }
-        let work = Work::File { path, read: session.media.file_bytes.clone(), packet, dng, preview, remove_location, label, size };
+        let work = Work::File { spec: FileSpec { path, packet, dng, remove_location, label, size }, read: session.media.file_bytes.clone(), preview };
         (work, weight)
     };
     Ok(PreparedExport { photo: id, file_name, work, guard, weight })
@@ -1871,56 +1884,77 @@ impl PreparedExport {
                 };
                 Ok(Exported { file_name, bytes, width: r.image.width, height: r.image.height, sidecars: Vec::new(), gpu_fallback })
             }
-            Work::File { path, read, packet, dng, preview, label, size, remove_location } => {
+            Work::File { spec, read, preview } => {
                 let bytes = match &read {
-                    Some(r) => r(&path)?,
-                    None => std::fs::read(&path).map_err(|e| format!("{path}: {e}"))?,
+                    Some(r) => r(&spec.path)?,
+                    None => std::fs::read(&spec.path).map_err(|e| format!("{}: {e}", spec.path))?,
                 };
-                let Some(dng) = dng else {
-                    // the file is copied byte for byte: refuse rather than leak a location it embeds
-                    if remove_location && lightcraft_meta::extract(&bytes).gps.is_some() {
-                        return Err(format!(
-                            "{label}: can't remove the location from an original file that embeds GPS; export as JPEG, TIFF or DNG instead"
-                        ));
-                    }
-                    return Ok(Exported {
-                        file_name,
-                        bytes,
-                        width: size.0,
-                        height: size.1,
-                        sidecars: vec![("xmp", packet.into_bytes())],
-                        gpu_fallback: None,
-                    });
-                };
-                if lightcraft_raw::probe(&bytes).is_none() {
-                    return Err(format!("{label}: DNG export needs a raw photo"));
-                }
-                let raw = lightcraft_raw::decode(&bytes).map_err(|e| format!("{label}: {e}"))?;
-                drop(bytes);
-                let compression = match dng {
-                    DngCompression::Lossless => lightcraft_raw::DngCompression::Lj92 { tile: 256 },
-                    DngCompression::Deflate => lightcraft_raw::DngCompression::Deflate { tile: 256, half: false },
-                    DngCompression::Uncompressed => lightcraft_raw::DngCompression::Uncompressed,
-                    DngCompression::Lossy => return Err(format!("{label}: lossy DNG is for Render to DNG; a raw DNG export is lossless")),
-                };
-                let preview = match preview {
-                    Some(job) => Some(dng_preview((*job).run().rendered.map_err(|e| format!("{label}: preview: {e}"))?)?),
-                    None => None,
-                };
-                let dng = lightcraft_raw::write_dng_with_preview(
-                    &raw,
-                    &lightcraft_raw::DngWriteOptions { xmp: Some(packet), compression, ..Default::default() },
-                    preview.as_ref(),
-                )
-                .map_err(|e| e.to_string())?;
-                Ok(Exported { file_name, bytes: dng, width: raw.width, height: raw.height, sidecars: Vec::new(), gpu_fallback: None })
+                run_file(file_name, bytes, spec, preview)
             }
+        }
+    }
+
+    /// [`Self::run`] with the file's bytes in hand (a host that read the original itself): an original copy or a DNG
+    /// uses `bytes` in place of reading the file; a rendered export ignores them.
+    pub fn run_with_bytes(self, bytes: Vec<u8>) -> Result<Exported, String> {
+        match self.work {
+            Work::File { spec, preview, .. } => run_file(self.file_name, bytes, spec, preview),
+            Work::Render(_) => self.run(),
         }
     }
 }
 
+/// The file work of [`PreparedExport::run`]: the preview job (a DNG's embedded preview) runs here, after the raw data
+/// is decoded and the file's bytes dropped.
+fn run_file(file_name: String, bytes: Vec<u8>, spec: FileSpec, preview: Option<Box<crate::media::RenderJob>>) -> Result<Exported, String> {
+    let label = spec.label.clone();
+    export_file(file_name, bytes, spec, move || match preview {
+        Some(job) => Ok(Some(dng_preview((*job).run().rendered.map_err(|e| format!("{label}: preview: {e}"))?)?)),
+        None => Ok(None),
+    })
+}
+
+/// An [`ExportFormat::Original`] or [`ExportFormat::Dng`] export from the file's `bytes`: the copy with its XMP
+/// sidecar, or the raw data re-encoded as a lossless DNG with the edits in its XMP. `preview` makes the DNG's embedded
+/// preview ([`dng_preview`]); it is called once, after the raw data is decoded and `bytes` are dropped, and only for a
+/// DNG.
+pub fn export_file(
+    file_name: String,
+    bytes: Vec<u8>,
+    spec: FileSpec,
+    preview: impl FnOnce() -> Result<Option<lightcraft_raw::DngPreview>, String>,
+) -> Result<Exported, String> {
+    let FileSpec { packet, dng, remove_location, label, size, .. } = spec;
+    let Some(dng) = dng else {
+        // the file is copied byte for byte: refuse rather than leak a location it embeds
+        if remove_location && lightcraft_meta::extract(&bytes).gps.is_some() {
+            return Err(format!("{label}: can't remove the location from an original file that embeds GPS; export as JPEG, TIFF or DNG instead"));
+        }
+        return Ok(Exported { file_name, bytes, width: size.0, height: size.1, sidecars: vec![("xmp", packet.into_bytes())], gpu_fallback: None });
+    };
+    if lightcraft_raw::probe(&bytes).is_none() {
+        return Err(format!("{label}: DNG export needs a raw photo"));
+    }
+    let raw = lightcraft_raw::decode(&bytes).map_err(|e| format!("{label}: {e}"))?;
+    drop(bytes);
+    let compression = match dng {
+        DngCompression::Lossless => lightcraft_raw::DngCompression::Lj92 { tile: 256 },
+        DngCompression::Deflate => lightcraft_raw::DngCompression::Deflate { tile: 256, half: false },
+        DngCompression::Uncompressed => lightcraft_raw::DngCompression::Uncompressed,
+        DngCompression::Lossy => return Err(format!("{label}: lossy DNG is for Render to DNG; a raw DNG export is lossless")),
+    };
+    let preview = preview()?;
+    let dng = lightcraft_raw::write_dng_with_preview(
+        &raw,
+        &lightcraft_raw::DngWriteOptions { xmp: Some(packet), compression, ..Default::default() },
+        preview.as_ref(),
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(Exported { file_name, bytes: dng, width: raw.width, height: raw.height, sidecars: Vec::new(), gpu_fallback: None })
+}
+
 /// The embedded preview of a DNG export: the rendered sRGB picture as a JPEG (4:2:0, quality 90) with its profile.
-fn dng_preview(r: lightcraft_pipeline::Rendered) -> Result<lightcraft_raw::DngPreview, String> {
+pub fn dng_preview(r: lightcraft_pipeline::Rendered) -> Result<lightcraft_raw::DngPreview, String> {
     let profile = icc::write_named(named_space(OutputSpace::Srgb));
     let meta = EncodeMeta { icc: Some(&profile), ..Default::default() };
     let jpeg = encode::encode_jpeg(&EncodeImage::rgba8(&r.image), 90, ChromaSubsampling::S420, &meta).map_err(|e| format!("DNG preview: {e}"))?;
@@ -1939,6 +1973,13 @@ pub struct RenderParts<'a> {
     pub opts: &'a ExportOptions,
 }
 
+/// The file half of a [`PreparedExport`] ([`PreparedExport::file_parts`]).
+pub struct FileParts<'a> {
+    pub spec: &'a FileSpec,
+    /// The edited photo for a DNG's embedded preview (rendered as sRGB, 8-bit).
+    pub preview: Option<&'a crate::media::RenderJob>,
+}
+
 impl PreparedExport {
     /// The render and encode of a rendered format ([`ExportFormat::is_rendered`]); `None` for an
     /// original copy or a DNG, which only read the file ([`PreparedExport::run`] does them).
@@ -1946,6 +1987,17 @@ impl PreparedExport {
         match &self.work {
             Work::Render(w) => Some(RenderParts { job: &w.job, hdr_job: w.hdr_job.as_ref(), meta: w.meta.as_ref(), opts: &w.opts }),
             Work::File { .. } => None,
+        }
+    }
+
+    /// The file work of an original copy or a DNG ([`ExportFormat::Original`], [`ExportFormat::Dng`]); `None` for a
+    /// rendered format ([`Self::render_parts`]). A host that reads the original itself makes the export from it with
+    /// [`export_file`] (the DNG's embedded preview is [`FileParts::preview`], rendered by the host) or
+    /// [`Self::run_with_bytes`].
+    pub fn file_parts(&self) -> Option<FileParts<'_>> {
+        match &self.work {
+            Work::File { spec, preview, .. } => Some(FileParts { spec, preview: preview.as_deref() }),
+            Work::Render(_) => None,
         }
     }
 

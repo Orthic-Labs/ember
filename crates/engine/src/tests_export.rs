@@ -74,6 +74,38 @@ fn original_export_copies_the_file_and_writes_its_edits_beside_it() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Issue #192: a host that reads the original itself (the web's workers) makes an original copy or a DNG from
+/// those bytes, and the file is the one the engine makes by reading it.
+#[test]
+fn an_original_or_dng_made_from_the_hosts_bytes_is_the_file_the_engine_makes() {
+    use crate::export::{DngPreviewSize, prepare_export};
+    let dir = temp_dir("export-from-bytes");
+    let src = dir.join("Shot.dng");
+    let dng = synthetic_dng_with(None, Default::default());
+    std::fs::write(&src, &dng).unwrap();
+    let mut s = Session::new().with_fs();
+    s.execute("library.import", &json!({"paths": [src.to_string_lossy()]})).unwrap();
+    let id = s.catalog.photos().next().unwrap().id;
+    s.execute("library.select", &json!({"ids": [id.0]})).unwrap();
+    s.execute("develop.set", &json!({"control": "light.exposure", "value": 0.7})).unwrap();
+    for format in [ExportFormat::Original, ExportFormat::Dng] {
+        let o = ExportOptions { format, dng_preview: DngPreviewSize::None, ..Default::default() };
+        let read = prepare_export(&mut s, id, &o, 1).unwrap().run().unwrap();
+        let item = prepare_export(&mut s, id, &o, 1).unwrap();
+        let parts = item.file_parts().expect("a file export has file parts");
+        assert_eq!((parts.spec.dng.is_some(), parts.preview.is_none()), (format == ExportFormat::Dng, true));
+        assert!(item.render_parts().is_none());
+        let given = item.run_with_bytes(dng.clone()).unwrap();
+        assert_eq!((&given.file_name, given.width, given.height), (&read.file_name, read.width, read.height), "{format:?}");
+        assert_eq!(given.bytes, read.bytes, "{format:?}");
+        assert_eq!(given.sidecars, read.sidecars, "{format:?}");
+    }
+    // a rendered export has no file work, and ignores bytes it is handed
+    let png = prepare_export(&mut s, id, &ExportOptions { format: ExportFormat::Png, ..Default::default() }, 1).unwrap();
+    assert!(png.file_parts().is_none() && png.render_parts().is_some());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn original_and_dng_need_a_file() {
     let mut s = Session::with_demo();

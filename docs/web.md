@@ -178,9 +178,31 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
   at once (a photo already in a worker finishes there and its file is dropped). `app.export`
   returns `{"background": true, "total": n}`; the result arrives as the toast and in `ui.inspect`
   → `export.last`. If no worker starts (or `?workers=0`), exports run on the main thread as
-  before, and a worker that fails mid-photo hands that photo back to the main thread. Photos a
-  worker can't make also run on the main thread, one per timer tick: *Original* copies and DNGs
-  (they only read the file) and photos with a Denoise edit.
+  before, and a worker that fails mid-photo hands that photo back to the main thread. Every
+  format goes to a worker:
+  - *Original* copies and DNGs go as a `WireFileExport` (`FileSpec`: the XMP packet, the DNG
+    compression, the location rule, plus, for a DNG, the render job of its embedded preview). The
+    worker reads the original from storage itself, asynchronously and off the main thread (the page
+    sends the bytes only with `?store=memory`), makes the file with the engine's `export_file`, the
+    code `PreparedExport::run` uses, so the bytes are the same, and sends it back with its XMP
+    sidecar, which the batch places beside it. The DNG's raw decode, lossless re-encode and preview
+    render all happen in the worker.
+  - A photo with a **Denoise edit** goes as any render does. The AI denoise pass needs the engine's
+    denoise model (the `denoise` feature, which the web build is compiled without, and a model
+    file) and a library on disk to keep its pictures in, and the browser has neither, so the pass
+    can't run in a worker or anywhere on the web: a Denoise edit has no denoised picture to mix in
+    and the photo exports from its plain picture, on the main thread before as in a worker now.
+    A job whose source does carry a denoised picture (only a native session makes one) is still
+    refused by `WireExport::from_parts`, and would run where the model is.
+  What a worker can't make still runs on the main thread, one per timer tick: a photo rendered from
+  a smart preview, and a photo whose original this thread can't tell a worker how to find (a path
+  that isn't a stored file). An original copy or DNG made there uses the bytes in memory
+  (`PreparedExport::run_with_bytes`), and fails with "still loading" when they aren't, since the
+  main thread doesn't wait for storage. Native unit tests make each kind both ways (the worker
+  path through the JSON wire, the session path) on a procedural photo and compare the bytes:
+  Original, DNG (with and without the embedded preview), and a photo with a Denoise edit
+  (`wire.rs`); the browser check is not run yet. (A user-picked lens is applied to a worker's export
+  as the engine's render does.)
 - **Auto commands run in the render workers** ([#192](https://github.com/Orthic-Labs/ember/issues/192)).
   Auto is two phases ([`auto_measure`](../crates/engine/src/auto_measure.rs)): a pure measure
   (`measure_kind`: the decoded source, its facts and the photo's settings in, the values out; no
@@ -230,17 +252,17 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
 
 ## Not yet
 
-- **Auto-adjustments no longer compute on the main thread; exports mostly don't** ([#192](https://github.com/Orthic-Labs/ember/issues/192)
-  stays open for the *Original*/DNG and Denoise exports below and for the browser check). Every
-  Auto command measures in the render workers (*Auto commands run in the render workers*).
+- **Auto-adjustments and exports no longer compute on the main thread** ([#192](https://github.com/Orthic-Labs/ember/issues/192)
+  stays open only for the browser check). Every Auto command measures in the render workers
+  (*Auto commands run in the render workers*), and every export format is made in them (*Exports
+  run in the render workers*).
   Separately, **the "still loading" failure after a reload** is fixed for every `develop.auto*`
   command: the browser host parks a `develop.auto*` command that fails because the original is still coming from storage
   (`apps/lightcraft-web/src/retry.rs`) and runs it again every 50 ms until it works, fails for
   another reason, or 60 s pass; the failed read has already queued the load. Only `command()` calls
   are parked (`web.stats` → `commandsWaitingForOriginals`); a key press in the UI right after a
   reload still reports it, though the active photo's original is prefetched from the first frame.
-  The *Original*/DNG and Denoise export cases above also still read the original on the main thread
-  and do not wait. The park/retry state is covered by native unit tests; the browser check (first
+  The park/retry state is covered by native unit tests; the browser check (first
   command after reload succeeds) is not run yet.
 - **Durability is "a frame later" for user actions, by design** ([#193](https://github.com/Orthic-Labs/ember/issues/193)):
   the catalog's `Store` is synchronous and browser storage is not (OPFS writable streams,

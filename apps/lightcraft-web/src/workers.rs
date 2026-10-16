@@ -8,7 +8,9 @@
 //!
 //! Exports use the same workers (#192): the main thread posts a [`WireExport`] (and the original's
 //! bytes when the page has no storage to read them from), the worker decodes, renders and encodes,
-//! and transfers the file back. [`Workers::offer_export`] is the main side; `exports.rs` runs a
+//! and transfers the file back. An Original copy or a DNG goes as a [`WireFileExport`]: the worker
+//! reads the original from storage (asynchronously, off the main thread), makes the file and sends
+//! it back with its XMP sidecar. [`Workers::offer_export`] is the main side; `exports.rs` runs a
 //! batch on top of it.
 //!
 //! Auto Settings use them too (#192): the main thread posts a [`WireAuto`] (the photo's source,
@@ -37,7 +39,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
 use crate::backend::Backend;
-use crate::wire::{CacheWatch, ThumbIndex, WireAuto, WireExport, WireJob, WorkerCore, WorkerSlots, thumb_storage_key};
+use crate::wire::{CacheWatch, ThumbIndex, WireAuto, WireExport, WireFileExport, WireJob, WorkerCore, WorkerSlots, thumb_storage_key};
 
 /// Storage key of the thumbnail index.
 pub const THUMB_INDEX: &str = "thumbs/index.json";
@@ -88,28 +90,37 @@ pub fn worker_main(store: String) {
     });
 }
 
-/// Run one export message and post the file (or the error) back.
+/// The original's bytes for a job: the ones the page sent, else the stored file (read here, asynchronously).
+async fn original_bytes(msg: &JsValue, hash: Option<String>, backend: Option<&Backend>) -> Result<Option<Vec<u8>>, String> {
+    let sent = get(msg, "original");
+    if sent.is_undefined() || sent.is_null() {
+        return match (hash, backend) {
+            (Some(hash), Some(b)) => b.read(&crate::store::storage_key(&hash)).await,
+            _ => Ok(None),
+        };
+    }
+    Ok(Some(Uint8Array::new(&sent).to_vec()))
+}
+
+/// Run one export message (a render, or an Original copy or DNG) and post the file (or the error) back.
 async fn handle_export(scope: &web_sys::DedicatedWorkerGlobalScope, backend: Option<Backend>, msg: JsValue) {
     let t0 = now();
     let out = Object::new();
     set(&out, "id", &get(&msg, "id"));
     set(&out, "kind", &"export".into());
     let result: Result<lightcraft_engine::export::Exported, String> = async {
+        if let Some(text) = get(&msg, "file").as_string() {
+            let job: WireFileExport = serde_json::from_str(&text).map_err(|e| format!("bad export job: {e}"))?;
+            let original = original_bytes(&msg, job.original_hash(), backend.as_ref()).await?;
+            return CORE.with(|c| c.borrow_mut().export_file(&job, original));
+        }
         let text = get(&msg, "export").as_string().ok_or("no export job")?;
         let job: WireExport = serde_json::from_str(&text).map_err(|e| format!("bad export job: {e}"))?;
-        let sent = get(&msg, "original");
-        let original = if sent.is_undefined() || sent.is_null() {
-            match (job.original_hash(), &backend) {
-                (Some(hash), Some(b)) => b.read(&crate::store::storage_key(&hash)).await?,
-                _ => None,
-            }
-        } else {
-            Some(Uint8Array::new(&sent).to_vec())
-        };
+        let original = original_bytes(&msg, job.original_hash(), backend.as_ref()).await?;
         CORE.with(|c| c.borrow_mut().export(&job, original.as_deref()))
     }
     .await;
-    let mut transfer = Array::new();
+    let transfer = Array::new();
     match result {
         Ok(file) => {
             let bytes = Uint8Array::from(file.bytes.as_slice());
@@ -117,7 +128,17 @@ async fn handle_export(scope: &web_sys::DedicatedWorkerGlobalScope, backend: Opt
             set(&out, "w", &(file.width as u32).into());
             set(&out, "h", &(file.height as u32).into());
             set(&out, "bytes", &bytes);
-            transfer = Array::of1(&bytes.buffer());
+            transfer.push(&bytes.buffer());
+            // files written beside it: `{ext, bytes}` each
+            let sidecars = Array::new();
+            for (ext, data) in &file.sidecars {
+                let (item, data) = (Object::new(), Uint8Array::from(data.as_slice()));
+                set(&item, "ext", &(*ext).into());
+                set(&item, "bytes", &data);
+                transfer.push(&data.buffer());
+                sidecars.push(&item);
+            }
+            set(&out, "sidecars", &sidecars);
         }
         Err(e) => {
             set(&out, "ok", &false.into());
@@ -170,7 +191,7 @@ async fn handle_auto(scope: &web_sys::DedicatedWorkerGlobalScope, backend: Optio
 
 /// Run one job message and post the result.
 async fn handle(scope: &web_sys::DedicatedWorkerGlobalScope, backend: Option<Backend>, msg: JsValue) {
-    if get(&msg, "export").is_string() {
+    if get(&msg, "export").is_string() || get(&msg, "file").is_string() {
         return handle_export(scope, backend, msg).await;
     }
     if get(&msg, "auto").is_string() {
@@ -281,6 +302,17 @@ pub struct ExportFile {
     pub bytes: Vec<u8>,
     pub width: usize,
     pub height: usize,
+    /// Files written beside it, named like it with another extension (the XMP of an Original copy).
+    pub sidecars: Vec<(&'static str, Vec<u8>)>,
+}
+
+/// What a worker is asked to make.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExportKind {
+    /// A rendered format: a [`WireExport`].
+    Render,
+    /// An Original copy or a DNG: a [`WireFileExport`].
+    File,
 }
 
 /// Why an export did not come back.
@@ -530,7 +562,26 @@ impl Workers {
         let result = if get(&data, "ok").is_truthy() {
             let bytes = Uint8Array::new(&get(&data, "bytes")).to_vec();
             let (width, height) = (get(&data, "w").as_f64().unwrap_or(0.0) as usize, get(&data, "h").as_f64().unwrap_or(0.0) as usize);
-            Ok(ExportFile { bytes, width, height })
+            let listed = get(&data, "sidecars");
+            let sidecars = if Array::is_array(&listed) {
+                Array::from(&listed)
+                    .iter()
+                    .filter_map(|item| {
+                        // (only the XMP exists; a name this build doesn't know is dropped, not guessed)
+                        let ext = match get(&item, "ext").as_string().as_deref() {
+                            Some("xmp") => "xmp",
+                            other => {
+                                log::warn!("export: a worker sent a sidecar of unknown kind {other:?}");
+                                return None;
+                            }
+                        };
+                        Some((ext, Uint8Array::new(&get(&item, "bytes")).to_vec()))
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            Ok(ExportFile { bytes, width, height, sidecars })
         } else {
             let message = get(&data, "err").as_string().unwrap_or_else(|| "the export failed in its worker".into());
             Err(ExportFailure { message, worker_lost: false })
@@ -544,11 +595,11 @@ impl Workers {
         self.0.borrow().workers.iter().any(|w| !w.dead)
     }
 
-    /// Give a free worker one export: `text` is a [`WireExport`] as JSON, `original` the file's
-    /// bytes when the worker has no storage to read them from (copied to the worker). With more
-    /// than one worker the first is left to the views (their decoded sources live there), so a
-    /// long export doesn't hold up the loupe.
-    pub fn offer_export(&self, text: &str, original: Option<&[u8]>, done: ExportDone) -> ExportOffer {
+    /// Give a free worker one export: `text` is a [`WireExport`] or (`kind` [`ExportKind::File`])
+    /// a [`WireFileExport`] as JSON, `original` the file's bytes when the worker has no storage to
+    /// read them from (copied to the worker). With more than one worker the first is left to the
+    /// views (their decoded sources live there), so a long export doesn't hold up the loupe.
+    pub fn offer_export(&self, kind: ExportKind, text: &str, original: Option<&[u8]>, done: ExportDone) -> ExportOffer {
         let mut g = self.0.borrow_mut();
         let g = &mut *g;
         let alive: Vec<usize> = g.workers.iter().enumerate().filter(|(_, w)| !w.dead).map(|(i, _)| i).collect();
@@ -563,7 +614,7 @@ impl Workers {
         let id = g.next_id;
         let msg = Object::new();
         set(&msg, "id", &id.into());
-        set(&msg, "export", &text.into());
+        set(&msg, if kind == ExportKind::File { "file" } else { "export" }, &text.into());
         let transfer = Array::new();
         if let Some(bytes) = original {
             let arr = Uint8Array::from(bytes);

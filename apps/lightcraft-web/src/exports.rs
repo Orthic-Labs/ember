@@ -11,9 +11,14 @@
 //! ([`ExportReport`]). A cancel takes effect at once: the photo in a worker finishes there and its
 //! file is dropped.
 //!
-//! What a worker can't make runs here, one photo per timer tick so the page keeps painting: an
-//! original copy or a DNG, a photo with a Denoise edit, and everything when no worker is left. A
-//! worker that fails mid-photo hands that photo back the same way, so no photo is lost to it.
+//! Every kind of export runs in a worker: a render, an original copy and a DNG (the worker reads
+//! the original from storage itself, asynchronously, and sends the file back with its sidecar) and a
+//! photo with a Denoise edit (the browser has no denoise model, so the edit renders from the plain
+//! picture, as it does anywhere the model isn't; see [`WireExport::from_parts`]). What a worker
+//! can't make runs here, one photo per timer tick so the page keeps painting: a photo rendered from
+//! a smart preview, one whose original this thread can't hand over, and everything when no worker
+//! is left. A worker that fails mid-photo hands that photo back the same way, so no photo is lost
+//! to it.
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -25,8 +30,8 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
 use crate::store::Originals;
-use crate::wire::WireExport;
-use crate::workers::{ExportFailure, ExportFile, ExportOffer, Workers};
+use crate::wire::{WireExport, WireFileExport};
+use crate::workers::{ExportFailure, ExportFile, ExportKind, ExportOffer, Workers};
 
 /// How often a batch looks again at its cancel flag and at the workers (ms).
 const TICK_MS: i32 = 100;
@@ -156,9 +161,9 @@ impl ExportHost {
             report.progress(r.placed, &item.file_name);
         }
         let head = item.head();
-        let Some((text, original)) = self.job_for(&item) else {
+        let Some((kind, text, original)) = self.job_for(&item) else {
             // made here; the next photo, after the page has painted
-            let result = item.run();
+            let result = self.make_here(item);
             self.place(&mut r, &head, result);
             let (host, next) = (self.clone(), run.clone());
             drop(r);
@@ -171,7 +176,7 @@ impl ExportHost {
         r.token += 1;
         let (host, next, token) = (self.clone(), run.clone(), r.token);
         let done = Box::new(move |result: Result<ExportFile, ExportFailure>| host.worker_done(&next, token, result));
-        match self.workers.offer_export(&text, original.as_deref(), done) {
+        match self.workers.offer_export(kind, &text, original.as_deref(), done) {
             ExportOffer::Started => r.current = Some((item, head)),
             ExportOffer::Busy(_) => {
                 // every worker is busy: this photo goes first again on the next tick
@@ -208,7 +213,7 @@ impl ExportHost {
             report.progress(r.placed, &item.file_name);
         }
         let head = item.head();
-        let result = item.run();
+        let result = self.make_here(item);
         self.place(&mut r, &head, result);
         drop(r);
         let (host, next) = (self.clone(), run.clone());
@@ -220,22 +225,52 @@ impl ExportHost {
 
     /// The job for a worker, as JSON, and the original's bytes when the page has no storage to
     /// read them from. `None`: this photo is made here.
-    fn job_for(&self, item: &PreparedExport) -> Option<(String, Option<Vec<u8>>)> {
-        let parts = item.render_parts()?;
-        let wire = match WireExport::from_parts(&parts, &item.file_name) {
+    fn job_for(&self, item: &PreparedExport) -> Option<(ExportKind, String, Option<Vec<u8>>)> {
+        if let Some(parts) = item.render_parts() {
+            let wire = match WireExport::from_parts(&parts, &item.file_name) {
+                Ok(w) => w,
+                Err(why) => {
+                    log::info!("export {}: made on the main thread ({why})", item.file_name);
+                    return None;
+                }
+            };
+            let original = match (&wire.job.origin, wire.needs_original()) {
+                (lightcraft_engine::catalog::Source::File { path }, true) => self.original_for(path)?,
+                _ => None,
+            };
+            let text = serde_json::to_string(&wire).map_err(|e| log::warn!("export {}: {e}", item.file_name)).ok()?;
+            return Some((ExportKind::Render, text, original));
+        }
+        let wire = match WireFileExport::from_parts(&item.file_parts()?, &item.file_name) {
             Ok(w) => w,
             Err(why) => {
                 log::info!("export {}: made on the main thread ({why})", item.file_name);
                 return None;
             }
         };
-        let original = match (&wire.job.origin, wire.needs_original()) {
-            (lightcraft_engine::catalog::Source::File { path }, true) if !self.stored => Some(self.originals.get(path)?.to_vec()),
-            (lightcraft_engine::catalog::Source::File { path }, true) if crate::store::hash_of_path(path).is_none() => return None,
-            _ => None,
-        };
+        let original = self.original_for(&wire.spec.path)?;
         let text = serde_json::to_string(&wire).map_err(|e| log::warn!("export {}: {e}", item.file_name)).ok()?;
-        Some((text, original))
+        Some((ExportKind::File, text, original))
+    }
+
+    /// How a worker gets the original at `path`: `Some(None)`, from browser storage itself; `Some(Some(bytes))`, the
+    /// bytes in memory, sent with the job (the page has no storage). `None`: this thread can't tell it where the
+    /// original is (a path that isn't a stored file, or bytes that aren't in memory), so the photo is made here.
+    fn original_for(&self, path: &str) -> Option<Option<Vec<u8>>> {
+        if self.stored {
+            return crate::store::hash_of_path(path).map(|_| None);
+        }
+        Some(Some(self.originals.get(path)?.to_vec()))
+    }
+
+    /// Make a photo on this thread. An original copy or a DNG needs the original's bytes: the ones in memory
+    /// (a miss queues the load; the photo fails with the "still loading" message rather than wait on this thread).
+    fn make_here(&self, item: PreparedExport) -> Result<Exported, String> {
+        let Some(path) = item.file_parts().map(|p| p.spec.path.clone()) else { return item.run() };
+        match self.originals.get(&path) {
+            Some(bytes) => item.run_with_bytes(bytes.to_vec()),
+            None => Err(format!("{path}: the original {}", crate::retry::STILL_LOADING)),
+        }
     }
 
     /// A worker's answer for job `token`.
@@ -252,13 +287,13 @@ impl ExportHost {
                     bytes: file.bytes,
                     width: file.width,
                     height: file.height,
-                    sidecars: Vec::new(),
+                    sidecars: file.sidecars,
                     gpu_fallback: None,
                 }),
                 // the worker went away, not this photo's fault: make it here
                 Err(f) if f.worker_lost => {
                     log::warn!("export {}: its worker failed ({}); making it on the main thread", head.file_name(), f.message);
-                    item.run()
+                    self.make_here(item)
                 }
                 Err(f) => {
                     log::warn!("export {}: {}", head.file_name(), f.message);
