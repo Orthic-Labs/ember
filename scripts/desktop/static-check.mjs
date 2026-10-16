@@ -23,7 +23,7 @@ function checkPins() {
   const packageJson = readJson("package.json");
   const all = { ...packageJson.dependencies, ...packageJson.devDependencies };
   const pins = {
-    "@rightkit/react-shell": "0.6.4",
+    "@rightkit/react-shell": "0.6.5",
     "@rightkit/platform-ui": "0.2.8",
     "@rightkit/tauri-shell": "0.1.1",
     "@rightkit/theme": "0.2.1",
@@ -39,9 +39,9 @@ function checkPins() {
     if (forbidden.test(cargo)) fail(`desktop Cargo.toml contains forbidden dependency form or sidecar reference: ${forbidden}`);
   }
   if (!/rightkit-tauri-shell\s*=\s*\{[^}]*default-features\s*=\s*false/.test(cargo)) fail("rightkit-tauri-shell must disable default features");
-  if (!/rightkit-qa-driver\s*=\s*\{[^}]*version\s*=\s*\"=0\.4\.0\"/.test(cargo)) fail("rightkit-qa-driver must stay pinned to =0.4.0");
-  if (!/rightkit-qa-driver\s*=\s*\{[^}]*default-features\s*=\s*false[^}]*features\s*=\s*\[[^\]]*"wv2-0_39"/.test(cargo)) fail("rightkit-qa-driver must select WebView2 0.39 for Tauri 2.12");
-  if (!/rightkit-qa\s*=\s*\"=0\.4\.0\"/.test(cargo)) fail("rightkit-qa must stay pinned to =0.4.0");
+  if (!/rightkit-qa\s*=\s*\{[^}]*version\s*=\s*\"=0\.6\.0\"/.test(cargo)) fail("rightkit-qa must stay pinned to =0.6.0");
+  if (!/rightkit-qa\s*=\s*\{[^}]*default-features\s*=\s*false[^}]*features\s*=\s*\[[^\]]*"control"[^\]]*"wv2-0_39"/.test(cargo)) fail("rightkit-qa must select the control feature and WebView2 0.39 for Tauri 2.12");
+  if (!/rightkit-qa\s*=\s*\"=0\.6\.0\"/.test(cargo)) fail("rightkit-qa dev pin must stay =0.6.0");
 }
 
 function checkNativeConfig() {
@@ -90,7 +90,7 @@ function checkSourceContracts() {
   for (const token of ["rightkit_qa::control", "Mode::Hidden", "RIGHTKIT_QA_UI_BINARY", "stalePreview", "lightroomImport", "catalogRecovery"]) {
     if (!nativeQa.includes(token)) fail(`native qualification is missing executed control contract ${token}`);
   }
-  if (!nativeHost.includes("rightkit_qa_driver::embedded::Control") || !nativeHost.includes("build_if_enabled") || !nativeHost.includes("qa-native")) fail("native app must register debug-gated rightkit-qa-driver");
+  if (!nativeHost.includes("rightkit_qa::embedded::Control") || !nativeHost.includes("build_if_enabled") || !nativeHost.includes("qa-native")) fail("native app must register debug-gated rightkit-qa");
   const ownedScripts = `${candidate}\n${installed}`;
   if (ownedScripts.includes("candidate.targets") || ownedScripts.includes("qualification.targets")) fail("desktop scripts must not use invented candidate/qualification release config APIs");
   const preview = readFileSync(path.join(repoRoot, "apps/lightcraft-desktop/web/src/preview/usePreview.ts"), "utf8");

@@ -722,7 +722,7 @@ fn control_dispatch(app: &AppHandle<Wry>, name: &str, raw: &str) -> Result<Strin
 
 #[cfg(feature = "qa-native")]
 fn qa_control_plugin() -> Option<TauriPlugin<Wry>> {
-    let control = rightkit_qa_driver::embedded::Control::<Wry>::new()
+    let control = rightkit_qa::embedded::Control::<Wry>::new()
         .window("main")
         .command("lc_run", |app, args| control_dispatch(app, "lc_run", args))
         .command("lc_snapshot", |app, args| control_dispatch(app, "lc_snapshot", args))

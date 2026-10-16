@@ -12,8 +12,8 @@ importers:
         specifier: 0.2.8
         version: 0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.0)
       '@rightkit/react-shell':
-        specifier: 0.6.4
-        version: 0.6.4(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.0))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: 0.6.5
+        version: 0.6.5(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.0))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@rightkit/tauri-shell':
         specifier: 0.1.1
         version: 0.1.1
@@ -79,8 +79,8 @@ packages:
   '@rightkit/qa-chrome@0.1.0':
     resolution: {integrity: sha512-g9MC05z4Ux6KVPTOi6OsokoNWsACbQKmWKpoVTWpwdQCEZG/uzpVRmMNObU0+PZk07COC0Bf4mKzU2EHqfjDBA==}
 
-  '@rightkit/react-shell@0.6.4':
-    resolution: {integrity: sha512-u74tjtXxEKZnZMrqVknEgPgYKZzcu+njsNbhKekLn+mClTx0qd+MUfRJy5zf+nWcL5kmecfwUJTDhsAHwErC2Q==}
+  '@rightkit/react-shell@0.6.5':
+    resolution: {integrity: sha512-HD75IRMDfRRJONkoNk4cBmUz0l8ggCx8FRn0Bz6e+JlnmhLxVFyRZJ2FYrZ3H7T4nW6zEkUQRDtyG9aGYW2psw==}
     peerDependencies:
       '@rightkit/platform-ui': '>=0.2.8 <1'
       '@tauri-apps/plugin-os': '>=2 <3'
@@ -508,7 +508,7 @@ snapshots:
 
   '@rightkit/qa-chrome@0.1.0': {}
 
-  '@rightkit/react-shell@0.6.4(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.0))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@rightkit/react-shell@0.6.5(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.0))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@rightkit/platform-ui': 0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.0)
       react: 19.3.0

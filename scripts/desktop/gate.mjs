@@ -22,7 +22,7 @@ function BunlessSpawn(command, args, env) {
 function lockfileReady(lockfile) {
   if (!existsSync(lockfile)) return false;
   const text = readFileSync(lockfile, "utf8");
-  return text.includes('name = "rightkit-qa-driver"') && text.includes('name = "rightkit-qa"');
+  return text.includes('name = "rightkit-qa"');
 }
 
 function bootstrapLockfile(lockfile) {
