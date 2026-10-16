@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 const build = { cmd: 'node', args: ['scripts/desktop/build-native.mjs'] };
-// The workspace version is the product version (Cargo.toml [workspace.package]); package.json and tauri.conf.json carry a stale 0.2.1.
+// The workspace version is the product version (Cargo.toml [workspace.package]); package.json and tauri.conf.json match it.
 const version = /^\[workspace\.package\][^[]*?^version\s*=\s*"(\d+\.\d+\.\d+)"/ms.exec(readFileSync(new URL('./Cargo.toml', import.meta.url), 'utf8'))?.[1];
 if (!version) throw new Error('Cargo.toml [workspace.package] must declare a SemVer version');
 // Signed candidates are the exact unsigned bytes from the candidate stage (LEGION_UNSIGNED_CANDIDATE_ROOT, set by release-candidate.yml);
