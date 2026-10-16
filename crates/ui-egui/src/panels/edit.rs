@@ -844,7 +844,15 @@ fn soft_proofing(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
         if r.clicked() {
             let target = app.ui.proof_profile.as_ref().map_or_else(|| app.ui.proof.space.label().to_string(), |(_, n)| n.clone());
             let name = crate::i18n::tr_format!("Proof Copy ({})", target);
-            if app.run("photo.virtualCopy", json!({"ids": [id.0], "name": name})).is_ok() {
+            let tag = json!({
+                "profile": target,
+                "path": app.ui.proof_profile.as_ref().map(|(f, _)| f.clone()),
+                "space": app.ui.proof_profile.is_none().then_some(app.ui.proof.space),
+                "intent": app.ui.proof_intent.name(),
+                "paperInk": app.ui.proof_paper_ink,
+                "blackPoint": app.ui.proof_black_point,
+            });
+            if app.run("photo.virtualCopy", json!({"ids": [id.0], "name": name, "proof": tag})).is_ok() {
                 app.toast(ui.ctx(), crate::i18n::tr("Proof copy created"));
             }
         }

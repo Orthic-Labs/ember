@@ -1,7 +1,7 @@
 //! Organizing commands: stacks (group, ungroup, set top, expand/collapse, auto-stack by capture
 //! time) and virtual copies.
 
-use lightcraft_catalog::{HistoryStep, Op, PhotoId, Stack, StackId};
+use lightcraft_catalog::{HistoryStep, Op, PhotoId, ProofTag, Stack, StackId};
 use serde_json::{Value, json};
 
 use super::{CommandSpec, always, bad, bool_or, cmd, f64_or, has_selection, str_param};
@@ -65,8 +65,9 @@ fn copy_number(name: Option<&str>) -> u32 {
 
 /// Create one virtual copy of `src`: a new photo sharing its file, with the same settings and
 /// metadata, added to the same albums and stacked right after it (the stack is expanded so the
-/// copy is visible). `name` replaces the default "Copy N".
-fn virtual_copy(s: &mut Session, src: PhotoId, name: Option<&str>) -> Result<Option<PhotoId>> {
+/// copy is visible). `name` replaces the default "Copy N"; `proof` makes it a Proof Copy for that
+/// soft-proof profile (a plain copy of a Proof Copy is not one).
+fn virtual_copy(s: &mut Session, src: PhotoId, name: Option<&str>, proof: Option<&ProofTag>) -> Result<Option<PhotoId>> {
     let Some(orig) = s.catalog.photo(src).cloned() else { return Ok(None) };
     let master = orig.copy_of.unwrap_or(src);
     let n = 1 + s.catalog.photos().filter(|p| p.copy_of == Some(master)).map(|p| copy_number(p.copy_name.as_deref())).max().unwrap_or(0);
@@ -75,6 +76,7 @@ fn virtual_copy(s: &mut Session, src: PhotoId, name: Option<&str>) -> Result<Opt
     c.id = id;
     c.copy_of = Some(master);
     c.copy_name = Some(name.map_or_else(|| format!("Copy {n}"), str::to_string));
+    c.proof = proof.cloned();
     c.versions.clear();
     c.history = vec![HistoryStep { label: "Virtual Copy".into(), settings: c.develop.clone() }];
     c.deleted = false;
@@ -108,14 +110,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Virtual Copy",
             ["Photo"],
             Some("Cmd+'"),
-            "{ids?, name?} → {ids: [new photo ids]} — a new catalog entry sharing the original file, with independent settings; stacked with its original and named `name` or \"Copy N\"",
+            "{ids?, name?, proof?: {profile, path?, space?, intent, paperInk, blackPoint}} → {ids: [new photo ids]} — a new catalog entry sharing the original file, with independent settings; stacked with its original and named `name` or \"Copy N\"; `proof` tags it as a Proof Copy for that soft-proof profile",
             has_selection,
             |s, p| {
                 let targets = s.targets(p)?;
                 let name = str_param(p, "name").filter(|n| !n.trim().is_empty()).map(str::to_string);
+                let proof = match p.get("proof") {
+                    None | Some(Value::Null) => None,
+                    Some(v) => Some(serde_json::from_value::<ProofTag>(v.clone()).map_err(|e| bad("photo.virtualCopy", format!("proof: {e}")))?),
+                };
                 let mut made = Vec::new();
                 for t in targets {
-                    if let Some(id) = virtual_copy(s, t, name.as_deref())? {
+                    if let Some(id) = virtual_copy(s, t, name.as_deref(), proof.as_ref())? {
                         made.push(id);
                     }
                 }

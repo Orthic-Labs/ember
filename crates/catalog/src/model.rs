@@ -216,6 +216,28 @@ pub struct HistoryStep {
     pub settings: Arc<DevelopSettings>,
 }
 
+/// The soft-proof settings a Proof Copy was made for: the proof profile (a standard space or a
+/// printer / paper ICC file) with its rendering options, so the copy says what it proofs.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProofTag {
+    /// The profile's name as shown ("sRGB", "Fogra39 coated").
+    pub profile: String,
+    /// A device profile's file; none for a standard space.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// A standard space's id (`srgb`, `adobeRgb` …); none for a device profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space: Option<String>,
+    /// `perceptual` or `relative`.
+    #[serde(default)]
+    pub intent: String,
+    #[serde(default)]
+    pub paper_ink: bool,
+    #[serde(default)]
+    pub black_point: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Photo {
     pub id: PhotoId,
@@ -279,6 +301,9 @@ pub struct Photo {
     /// Virtual copies' name ("Copy 1").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copy_name: Option<String>,
+    /// A Proof Copy: the soft-proof profile and options it was made for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proof: Option<ProofTag>,
     /// The settings import gave the photo when a user default (a raw/JPEG default preset, see
     /// the engine's import defaults) changed them from [`Photo::camera_defaults`]. They count as
     /// unedited, and Reset returns to them.
@@ -368,6 +393,7 @@ impl Photo {
             embedded_lens: None,
             copy_of: None,
             copy_name: None,
+            proof: None,
             import_look: None,
             analysis: None,
             preview_only: None,

@@ -1278,6 +1278,8 @@ fn soft_proofing_flags_out_of_gamut_colours_and_makes_proof_copies() {
     assert_eq!(h.app.session.catalog.photos().count(), n + 1);
     let copy = (**h.app.session.catalog.photos().max_by_key(|p| p.id.0).unwrap()).clone();
     assert_eq!(copy.copy_name.as_deref(), Some("Proof Copy (sRGB)"));
+    let tag = copy.proof.clone().expect("the proof copy carries its profile");
+    assert_eq!((tag.profile.as_str(), tag.space.as_deref(), tag.path, tag.intent.as_str()), ("sRGB", Some("srgb"), None, "perceptual"));
     // S again turns it off; in a grid S is Expand/Collapse Stack (the copy made a stack)
     h.request("ui.key", json!({"key": "s"}), T);
     assert!(!h.app.ui.soft_proof);

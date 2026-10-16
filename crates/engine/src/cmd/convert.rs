@@ -402,6 +402,7 @@ fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
         q.content_hash = q.content_hash.map(|h| format!("{h}:dup{}", new.0));
         q.copy_of = None;
         q.copy_name = None;
+        q.proof = None;
         q.history.clear();
         q.versions.retain(|v| !v.auto);
         let mut ops = vec![Op::AddPhoto { photo: Box::new(q) }];
