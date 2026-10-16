@@ -1565,7 +1565,7 @@ fn write_jpg(path: &Path) {
     std::fs::write(path, crate::export::encode_image(&img, &options).unwrap()).unwrap();
 }
 
-fn rating_in(path: &Path) -> Option<u8> {
+fn rating_in(path: &Path) -> Option<i8> {
     lightcraft_meta::parse_xmp(&std::fs::read_to_string(path).unwrap()).unwrap().metadata.rating
 }
 

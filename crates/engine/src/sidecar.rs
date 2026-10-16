@@ -691,9 +691,10 @@ impl Session {
         if p.copy_of.is_some() {
             return Err(EngineError::Other(format!("{} is a virtual copy: its settings live only in the library", p.file_name)));
         }
-        let orig = file_path(p).ok_or_else(|| EngineError::Other(format!("{} is not a file on disk", p.file_name)))?;
+        // owned: the catalog borrow must end before the repair below takes `self` mutably
+        let orig = file_path(p).ok_or_else(|| EngineError::Other(format!("{} is not a file on disk", p.file_name)))?.to_owned();
         let naming = owners.naming(p, self.xmp.naming);
-        let preferred = sidecar_path(orig, naming);
+        let preferred = sidecar_path(&orig, naming);
         let other = if naming == SidecarNaming::Stem { SidecarNaming::Full } else { SidecarNaming::Stem };
         // The stem sidecar is this photo's own when it owns the stem (Stem naming) or the photo has no
         // stem partner (Split naming); otherwise it is another file's and is never written.
@@ -705,7 +706,7 @@ impl Session {
             .into_iter()
             .filter(|n| *n != SidecarNaming::Stem || own_stem)
             .flat_map(|n| {
-                let path = sidecar_path(orig, n);
+                let path = sidecar_path(&orig, n);
                 [path.clone(), path.with_extension("XMP")]
             })
             .collect();
@@ -726,7 +727,7 @@ impl Session {
         let err = |e: std::io::Error| EngineError::Other(format!("{}: {e}", path.display()));
         // A new variant sidecar starts from the legacy shared one, so the foreign data in it is kept.
         let seed = (self.xmp.naming == SidecarNaming::Split && naming == SidecarNaming::Full && !path.is_file())
-            .then(|| legacy_stem_sidecar(orig))
+            .then(|| legacy_stem_sidecar(&orig))
             .flatten();
         let (data, merged, backup) = sidecar_contents(&path, seed.as_deref(), sidecar_save_packet(p, &self.catalog), &(self.clock)()).map_err(err)?;
         write_atomic(&path, data.as_bytes()).map_err(err)?;
