@@ -123,6 +123,7 @@ fn load_track(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let reply = json!({"name": track.name, "tracks": log.tracks, "points": track.points(), "segments": track.segments.len()});
     s.map_track = Some(track);
+    s.map_show_track = true;
     Ok(reply)
 }
 
@@ -332,9 +333,9 @@ mod tests {
         let track = s.map_track.clone().unwrap();
         assert_eq!(track.segments.len(), 2, "one line per segment, never bridged");
         assert_eq!(track.segments[1][0], (51.5, -0.12));
-        assert!(!s.map_show_track, "a loaded track is not drawn until asked");
-        assert_eq!(s.execute("map.showTrack", &json!({})).unwrap(), json!({"show": true, "loaded": true}), "no enabled: toggles");
-        assert_eq!(s.execute("map.showTrack", &json!({"enabled": false})).unwrap()["show"], false);
+        assert!(s.map_show_track, "a loaded track is drawn at once");
+        assert_eq!(s.execute("map.showTrack", &json!({})).unwrap(), json!({"show": false, "loaded": true}), "no enabled: toggles");
+        assert_eq!(s.execute("map.showTrack", &json!({"enabled": true})).unwrap()["show"], true);
         assert_eq!(s.undo.len(), undo_before, "loading and showing are not library edits");
         s.execute("map.loadTrack", &json!({"clear": true})).unwrap();
         assert!(s.map_track.is_none());
