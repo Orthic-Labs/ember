@@ -56,7 +56,7 @@ that is promising but is not recorded as review, so the column says `no (communi
 | 9 | Japanese | `ja` | 2,164 keys present (machine-drafted, see #185 note) | as zh-hans; vertical export watermarks | Jpan via craft-fonts (BIZ UDPGothic / UDMincho); IME through winit | no (community edits) | complete, machine-drafted (native review pending) | 6–10 h |
 | 10 | German | `de` | 2,162 keys present (machine-drafted for the 40 keys added in #185) | as zh-hans; What's New translated line by line | Latin | no (community edits) | complete, machine-drafted (native review pending) | 4–8 h |
 | 11 | Korean | `ko` | 0 (0%) | none | **no Korean (Hangul) face**: needs a non-reference publisher OFL face in craft-fonts (Noto CJK is allowed only for Chinese) | no | none | 14–22 h |
-| 12 | Vietnamese | `vi` | 0 (0%) | none | Latin with stacked diacritics (Inter covers it; check combining marks) | no | none (target: not shipped) | 10–16 h |
+| 12 | Vietnamese | `vi` | 2,162 keys present (machine-drafted, see #185 note) | as zh-hans | Latin with stacked diacritics (Inter covers every Vietnamese letter, checked against its cmap) | no | complete, machine-drafted (native review pending) | 10–16 h |
 
 ## Other languages Ember ships (3)
 
@@ -103,7 +103,7 @@ Chinese 198, Japanese 199, Spanish 162, French 204, Brazilian Portuguese 160.
   review together.
 - The catalogs contain English-looking values that equal their key (see the per-language notes); those are
   not part of this batch and were not changed.
-- Indonesian (`id`) was added once the partial catalogs were complete, as the #185 decision orders: a machine draft of the full key set, native review pending. Still open for #185: Vietnamese and Korean. Known gap in the Indonesian catalog: plural suffixes (`photo{}`) are filled by callers with English "s", so the plural slot needs a call-site fix before it ships. Hindi and Arabic stay deferred until shaping and RTL exist.
+- Indonesian (`id`) was added once the partial catalogs were complete, as the #185 decision orders: a machine draft of the full key set, native review pending. Vietnamese (`vi`) was added second, with the same machine-draft status and the same plural-suffix gap. Still open for #185: Korean. Known gap in the Indonesian catalog: plural suffixes (`photo{}`) are filled by callers with English "s", so the plural slot needs a call-site fix before it ships. Hindi and Arabic stay deferred until shaping and RTL exist.
 
 ## Revision history
 
@@ -111,4 +111,5 @@ Chinese 198, Japanese 199, Spanish 162, French 204, Brazilian Portuguese 160.
 |---|---|---|
 | 2026-10-10 | major | Created: per-language counts measured from the catalogs, the twelve key languages, script support, estimates |
 | 2026-10-16 | minor | #185: the nine partial catalogs completed with machine-drafted keys (needs native review); counts updated |
+| 2026-10-16 | minor | #185: Vietnamese catalog added (machine-drafted, native review pending) |
 | 2026-10-16 | minor | #185: Indonesian catalog added (machine-drafted, native review pending) |
