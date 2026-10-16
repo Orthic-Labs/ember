@@ -127,7 +127,7 @@ rounded-plane coding, vertical C-RAW tiling and adaptive low-frequency gains
 remain unsupported. The decoder bounds image dimensions, sample count,
 tile count, marker headers and temporary allocations. The full sensor buffer is
 allocated only after the first plane decodes, and plane buffers grow row by row,
-so a small crafted file fails before reserving memory for the image it claims.
+so a small crafted file fails before reserving memory for the image it claims. [#176](https://github.com/Orthic-Labs/ember/issues/176)
 
 ## Colour limits
 

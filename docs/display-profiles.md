@@ -48,4 +48,4 @@ LUT-based profile's correction about 65 ms. Drafts during slider drags skip the 
 ## Not yet
 
 - Picking up the profile the operating system assigns on Linux and Windows (X11 `_ICC_PROFILE`, colord, WCS) and
-  following the window across monitors there (macOS does both, above).
+  following the window across monitors there (macOS does both, above). [#186](https://github.com/Orthic-Labs/ember/issues/186)

@@ -28,7 +28,7 @@ its inbox. No SDK files, versions or packages were changed by Ember chat.
 
 SDK owner will handle repair, native feature-matrix qualification, managed
 publication & dependency integration. Ember retains existing pins & reruns
-exact-revision hidden native QA with existing hard foreground guard intact.
+exact-revision hidden native QA with existing hard foreground guard intact. [#211](https://github.com/Orthic-Labs/ember/issues/211)
 
 ## Restored native evidence, 2026-10-10
 
@@ -40,7 +40,7 @@ stage-summary SHA-256 entries: 48 Mac files & 43 Windows files.
 
 Windows passed 14 of 15 hidden journeys. Culling Apply failed synchronously;
 dialog showed a generic stale-photo message, so exact validation rejection
-remains unresolved. Mac repeated unavailable foreground PID/name evidence
+remains unresolved. [#209](https://github.com/Orthic-Labs/ember/issues/209) Mac repeated unavailable foreground PID/name evidence
 across all journeys; 12 journey bodies passed, while culling Apply, inspector
 collapse & virtual-grid geometry failed. Native qualification remains failed.
 
@@ -50,7 +50,7 @@ stage layout restored collapsed columns from `690px 8px 336px` to
 to its inline `79810px`. Both results persisted at 64 ms. Direct inline style
 changes & viewport bounce did not restore geometry. Ember follow-up preserves
 stateful workspaces while testing isolated DOM replacement; SDK foreground
-repair remains with its assigned owner.
+repair remains with its assigned owner. [#210](https://github.com/Orthic-Labs/ember/issues/210)
 
 ## Follow-up evidence, 2026-10-10
 

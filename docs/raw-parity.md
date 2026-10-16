@@ -1,6 +1,6 @@
 # RAW parity: cameras, formats, demosaic, colour and lens profiles
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-15 · **Change:** minor (upstream absorb 2026-10-14: Hasselblad Lunar verified and Leaf MOS recognised, 236 verified and 232 preview; Nikon D4 and D90 image areas; Nikon in-file distortion)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (upstream absorb 2026-10-14: Hasselblad Lunar verified and Leaf MOS recognised, 236 verified and 232 preview; Nikon D4 and D90 image areas; Nikon in-file distortion)
 
 Raw processing is the deepest single dimension of reference editor parity: a photographer whose camera
 does not decode, or decodes with the wrong colour, cannot switch. This document measures it model by
@@ -113,40 +113,40 @@ checked, and Canon, the largest bucket, is the weakest of the big four.
 | CR2 | sRAW / mRAW (YCbCr) | ✅ | `vendor/cr2/sraw.rs`, 31 samples from 16 models |
 | CR3 | CRX lossless, version 0x100 | ✅ | M50, R100, R8 exact against a reference; R5 Mark II (odd-height planes) pinned |
 | CR3 | C-RAW 0x100 (horizontal tiles), 0x200 (single 14-bit tile, adaptive QP incl. the QP-map escape) | ✅ | same 3 bodies exact; R5 Mark II pinned, QP maps of 33,665 files decode exactly, matches the camera JPEG |
-| CR3 | other CRX variants (vertical tiles, partial subbands, other plane flags, 0x200 multi-tile) | ⬜ | refused in `crx.rs`, falls back to the preview; which bodies write them is unmeasured |
-| CR3 | sRAW / mRAW | ⬜ | 4-plane Bayer only |
-| CR3 | HEIF / HDR PQ | ⬜ | HEVC tracks recognised, not decoded |
-| CR3 | dual-pixel raw | ⬜ | never substituted |
-| CRW | all | ⬜ | preview |
+| CR3 | other CRX variants (vertical tiles, partial subbands, other plane flags, 0x200 multi-tile) | ⬜ | refused in `crx.rs`, falls back to the preview; which bodies write them is unmeasured [#156](https://github.com/Orthic-Labs/ember/issues/156) |
+| CR3 | sRAW / mRAW | ⬜ | 4-plane Bayer only [#157](https://github.com/Orthic-Labs/ember/issues/157) |
+| CR3 | HEIF / HDR PQ | ⬜ | HEVC tracks recognised, not decoded [#158](https://github.com/Orthic-Labs/ember/issues/158) |
+| CR3 | dual-pixel raw | ⬜ | never substituted [#159](https://github.com/Orthic-Labs/ember/issues/159) |
+| CRW | all | ⬜ | preview [#160](https://github.com/Orthic-Labs/ember/issues/160) |
 | NEF | uncompressed, lossless, lossy type 1 / 2, lossy after split | ✅ | D5100, D7000, D7500, Z f corpus; ~60 NEFs by hand; #633; D4, D90, D5000, D600 and D610 image area measured against the camera JPEG (white level too for the D4, D90 and D5000) |
-| NEF | packed 14-bit stored under a compressed tag (Z 6II uncompressed) | 🟡 | `nef.rs` `stored_plain`: a 34713 strip with no `0x0096` table whose size is exactly the MSB-first packed (12/14/16-bit) or 16-bit-word layout is read as samples; synthetic test only, no real Z 6II file measured (#161) |
-| NEF | High Efficiency / HE★ (JPEG XS) | ⬜ | named, preview (#193); needs a JPEG XS decoder |
+| NEF | packed 14-bit stored under a compressed tag (Z 6II uncompressed) | 🟡 | `nef.rs` `stored_plain`: a 34713 strip with no `0x0096` table whose size is exactly the MSB-first packed (12/14/16-bit) or 16-bit-word layout is read as samples; synthetic test only, no real Z 6II file measured (#161) [#161](https://github.com/Orthic-Labs/ember/issues/161) |
+| NEF | High Efficiency / HE★ (JPEG XS) | ⬜ | named, preview (#193); needs a JPEG XS decoder [#162](https://github.com/Orthic-Labs/ember/issues/162) |
 | ARW | uncompressed, cRAW (ARW2), lossless LJ92 (L / M / S) | ✅ | 86 bodies (#535); M/S black level 1024; the Hasselblad Lunar, a NEX-7 under Make HASSELBLAD, routed by Sony's raw coding (upstream #1275) |
 | ARW | packed 12-bit (A900) | ✅ | one CC0 file; A850 unmeasured |
 | ARW | ARW6 Compressed / HQ (compression 32766; ILCE-7RM6) | ✅ | 8 CC0 files; 12-bit mode unsupported; `docs/arw6-compression.md` |
-| ARW | 12-bit compressed of DSLR-A200…A390 | ⬜ | preview (#535) |
-| ARW | A100 ARW; SRF (F828, V3) | ⬜ | refused (#702); SRF not imported |
-| ARW | ARQ pixel shift | ⬜ | no code |
+| ARW | 12-bit compressed of DSLR-A200…A390 | ⬜ | preview (#535) [#163](https://github.com/Orthic-Labs/ember/issues/163) |
+| ARW | A100 ARW; SRF (F828, V3) | ⬜ | refused (#702); SRF not imported [#164](https://github.com/Orthic-Labs/ember/issues/164) |
+| ARW | ARQ pixel shift | ⬜ | no code [#165](https://github.com/Orthic-Labs/ember/issues/165) |
 | SR2 | DSC-R1 | ✅ | CC0 3221 sample |
 | RAF | uncompressed, lossless and lossy compressed; Bayer and X-Trans; GFX 14/16-bit | ✅ | 24 files from 13 bodies exact |
-| RAF | pre-X FinePix without a raw IFD | ⬜ | `raf.rs` refuses (26 reference publisher models, estimated split) |
+| RAF | pre-X FinePix without a raw IFD | ⬜ | `raf.rs` refuses (26 reference publisher models, estimated split) [#166](https://github.com/Orthic-Labs/ember/issues/166) |
 | ORF | uncompressed 16-bit, 12-bit packed, two-field 12-bit, 12.8 bpp | ✅ | E-1, E-400, XZ-2 corpus; #651 |
 | ORF | **compressed** (every Olympus / OM body since ~2008) | ⬜ | `orf.rs` refuses; the E-M1 and E-M10 III corpus files are `KNOWN_UNSUPPORTED` |
 | RW2 / RWL / RAW | formats 2, 4, 5, 6, 7, 8 and 16-bit words | ✅ | 118 bodies (#215) |
 | PEF | uncompressed, Huffman, packed 12-bit | ✅ | K10D, K-3, K-5 IIs |
-| PEF / DNG | Pentax pixel shift | ⬜ | frames not combined |
+| PEF / DNG | Pentax pixel shift | ⬜ | frames not combined [#167](https://github.com/Orthic-Labs/ember/issues/167) |
 | SRW | uncompressed, 12-bit packed | ✅ | EX1 corpus; NX10, NX20 |
-| SRW | compressed 32770 / 32772 / 32773 | ⬜ | refused |
+| SRW | compressed 32770 / 32772 / 32773 | ⬜ | refused [#168](https://github.com/Orthic-Labs/ember/issues/168) |
 | DNG | uncompressed, LJ92, lossy JPEG / Smart Preview, Deflate incl. float, LinearRaw, tiles / strips, row / column interleave | ✅ | 6 corpus DNGs; 4 ILCE-6400 JXL DNGs |
 | DNG | JPEG XL (DNG 1.7, lossless and lossy) | ✅ | synthetic bit-exact; real lossless and lossy files |
 | DNG | Apple ProRAW (incl. semantic mattes) | ✅ | iPhone 12 Pro corpus; ProfileGainTableMap read but off (ΔE00 19 against reference editor with it on) |
-| DNG | phone DNGs (Pixel, Galaxy, Xiaomi…) | 🟡 | Pixel 2 XL only; white-level pile-up fix #548 |
-| DNG | GoPro GPR (VC-5) | ⬜ | refused |
-| 3FR / FFF | DNG-like layouts | 🟡 | decoded when uncompressed or LJ92 |
-| 3FR / FFF | Hasselblad compression | ⬜ | preview |
-| IIQ, MOS, MRW, ERF, KDC, X3F | all | ⬜ | preview; an uncompressed MOS, whose IFD0 is the mosaic itself with no Make tag, is recognised by Leaf's data block `0x8606` (upstream #1275) |
-| IIQ, MOS, MRW, ERF, KDC, X3F | all | ⬜ | preview |
-| DCR, MEF, MFW, DXO, GPR, TIFF raws | all | ⬜ | not imported |
+| DNG | phone DNGs (Pixel, Galaxy, Xiaomi…) | 🟡 | Pixel 2 XL only; white-level pile-up fix #548 [#169](https://github.com/Orthic-Labs/ember/issues/169) |
+| DNG | GoPro GPR (VC-5) | ⬜ | refused [#170](https://github.com/Orthic-Labs/ember/issues/170) |
+| 3FR / FFF | DNG-like layouts | 🟡 | decoded when uncompressed or LJ92 [#171](https://github.com/Orthic-Labs/ember/issues/171) |
+| 3FR / FFF | Hasselblad compression | ⬜ | preview [#172](https://github.com/Orthic-Labs/ember/issues/172) |
+| IIQ, MOS, MRW, ERF, KDC, X3F | all | ⬜ | preview; an uncompressed MOS, whose IFD0 is the mosaic itself with no Make tag, is recognised by Leaf's data block `0x8606` (upstream #1275) [#173](https://github.com/Orthic-Labs/ember/issues/173) |
+| IIQ, MOS, MRW, ERF, KDC, X3F | all | ⬜ | preview [#174](https://github.com/Orthic-Labs/ember/issues/174) |
+| DCR, MEF, MFW, DXO, GPR, TIFF raws | all | ⬜ | not imported [#175](https://github.com/Orthic-Labs/ember/issues/175) |
 
 ### Compressed ORF: a clean-room starting point
 
@@ -167,12 +167,12 @@ sample files. A pointer for contributors, not legal advice.
 
 | Stage | Target | Ember | Status |
 |---|---|---|---|
-| Bayer demosaic | reference publisher's own, plus AI "Raw Details" | AHD (default), PPG, bilinear (`crates/raw/src/demosaic`) | 🟡 quality unmeasured against reference editor; no Raw Details |
+| Bayer demosaic | reference publisher's own, plus AI "Raw Details" | AHD (default), PPG, bilinear (`crates/raw/src/demosaic`) | 🟡 quality unmeasured against reference editor; no Raw Details [#51](https://github.com/Orthic-Labs/ember/issues/51) |
 | X-Trans demosaic | ✅ | in-house edge-weighted directional | 🟡 unmeasured |
 | Foveon | ✅ (older bodies) | — | ⬜ |
 | Monochrome / LinearRaw | ✅ | handled, no demosaic | ✅ |
 | Pixel shift (Sony ARQ, Pentax, OM high-res, Nikon) | ✅ (Sony, Pentax, Nikon) | — | ⬜ |
-| Black and white levels | per model, calibrated | read from each file (masked columns, maker notes, SR2SubIFD, CMP1) | 🟡 per-body bugs keep surfacing: A450–A700 SR2 black level and M/S ARW pedestal (#535, fixed); 5D Mark IV CR2 renders dark (#455, open); white-level pile-up in phone DNGs (#548, fixed) |
+| Black and white levels | per model, calibrated | read from each file (masked columns, maker notes, SR2SubIFD, CMP1) | 🟡 per-body bugs keep surfacing: A450–A700 SR2 black level and M/S ARW pedestal (#535, fixed); 5D Mark IV CR2 renders dark (#455, open); white-level pile-up in phone DNGs (#548, fixed) [#181](https://github.com/Orthic-Labs/ember/issues/181) |
 | Crop masks and aspect | ✅ | DefaultCrop, Sony recorded size, Canon AspectInfo, Panasonic in-camera crops, Nikon CropArea, measured Nikon bodies without it (D4, D90, D5000, D600, D610) | 🟡 7RM3 / 7RM4 crop origin 8–32 px off (cosmetic) |
 | Lens metadata | ✅ read for profile selection | EXIF lens fields read; used only for the in-file corrections below | 🟡 |
 | Highlight reconstruction | ✅ | neutral clip, chromaticity diffusion (`highlight.rs`) | 🟡 tuned by eye |

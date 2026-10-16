@@ -154,7 +154,7 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
   notice reports what was added, what was already there and what could not be read. *Export
   Presets…* (or the Presets panel's export) hands the `.lcpreset` to the browser as a download
   (`preset.export` with `content`). `.cube` LUT profiles and point-curve presets aren't wired to
-  the browser picker yet.
+  the browser picker yet. [#195](https://github.com/Orthic-Labs/ember/issues/195)
 - **Automation.** `await lightcraft.command("library.info", "{}")` runs any engine or UI command
   by id on the next frame and resolves to the JSON result once the command's writes are in browser
   storage (or rejects if storage refused them; no storage, `?store=memory`, resolves at once).
@@ -165,23 +165,23 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
 
 - **Exports and auto-adjustments run on the main thread** (they need the original's pixels
   there). Right after a reload, the first such command on a photo whose original isn't in memory
-  yet fails with "still loading" and works a moment later.
+  yet fails with "still loading" and works a moment later. [#192](https://github.com/Orthic-Labs/ember/issues/192)
 - **Durability is "a frame later" for user actions:** a click or key command is written to browser
   storage a few milliseconds after it runs (one flush), so a crash or tab kill in that window loses
   it. The automation API is durable before it returns: `command()` (see *Automation*) resolves only
   once its writes reached storage, and rejects, saying the change is not saved, if storage refused
-  them. A kill check for the user path is still to do (issue #193 stays open for it).
+  them. A kill check for the user path is still to do (issue #193 stays open for it). [#193](https://github.com/Orthic-Labs/ember/issues/193)
 - **Data-safety gaps still open** (issue #107): a panic in a decoder still ends the page (and a
   photo that panics while its thumbnail renders can do so again after a reload; there is no
   `?safe` start that skips rendering yet); removing photos doesn't delete their stored originals
   (`originals/<hash>`; they are kept, and included in backups); restored-over libraries stay in
   storage until the site's data is cleared; backups larger than 4 GB need zip64, which isn't
-  written yet.
+  written yet. [#194](https://github.com/Orthic-Labs/ember/issues/194)
 - **Control channel / MCP.** These are desktop-only, because they need a TCP socket.
 - **AVIF export** is native only: its encoder (`ravif`, `rav1e`) is compiled out on wasm32, so the browser
-  build doesn't offer the format in the export dialog (issue #196).
+  build doesn't offer the format in the export dialog (issue #196). [#196](https://github.com/Orthic-Labs/ember/issues/196)
 - **JPEG XL export** is native only: the encoder (`jixel`) starts threads of its own, which wasm32 has not got; the
-  web build reports "not available in this build". JPEG XL import works.
+  web build reports "not available in this build". JPEG XL import works. [#197](https://github.com/Orthic-Labs/ember/issues/197)
 
 ## Measuring
 

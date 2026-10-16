@@ -1,6 +1,6 @@
 # Target-app parity: Ember vs reference editor
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (research authorization wording aligned with Ember policy; historical measurements unchanged) · **Target:** reference catalog editor 15.5 (August 2026) and reference editor 9.6 (desktop)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (research authorization wording aligned with Ember policy; historical measurements unchanged) · **Target:** reference catalog editor 15.5 (August 2026) and reference editor 9.6 (desktop)
 
 The authoritative assessment of how close Ember is to reference editor. The row-by-row checklist is
 [parity-checklist.md](parity-checklist.md); the ranked work list is [gaps.md](gaps.md); deep areas
@@ -55,7 +55,7 @@ phase #85, duplicate Local entries #22, black GPU exports on an Intel iGPU #78).
 | File formats (non-raw: images, sidecars, presets, catalogs) | ~85% | ~70% | 30–55 h | [file-format-parity.md](file-format-parity.md) |
 | Hardware | ~50% | ~40% | 40–80 h (+ tethering and printing, counted under Classic modules) | [hardware-parity.md](hardware-parity.md) |
 | Localization (12 key languages) | 7 of 12 present | ~52% (mean of the 12, measured) | 130–210 h for the target's set; +145–255 h for Hindi, Arabic, Indonesian, Vietnamese, Korean | [localization-parity.md](localization-parity.md) |
-| Performance | ~80% | ~70% | 30–50 h | 24 MP GPU slider 3.9 ms, export 0.3 s (measured, [gpu-pipeline.md](gpu-pipeline.md)); 85k library opens in 1.7–4.7 s; 100k test pending |
+| Performance | ~80% | ~70% | 30–50 h | 24 MP GPU slider 3.9 ms, export 0.3 s (measured, [gpu-pipeline.md](gpu-pipeline.md)); 85k library opens in 1.7–4.7 s; 100k test pending [#189](https://github.com/Orthic-Labs/ember/issues/189) |
 | Stability | — | ~60% | 30–60 h | never-crash lints and guards workspace-wide, crash-tested journal, 2,561 tests; but CI runs tests only on FreeBSD, user reports keep finding bugs in ✅ areas |
 | Platforms | macOS, Windows (x64 / x86 / ARM64), Linux (AppImage, deb, rpm, Flatpak, Nix), FreeBSD, web | ~60% | 25–45 h | macOS is where it is tested; Windows installer UI unverified on Windows (#79); web experimental (CPU only) |
 | Ecosystem / plug-ins | ~25% | ~15% | 40–80 h + owner decision | no reference editor SDK equivalent (export, publish, metadata plug-ins); beyond the target: JSON-lines control channel, MCP server with 28 tools + one per command, CLI |
@@ -80,7 +80,7 @@ from the checklist sections and the deep-dive documents.
 | Export | 6% | 89% | 75% | 15–30 h | checklist S 88.9% |
 | Merge and HDR | 3% | 85% | 60% | 20–35 h | merge 100%, HDR 70% (no HDR display) |
 | Views, compare, zoom, culling | 5% | 90% | 70% | 15–30 h | zoom detail P0 gap |
-| Classic output modules (Map, Book, Slideshow, Print, Web, publish, tethering) | 4% | 15% | 10% | 90–150 h | Classic extras 48% counts many small keys; the modules themselves are mostly ⬜ |
+| Classic output modules (Map, Book, Slideshow, Print, Web, publish, tethering) | 4% | 15% | 10% | 90–150 h | Classic extras 48% counts many small keys; the modules themselves are mostly ⬜ [#119](https://github.com/Orthic-Labs/ember/issues/119) |
 | Video | 1% | 0% | 0% | 25–45 h | catalogued only |
 | **Weighted** | 100% | **~77%** | **~61%** (60.6%) | **600–1,100 h** | |
 
@@ -93,18 +93,18 @@ search embeddings; generative remove runs in reference publisher's cloud.
 
 | Feature | Ember | Status |
 |---|---|---|
-| Subject / Sky / Background masks | classical heuristics; the file's own DNG semantic mattes | 🟡 |
-| People (faces, body, hair, skin…) and Landscape masks | — | ⬜ |
-| Object / Describe masks | SAM 3 in pure Rust (Metal / CPU); opt-in 3.4 GB download, no mirror configured | 🟡 |
-| Depth range mask, Lens Blur | — | ⬜ |
-| AI Denoise | Bayer only, pure-Rust CPU / GPU, user-installed weights | 🟡 |
-| Raw Details, Super Resolution | — | ⬜ |
+| Subject / Sky / Background masks | classical heuristics; the file's own DNG semantic mattes | 🟡 [#27](https://github.com/Orthic-Labs/ember/issues/27) |
+| People (faces, body, hair, skin…) and Landscape masks | — | ⬜ [#27](https://github.com/Orthic-Labs/ember/issues/27) |
+| Object / Describe masks | SAM 3 in pure Rust (Metal / CPU); opt-in 3.4 GB download, no mirror configured | 🟡 [#62](https://github.com/Orthic-Labs/ember/issues/62) |
+| Depth range mask, Lens Blur | — | ⬜ [#64](https://github.com/Orthic-Labs/ember/issues/64) |
+| AI Denoise | Bayer only, pure-Rust CPU / GPU, user-installed weights | 🟡 [#27](https://github.com/Orthic-Labs/ember/issues/27) |
+| Raw Details, Super Resolution | — | ⬜ [#51](https://github.com/Orthic-Labs/ember/issues/51) |
 | Generative remove, distractions, reflections | — (generative is out of scope: cloud) | ⬜ |
 | Dust detection | ✅ | ✅ |
 | Faces / People | YuNet detection, SFace / AuraFace recognition (opt-in downloads), People view | ✅ (MVP, [faces.md](faces.md)) |
-| Assisted culling | focus, bursts | 🟡 (no eyes-open / aesthetics scores) |
-| Auto (tone), adaptive presets | Auto calibrated on reference editor's Auto results (#628); no adaptive presets | 🟡 |
-| Natural-language search | — | ⬜ |
+| Assisted culling | focus, bursts | 🟡 (no eyes-open / aesthetics scores) [#44](https://github.com/Orthic-Labs/ember/issues/44) |
+| Auto (tone), adaptive presets | Auto calibrated on reference editor's Auto results (#628); no adaptive presets | 🟡 [#50](https://github.com/Orthic-Labs/ember/issues/50) |
+| Natural-language search | — | ⬜ [#47](https://github.com/Orthic-Labs/ember/issues/47) |
 
 **Blocked on a model strategy** (maintainer decision): licensable weights or our own training;
 pure-Rust inference is proven (faces, SAM 3, denoise).

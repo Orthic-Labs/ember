@@ -34,7 +34,7 @@ A versioned bridge exposes typed requests/responses, cancellation, progress, str
 
 Generated CI will package Rust device/simulator libraries as an XCFramework. `aarch64-apple-ios` & `aarch64-apple-ios-sim` are supported Rust targets; Ember linking/runtime qualification remains future work. [Rust platform support](https://doc.rust-lang.org/rustc/platform-support.html)
 
-Bridge ownership is pending RightKit audit. Prefer shared native adapter/generation support. Any required ABI glue belongs behind isolated safe APIs; current production `unsafe` restrictions cannot silently expand. Mobile in-process supervision must be a qualified RightKit owner adapter, rather than copying desktop child-process supervision into Ember.
+Bridge ownership is pending RightKit audit. Prefer shared native adapter/generation support. Any required ABI glue belongs behind isolated safe APIs; current production `unsafe` restrictions cannot silently expand. Mobile in-process supervision must be a qualified RightKit owner adapter, rather than copying desktop child-process supervision into Ember. [#212](https://github.com/Orthic-Labs/ember/issues/212)
 
 ## Portable data, separate from local catalog
 

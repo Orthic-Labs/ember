@@ -36,6 +36,6 @@ One undo step. `dryRun: true` returns the values without editing. Regressions (`
 ## Limits & next
 
 - Tone & colourfulness only: no hue shifts, split toning, curves or grain are transferred (a preset does those; a look target & a preset combine: apply the preset, then the target).
-- Percentile statistics do not see *where* tones sit. Spatial targets (centre vs edge, sky vs ground) & face-weighted exposure follow the same path as Auto's next steps (`auto-tone.md`).
-- Batch: `develop.applyLook` with `ids` is not yet implemented; drive it per photo (CLI `run`, MCP) or via sync after one apply.
+- Percentile statistics do not see *where* tones sit. Spatial targets (centre vs edge, sky vs ground) & face-weighted exposure follow the same path as Auto's next steps (`auto-tone.md`). [#203](https://github.com/Orthic-Labs/ember/issues/203)
+- Batch: `develop.applyLook` with `ids` is not yet implemented; drive it per photo (CLI `run`, MCP) or via sync after one apply. [#202](https://github.com/Orthic-Labs/ember/issues/202)
 - Personal style from accepted edits (`personal-auto-evaluation.md`) is the learned counterpart: a look target needs no training & five samples; a residual model needs hundreds of accepted edits & qualifies against held-out shoots.

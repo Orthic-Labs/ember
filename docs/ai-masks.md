@@ -118,7 +118,7 @@ The model is fetched from an ordered list of mirrors: base URLs where `<base>/mo
 > unchanged, and pin `vocab.json` / `merges.txt` (size + SHA-256) in `SAM3_FILES` at the same
 > time. Until then the in-app download needs a user-configured mirror, and the dialog says so:
 > it names the three files to put in the model folder by hand, with a button that shows that folder
-> (created if needed) and a link to this guide.
+> (created if needed) and a link to this guide. [#177](https://github.com/Orthic-Labs/ember/issues/177)
 
 Hugging Face's `facebook/sam3` can't be a default: it is **gated** (each person must accept the
 licence there, wait for approval and download with their own token). Someone with access can

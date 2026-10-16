@@ -40,6 +40,6 @@ the image centre (lensfun's `<center>` offsets are not read).
 ## Limits
 
 - Only raws: rendered images (JPEG, HEIF, TIFF) are often already corrected in camera.
-- The focus distance is not read from maker notes yet: vignetting uses the farthest calibrated distance.
-- No manual make / model picker yet; matching is automatic.
-- Not yet validated against real photos and another renderer; the tests use synthetic profiles and grids.
+- The focus distance is not read from maker notes yet: vignetting uses the farthest calibrated distance. [#217](https://github.com/Orthic-Labs/ember/issues/217)
+- No manual make / model picker yet; matching is automatic. [#218](https://github.com/Orthic-Labs/ember/issues/218)
+- Not yet validated against real photos and another renderer; the tests use synthetic profiles and grids. [#219](https://github.com/Orthic-Labs/ember/issues/219)
