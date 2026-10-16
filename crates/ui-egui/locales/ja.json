@@ -2313,6 +2313,8 @@
   "Video support isn't installed": "動画のサポートがインストールされていません",
   "Playback position": "再生位置",
   "Set Poster Frame": "ポスターフレームを設定",
+  "Capture Frame": "フレームを取り込む",
+  "Capturing Frame": "フレームを取り込み中",
   "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "表示中のフレームを、グリッド、ルーペ、書き出しでのこのクリップのポスターにします",
   "Depth": "深度",
   "Select Depth Range": "深度範囲を選択",

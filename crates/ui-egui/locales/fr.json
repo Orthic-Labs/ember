@@ -2310,6 +2310,8 @@
   "Video support isn't installed": "La prise en charge de la vidéo n'est pas installée",
   "Playback position": "Position de lecture",
   "Set Poster Frame": "Définir l'image d'affiche",
+  "Capture Frame": "Capturer l'image",
+  "Capturing Frame": "Capture de l'image en cours",
   "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Utiliser l'image affichée comme image d'affiche de ce clip dans la grille, la loupe et les exports",
   "Depth": "Profondeur",
   "Select Depth Range": "Sélectionner une plage de profondeur",

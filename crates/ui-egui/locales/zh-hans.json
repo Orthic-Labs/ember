@@ -2312,6 +2312,8 @@
   "Video support isn't installed": "未安装视频支持",
   "Playback position": "播放位置",
   "Set Poster Frame": "设置海报帧",
+  "Capture Frame": "截取帧",
+  "Capturing Frame": "正在截取帧",
   "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "将当前画面用作此视频在网格、放大视图和导出中的海报帧",
   "Depth": "深度",
   "Select Depth Range": "选择深度范围",

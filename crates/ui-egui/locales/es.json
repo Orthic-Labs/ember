@@ -2310,6 +2310,8 @@
   "Video support isn't installed": "La compatibilidad con vídeo no está instalada",
   "Playback position": "Posición de reproducción",
   "Set Poster Frame": "Establecer fotograma de póster",
+  "Capture Frame": "Capturar fotograma",
+  "Capturing Frame": "Capturando fotograma",
   "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Usar el fotograma en pantalla como póster de este clip en la cuadrícula, la lupa y las exportaciones",
   "Depth": "Profundidad",
   "Select Depth Range": "Seleccionar rango de profundidad",

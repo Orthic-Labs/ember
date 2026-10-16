@@ -2311,6 +2311,8 @@
   "Video support isn't installed": "Chưa cài đặt hỗ trợ video",
   "Playback position": "Vị trí phát",
   "Set Poster Frame": "Đặt khung hình poster",
+  "Capture Frame": "Chụp khung hình",
+  "Capturing Frame": "Đang chụp khung hình",
   "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Dùng khung hình đang hiển thị làm poster của clip này trong lưới, kính lúp và khi xuất",
   "Depth": "Độ sâu",
   "Select Depth Range": "Chọn dải độ sâu",

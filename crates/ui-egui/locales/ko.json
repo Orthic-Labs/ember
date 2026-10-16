@@ -2311,6 +2311,8 @@
   "Video support isn't installed": "동영상 지원이 설치되어 있지 않습니다",
   "Playback position": "재생 위치",
   "Set Poster Frame": "포스터 프레임 설정",
+  "Capture Frame": "프레임 캡처",
+  "Capturing Frame": "프레임 캡처 중",
   "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "화면의 프레임을 그리드, 루페, 내보내기에서 이 클립의 포스터로 사용합니다",
   "Depth": "깊이",
   "Select Depth Range": "깊이 범위 선택",

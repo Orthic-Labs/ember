@@ -110,6 +110,26 @@ settings (`trim_in`, `trim_out`); `video.clearTrim {id?}` keeps the whole clip a
   (it starts at the in point and stops at the out point; scrubbing is free, so new points can be found outside it); draggable handles on
   the player's scrubber are not there yet.
 
+## Capture Frame
+
+`video.captureFrame {id?, t?}` (Photo ▸ Capture Frame, issue #113) saves one frame of a clip as a JPEG beside the clip.
+
+- **Frame.** At `t` seconds (held inside the clip). By default `t` is where the player is when the clip is loaded in it, else the poster
+  frame. The frame is decoded at the clip's full size (its longest edge; the sidecar caps it at 4096 px) by `lightcraft_video::frame_at_with`,
+  under the activity row "Capturing Frame" with a stop button that kills the child process. It is encoded as a JPEG (quality 95, 4:4:4), not
+  colour managed and without the clip's edits, as the stream's frames are.
+- **File.** `<clip name> frame <t>s.jpg` in the clip's folder, for example `beach frame 7.500s.jpg`. A name already taken gets ` (2)`,
+  ` (3)` and so on before the extension, so a capture never overwrites a file. The file is written durably, as every export is.
+- **Catalog.** The JPEG is imported (as Render to DNG imports its copy) and stacked with the clip, the frame on top. It takes the clip's
+  keywords and rating, and its capture time is the clip's capture time plus the whole seconds of `t` (rounded down).
+- **One undo step.** The import, the metadata and the stack are folded into one History entry, "Capture Frame". Undo removes the frame from
+  the catalog and the stack; the JPEG stays on disk, as an imported file does.
+- **Errors.** Without the sidecar the command fails with "video support not installed" before anything is written. A clip with no file (a
+  generated demo) has nothing to take a frame from. A `t` below zero or a photo that is not a video is refused.
+- **Frame source.** The decoder is a parameter (`video_capture::capture_frame`), so the tests (`tests_video_capture.rs`) use a fake frame
+  and run without the sidecar; they check the file names, the capture time, the metadata copy, the stack, the single undo step and the
+  error without the sidecar.
+
 ## Export
 
 `app.export {format: "video"}` (desktop app, `lightcraft-cli run`, MCP `export`, the control channel) writes each selected video as a clip

@@ -2311,6 +2311,8 @@
   "Video support isn't installed": "Videounterstützung ist nicht installiert",
   "Playback position": "Wiedergabeposition",
   "Set Poster Frame": "Posterbild festlegen",
+  "Capture Frame": "Bild aufnehmen",
+  "Capturing Frame": "Bild wird aufgenommen",
   "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Das angezeigte Bild als Posterbild dieses Clips in Raster, Lupe und Export verwenden",
   "Depth": "Tiefe",
   "Select Depth Range": "Tiefenbereich auswählen",

@@ -79,6 +79,7 @@ pub mod smart;
 pub mod sync;
 pub mod video;
 pub mod video_player;
+mod video_capture;
 mod view;
 pub mod walk;
 
@@ -1160,5 +1161,7 @@ mod tests_sync;
 mod tests_video;
 #[cfg(test)]
 mod tests_video_player;
+#[cfg(test)]
+mod tests_video_capture;
 #[cfg(test)]
 mod tests_xmp;

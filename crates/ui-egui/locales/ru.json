@@ -2311,6 +2311,8 @@
   "Video support isn't installed": "Поддержка видео не установлена",
   "Playback position": "Позиция воспроизведения",
   "Set Poster Frame": "Задать кадр постера",
+  "Capture Frame": "Снять кадр",
+  "Capturing Frame": "Съёмка кадра",
   "Use the frame on screen as this clip's poster in the grid, the loupe and exports": "Использовать текущий кадр как постер этого клипа в сетке, лупе и экспорте",
   "Depth": "Глубина",
   "Select Depth Range": "Выбрать диапазон глубины",
