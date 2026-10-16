@@ -199,6 +199,7 @@ const LAYOUT: &[(&str, &[&str])] = &[
             "develop.treatment",
             "develop.reset",
             "develop.updateProcess",
+            "develop.updateAi",
             "dialog.createPreset",
             "---",
             "photo.saveMetadataToFile",
@@ -1481,6 +1482,18 @@ mod tests {
         let p = app.session.catalog.photo(lightcraft_engine::catalog::PhotoId(id)).unwrap();
         assert_eq!(p.meta.gps, Some((46.001, 7.002)));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn update_ai_settings_is_in_the_photo_menu_and_runs_on_the_selection() {
+        let mut app = app();
+        let id = app.session.visible()[0].0;
+        app.session.execute("library.select", &json!({"ids": [id]})).unwrap();
+        let photo_menu = menu_bar(&app).into_iter().find(|(t, _)| t == "Photo").unwrap().1;
+        let Some(MenuNode::Item { enabled, .. }) = find(&photo_menu, "develop.updateAi") else { panic!("not in the Photo menu") };
+        assert!(enabled, "a selected photo can be updated");
+        let r = run_item(&mut app, "develop.updateAi", json!({})).unwrap();
+        assert_eq!(r["stale"], 0, "{r}");
     }
 
     #[test]
