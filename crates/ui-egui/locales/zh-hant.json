@@ -2172,5 +2172,9 @@
   "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "忘記會刪除所有臉孔嵌入資料和自動找到的未命名臉孔，並關閉辨識。已命名的臉孔會保留。",
   "Forget All Face Data…": "忘記所有臉孔資料…",
   "Forget": "忘記",
-  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "已忘記 {embeddings} 筆臉孔嵌入資料和 {regions} 個未命名臉孔。"
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "已忘記 {embeddings} 筆臉孔嵌入資料和 {regions} 個未命名臉孔。",
+  "GPU choice": "GPU 選擇",
+  "High performance": "高效能",
+  "Power saving": "節能",
+  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "節能會優先使用內建顯示卡（如果有）。變更將在下次啟動 GPU 時生效。"
 }

@@ -2175,5 +2175,9 @@
   "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "忘れると、すべての顔の特徴データと、自動で見つかった名前のない顔が削除され、認識はオフになります。名前付きの顔は残ります。",
   "Forget All Face Data…": "顔のデータをすべて忘れる…",
   "Forget": "忘れる",
-  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "顔の特徴データ {embeddings} 件と名前のない顔 {regions} 件を削除しました。"
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "顔の特徴データ {embeddings} 件と名前のない顔 {regions} 件を削除しました。",
+  "GPU choice": "GPU の選択",
+  "High performance": "高パフォーマンス",
+  "Power saving": "省電力",
+  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "省電力では、内蔵 GPU がある場合はそれを優先します。変更は次回 GPU の起動時に反映されます。"
 }

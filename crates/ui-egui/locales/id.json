@@ -2173,5 +2173,9 @@
   "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "Melupakan menghapus semua embedding wajah dan wajah tanpa nama yang ditemukan otomatis, dan mematikan pengenalan. Wajah yang sudah diberi nama tetap disimpan.",
   "Forget All Face Data…": "Lupakan Semua Data Wajah…",
   "Forget": "Lupakan",
-  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "{embeddings} embedding wajah dan {regions} wajah tanpa nama dilupakan."
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "{embeddings} embedding wajah dan {regions} wajah tanpa nama dilupakan.",
+  "GPU choice": "Pilihan GPU",
+  "High performance": "Performa tinggi",
+  "Power saving": "Hemat daya",
+  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Hemat daya memilih GPU terintegrasi jika ada. Perubahan berlaku saat GPU dimulai berikutnya."
 }

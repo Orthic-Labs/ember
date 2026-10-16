@@ -2173,5 +2173,9 @@
   "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "Beim Vergessen werden alle Gesichts-Einbettungen und die automatisch gefundenen, unbenannten Gesichter gelöscht, und die Erkennung wird ausgeschaltet. Benannte Gesichter bleiben.",
   "Forget All Face Data…": "Alle Gesichtsdaten vergessen…",
   "Forget": "Vergessen",
-  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "{embeddings} Gesichts-Einbettungen und {regions} unbenannte Gesichter vergessen."
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "{embeddings} Gesichts-Einbettungen und {regions} unbenannte Gesichter vergessen.",
+  "GPU choice": "GPU-Wahl",
+  "High performance": "Hohe Leistung",
+  "Power saving": "Energiesparen",
+  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Energiesparen bevorzugt die integrierte GPU, wo es eine gibt. Eine Änderung wirkt beim nächsten Start der GPU."
 }

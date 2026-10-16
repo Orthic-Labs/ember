@@ -430,6 +430,16 @@ fn performance_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
     use lightcraft_engine::gpu;
     heading(ui, t, crate::i18n::tr("Rendering"));
     check(ui, "settings.gpu", &mut app.ui.settings.gpu, "Use the GPU for rendering");
+    row(ui, t, crate::i18n::tr("GPU choice"), |ui| {
+        let (fast, saving) = (crate::i18n::tr("High performance"), crate::i18n::tr("Power saving"));
+        let mut low = app.ui.settings.gpu_low_power;
+        if choices(ui, "settingsGpuPower", &[(false, fast), (true, saving)], &mut low) {
+            app.ui.settings.gpu_low_power = low;
+            let power = if low { "low" } else { "high" };
+            let _ = app.run("app.gpu", json!({"power": power}));
+        }
+    });
+    hint(ui, t, crate::i18n::tr("Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts."));
     let status = if !gpu::available() {
         match gpu::unavailable_reason() {
             Some(why) => crate::i18n::tr_format!("Rendering on the CPU: {why}", why = why),
@@ -1178,6 +1188,19 @@ pub fn display_profile(app: &mut LightcraftApp, p: &Value) -> Result<Value, Stri
         Some(d) => d.describe(),
         None => json!({"path": null, "description": "sRGB (no display profile)"}),
     })
+}
+
+#[test]
+fn device_settings_have_defaults_and_survive_a_save() {
+    use crate::state::AppSettings;
+    let d = AppSettings::default();
+    assert!(d.gpu && !d.gpu_low_power && d.memory_mb == 0);
+    let saved = serde_json::to_string(&AppSettings { gpu_low_power: true, memory_mb: 2048, ..Default::default() }).unwrap();
+    let back: AppSettings = serde_json::from_str(&saved).unwrap();
+    assert!(back.gpu_low_power && back.memory_mb == 2048 && back.gpu);
+    // a ui.json written before the GPU choice existed keeps the fast GPU
+    let old: AppSettings = serde_json::from_str(r#"{"gpu":false}"#).unwrap();
+    assert!(!old.gpu && !old.gpu_low_power);
 }
 
 #[cfg(test)]

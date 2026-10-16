@@ -251,6 +251,8 @@ pub struct AppSettings {
     pub confirm_delete: bool,
     /// GPU rendering allowed (`app.gpu`).
     pub gpu: bool,
+    /// The power-saving GPU instead of the fast one (`app.gpu {power}`); it takes effect when the GPU next starts.
+    pub gpu_low_power: bool,
     /// Largest long edge (pixels) the user lets the loupe render at; 0 = Automatic (the size it is
     /// drawn at, up to the photo's own pixels and [`LOUPE_EDGE_CEILING`]). Not the old
     /// `previewEdge` key: its 2560 px default was the soft-image bug (issue #323).
@@ -302,6 +304,7 @@ impl Default for AppSettings {
             startup_view: StartupView::Last,
             confirm_delete: true,
             gpu: true,
+            gpu_low_power: false,
             preview_limit: 0,
             external_editor: String::new(),
             external_file: EditFile::default(),

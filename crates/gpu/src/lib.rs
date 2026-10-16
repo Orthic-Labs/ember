@@ -50,6 +50,8 @@ mod render;
 pub use render::GpuStages;
 
 static ENABLED: AtomicBool = AtomicBool::new(true);
+/// The power-saving GPU is preferred (`set_low_power`); read when the device is created.
+static LOW_POWER: AtomicBool = AtomicBool::new(false);
 /// Set when a GPU render failed: the process stays on the CPU from then on.
 static BROKEN: AtomicBool = AtomicBool::new(false);
 
@@ -203,6 +205,17 @@ pub fn reset_failures() {
 /// whole process regardless.
 pub fn set_enabled(on: bool) {
     ENABLED.store(on, Ordering::Relaxed);
+}
+
+/// Prefer the power-saving GPU (the integrated one, where there is one) over the fast one. The device is chosen when it
+/// is created, so the choice takes effect the next time the GPU starts.
+pub fn set_low_power(on: bool) {
+    LOW_POWER.store(on, Ordering::Relaxed);
+}
+
+/// Whether the power-saving GPU is preferred (see [`set_low_power`]).
+pub fn low_power() -> bool {
+    LOW_POWER.load(Ordering::Relaxed)
 }
 
 /// Whether GPU rendering is allowed (environment, preference, no earlier failure — real, or

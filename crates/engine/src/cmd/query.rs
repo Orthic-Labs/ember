@@ -224,12 +224,21 @@ pub fn specs() -> Vec<CommandSpec> {
                 "versions": ph.versions.iter().map(|v| json!({"name": v.name, "created": v.created})).collect::<Vec<_>>(),
             }))
         }),
-        cmd!(query "app.gpu", "GPU Rendering", [], None, "{enabled?: bool} — allow/forbid GPU rendering (CPU fallback; LIGHTCRAFT_GPU=0 forbids it for the process); returns {enabled, available, adapter, reason (why the GPU is off), lastFallback (latest render redone on the CPU, and why)}", always, |_, p| {
+        cmd!(query "app.gpu", "GPU Rendering", [], None, "{enabled?: bool, power?: high | low} — allow/forbid GPU rendering (CPU fallback; LIGHTCRAFT_GPU=0 forbids it for the process) and choose the GPU: high (the fast one, the default) or low (power saving, where there is one; it takes effect when the GPU next starts); returns {enabled, power, available, adapter, reason (why the GPU is off), lastFallback (latest render redone on the CPU, and why)}", always, |_, p| {
             if let Some(on) = p.get("enabled").and_then(Value::as_bool) {
                 lightcraft_gpu::set_enabled(on);
             }
+            if let Some(choice) = p.get("power") {
+                match choice.as_str() {
+                    Some("low") => lightcraft_gpu::set_low_power(true),
+                    Some("high") => lightcraft_gpu::set_low_power(false),
+                    _ => return Err(bad("app.gpu", "power must be high or low")),
+                }
+            }
+            let power = if lightcraft_gpu::low_power() { "low" } else { "high" };
             Ok(json!({
                 "enabled": lightcraft_gpu::enabled(),
+                "power": power,
                 "available": lightcraft_gpu::available(),
                 "adapter": lightcraft_gpu::adapter_name(),
                 "reason": lightcraft_gpu::unavailable_reason(),
@@ -254,6 +263,24 @@ pub fn specs() -> Vec<CommandSpec> {
             Ok(Value::Array(s.journal[start..].iter().map(|(c, p)| json!({"command": c, "params": p})).collect()))
         }),
     ]
+}
+
+#[cfg(test)]
+mod gpu_power_tests {
+    use crate::Session;
+    use serde_json::json;
+
+    #[test]
+    fn the_gpu_choice_is_set_reported_and_bad_values_are_refused() {
+        let mut s = Session::with_demo();
+        assert_eq!(s.execute("app.gpu", &json!({"power": "low"})).unwrap()["power"], "low");
+        assert!(lightcraft_gpu::low_power());
+        assert_eq!(s.execute("app.gpu", &json!({})).unwrap()["power"], "low");
+        assert!(s.execute("app.gpu", &json!({"power": "turbo"})).is_err());
+        assert!(lightcraft_gpu::low_power(), "a refused value changes nothing");
+        assert_eq!(s.execute("app.gpu", &json!({"power": "high"})).unwrap()["power"], "high");
+        assert!(!lightcraft_gpu::low_power());
+    }
 }
 
 #[cfg(test)]

@@ -2173,5 +2173,9 @@
   "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "При забывании удаляются все векторы лиц и автоматически найденные безымянные лица, распознавание выключается. Лица с именами остаются.",
   "Forget All Face Data…": "Забыть все данные о лицах…",
   "Forget": "Забыть",
-  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "Забыто векторов лиц: {embeddings}, безымянных лиц: {regions}."
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "Забыто векторов лиц: {embeddings}, безымянных лиц: {regions}.",
+  "GPU choice": "Выбор GPU",
+  "High performance": "Высокая производительность",
+  "Power saving": "Экономия энергии",
+  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Экономия энергии предпочитает встроенный GPU, если он есть. Изменение действует при следующем запуске GPU."
 }

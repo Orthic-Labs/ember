@@ -2173,5 +2173,9 @@
   "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "Quên sẽ xóa mọi embedding khuôn mặt và các khuôn mặt chưa đặt tên được tìm tự động, đồng thời tắt nhận diện. Khuôn mặt đã đặt tên được giữ lại.",
   "Forget All Face Data…": "Quên mọi dữ liệu khuôn mặt…",
   "Forget": "Quên",
-  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "Đã quên {embeddings} embedding khuôn mặt và {regions} khuôn mặt chưa đặt tên."
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "Đã quên {embeddings} embedding khuôn mặt và {regions} khuôn mặt chưa đặt tên.",
+  "GPU choice": "Chọn GPU",
+  "High performance": "Hiệu năng cao",
+  "Power saving": "Tiết kiệm điện",
+  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Tiết kiệm điện ưu tiên GPU tích hợp nếu có. Thay đổi có hiệu lực lần GPU khởi động tiếp theo."
 }

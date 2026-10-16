@@ -2173,5 +2173,9 @@
   "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "잊기를 실행하면 모든 얼굴 임베딩과 자동으로 찾은 이름 없는 얼굴이 삭제되고 인식이 꺼집니다. 이름이 붙은 얼굴은 남습니다.",
   "Forget All Face Data…": "모든 얼굴 데이터 잊기…",
   "Forget": "잊기",
-  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "얼굴 임베딩 {embeddings}개와 이름 없는 얼굴 {regions}개를 잊었습니다."
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "얼굴 임베딩 {embeddings}개와 이름 없는 얼굴 {regions}개를 잊었습니다.",
+  "GPU choice": "GPU 선택",
+  "High performance": "고성능",
+  "Power saving": "절전",
+  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "절전은 내장 GPU가 있으면 그것을 우선합니다. 변경 사항은 다음에 GPU가 시작될 때 적용됩니다."
 }

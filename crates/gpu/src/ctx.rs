@@ -301,8 +301,9 @@ impl Gpu {
         // no indirect-call validation pipeline: Intel Metal fails to compile it (#250)
         desc.flags = crate::backend::instance_flags_from_env(desc.flags);
         let instance = wgpu::Instance::new(desc);
+        let power_preference = if crate::low_power() { wgpu::PowerPreference::LowPower } else { wgpu::PowerPreference::HighPerformance };
         let adapter = pollster::block_on(
-            instance.request_adapter(&wgpu::RequestAdapterOptions { power_preference: wgpu::PowerPreference::HighPerformance, ..Default::default() }),
+            instance.request_adapter(&wgpu::RequestAdapterOptions { power_preference, ..Default::default() }),
         )
         .map_err(|e| format!("no GPU adapter among {backends:?} ({e})"))?;
         let info = adapter.get_info();
