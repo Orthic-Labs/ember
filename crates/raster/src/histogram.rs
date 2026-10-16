@@ -164,6 +164,20 @@ impl Histogram {
         (lo, hi)
     }
 
+    /// [`Histogram::clipping`] for an HDR histogram whose picture is limited to `headroom_ev` stops above SDR white (the
+    /// photo's headroom limit): the highlights are clipped from the bin of that limit up, not only at the end of the
+    /// scale. Without HDR bins, or without a headroom, this is `clipping()`.
+    pub fn clipping_at(&self, headroom_ev: Option<f32>) -> (f32, f32) {
+        let (lo, hi) = self.clipping();
+        let (Some(b), Some(ev)) = (self.hdr, headroom_ev.filter(|e| e.is_finite())) else { return (lo, hi) };
+        if self.total == 0 {
+            return (lo, hi);
+        }
+        let from = b.bin(ev.max(0.0).exp2());
+        let over = |v: &[u32]| v.iter().skip(from).sum::<u32>();
+        (lo, over(&self.r).max(over(&self.g)).max(over(&self.b)) as f32 / self.total as f32)
+    }
+
     /// Mean luma in 0..1.
     pub fn mean_luma(&self) -> f32 {
         if self.total == 0 {
@@ -220,6 +234,21 @@ mod tests {
         assert_eq!(h.b[255], 2, "16 and +inf");
         assert!((h.above_sdr() - 0.6).abs() < 1e-6, "{}", h.above_sdr());
         assert_eq!(Histogram::of_hdr(&[], 4.0).above_sdr(), 0.0);
+    }
+
+    #[test]
+    fn hdr_clipping_is_measured_at_the_headroom_limit() {
+        // two of four pixels reach a 2-stop headroom limit (linear 4); the others are below it (2 stops: linear 2; mid grey)
+        let px = [[4.0, 4.0, 4.0], [4.0, 1.0, 1.0], [2.0, 2.0, 2.0], [0.2, 0.2, 0.2]];
+        let h = Histogram::of_hdr(&px, 5.0);
+        assert_eq!(h.clipping().1, 0.0, "nothing reaches the end of the 5-stop scale");
+        let (_, hi) = h.clipping_at(Some(2.0));
+        assert!((hi - 0.5).abs() < 1e-6, "{hi}");
+        assert!(h.clipping_at(Some(1.0)).1 > hi, "a lower limit clips more");
+        assert_eq!(h.clipping_at(Some(5.0)).1, 0.0);
+        assert_eq!(h.clipping_at(None), h.clipping());
+        let sdr = Histogram::of_srgb8(&Rgba8::from_fn(2, 2, |_, _| [255, 255, 255, 255]));
+        assert_eq!(sdr.clipping_at(Some(2.0)), sdr.clipping());
     }
 
     #[test]

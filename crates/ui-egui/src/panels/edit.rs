@@ -728,7 +728,8 @@ fn histogram(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
                 p.add(egui::Shape::line(pts, Stroke::new(1.5, *c)));
             }
         }
-        let (lo, hi) = h.clipping();
+        // an HDR edit clips at its headroom limit, not at the end of the HDR scale
+        let (lo, hi) = h.clipping_at(h.hdr.and_then(|_| app.session.develop_of(id)).map(|d| d.hdr.max_ev as f32));
         for (on, x, active) in [(lo > 0.003, plot.left() + 12.0, app.ui.show_clipping), (hi > 0.003, plot.right() - 12.0, app.ui.show_clipping)] {
             let tri = Rect::from_center_size(pos2(x, plot.top() + 10.0), vec2(14.0, 12.0));
             p.rect_filled(tri, 2.0, if active { t.hover } else { Color32::from_gray(60) });
