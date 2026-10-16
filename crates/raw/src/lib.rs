@@ -9,6 +9,7 @@
 //!   [`RawImage::develop`] does all of it plus `OpcodeList3` and the default crop; [`RawImage::develop_binned`]
 //!   produces the same at 1/k of the size straight from the mosaic (previews, thumbnails;
 //!   [`RawImage::develop_binned_masked`] with the mask of blocks holding clipped samples, for [`highlight`]).
+//! - [`calibrate`] fits DNG colour tags to a photographed ColorChecker chart (own camera calibration).
 //! - [`color`] implements the DNG colour model (dual-illuminant interpolation, forward matrices, white balance)
 //!   and produces camera → linear Rec.2020 D65 matrices; [`profile`] reads and applies a DNG's own profile
 //!   look tables and tone curve, and [`gaintable`] its gain table map (Apple ProRAW's local tone mapping).
@@ -26,6 +27,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod binned;
+pub mod calibrate;
 pub mod color;
 pub mod demosaic;
 mod dng;
