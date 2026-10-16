@@ -213,6 +213,51 @@ pub fn start_contact_sheet(app: &mut LightcraftApp, params: &Value) -> Result<Va
     Ok(json!({"background": true, "total": total}))
 }
 
+/// Starts the Classic Print's PDF in the background (`app.printPdf`): the photos are prepared on the UI
+/// thread ([`lightcraft_engine::print::prepare`]), then rendered and written on a worker with the print's
+/// activity row and its cross. The file at `path` is written only when the print finishes.
+pub fn start_print(app: &mut LightcraftApp, ids: &[lightcraft_catalog::PhotoId], path: &str) -> Result<Value, String> {
+    if app.export.is_some() {
+        return Err("an export is already running".into());
+    }
+    app.session.check_write_target(path)?;
+    let model = app.session.print.clone();
+    let ppi = model.job.ppi;
+    let prepared = lightcraft_engine::print::prepare(&mut app.session, &model, ids, ppi, None)?;
+    let total = prepared.pages();
+    let write = app.services.write_shared.clone();
+    let progress = Arc::new(Mutex::new((0, String::new())));
+    let cancel = Arc::new(AtomicBool::new(false));
+    let (p, c) = (progress.clone(), cancel.clone());
+    let (tx, rx) = channel();
+    let guard = app.session.activity.start("export", "Printing", Cancel::Flag(cancel.clone()));
+    guard.progress(0, total as u64);
+    let path = path.to_string();
+    let work = move || {
+        let result = prepared
+            .pdf(&mut |done, pages| {
+                if let Ok(mut g) = p.lock() {
+                    *g = (done, format!("page {} of {pages}", done + 1));
+                }
+                !c.load(Ordering::Relaxed)
+            })
+            .and_then(|bytes| {
+                match write {
+                    Some(write) => write(&path, &bytes)?,
+                    None => lightcraft_engine::export::write_file(&path, &bytes)?,
+                }
+                Ok(vec![json!({"path": path, "pages": total, "ppi": ppi, "bytes": bytes.len(), "print": true})])
+            });
+        let _ = tx.send(result.map(|files| (files, None, c.load(Ordering::Relaxed))));
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    std::thread::Builder::new().name("print".into()).spawn(work).map_err(|e| e.to_string())?;
+    #[cfg(target_arch = "wasm32")]
+    work();
+    app.export = Some(ExportTask { total, progress, cancel, rx, guard });
+    Ok(json!({"background": true, "total": total}))
+}
+
 /// The toast's account of [`AfterExport::run`]'s Apple Photos outcome.
 pub fn apple_photos_note(outcome: &Value) -> String {
     if let Some(e) = outcome.get("error").and_then(Value::as_str) {
@@ -273,6 +318,7 @@ pub fn poll(app: &mut LightcraftApp, ctx: &egui::Context) {
             let msg = match r {
                 Ok((files, photos, _)) => {
                     let sheet = files.first().filter(|f| f["contactSheet"] == true);
+                    let print = files.first().filter(|f| f["print"] == true);
                     let ok = files.iter().filter(|f| f.get("path").is_some()).count();
                     let failed: Vec<&Value> = files.iter().filter(|f| f.get("error").is_some()).collect();
                     let skipped = files.iter().filter(|f| f.get("skipped").is_some()).count();
@@ -280,6 +326,9 @@ pub fn poll(app: &mut LightcraftApp, ctx: &egui::Context) {
                         crate::i18n::tr_format!("Exported {ok} of {total} photo{}", crate::i18n::plural_suffix(total == 1), ok = ok, total = total);
                     if let Some(sheet) = sheet {
                         m = format!("Exported contact sheet: {} photos, {} pages", sheet["photos"], sheet["pages"]);
+                    }
+                    if let Some(print) = print {
+                        m = format!("Printed {} pages to {}", print["pages"], print["path"].as_str().unwrap_or_default());
                     }
                     if skipped > 0 {
                         m += &crate::i18n::tr_format!(" · {skipped} skipped (file exists)", skipped = skipped);

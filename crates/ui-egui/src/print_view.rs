@@ -5,8 +5,8 @@
 //! its own. Text boxes keep a draft while they are being typed in, so a frame does not reset them.
 
 use crate::LightcraftApp;
-use crate::pick::{PickRequest, Picked};
 use crate::text_field::TextField;
+use lightcraft_catalog::PhotoId;
 use lightcraft_engine::print;
 use serde_json::{Value, json};
 
@@ -217,6 +217,24 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
             }
         });
         ui.separator();
+        // the profile the proof and the PDF are made for; it is chosen as a file (`app.printProfile`)
+        ui.label(crate::i18n::tr("Output profile"));
+        let profile = model.job.profile.trim().to_string();
+        let shown = if profile.is_empty() {
+            crate::i18n::tr("None").to_string()
+        } else {
+            std::path::Path::new(&profile).file_name().map_or_else(|| profile.clone(), |name| name.to_string_lossy().to_string())
+        };
+        ui.horizontal(|ui| {
+            ui.label(shown);
+            if ui.button(crate::i18n::tr("Choose…")).clicked() {
+                command = Some(("app.printProfile", json!({})));
+            }
+            if ui.add_enabled(!profile.is_empty(), egui::Button::new(crate::i18n::tr("Clear"))).clicked() {
+                command = Some(("print.set", json!({"job": {"profile": ""}})));
+            }
+        });
+        ui.separator();
         ui.checkbox(&mut guides.show, crate::i18n::tr("Show guides"));
         ui.add_enabled_ui(guides.show, |ui| {
             ui.checkbox(&mut guides.rulers, crate::i18n::tr("Rulers"));
@@ -293,7 +311,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         }
     }
     if export {
-        export_pdf(app, ctx);
+        export_pdf(app, ctx, &ids);
     }
     if close {
         app.ui.classic_print = None;
@@ -302,22 +320,12 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     }
 }
 
-/// Asks for a PDF path, then writes the print there (`print.export`), at the job's resolution.
-fn export_pdf(app: &mut LightcraftApp, ctx: &egui::Context) {
-    let params = json!({"format": "pdf"});
-    let request = PickRequest::save("Print PDF", "PDF", &["pdf"], "Print.pdf");
-    match crate::pick::ask(app, "print.export", &params, "path", request, |_| None) {
-        Picked::Now(paths) => {
-            let Some(path) = paths.first() else { return };
-            let mut params = params;
-            params["path"] = json!(path);
-            match app.run("print.export", params) {
-                Ok(done) => app.toast(ctx, format!("Printed {} pages to {}", done["pages"], path)),
-                Err(e) => app.toast_error(ctx, e),
-            }
-        }
-        Picked::Later => {}
-        Picked::Unavailable => app.toast_error(ctx, "no save dialog on this platform; print.export needs a path"),
+/// Starts the print's PDF in the background (`app.printPdf`) for the photos shown: the path is asked for,
+/// then the pages are rendered and written on a worker with the print's activity row and its cross.
+fn export_pdf(app: &mut LightcraftApp, ctx: &egui::Context, ids: &[PhotoId]) {
+    let params = json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<u64>>()});
+    if let Err(e) = app.run("app.printPdf", params) {
+        app.toast_error(ctx, e);
     }
 }
 

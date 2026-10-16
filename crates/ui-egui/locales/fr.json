@@ -2284,5 +2284,9 @@
   "Previous page": "Page précédente",
   "Repeat one photo per page": "Répéter une photo par page",
   "Rotate to fit": "Pivoter pour ajuster",
-  "Select photos to print.": "Sélectionnez des photos à imprimer."
+  "Select photos to print.": "Sélectionnez des photos à imprimer.",
+  "Output profile": "Profil de sortie",
+  "Output Profile": "Profil de sortie",
+  "Export Print PDF": "Exporter le PDF d’impression",
+  "Choose Print Output Profile": "Choisir le profil de sortie d’impression"
 }

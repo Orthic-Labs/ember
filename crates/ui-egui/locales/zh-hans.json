@@ -2286,5 +2286,9 @@
   "Previous page": "上一页",
   "Repeat one photo per page": "每页重复一张照片",
   "Rotate to fit": "旋转以适应",
-  "Select photos to print.": "选择要打印的照片。"
+  "Select photos to print.": "选择要打印的照片。",
+  "Output profile": "输出配置文件",
+  "Output Profile": "输出配置文件",
+  "Export Print PDF": "导出打印 PDF",
+  "Choose Print Output Profile": "选择打印输出配置文件"
 }

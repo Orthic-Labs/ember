@@ -2285,5 +2285,9 @@
   "Previous page": "Попередня сторінка",
   "Repeat one photo per page": "Повторювати одне фото на кожній сторінці",
   "Rotate to fit": "Повернути за розміром",
-  "Select photos to print.": "Виберіть фото для друку."
+  "Select photos to print.": "Виберіть фото для друку.",
+  "Output profile": "Профіль виводу",
+  "Output Profile": "Профіль виводу",
+  "Export Print PDF": "Експорт PDF для друку",
+  "Choose Print Output Profile": "Вибрати профіль виводу для друку"
 }

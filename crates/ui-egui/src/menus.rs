@@ -199,6 +199,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("dialog.export", "Export…", None, "File"),
     ("dialog.contactSheet", "Contact Sheet PDF…", None, "File"),
     ("app.contactSheet", "Export Contact Sheet PDF", None, ""),
+    ("app.printPdf", "Export Print PDF", None, ""),
+    ("app.printProfile", "Choose Print Output Profile", None, ""),
     ("photo.editInPhotoCraft", "Edit in PhotoCraft", Some("Cmd+Shift+E"), "Photo>Edit In"),
     ("photo.editInExternal", "Edit in Other Editor", Some("Cmd+Alt+E"), "Photo>Edit In"),
     ("dialog.mergeHdr", "HDR…", Some("Ctrl+H"), "Photo>Photo Merge"),
@@ -1401,6 +1403,48 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 params["path"] = json!(path);
             }
             crate::export_task::start_contact_sheet(app, &params)
+        }
+        "app.printPdf" => {
+            if app.export.is_some() {
+                return Some(Err("an export is already running".into()));
+            }
+            // the photos the print view shows, as photo ids
+            let parsed = p.get("ids").and_then(Value::as_array).map(|a| {
+                a.iter().map(|v| v.as_u64().map(lightcraft_catalog::PhotoId)).collect::<Option<Vec<_>>>()
+            });
+            let ids = match parsed {
+                Some(Some(ids)) => ids,
+                _ => return Some(Err("ids must be an array of photo ids".into())),
+            };
+            let mut params = p.clone();
+            if p.get("path").is_none() {
+                let req = PickRequest::save("Print PDF", "PDF", &["pdf"], "Print.pdf");
+                let paths = match crate::pick::ask(app, id, p, "path", req, |_| None) {
+                    Picked::Now(paths) => paths,
+                    Picked::Later => return Some(Ok(Value::Null)),
+                    Picked::Unavailable => return Some(Err("no save dialog on this platform; supply path".into())),
+                };
+                let Some(path) = paths.first() else { return Some(Ok(Value::Null)) };
+                params["path"] = json!(path);
+            }
+            let Some(path) = params["path"].as_str().map(str::to_string) else { return Some(Err("missing path".into())) };
+            crate::export_task::start_print(app, &ids, &path)
+        }
+        "app.printProfile" => {
+            // the output profile the print soft-proofs to (`print.set`, job.profile); its file is asked for first
+            let mut params = p.clone();
+            if p.get("path").is_none() {
+                let req = PickRequest::file(crate::i18n::tr("Output Profile"), "ICC profile", &["icc", "icm"]);
+                let paths = match crate::pick::ask(app, id, p, "path", req, |_| None) {
+                    Picked::Now(paths) => paths,
+                    Picked::Later => return Some(Ok(Value::Null)),
+                    Picked::Unavailable => return Some(Err("no file dialog on this platform; supply path".into())),
+                };
+                let Some(path) = paths.first() else { return Some(Ok(Value::Null)) };
+                params["path"] = json!(path);
+            }
+            let Some(path) = params["path"].as_str().map(str::to_string) else { return Some(Err("missing path".into())) };
+            app.run("print.set", json!({"job": {"profile": path}}))
         }
         "dialog.export" => {
             let prev = app.session.last_export.clone().unwrap_or_default();

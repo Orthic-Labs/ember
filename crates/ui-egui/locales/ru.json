@@ -2285,5 +2285,9 @@
   "Previous page": "Предыдущая страница",
   "Repeat one photo per page": "Повторять одно фото на каждой странице",
   "Rotate to fit": "Повернуть по размеру",
-  "Select photos to print.": "Выберите фото для печати."
+  "Select photos to print.": "Выберите фото для печати.",
+  "Output profile": "Профиль вывода",
+  "Output Profile": "Профиль вывода",
+  "Export Print PDF": "Экспорт PDF для печати",
+  "Choose Print Output Profile": "Выбрать профиль вывода для печати"
 }

@@ -2287,5 +2287,9 @@
   "Previous page": "前のページ",
   "Repeat one photo per page": "1 枚の写真をページごとに繰り返す",
   "Rotate to fit": "収まるように回転",
-  "Select photos to print.": "印刷する写真を選択してください。"
+  "Select photos to print.": "印刷する写真を選択してください。",
+  "Output profile": "出力プロファイル",
+  "Output Profile": "出力プロファイル",
+  "Export Print PDF": "印刷用 PDF を書き出す",
+  "Choose Print Output Profile": "印刷の出力プロファイルを選択"
 }

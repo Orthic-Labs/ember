@@ -2285,5 +2285,9 @@
   "Previous page": "이전 페이지",
   "Repeat one photo per page": "페이지마다 사진 하나 반복",
   "Rotate to fit": "맞게 회전",
-  "Select photos to print.": "인쇄할 사진을 선택하세요."
+  "Select photos to print.": "인쇄할 사진을 선택하세요.",
+  "Output profile": "출력 프로필",
+  "Output Profile": "출력 프로필",
+  "Export Print PDF": "인쇄 PDF 내보내기",
+  "Choose Print Output Profile": "인쇄 출력 프로필 선택"
 }

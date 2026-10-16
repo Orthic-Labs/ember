@@ -8,6 +8,7 @@ use crate::Session;
 use crate::book::{self, Rect, font_px, line_height, text_line};
 use crate::contact_sheet::{Pdf, blit};
 use crate::export::{SharpenAmount, SharpenFor, encode_image, named_space, output_sharpen};
+use crate::media::RenderJob;
 use crate::proof::{self, ProofIntent};
 use crate::slideshow::{self, Fields};
 use lightcraft_catalog::PhotoId;
@@ -517,30 +518,6 @@ fn rotate90(img: &Rgba8) -> Rgba8 {
     out
 }
 
-/// A photo fitted (or covering, with zoom to fill) into `w` × `h` pixels, turned to suit the cell and
-/// sharpened for output.
-fn fitted(session: &mut Session, m: &Model, id: PhotoId, w: usize, h: usize, proof: Option<u64>) -> Result<Rgba8, String> {
-    let (pw, ph) = session.catalog.photo(id).map(|p| (p.width, p.height)).ok_or("no such photo")?;
-    let turn = m.image.rotate_to_fit && w != h && pw != ph && ((pw > ph) != (w > h));
-    let (bw, bh) = if turn { (h, w) } else { (w, h) };
-    let mut job = session.export_job(id, bw, bh, OutputSpace::Srgb, OutputDepth::U8)?;
-    if let Some(profile) = proof {
-        job = job.with_proof(Some(Proof { space: OutputSpace::Srgb, dest_warning: false, display_warning: false, profile }));
-    }
-    let mut img = job.run().rendered?.image;
-    if turn {
-        img = rotate90(&img);
-    }
-    if m.image.zoom_to_fill {
-        img = slideshow::cover(&img, w, h);
-    }
-    let (target, amount) = sharpening(&m.job)?;
-    if target != SharpenFor::None {
-        output_sharpen(&mut img, target, amount);
-    }
-    Ok(img)
-}
-
 /// Draws a `width`-pixel frame of `colour` round the rectangle `r`, outside it.
 fn frame(img: &mut Rgba8, r: Rect, width: usize, colour: [u8; 3]) {
     let c = rgba(colour);
@@ -560,35 +537,6 @@ fn frame(img: &mut Rgba8, r: Rect, width: usize, colour: [u8; 3]) {
     }
 }
 
-/// One photo in its cell with its frame and caption.
-fn place(session: &mut Session, m: &Model, id: PhotoId, cell: Rect, proof: Option<u64>, ppi: f64, img: &mut Rgba8) -> Result<(), String> {
-    if cell.w == 0 || cell.h == 0 {
-        return Ok(());
-    }
-    let size = m.page.text_size_pt;
-    let strip = if m.page.captions { line_height(size, ppi, cell.h / 4) } else { 0 };
-    let stroke = (m.image.stroke_pt / 72.0 * ppi).round().max(0.0) as usize;
-    let (bw, bh) = (cell.w.saturating_sub(2 * stroke), cell.h.saturating_sub(strip + 2 * stroke));
-    if bw > 0 && bh > 0 {
-        let photo = fitted(session, m, id, bw, bh, proof)?;
-        if photo.width > bw || photo.height > bh {
-            return Err("the render exceeded the print cell".into());
-        }
-        let x = cell.x + stroke + (bw - photo.width) / 2;
-        let y = cell.y + stroke + (bh - photo.height) / 2;
-        blit(img, &photo, x, y)?;
-        if stroke > 0 {
-            frame(img, Rect { x, y, w: photo.width, h: photo.height }, stroke, m.image.stroke_color);
-        }
-    }
-    if strip > 0 {
-        let name = session.catalog.photo(id).map(|p| p.file_name.clone()).ok_or("no such photo")?;
-        let line = text_line(cell.w, strip, m.page.background, &name, font_px(size, ppi), "center", TEXT_COLOUR);
-        blit(img, &line, cell.x, cell.y + cell.h - strip)?;
-    }
-    Ok(())
-}
-
 /// A line of page text in the margin band, `top` or bottom; nothing is drawn with no margin.
 fn band_text(img: &mut Rgba8, m: &Model, text: &str, band: usize, ppi: f64, top: bool, align: &str) -> Result<(), String> {
     if text.trim().is_empty() || band == 0 || img.width <= 2 * band || img.height < band {
@@ -601,33 +549,205 @@ fn band_text(img: &mut Rgba8, m: &Model, text: &str, band: usize, ppi: f64, top:
     blit(img, &line, band, y)
 }
 
-/// Page `index` of the print of `photos` at `ppi`: the background, each cell's photo, and the
-/// identity plate and info text expanded from the page's first photo.
-pub fn render_page(session: &mut Session, m: &Model, photos: &[PhotoId], index: usize, ppi: f64) -> Result<Rgba8, String> {
-    let pages = plan(m, photos.len())?;
-    let page = pages.get(index).ok_or("no such page")?;
-    let (w_mm, h_mm) = paper_mm(&m.layout)?;
-    let (w, h) = page_size(w_mm, h_mm, ppi)?;
-    let proof = proof_id(&m.job)?;
-    let mut img = Rgba8::filled(w, h, rgba(m.page.background));
-    for (cell, slot) in cells_mm(m)?.iter().zip(page) {
-        let Some(i) = slot else { continue };
-        let id = *photos.get(*i).ok_or("no such photo")?;
-        place(session, m, id, cell_px(cell, ppi), proof, ppi, &mut img)?;
-    }
-    let first = page.iter().flatten().next().and_then(|i| photos.get(*i)).copied();
-    let fields = first.and_then(|id| session.catalog.photo(id)).map(Fields::of).unwrap_or_default();
-    let band = book::px(m.layout.margin_mm, ppi).round().max(0.0) as usize;
-    let identity = slideshow::expand(&m.page.identity_plate, &fields);
-    let info = slideshow::expand(&m.page.info_text, &fields);
-    band_text(&mut img, m, &identity, band, ppi, true, "left")?;
-    band_text(&mut img, m, &info, band, ppi, false, "right")?;
-    Ok(img)
-}
-
 /// The sRGB profile the print's pages are written in: photos are sRGB after any soft proof.
 fn output_profile() -> Vec<u8> {
     icc::write_named(named_space(OutputSpace::Srgb))
+}
+
+/// A print prepared on the session: each photo's render job and cell, and each page's text. Rendering it
+/// needs no session, so [`Prepared::pdf`] and [`Prepared::jpegs`] can run on a worker thread.
+pub struct Prepared {
+    model: Model,
+    ppi: f64,
+    /// The pages by index; `None` for a page that [`prepare`] was asked to leave out.
+    pages: Vec<Option<PreparedPage>>,
+}
+
+/// One page: its cells in plan order and the identity plate and info text of its first photo.
+struct PreparedPage {
+    cells: Vec<PreparedCell>,
+    identity: String,
+    info: String,
+}
+
+/// One cell in whole pixels: the photo (if any), its stroke and caption strip, and the caption (if any).
+struct PreparedCell {
+    cell: Rect,
+    strip: usize,
+    stroke: usize,
+    photo: Option<PreparedPhoto>,
+    caption: Option<String>,
+}
+
+/// A photo's render job, the box it is fitted into (`w` x `h`) and whether it is turned to fit.
+struct PreparedPhoto {
+    job: RenderJob,
+    w: usize,
+    h: usize,
+    turn: bool,
+}
+
+/// The print of `photos` at `ppi` prepared on `session`: every page, or only page `only`. Photos are
+/// looked up here, on the session's thread; the pages are then rendered without it.
+pub fn prepare(session: &mut Session, m: &Model, photos: &[PhotoId], ppi: f64, only: Option<usize>) -> Result<Prepared, String> {
+    let pages = plan(m, photos.len())?;
+    let (w_mm, h_mm) = paper_mm(&m.layout)?;
+    page_size(w_mm, h_mm, ppi)?;
+    let proof = proof_id(&m.job)?;
+    let cells = cells_mm(m)?;
+    let mut out = Vec::with_capacity(pages.len());
+    for (index, page) in pages.iter().enumerate() {
+        if only.is_some_and(|o| o != index) {
+            out.push(None);
+            continue;
+        }
+        let mut prepared = Vec::with_capacity(page.len());
+        for (cell, slot) in cells.iter().zip(page) {
+            let Some(i) = slot else { continue };
+            let id = *photos.get(*i).ok_or("no such photo")?;
+            prepared.push(prepare_cell(session, m, id, cell_px(cell, ppi), proof, ppi)?);
+        }
+        let first = page.iter().flatten().next().and_then(|i| photos.get(*i)).copied();
+        let fields = first.and_then(|id| session.catalog.photo(id)).map(Fields::of).unwrap_or_default();
+        out.push(Some(PreparedPage {
+            cells: prepared,
+            identity: slideshow::expand(&m.page.identity_plate, &fields),
+            info: slideshow::expand(&m.page.info_text, &fields),
+        }));
+    }
+    Ok(Prepared { model: m.clone(), ppi, pages: out })
+}
+
+/// One photo in its cell, laid out as [`place`] did: the stroke, the caption strip and the photo's box.
+fn prepare_cell(session: &mut Session, m: &Model, id: PhotoId, cell: Rect, proof: Option<u64>, ppi: f64) -> Result<PreparedCell, String> {
+    let size = m.page.text_size_pt;
+    let strip = if m.page.captions { line_height(size, ppi, cell.h / 4) } else { 0 };
+    let stroke = (m.image.stroke_pt / 72.0 * ppi).round().max(0.0) as usize;
+    let (bw, bh) = (cell.w.saturating_sub(2 * stroke), cell.h.saturating_sub(strip + 2 * stroke));
+    let empty = cell.w == 0 || cell.h == 0;
+    let photo = if !empty && bw > 0 && bh > 0 { Some(prepare_photo(session, m, id, bw, bh, proof)?) } else { None };
+    let caption = if !empty && strip > 0 {
+        Some(session.catalog.photo(id).map(|p| p.file_name.clone()).ok_or("no such photo")?)
+    } else {
+        None
+    };
+    Ok(PreparedCell { cell, strip, stroke, photo, caption })
+}
+
+/// The render job for a photo fitted (or covering, with zoom to fill) into `w` x `h`, turned when the
+/// photo's shape asks for it.
+fn prepare_photo(session: &mut Session, m: &Model, id: PhotoId, w: usize, h: usize, proof: Option<u64>) -> Result<PreparedPhoto, String> {
+    let (pw, ph) = session.catalog.photo(id).map(|p| (p.width, p.height)).ok_or("no such photo")?;
+    let turn = m.image.rotate_to_fit && w != h && pw != ph && ((pw > ph) != (w > h));
+    let (bw, bh) = if turn { (h, w) } else { (w, h) };
+    let mut job = session.export_job(id, bw, bh, OutputSpace::Srgb, OutputDepth::U8)?;
+    if let Some(profile) = proof {
+        job = job.with_proof(Some(Proof { space: OutputSpace::Srgb, dest_warning: false, display_warning: false, profile }));
+    }
+    Ok(PreparedPhoto { job, w, h, turn })
+}
+
+/// The rendered photo for its box: turned, covering when zoomed to fill, and sharpened for output.
+fn finish_photo(job: RenderJob, turn: bool, w: usize, h: usize, m: &Model) -> Result<Rgba8, String> {
+    let mut img = job.run().rendered?.image;
+    if turn {
+        img = rotate90(&img);
+    }
+    if m.image.zoom_to_fill {
+        img = slideshow::cover(&img, w, h);
+    }
+    let (target, amount) = sharpening(&m.job)?;
+    if target != SharpenFor::None {
+        output_sharpen(&mut img, target, amount);
+    }
+    Ok(img)
+}
+
+impl Prepared {
+    /// How many pages the print has.
+    pub fn pages(&self) -> usize {
+        self.pages.len()
+    }
+
+    /// Page `index` as pixels: the background, each cell's photo, and the identity plate and info text.
+    pub fn render(&self, index: usize) -> Result<Rgba8, String> {
+        let page = self.pages.get(index).ok_or("no such page")?.as_ref().ok_or("page not prepared")?;
+        let (w_mm, h_mm) = paper_mm(&self.model.layout)?;
+        let (w, h) = page_size(w_mm, h_mm, self.ppi)?;
+        let mut img = Rgba8::filled(w, h, rgba(self.model.page.background));
+        for cell in &page.cells {
+            self.draw_cell(cell, &mut img)?;
+        }
+        let band = book::px(self.model.layout.margin_mm, self.ppi).round().max(0.0) as usize;
+        band_text(&mut img, &self.model, &page.identity, band, self.ppi, true, "left")?;
+        band_text(&mut img, &self.model, &page.info, band, self.ppi, false, "right")?;
+        Ok(img)
+    }
+
+    /// One prepared cell drawn on the page: its photo with the stroke, then its caption.
+    fn draw_cell(&self, c: &PreparedCell, img: &mut Rgba8) -> Result<(), String> {
+        if let Some(photo) = &c.photo {
+            let picture = finish_photo(photo.job.clone(), photo.turn, photo.w, photo.h, &self.model)?;
+            if picture.width > photo.w || picture.height > photo.h {
+                return Err("the render exceeded the print cell".into());
+            }
+            let x = c.cell.x + c.stroke + (photo.w - picture.width) / 2;
+            let y = c.cell.y + c.stroke + (photo.h - picture.height) / 2;
+            blit(img, &picture, x, y)?;
+            if c.stroke > 0 {
+                frame(img, Rect { x, y, w: picture.width, h: picture.height }, c.stroke, self.model.image.stroke_color);
+            }
+        }
+        if let Some(name) = &c.caption {
+            let size = self.model.page.text_size_pt;
+            let line = text_line(c.cell.w, c.strip, self.model.page.background, name, font_px(size, self.ppi), "center", TEXT_COLOUR);
+            blit(img, &line, c.cell.x, c.cell.y + c.cell.h - c.strip)?;
+        }
+        Ok(())
+    }
+
+    /// The print as a PDF: one page per print page, each a JPEG on a paper of the layout's size, coloured by
+    /// the embedded sRGB profile. `progress(done, pages)` runs before each page; `false` cancels.
+    pub fn pdf(&self, progress: &mut dyn FnMut(usize, usize) -> bool) -> Result<Vec<u8>, String> {
+        let pages = self.pages.len();
+        let (w_mm, h_mm) = paper_mm(&self.model.layout)?;
+        let (w, h) = page_size(w_mm, h_mm, self.ppi)?;
+        let mut doc = Pdf::new(pages, (w_mm * 72.0 / 25.4, h_mm * 72.0 / 25.4)).with_icc(output_profile());
+        let mut total = 0usize;
+        for i in 0..pages {
+            if !progress(i, pages) {
+                return Err(CANCELLED.into());
+            }
+            let jpg = encode_image(&self.render(i)?, &slideshow::jpeg_options())?;
+            total = total.saturating_add(jpg.len());
+            if total > MAX_PDF_BYTES {
+                return Err("the print exceeds 256 MiB; print fewer photos or use a lower ppi".into());
+            }
+            doc.page(i, &jpg, w, h);
+        }
+        Ok(doc.finish())
+    }
+
+    /// One JPEG per print page, named `print-0001.jpg`, `print-0002.jpg`, ...; `progress` as for [`Self::pdf`].
+    pub fn jpegs(&self, progress: &mut dyn FnMut(usize, usize) -> bool) -> Result<Vec<(String, Vec<u8>)>, String> {
+        let pages = self.pages.len();
+        let (w_mm, h_mm) = paper_mm(&self.model.layout)?;
+        page_size(w_mm, h_mm, self.ppi)?;
+        let mut files = Vec::with_capacity(pages);
+        for i in 0..pages {
+            if !progress(i, pages) {
+                return Err(CANCELLED.into());
+            }
+            files.push((format!("print-{:04}.jpg", i + 1), encode_image(&self.render(i)?, &slideshow::jpeg_options())?));
+        }
+        Ok(files)
+    }
+}
+
+/// Page `index` of the print of `photos` at `ppi`: the background, each cell's photo, and the identity plate and
+/// info text expanded from the page's first photo.
+pub fn render_page(session: &mut Session, m: &Model, photos: &[PhotoId], index: usize, ppi: f64) -> Result<Rgba8, String> {
+    prepare(session, m, photos, ppi, Some(index))?.render(index)
 }
 
 /// The print as a PDF: one page per print page, each a JPEG at `ppi` on a paper of the layout's size,
@@ -644,23 +764,7 @@ pub fn export_pdf_with(
     ppi: f64,
     progress: &mut dyn FnMut(usize, usize) -> bool,
 ) -> Result<Vec<u8>, String> {
-    let pages = plan(m, photos.len())?.len();
-    let (w_mm, h_mm) = paper_mm(&m.layout)?;
-    let (w, h) = page_size(w_mm, h_mm, ppi)?;
-    let mut doc = Pdf::new(pages, (w_mm * 72.0 / 25.4, h_mm * 72.0 / 25.4)).with_icc(output_profile());
-    let mut total = 0usize;
-    for i in 0..pages {
-        if !progress(i, pages) {
-            return Err(CANCELLED.into());
-        }
-        let jpg = encode_image(&render_page(session, m, photos, i, ppi)?, &slideshow::jpeg_options())?;
-        total = total.saturating_add(jpg.len());
-        if total > MAX_PDF_BYTES {
-            return Err("the print exceeds 256 MiB; print fewer photos or use a lower ppi".into());
-        }
-        doc.page(i, &jpg, w, h);
-    }
-    Ok(doc.finish())
+    prepare(session, m, photos, ppi, None)?.pdf(progress)
 }
 
 /// One JPEG per print page at `ppi`, named `print-0001.jpg`, `print-0002.jpg`, ...
@@ -676,18 +780,7 @@ pub fn export_jpegs_with(
     ppi: f64,
     progress: &mut dyn FnMut(usize, usize) -> bool,
 ) -> Result<Vec<(String, Vec<u8>)>, String> {
-    let pages = plan(m, photos.len())?.len();
-    let (w_mm, h_mm) = paper_mm(&m.layout)?;
-    page_size(w_mm, h_mm, ppi)?;
-    let mut files = Vec::with_capacity(pages);
-    for i in 0..pages {
-        if !progress(i, pages) {
-            return Err(CANCELLED.into());
-        }
-        let img = render_page(session, m, photos, i, ppi)?;
-        files.push((format!("print-{:04}.jpg", i + 1), encode_image(&img, &slideshow::jpeg_options())?));
-    }
-    Ok(files)
+    prepare(session, m, photos, ppi, None)?.jpegs(progress)
 }
 
 #[cfg(test)]
@@ -697,6 +790,20 @@ mod tests {
 
     fn photos(s: &Session, n: usize) -> Vec<PhotoId> {
         s.catalog.photos().take(n).map(|p| p.id).collect()
+    }
+
+    #[test]
+    fn a_prepared_print_renders_the_same_pages_and_stops_when_cancelled() {
+        // the UI prepares on the session and renders on a worker: the pages must match the session render
+        let mut s = Session::with_demo();
+        let m = Model::default();
+        let ids = photos(&s, 2);
+        let prepared = prepare(&mut s, &m, &ids, 72.0, None).unwrap();
+        assert_eq!(prepared.pages(), plan(&m, ids.len()).unwrap().len());
+        assert_eq!(prepared.render(0).unwrap(), render_page(&mut s, &m, &ids, 0, 72.0).unwrap(), "the same page as the session render");
+        assert_eq!(prepared.pdf(&mut |done, _| done < 1), Err(CANCELLED.to_string()), "a cancelled print writes nothing");
+        let only = prepare(&mut s, &m, &ids, 72.0, Some(0)).unwrap();
+        assert!(only.render(0).is_ok(), "the page that was asked for renders");
     }
 
     #[test]
