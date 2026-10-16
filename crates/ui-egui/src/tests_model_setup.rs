@@ -69,11 +69,11 @@ fn accepting_a_local_model_installs_in_background_and_resumes_the_pending_action
     assert_eq!(result["started"], "local-install");
     assert_eq!(app.ui.dialog, Some(Dialog::Settings { tab: "denoise".into() }));
     let ctx = egui::Context::default();
-    for _ in 0..600 {
+    // Wait on the install, not a fixed count: loaded CI runners can take seconds to copy and verify the model.
+    // Resume once afterwards: its 0.25 s throttle reads the context clock, which never advances here.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while app.session.denoise_photo_state(raw) == lightcraft_engine::denoise::PhotoState::NoModel && std::time::Instant::now() < deadline {
         crate::panels::denoise::pump(&mut app, &ctx);
-        if app.session.denoise_photo_state(raw) != lightcraft_engine::denoise::PhotoState::NoModel {
-            break;
-        }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
     resume(&mut app);
