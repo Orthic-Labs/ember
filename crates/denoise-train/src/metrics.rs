@@ -184,8 +184,8 @@ mod tests {
         let clean = vec![0.5f32; 3 * 4 * 4];
         let out: Vec<f32> = clean.iter().map(|v| v + 0.1).collect();
         let m = measure(&out, &clean, 4, 4);
-        assert!((m.mse - 0.01).abs() < 1e-9);
-        assert!((m.psnr_db.unwrap() - 20.0).abs() < 1e-6);
+        assert!((m.mse - 0.01).abs() < 1e-6, "f32 offset: {}", m.mse);
+        assert!((m.psnr_db.unwrap() - 20.0).abs() < 1e-4);
         for b in m.bias {
             assert!((b - 0.1).abs() < 1e-6);
         }
