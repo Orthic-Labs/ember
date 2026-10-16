@@ -113,7 +113,13 @@ fn import_with_the_culling_option_queues_the_pass_for_the_imported_photos() {
     }
     let mut session = Session::new();
     session.media.file_probe = Some(std::sync::Arc::new(|p: &str| {
-        Ok(lightcraft_engine::media::ProbeInfo { width: 60, height: 40, format: "JPEG".into(), content_hash: Some(p.to_string()), ..Default::default() })
+        Ok(lightcraft_engine::media::ProbeInfo {
+            width: 60,
+            height: 40,
+            format: "JPEG".into(),
+            content_hash: Some(p.to_string()),
+            ..Default::default()
+        })
     }));
     let mut h = Headless::new(LightcraftApp::new(session, Services { png: None, ..Default::default() }), [1200.0, 800.0], 1.0);
     h.settle(Duration::from_secs(20));
