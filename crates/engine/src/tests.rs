@@ -1837,3 +1837,39 @@ fn auto_batch_changes_only_the_photos_it_names() {
     assert_eq!(r["changed"], 1);
     assert_eq!(*s.develop_of(ids[1]).unwrap(), other, "a photo that was not named stays as it was");
 }
+
+#[test]
+fn a_preset_with_apply_auto_runs_auto_before_its_own_settings() {
+    use lightcraft_catalog::PhotoId;
+    let mut s = demo();
+    let ids: Vec<PhotoId> = s.visible_cloned().into_iter().take(2).collect();
+    // the source photo's Clarity is what the presets copy
+    s.execute("library.select", &json!({"ids": [ids[0].0]})).unwrap();
+    let mut src = active_dev(&s);
+    src.effects.clarity = 30.0;
+    s.set_develop(ids[0], src, "setup").unwrap();
+    let with_auto = s.execute("preset.create", &json!({"name": "Auto clarity", "groups": ["effects"], "auto": true})).unwrap();
+    let plain = s.execute("preset.create", &json!({"name": "Plain clarity", "groups": ["effects"]})).unwrap();
+    let (with_auto, plain) = (with_auto["id"].as_str().unwrap().to_string(), plain["id"].as_str().unwrap().to_string());
+    assert!(s.presets.iter().any(|p| p.id == with_auto && p.auto), "the flag is stored on the preset");
+    assert!(s.presets.iter().any(|p| p.id == plain && !p.auto));
+
+    // a photo of its own: Auto's exposure for it, measured before any preset
+    s.execute("library.select", &json!({"ids": [ids[1].0]})).unwrap();
+    let auto = s.execute("develop.auto", &json!({"dryRun": true, "regions": false})).unwrap();
+    let before = active_dev(&s);
+    s.execute("preset.apply", &json!({"id": plain, "ids": [ids[1].0]})).unwrap();
+    let p = active_dev(&s);
+    assert_eq!(p.light.exposure, before.light.exposure, "a preset without the flag leaves the light alone");
+    assert_eq!(p.effects.clarity, 30.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(active_dev(&s), before);
+
+    s.execute("preset.apply", &json!({"id": with_auto, "ids": [ids[1].0]})).unwrap();
+    let a = active_dev(&s);
+    assert_eq!(a.light.exposure, auto["exposure"].as_f64().unwrap(), "Auto ran first");
+    assert_eq!(a.effects.clarity, 30.0, "then the preset's own settings went on top");
+    // one undo step takes the whole preset back
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(active_dev(&s), before);
+}

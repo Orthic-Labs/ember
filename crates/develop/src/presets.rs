@@ -209,11 +209,14 @@ pub struct Preset {
     /// Built-in presets ship with the app and can't be deleted.
     #[serde(default)]
     pub builtin: bool,
+    /// Apply Auto Settings to the photo first, then this preset's settings on top ("apply Auto").
+    #[serde(default)]
+    pub auto: bool,
 }
 
 impl Preset {
     pub fn from_settings(id: &str, name: &str, group: &str, s: &DevelopSettings, groups: &[SettingsGroup]) -> Preset {
-        Preset { id: id.into(), name: name.into(), group: group.into(), settings: extract_groups(s, groups), favorite: false, builtin: false }
+        Preset { id: id.into(), name: name.into(), group: group.into(), settings: extract_groups(s, groups), favorite: false, builtin: false, auto: false }
     }
     /// Apply at `amount` (1.0 = 100 %). Masks in the preset are added to the photo's own (ones it
     /// already has are skipped), their effect scaled by the amount.

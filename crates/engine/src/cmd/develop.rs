@@ -1190,17 +1190,24 @@ pub fn specs() -> Vec<CommandSpec> {
             let pid = str_param(p, "id").ok_or_else(|| bad("preset.apply", "missing id"))?;
             let preset = s.presets.iter().find(|x| x.id == pid).cloned().ok_or_else(|| bad("preset.apply", format!("unknown preset `{pid}`")))?;
             let amount = f64_or(p, "amount", 100.0).clamp(0.0, 200.0) / 100.0;
+            let label = format!("Preset: {}", preset.name);
             // `id` names the preset here: the photos are `ids`, else the selection
             let ids = s.targets(&json!({"ids": p.get("ids")}))?;
-            let ops = ids
-                .iter()
-                .filter_map(|id| s.develop_of(*id).map(|d| (*id, d)))
-                .filter_map(|(id, d)| s.develop_op(id, preset.apply(&d, amount), &format!("Preset: {}", preset.name)))
-                .collect::<Vec<_>>();
-            s.commit(&format!("Preset: {}", preset.name), Op::Batch { ops })?;
+            let mut ops = Vec::new();
+            for id in ids {
+                let Some(d) = s.develop_of(id) else { continue };
+                let mut base = (*d).clone();
+                if preset.auto {
+                    // "apply Auto": Auto Settings first, the preset's own settings on top
+                    let r = auto_values(s, "preset.apply", id, false)?;
+                    apply_auto("preset.apply", &mut base, &r)?;
+                }
+                ops.extend(s.develop_op(id, preset.apply(&base, amount), &label));
+            }
+            s.commit(&label, Op::Batch { ops })?;
             ok()
         }),
-        cmd!("preset.create", "Create Preset", ["Photo"], None, "{name, group?, groups?: [settingsGroup]}", has_active, |s, p| {
+        cmd!("preset.create", "Create Preset", ["Photo"], None, "{name, group?, groups?: [settingsGroup], auto?: bool (apply Auto Settings to a photo before the preset)}", has_active, |s, p| {
             let c = "preset.create";
             let id = active(s, c)?;
             let name = str_param(p, "name").ok_or_else(|| bad(c, "missing name"))?;
@@ -1208,7 +1215,7 @@ pub fn specs() -> Vec<CommandSpec> {
             let groups = groups_param(p, c)?.unwrap_or_else(SettingsGroup::default_copy);
             let d = s.develop_of(id).unwrap_or_default();
             let pid = format!("user.{}.{}", s.presets.len(), name.to_lowercase().replace(' ', "-"));
-            s.presets.push(Preset::from_settings(&pid, name, group, &d, &groups));
+            s.presets.push(Preset { auto: bool_or(p, "auto", false), ..Preset::from_settings(&pid, name, group, &d, &groups) });
             Ok(json!({"id": pid}))
         }),
         cmd!("preset.delete", "Delete Preset", [], None, "{id}", always, |s, p| {
