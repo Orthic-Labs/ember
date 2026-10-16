@@ -122,6 +122,8 @@ const LAYOUT: &[(&str, &[&str])] = &[
         &[
             "view.photoGrid",
             "view.squareGrid",
+            "view.thumbLarger",
+            "view.thumbSmaller",
             "@Grid Info",
             "view.detail",
             "view.compare",

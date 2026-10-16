@@ -169,6 +169,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("view.secondWindow", "Second Window", Some("Cmd+F11"), "Window"),
     ("tool.keywordPainter", "Keyword Painter", None, ""),
     ("view.gridInfo", "Grid Info", None, ""),
+    ("view.thumbLarger", "Larger Thumbnails", Some("="), "View"),
+    ("view.thumbSmaller", "Smaller Thumbnails", Some("-"), "View"),
     // {mode?: auto | light | dark}: Appearance Mode (cycles Auto, Light, Dark when omitted; the
     // top bar's appearance button). View ▸ Appearance lists the modes.
     ("view.appearance", "Next Appearance Mode", None, ""),
@@ -422,6 +424,12 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 app.ui.view = ViewMode::SquareGrid;
             }
             Ok(json!({"info": app.ui.grid_info}))
+        }
+        "view.thumbLarger" | "view.thumbSmaller" => {
+            // the grid cell size (= and -): 20 points a step, within the slider's range
+            let step = if id == "view.thumbLarger" { 20.0 } else { -20.0 };
+            app.ui.thumb_size = (app.ui.thumb_size + step).clamp(90.0, 480.0);
+            Ok(json!({"thumbSize": app.ui.thumb_size}))
         }
         "tool.keywordPainter" => {
             // {keyword?}: paint that keyword onto photos in the grid by clicking them; no keyword stops

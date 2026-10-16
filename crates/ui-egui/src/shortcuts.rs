@@ -993,6 +993,20 @@ mod tests {
     }
 
     #[test]
+    fn equals_and_minus_size_the_grid_thumbnails() {
+        let mut h = library();
+        let start = h.app.ui.thumb_size;
+        key(&mut h, "=", false);
+        assert_eq!(h.app.ui.thumb_size, start + 20.0);
+        key(&mut h, "-", false);
+        key(&mut h, "-", false);
+        assert_eq!(h.app.ui.thumb_size, start - 20.0);
+        h.app.ui.thumb_size = 480.0;
+        key(&mut h, "=", false);
+        assert_eq!(h.app.ui.thumb_size, 480.0, "the largest cell is the end of the slider");
+    }
+
+    #[test]
     fn f1_opens_the_keyboard_shortcut_list() {
         let mut h = library();
         key(&mut h, "F1", false);
