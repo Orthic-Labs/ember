@@ -7,7 +7,7 @@ if (!version) throw new Error('Cargo.toml [workspace.package] must declare a Sem
 // Signed candidates are the exact unsigned bytes from the candidate stage (LEGION_UNSIGNED_CANDIDATE_ROOT, set by release-candidate.yml);
 // scripts/desktop/finalize-candidate.mjs only stages and archives them. RightKit signs, notarizes, hardens and seals.
 const stageCommand = { cmd: 'node', args: ['scripts/desktop/finalize-candidate.mjs', 'stage'] };
-const packageCommand = { cmd: 'node', args: ['scripts/desktop/finalize-candidate.mjs', 'package'] };
+const packageCommand = { cmd: 'node', args: ['scripts/desktop/finalize-candidate.mjs', 'package'], livenessOwnerTimeoutMs: 20 * 60 * 1000 };
 const winStage = `dist/native/windows-x86_64/ember-${version}`;
 const macStage = `dist/native/macos-arm64/ember-${version}`;
 const winArchive = `dist/releases/windows/${version}/x86_64/ember-${version}-windows-x86_64.zip`;
@@ -59,7 +59,7 @@ export default {
         receipt: '.right-release/receipts/macos-arm64-signing.json',
       },
       package: packageCommand,
-      notarize: { file: macArchive, receipt: '.right-release/receipts/macos-arm64-notarization.json' },
+      notarize: { file: macArchive, staple: false, receipt: '.right-release/receipts/macos-arm64-notarization.json' },
       artifacts: [macArchive],
     },
   },
