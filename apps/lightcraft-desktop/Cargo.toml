@@ -26,14 +26,14 @@ log = { workspace = true }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 rfd = { workspace = true }
-tauri = { version = "=2.12.1" }
+tauri = { version = "=2.12.4" }
 rightkit-tauri-shell = { version = "=0.3.0", default-features = false, features = ["wv2-0_39"] }
-rightkit-qa = { version = "=0.6.0", default-features = false, features = ["control", "wv2-0_39"], optional = true }
+rightkit-qa = { version = "=0.6.1", default-features = false, features = ["control", "wv2-0_39"], optional = true }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.build-dependencies]
-tauri-build = "=2.7.1"
+tauri-build = "=2.7.3"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dev-dependencies]
-rightkit-qa = "=0.6.0"
+rightkit-qa = "=0.6.1"
 lightcraft-tiff = { workspace = true }
 png = { workspace = true }
