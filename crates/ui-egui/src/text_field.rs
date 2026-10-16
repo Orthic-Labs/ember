@@ -388,6 +388,7 @@ mod tests {
     struct Rig {
         view: HeadlessView,
         text: String,
+        multiline: bool,
         select_on_focus: bool,
         /// The field is on screen (a dialog that holds it may close).
         shown: bool,
@@ -402,9 +403,15 @@ mod tests {
 
     impl Rig {
         fn new(text: &str) -> Self {
+            Self::with(text, false)
+        }
+
+        /// A one-line field, or a multi-line one when `multiline`.
+        fn with(text: &str, multiline: bool) -> Self {
             let mut rig = Rig {
                 view: HeadlessView::new(),
                 text: text.to_string(),
+                multiline,
                 select_on_focus: false,
                 shown: true,
                 window_focused: true,
@@ -421,13 +428,15 @@ mod tests {
             self.time += 1.0 / 60.0;
             let mut raw = HeadlessView::raw_input(egui::vec2(400.0, 300.0), 1.0, self.time, events);
             raw.focused = self.window_focused;
+            let multiline = self.multiline;
             let (text, select, shown, endings, editing) = (&mut self.text, self.select_on_focus, self.shown, &mut self.endings, &mut self.editing);
             self.view.run(raw, |ui| {
                 ui.add_space(20.0);
                 if !shown {
                     return;
                 }
-                let r = TextField::singleline(FIELD, text).width(200.0).select_on_focus(select).show(ui);
+                let field = if multiline { TextField::multiline(FIELD, text) } else { TextField::singleline(FIELD, text) };
+                let r = field.width(200.0).select_on_focus(select).show(ui);
                 endings.extend(r.ending);
                 *editing = r.editing;
             });
@@ -582,6 +591,23 @@ mod tests {
         rig.key(Key::Escape, Modifiers::NONE);
         assert_eq!(rig.text, "Lisbon");
         assert_eq!(rig.endings, vec![Ending::Escape]);
+    }
+
+    /// A multi-line field (the watermark text, the Info panel's captions) has the same menu, and Esc
+    /// gives back the text from before the edit.
+    #[test]
+    fn multiline_field_has_the_same_menu_and_escape_gives_the_text_back() {
+        let mut rig = Rig::with("Ada", true);
+        rig.select_all_by_keys();
+        rig.type_text("Grace");
+        assert_eq!(rig.text, "Grace");
+        rig.key(Key::Escape, Modifiers::NONE);
+        assert_eq!(rig.text, "Ada");
+        assert_eq!(rig.endings, vec![Ending::Escape]);
+        rig.click(FIELD, PointerButton::Secondary);
+        for item in ["cut", "copy", "paste", "selectAll"] {
+            assert!(rig.rect(&format!("{FIELD}:{item}")).is_some(), "{item}: {:?}", rig.widgets);
+        }
     }
 
     /// Return ends the edit and keeps the text.
