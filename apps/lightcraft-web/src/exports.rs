@@ -289,6 +289,7 @@ impl ExportHost {
                     height: file.height,
                     sidecars: file.sidecars,
                     gpu_fallback: None,
+                    staged: None,
                 }),
                 // the worker went away, not this photo's fault: make it here
                 Err(f) if f.worker_lost => {

@@ -440,6 +440,7 @@ impl WorkerCore {
             height: rendered.image.height,
             sidecars: Vec::new(),
             gpu_fallback: None,
+            staged: None,
         })
     }
 

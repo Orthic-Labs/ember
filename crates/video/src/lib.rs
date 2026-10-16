@@ -28,6 +28,8 @@ mod trim;
 
 pub use trim::{MIN_TRIM_SECS, Trim, check_trim, kept_range};
 
+pub mod clip;
+
 /// File extensions (lower case) Ember treats as video. The engine's import list contains every one of them.
 pub const EXTENSIONS: &[&str] = &["mp4", "m4v", "mov", "mkv", "webm", "avi", "mts", "m2ts"];
 

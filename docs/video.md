@@ -1,6 +1,6 @@
 # Video
 
-*Last updated: 2026-10-17 (foundation: probe and poster frame; trim; issues #73, #74, #76).*
+*Last updated: 2026-10-17 (foundation: probe and poster frame; trim; clip and frame export; issues #73, #74, #76, #77).*
 
 Ember catalogues videos, shows a poster frame for each in the grid, the loupe and exports, and lets you choose which frame that is.
 Playback comes next (silent first, #73); this page records what exists and how it is built.
@@ -76,6 +76,34 @@ settings (`trim_in`, `trim_out`); `video.clearTrim {id?}` keeps the whole clip a
 - The loupe shows a Trim row at the bottom of a video that has a duration: the points, **Set In** and **Set Out** (at the frame on
   screen, which is the poster frame until the player exists) and **Clear Trim**. The player's scrubber gets draggable handles with it.
 
+## Export
+
+`app.export {format: "video"}` (desktop app, `lightcraft-cli run`, MCP `export`, the control channel) writes each selected video as a clip
+file, cut to its trim, through the same batch as pictures (names, conflict policy, subfolder, never over an original).
+
+- **Stream copy** (the default): the video and audio streams are copied as they are, so it is fast and lossless, in the clip's own container
+  (`mov` stays `mov`). A cut can only begin on a keyframe: the file starts at the keyframe at or before the in point (up to a group of
+  pictures longer than asked) and ends at the first packet past the out point; `-avoid_negative_ts make_zero` puts that keyframe at time
+  zero. The report says `accurate: false`.
+- **Re-encode** (`videoReencode: true`): starts on exactly the in point; H.264 and AAC in MP4. Windows uses `h264_mf` (Media Foundation) and
+  macOS `h264_videotoolbox`, each with an explicit `-b:v` (`videoKbps`; by default 0.1 bit per pixel per frame at the clip's size and rate,
+  between 1 and 100 Mbit/s): Media Foundation with no rate writes 1080p at about 88 kbit/s. **The approved `decode` build of the sidecar
+  links neither encoder** (in the `rightkit-ffmpeg` catalog `--enable-mediafoundation` and `--enable-videotoolbox` belong to the
+  `export-ass*` builds), so there a re-encode fails with "this ffmpeg sidecar build has no H.264 encoder"; only stream copy works until an
+  export build is approved and bundled.
+- Only the first video stream and the audio streams are written; subtitles, data streams and chapters are left out. The clip's container
+  metadata is copied, unless the export removes the location (or the photo is in a private place) or the metadata policy is not "all":
+  then none is written (a clip's metadata is all or nothing).
+- The run holds a row in the activity stack ("Exporting Video", with progress) whose ✕ kills the ffmpeg child and its process tree, and a
+  deadline of ten times the kept length. ffmpeg writes a temporary file (`ember-clip-<pid>-<n>.<ext>` in the system temp folder), which
+  the batch moves to its path with the atomic write every export uses (a temp file next to the target, renamed over it); a failure or a
+  cancel leaves no temporary file and any earlier file as it was.
+- The entry of the file in the result gains `video`: `{mode, accurate, start, length, encoder?, videoKbps?, strippedMetadata}`.
+- Without the sidecar (a development checkout, CI, Linux, the web) a clip export is refused before anything is written ("video support
+  not installed" or "not supported"). `lightcraft-cli render` writes a picture only and refuses the video format.
+- A **picture format of a video** exports one frame through the ordinary still pipeline (size, sharpening, colour space, watermark): the
+  poster frame, or `frameTime` seconds into the clip (held inside it).
+
 ## Licence
 
 FFmpeg is LGPL-2.1-or-later and is **not in this repository**. It is run as a separate program, never linked. Release bundles that include
@@ -86,5 +114,6 @@ decision in `CLAUDE.md` ("Pure Rust ... except the verified LGPL ffmpeg sidecar"
 ## Not yet
 
 Silent playback (play/pause, seek, a player in the loupe) with trim handles on its scrubber and playback held to the trimmed range, audio,
-a grid badge and duration label, a poster chooser in the UI, video export (which will honour the trim) and the bundling of the sidecar
-into the installers (release tooling), and Linux.
+a grid badge and duration label, a poster chooser in the UI, the Export dialog's Video entry, an export build of the sidecar with an H.264
+encoder (so a re-encode works; until then only stream copy does) and the bundling of the sidecar into the installers (release tooling),
+and Linux.

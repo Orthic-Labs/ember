@@ -7,6 +7,12 @@ pub(crate) use native::{available, ffprobe_json, frame_rgba};
 #[cfg(all(test, any(target_os = "windows", target_os = "macos")))]
 pub(crate) use native::resolve_in;
 
+/// The verified `ffmpeg`, for the clip export (`crate::clip`).
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+pub(crate) fn ffmpeg() -> Result<rightkit_ffmpeg::VerifiedFfmpeg, crate::VideoError> {
+    native::ffmpeg()
+}
+
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 mod native {
     use std::path::Path;
@@ -108,6 +114,11 @@ mod native {
 
     pub(crate) fn available() -> Result<(), VideoError> {
         tools().map(|_| ())
+    }
+
+    /// The verified `ffmpeg`, for the clip export (`crate::clip`).
+    pub(crate) fn ffmpeg() -> Result<VerifiedFfmpeg, VideoError> {
+        tools().map(|t| t.ffmpeg.clone())
     }
 
     fn token(limits: &Limits) -> CancellationToken {

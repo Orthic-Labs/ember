@@ -11,6 +11,10 @@ pub use lightcraft_pipeline::{DeepImage, DeepSamples, OutputDepth, OutputSpace};
 use lightcraft_raster::Rgba8;
 use serde::{Deserialize, Serialize};
 
+mod clip;
+
+pub use clip::StagedFile;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ExportFormat {
@@ -30,6 +34,9 @@ pub enum ExportFormat {
     Dng,
     /// Render to DNG: a linear DNG (16-bit float) of the rendered photo, the edit baked in.
     RenderedDng,
+    /// A video clip cut to its trim: a stream copy by default (fast and lossless; the cut starts on a keyframe), or re-encoded
+    /// (`videoReencode`). Videos only; a picture format exports one frame of a video (`frameTime`, else the poster frame).
+    Video,
 }
 
 impl ExportFormat {
@@ -45,6 +52,7 @@ impl ExportFormat {
             "original" => Self::Original,
             "dng" => Self::Dng,
             "rendereddng" | "renderdng" | "render-dng" | "lineardng" => Self::RenderedDng,
+            "video" => Self::Video,
             _ => return None,
         })
     }
@@ -60,12 +68,14 @@ impl ExportFormat {
             // the original keeps its own extension (see `ExportOptions::file_name_for`)
             Self::Original => "",
             Self::Dng | Self::RenderedDng => "dng",
+            // a clip keeps its own container, or is MP4 when re-encoded (see `ExportOptions::file_name_for`)
+            Self::Video => "",
         }
     }
 
-    /// Formats that render pixels (everything but `Original` and `Dng`).
+    /// Formats that render pixels (everything but `Original`, `Dng` and `Video`).
     pub fn is_rendered(self) -> bool {
-        !matches!(self, Self::Original | Self::Dng)
+        !matches!(self, Self::Original | Self::Dng | Self::Video)
     }
 }
 
@@ -770,6 +780,21 @@ pub struct ExportOptions {
     /// HDR output: the most headroom (stops above SDR white, 0 to 5) the file keeps; brighter highlights are clamped to it.
     /// `None` keeps the edit's own headroom limit (`develop.hdr`); a cap above that limit changes nothing.
     pub hdr_max_ev: Option<f64>,
+    /// Video clips: decode and encode again (a cut that starts on exactly the in point, a chosen bit rate) instead of copying the
+    /// streams, which can only start on a keyframe.
+    #[serde(skip_serializing_if = "is_false")]
+    pub video_reencode: bool,
+    /// Video clips, re-encoded: the video bit rate in kbit/s (`None` chooses one from the clip's size and frame rate).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub video_kbps: Option<u32>,
+    /// A picture format of a video: the time (seconds into the clip, held inside it) of the frame to export; `None` is the
+    /// poster frame.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame_time: Option<f64>,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 impl Default for ExportOptions {
@@ -802,6 +827,9 @@ impl Default for ExportOptions {
             photos_album: String::new(),
             hdr_transfer: HdrCurve::Pq,
             hdr_max_ev: None,
+            video_reencode: false,
+            video_kbps: None,
+            frame_time: None,
         }
     }
 }
@@ -846,6 +874,9 @@ pub const OPTION_PARAMS: &[&str] = &[
     "photosAlbum",
     "hdrTransfer",
     "hdrMaxEv",
+    "videoReencode",
+    "videoKbps",
+    "frameTime",
 ];
 
 /// Why an export can't add its files to Apple Photos on this platform (`None`: it can, when the
@@ -972,7 +1003,7 @@ impl ExportOptions {
             match k.as_str() {
                 "format" => {
                     if ExportFormat::parse(string(cmd, k, v)?).is_none() {
-                        return Err(bad(format!("`{k}` must be one of jpeg|png|tiff|webp|avif|jxl|dng|original")));
+                        return Err(bad(format!("`{k}` must be one of jpeg|png|tiff|webp|avif|jxl|dng|original|video")));
                     }
                 }
                 "quality" => {
@@ -1002,7 +1033,7 @@ impl ExportOptions {
                     }
                     serde_json::from_value::<Resize>(v.clone()).map_err(|e| bad(format!("`{k}`: {e}")))?;
                 }
-                "dontEnlarge" | "removeLocation" | "background" | "hdr" | "jxlLossless" | "jxlProgressive" => {
+                "dontEnlarge" | "removeLocation" | "background" | "hdr" | "jxlLossless" | "jxlProgressive" | "videoReencode" => {
                     boolean(k, v)?;
                 }
                 "addToPhotos" => {
@@ -1025,6 +1056,12 @@ impl ExportOptions {
                 "hdrTransfer" => one_of(k, v, &["pq", "hlg"])?,
                 "hdrMaxEv" => {
                     num(k, v, 0.0, lightcraft_develop::Hdr::MAX_EV_LIMIT)?;
+                }
+                "videoKbps" => {
+                    int(k, v, 1, u32::MAX as i64)?;
+                }
+                "frameTime" => {
+                    num(k, v, 0.0, 1.0e7)?;
                 }
                 "conflict" => parses(k, v, |s| Conflict::parse(s).is_some(), &["unique", "overwrite", "skip"])?,
                 "tiffCompression" => one_of(k, v, &["none", "lzw", "zip", "deflate"])?,
@@ -1175,6 +1212,9 @@ impl ExportOptions {
                 .filter(|v| v.is_finite())
                 .map(|v| v.clamp(0.0, lightcraft_develop::Hdr::MAX_EV_LIMIT))
                 .or(d.hdr_max_ev),
+            video_reencode: p.get("videoReencode").and_then(Value::as_bool).unwrap_or(d.video_reencode),
+            video_kbps: u("videoKbps").filter(|v| *v > 0).map(|v| v.min(u32::MAX as u64) as u32),
+            frame_time: p.get("frameTime").and_then(Value::as_f64).filter(|t| t.is_finite() && *t >= 0.0),
         }
     }
 
@@ -1239,7 +1279,7 @@ impl ExportOptions {
     /// The sample format the file is written with (unsupported requests fall back to the closest).
     pub fn effective_depth(&self) -> OutputDepth {
         match (self.format, self.bit_depth) {
-            (ExportFormat::Jpeg | ExportFormat::Webp | ExportFormat::Original | ExportFormat::Dng, _) => OutputDepth::U8,
+            (ExportFormat::Jpeg | ExportFormat::Webp | ExportFormat::Original | ExportFormat::Dng | ExportFormat::Video, _) => OutputDepth::U8,
             (ExportFormat::Png, _) if self.hdr => OutputDepth::F32Hdr,
             (ExportFormat::Png, Some(16 | 32)) => OutputDepth::U16,
             (ExportFormat::Png, _) => OutputDepth::U8,
@@ -1263,7 +1303,7 @@ impl ExportOptions {
     /// The bit depths `format` offers (value, label); the first is its default.
     pub fn bit_depths(format: ExportFormat) -> &'static [(u8, &'static str)] {
         match format {
-            ExportFormat::Jpeg | ExportFormat::Webp | ExportFormat::Original | ExportFormat::Dng => &[(8, "8-bit")],
+            ExportFormat::Jpeg | ExportFormat::Webp | ExportFormat::Original | ExportFormat::Dng | ExportFormat::Video => &[(8, "8-bit")],
             ExportFormat::Png => &[(8, "8-bit"), (16, "16-bit")],
             ExportFormat::Tiff => &[(16, "16-bit"), (8, "8-bit"), (32, "32-bit float")],
             ExportFormat::Psd => &[(16, "16-bit"), (8, "8-bit")],
@@ -1324,6 +1364,8 @@ impl ExportOptions {
         if self.format == ExportFormat::Original {
             let base = name.trim_end_matches('.');
             if ext.is_empty() { base.to_string() } else { format!("{base}.{ext}") }
+        } else if self.format == ExportFormat::Video {
+            format!("{name}.{}", lightcraft_video::clip::output_extension(std::path::Path::new(&p.file_name), self.video_reencode))
         } else {
             format!("{name}.{}", self.format.extension())
         }
@@ -1457,7 +1499,7 @@ pub fn encode_with_metadata(img: &Rgba8, o: &ExportOptions, meta: Option<&Metada
         ExportFormat::Webp => encode::encode_webp_lossless(&e, &meta),
         ExportFormat::Avif => encode::encode_avif(&e, o.quality, 8, &meta),
         ExportFormat::Jxl => lightcraft_codecs::encode_jxl(&e, &o.jxl(space, false), &meta),
-        f @ (ExportFormat::Original | ExportFormat::Dng) => return Err(format!("{f:?} export does not encode pixels")),
+        f @ (ExportFormat::Original | ExportFormat::Dng | ExportFormat::Video) => return Err(format!("{f:?} export does not encode pixels")),
         ExportFormat::RenderedDng => return Err("Render to DNG needs a float render".into()),
     };
     r.map_err(|e| e.to_string())
@@ -1662,6 +1704,9 @@ pub struct Exported {
     /// Set when the render was tried on the GPU and fell back to the CPU: why (see
     /// `docs/gpu-pipeline.md`). The file holds the CPU render either way.
     pub gpu_fallback: Option<String>,
+    /// A finished file in a temporary place, for what is too big for `bytes` (a video clip): the batch moves it to its path and
+    /// `bytes` is empty. `None` for everything made in memory.
+    pub staged: Option<StagedFile>,
 }
 
 /// Output size of photo `p` under `o` (its cropped full size when `o.resize` is `None`).
@@ -1678,6 +1723,10 @@ pub fn output_size(p: &lightcraft_catalog::Photo, o: &ExportOptions) -> (usize, 
 /// Render photo `id` at the requested size and encode it (or copy / convert its original for
 /// [`ExportFormat::Original`] / [`ExportFormat::Dng`]).
 pub fn export_photo(session: &mut crate::Session, id: lightcraft_catalog::PhotoId, o: &ExportOptions, seq: usize) -> Result<Exported, String> {
+    // a clip is a file of its own, too big for `Exported::bytes`: `run_batch` places it
+    if o.format == ExportFormat::Video {
+        return Err("a video export writes its file itself: use app.export with format video".into());
+    }
     prepare_export(session, id, o, seq)?.run()
 }
 
@@ -1713,6 +1762,8 @@ enum Work {
         /// The edited photo for the DNG's embedded preview ([`ExportOptions::dng_preview`]).
         preview: Option<Box<crate::media::RenderJob>>,
     },
+    /// A video clip ([`ExportFormat::Video`]): cut by the ffmpeg sidecar into a staged file ([`clip`]).
+    Clip(Box<clip::ClipWork>),
 }
 
 /// What an [`ExportFormat::Original`] or [`ExportFormat::Dng`] export does with the file's bytes: owned and
@@ -1770,6 +1821,9 @@ fn prepare_guarded(
     seq: usize,
     guard: std::sync::Arc<crate::originals::OriginalGuard>,
 ) -> Result<PreparedExport, String> {
+    if o.format == ExportFormat::Video {
+        return clip::prepare(session, id, o, seq, guard);
+    }
     let p = session.catalog.photo(id).ok_or("no such photo")?;
     let file_name = o.file_name_for(p, seq);
     // HDR output only for photos edited in HDR; the rest of the batch exports as usual
@@ -1788,9 +1842,14 @@ fn prepare_guarded(
         let label = p.file_name.clone();
         let meta = export_metadata(p, &session.catalog, o);
         let gain_map = o.hdr_output() && o.format == ExportFormat::Jpeg;
+        // a frame of a video other than its poster
+        let video = o.frame_time.filter(|_| p.kind == lightcraft_catalog::MediaKind::Video).map(|t| (t, p.clone()));
         let mut job = session.export_job(id, w, h, o.effective_space(), o.effective_depth())?;
         if job.request.depth == OutputDepth::F32Hdr {
             cap_headroom(&mut job, o.hdr_max_ev);
+        }
+        if let Some((t, q)) = &video {
+            clip::at_frame(session, &mut job, q, *t);
         }
         let weight = render_weight(full_px, long, job.level, w.saturating_mul(h));
         if let Some(why) = too_big_for_memory((w, h), native_px, weight, crate::memory::total_ram()) {
@@ -1882,7 +1941,7 @@ impl PreparedExport {
                     }
                     None => encode_rendered(&r, &opts, meta.as_ref())?,
                 };
-                Ok(Exported { file_name, bytes, width: r.image.width, height: r.image.height, sidecars: Vec::new(), gpu_fallback })
+                Ok(Exported { file_name, bytes, width: r.image.width, height: r.image.height, sidecars: Vec::new(), gpu_fallback, staged: None })
             }
             Work::File { spec, read, preview } => {
                 let bytes = match &read {
@@ -1891,6 +1950,7 @@ impl PreparedExport {
                 };
                 run_file(file_name, bytes, spec, preview)
             }
+            Work::Clip(w) => clip::run(file_name, *w),
         }
     }
 
@@ -1899,7 +1959,7 @@ impl PreparedExport {
     pub fn run_with_bytes(self, bytes: Vec<u8>) -> Result<Exported, String> {
         match self.work {
             Work::File { spec, preview, .. } => run_file(self.file_name, bytes, spec, preview),
-            Work::Render(_) => self.run(),
+            Work::Render(_) | Work::Clip(_) => self.run(),
         }
     }
 }
@@ -1930,7 +1990,15 @@ pub fn export_file(
         if remove_location && lightcraft_meta::extract(&bytes).gps.is_some() {
             return Err(format!("{label}: can't remove the location from an original file that embeds GPS; export as JPEG, TIFF or DNG instead"));
         }
-        return Ok(Exported { file_name, bytes, width: size.0, height: size.1, sidecars: vec![("xmp", packet.into_bytes())], gpu_fallback: None });
+        return Ok(Exported {
+            file_name,
+            bytes,
+            width: size.0,
+            height: size.1,
+            sidecars: vec![("xmp", packet.into_bytes())],
+            gpu_fallback: None,
+            staged: None,
+        });
     };
     if lightcraft_raw::probe(&bytes).is_none() {
         return Err(format!("{label}: DNG export needs a raw photo"));
@@ -1950,7 +2018,7 @@ pub fn export_file(
         preview.as_ref(),
     )
     .map_err(|e| e.to_string())?;
-    Ok(Exported { file_name, bytes: dng, width: raw.width, height: raw.height, sidecars: Vec::new(), gpu_fallback: None })
+    Ok(Exported { file_name, bytes: dng, width: raw.width, height: raw.height, sidecars: Vec::new(), gpu_fallback: None, staged: None })
 }
 
 /// The embedded preview of a DNG export: the rendered sRGB picture as a JPEG (4:2:0, quality 90) with its profile.
@@ -1986,7 +2054,7 @@ impl PreparedExport {
     pub fn render_parts(&self) -> Option<RenderParts<'_>> {
         match &self.work {
             Work::Render(w) => Some(RenderParts { job: &w.job, hdr_job: w.hdr_job.as_ref(), meta: w.meta.as_ref(), opts: &w.opts }),
-            Work::File { .. } => None,
+            Work::File { .. } | Work::Clip(_) => None,
         }
     }
 
@@ -1997,7 +2065,7 @@ impl PreparedExport {
     pub fn file_parts(&self) -> Option<FileParts<'_>> {
         match &self.work {
             Work::File { spec, preview, .. } => Some(FileParts { spec, preview: preview.as_deref() }),
-            Work::Render(_) => None,
+            Work::Render(_) | Work::Clip(_) => None,
         }
     }
 
@@ -2533,7 +2601,11 @@ impl<'a> Placer<'a> {
             for f in &files {
                 guard.check(std::path::Path::new(f))?;
             }
-            write(&path, &e.bytes)?;
+            match &e.staged {
+                // a clip is moved on disk (atomically), never held in memory
+                Some(staged) => staged.place(std::path::Path::new(&path))?,
+                None => write(&path, &e.bytes)?,
+            }
             let mut sidecars = Vec::new();
             for ((_, bytes), sc) in e.sidecars.iter().zip(files.iter().skip(1)) {
                 write(sc, bytes)?;
@@ -2544,7 +2616,11 @@ impl<'a> Placer<'a> {
         match written {
             Ok((path, files, sidecars)) => {
                 self.taken.extend(files);
-                let mut entry = json!({"path": path, "width": e.width, "height": e.height, "bytes": e.bytes.len(), "sidecars": sidecars});
+                let bytes = e.staged.as_ref().map_or(e.bytes.len() as u64, |s| s.size);
+                let mut entry = json!({"path": path, "width": e.width, "height": e.height, "bytes": bytes, "sidecars": sidecars});
+                if let Some(staged) = &e.staged {
+                    entry["video"] = staged.detail.clone();
+                }
                 if let Some(why) = &e.gpu_fallback {
                     entry["gpuFallback"] = json!(why);
                 }
