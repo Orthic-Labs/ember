@@ -1,6 +1,6 @@
 # Gaps: where Ember falls short of reference editor
 
-> **Last reviewed:** 2026-10-17 · **Last updated:** 2026-10-17 · **Change:** minor (gap 28 shrunk: F1, Tab, F5, F8, `[` `]` and the grid `\` filter bar in egui)
+> **Last reviewed:** 2026-10-17 · **Last updated:** 2026-10-17 · **Change:** minor (gap 15 shrinks: print guides, user print templates, print progress and cancel, and the embedded sRGB profile in code; OS printer output remains)
 
 Every known shortfall, one entry each, ranked by user impact (how many reference editor users hit it, and
 how hard it blocks them), then by effort. **Agents pick work from the top** (the first entry nobody is
@@ -33,7 +33,7 @@ numeric tone labels alone do not complete corpus preparation. See [format & comp
 | 12 | **Content-aware / generative remove, detect distractions, reflections removal** [#59](https://github.com/Orthic-Labs/ember/issues/59) | REM rows 75%; patch synthesis shipped for Remove and Fill (#59); generative fill, detect distractions and reflections removal missing | cleanup work goes back to Photoshop | 25–45 (+ generative model) | [target-app-parity](target-app-parity.md#ai) |
 | 13 | **reference editor catalog migration is one-way and approximate**: unsupported reference publisher profiles / AI settings archived, history kept as data [#220](https://github.com/Orthic-Labs/ember/issues/220) | lightroom-catalog-import.md | switching users lose some looks | 8–12 | [file-format-parity](file-format-parity.md) |
 | 14 | **HDR display** (EDR / Windows HDR); the headroom limit and SDR rendition from `crs` XMP (the HDR switch, `HDREditMode`, is read). HLG AVIF export done; View ▸ HDR Display, the macOS EDR headroom query and the SDR/HDR decision are tested; blocked on eframe's 8-bit surface (no hook for the surface format or colour space) and, on Windows, on a safe DXGI HDR query [#46](https://github.com/Orthic-Labs/ember/issues/46) | HDR rows 70%; LR-VIEW-HDR-DISPLAY ⬜ | HDR editing works blind on HDR monitors | 12–25 | [hardware-parity](hardware-parity.md) |
-| 15 | **Print module**: user print templates, guide drawing, printer output and print progress/cancel still missing; layout styles, picture-package cells, image settings, PDF/JPEG output and ICC soft proof are in (`print.*`, Print view) [#138](https://github.com/Orthic-Labs/ember/issues/138) | LRC-PRINT rows | Classic users who print | 25–40 | [target-app-parity](target-app-parity.md#features) |
+| 15 | **Print module**: OS printer output still missing (refused with an explicit error; no platform print API in egui) [#138](https://github.com/Orthic-Labs/ember/issues/138) | LRC-PRINT-JOB row | Classic users who print straight to a printer | 25–40 | [target-app-parity](target-app-parity.md#features) |
 | 16 | **Book, Slideshow module, publish services; Map extras** (the Map view itself landed: [#114](https://github.com/Orthic-Labs/ember/issues/114)) | LRC-BOOK / SS rows ⬜; LR-MAP-MODULE 🟡 (no GPX track on the map, no location editing there) | Classic users; publish services matter for Flickr / SmugMug workflows | 60–100 | [target-app-parity](target-app-parity.md#features) |
 | 17 | **Tethered capture** [#106](https://github.com/Orthic-Labs/ember/issues/106) | ⬜ | studio photographers | 25–45 + cameras | [hardware-parity](hardware-parity.md) |
 | 18 | **Video**: playback, trim, global edits, export [#73](https://github.com/Orthic-Labs/ember/issues/73) | VID rows 0% | users who mix stills and clips | 25–45 | [target-app-parity](target-app-parity.md#features) |
@@ -82,6 +82,7 @@ loader qualification remain separate evidence; AI gaps stay open. See [corpus co
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | Gap 15: print guides, user print templates, the job resolution as the export default, the embedded sRGB profile and print progress and cancel are in code; OS printer output remains |
 | 2026-10-17 | minor | Gap 11: Photo ▸ Enhance… (#68, #69, #98) sets AI Denoise and Raw Details on the photo in one undo step; Super Resolution still 0% (shown disabled) |
 | 2026-10-16 | minor | Gap 11 narrows: Detail ▸ Raw Details turns on a higher-quality Bayer demosaic (opt-in, off for every existing edit; X-Trans still to do) |
 | 2026-10-16 | minor | Gap 14: View ▸ HDR Display and the macOS EDR headroom query land; the display is still SDR until the surface can be HDR |

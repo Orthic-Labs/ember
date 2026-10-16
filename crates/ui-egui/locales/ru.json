@@ -875,6 +875,15 @@
   "Previous Photo": "Предыдущее фото",
   "Print": "Печать",
   "Print…": "Печать…",
+  "Show guides": "Показывать направляющие",
+  "Rulers": "Линейки",
+  "Cell dimensions": "Размеры ячеек",
+  "Resolution": "Разрешение",
+  "Print template": "Шаблон печати",
+  "Template name": "Название шаблона",
+  "Save template": "Сохранить шаблон",
+  "Rename template": "Переименовать шаблон",
+  "Delete template": "Удалить шаблон",
   "Profile": "Профиль",
   "Profile Browser": "Обозреватель профилей",
   "Profile Distortion": "Дисторсия профиля",
@@ -2242,10 +2251,5 @@
   "Previous slide": "Предыдущий слайд",
   "Next slide": "Следующий слайд",
   "Slide": "Слайд",
-  "Select photos to show.": "Выберите фото для показа.",
-  "Set Location": "Задать местоположение",
-  "Only photos without a position": "Только фото без позиции",
-  "Drag photos onto the map to give them a GPS position.": "Перетащите фото на карту, чтобы задать им GPS-позицию.",
-  "photo placed on the map": "фото размещено на карте",
-  "photos placed on the map": "фото размещено на карте"
+  "Select photos to show.": "Выберите фото для показа."
 }

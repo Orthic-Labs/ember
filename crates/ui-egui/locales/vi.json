@@ -1316,6 +1316,15 @@
   "Previous Photo": "Ảnh trước",
   "Print": "In",
   "Print…": "In…",
+  "Show guides": "Hiển thị đường hướng dẫn",
+  "Rulers": "Thước",
+  "Cell dimensions": "Kích thước ô",
+  "Resolution": "Độ phân giải",
+  "Print template": "Mẫu in",
+  "Template name": "Tên mẫu",
+  "Save template": "Lưu mẫu",
+  "Rename template": "Đổi tên mẫu",
+  "Delete template": "Xóa mẫu",
   "Processor": "Bộ xử lý",
   "Profile": "Hồ sơ",
   "Profile Browser": "Trình duyệt hồ sơ",
@@ -2242,10 +2251,5 @@
   "Previous slide": "Slide trước",
   "Next slide": "Slide tiếp theo",
   "Slide": "Slide",
-  "Select photos to show.": "Chọn ảnh để trình chiếu.",
-  "Set Location": "Đặt vị trí",
-  "Only photos without a position": "Chỉ ảnh chưa có vị trí",
-  "Drag photos onto the map to give them a GPS position.": "Kéo ảnh vào bản đồ để gán vị trí GPS cho ảnh.",
-  "photo placed on the map": "ảnh đã được đặt trên bản đồ",
-  "photos placed on the map": "ảnh đã được đặt trên bản đồ"
+  "Select photos to show.": "Chọn ảnh để trình chiếu."
 }

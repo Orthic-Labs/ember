@@ -201,15 +201,23 @@ pub(crate) struct Pdf {
     bytes: Vec<u8>,
     offsets: Vec<usize>,
     points: (f64, f64),
+    pages: usize,
+    icc: Option<Vec<u8>>,
 }
 
 impl Pdf {
     pub(crate) fn new(pages: usize, points: (f64, f64)) -> Self {
-        let mut p = Self { bytes: b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n".to_vec(), offsets: vec![0], points };
+        let mut p = Self { bytes: b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n".to_vec(), offsets: vec![0], points, pages, icc: None };
         p.object(1, b"<< /Type /Catalog /Pages 2 0 R >>");
         let kids = (0..pages).map(|i| format!("{} 0 R", 3 + i * 3)).collect::<Vec<_>>().join(" ");
         p.object(2, format!("<< /Type /Pages /Count {pages} /Kids [{kids}] >>").as_bytes());
         p
+    }
+
+    /// Colours the pages by this ICC profile (an ICCBased space) instead of plain RGB.
+    pub(crate) fn with_icc(mut self, icc: Vec<u8>) -> Self {
+        self.icc = Some(icc);
+        self
     }
 
     fn object(&mut self, id: usize, body: &[u8]) {
@@ -239,14 +247,22 @@ impl Pdf {
             .as_bytes(),
         );
         self.stream(id + 1, "", format!("q {w:.2} 0 0 {h:.2} 0 0 cm /Im Do Q").as_bytes());
+        let colour = match &self.icc {
+            Some(_) => format!("[/ICCBased {} 0 R]", 3 + self.pages * 3),
+            None => "/DeviceRGB".to_string(),
+        };
         self.stream(
             id + 2,
-            &format!("/Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode"),
+            &format!("/Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace {colour} /BitsPerComponent 8 /Filter /DCTDecode"),
             jpg,
         );
     }
 
     pub(crate) fn finish(mut self) -> Vec<u8> {
+        if let Some(icc) = self.icc.take() {
+            let id = 3 + self.pages * 3;
+            self.stream(id, "/N 3 /Alternate /DeviceRGB", &icc);
+        }
         let start = self.bytes.len();
         self.bytes.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", self.offsets.len()).as_bytes());
         for offset in self.offsets.iter().skip(1) {

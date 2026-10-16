@@ -1316,6 +1316,15 @@
   "Previous Photo": "Foto Sebelumnya",
   "Print": "Cetak",
   "Print…": "Cetak…",
+  "Show guides": "Tampilkan panduan",
+  "Rulers": "Penggaris",
+  "Cell dimensions": "Dimensi sel",
+  "Resolution": "Resolusi",
+  "Print template": "Templat cetak",
+  "Template name": "Nama templat",
+  "Save template": "Simpan templat",
+  "Rename template": "Ganti nama templat",
+  "Delete template": "Hapus templat",
   "Processor": "Prosesor",
   "Profile": "Profil",
   "Profile Browser": "Penelusur Profil",
@@ -2242,10 +2251,5 @@
   "Previous slide": "Slide sebelumnya",
   "Next slide": "Slide berikutnya",
   "Slide": "Slide",
-  "Select photos to show.": "Pilih foto untuk ditampilkan.",
-  "Set Location": "Atur Lokasi",
-  "Only photos without a position": "Hanya foto tanpa posisi",
-  "Drag photos onto the map to give them a GPS position.": "Seret foto ke peta untuk memberi mereka posisi GPS.",
-  "photo placed on the map": "foto ditempatkan di peta",
-  "photos placed on the map": "foto ditempatkan di peta"
+  "Select photos to show.": "Pilih foto untuk ditampilkan."
 }

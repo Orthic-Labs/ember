@@ -354,3 +354,20 @@ fn reopening_a_library_retires_the_old_cache_so_its_jobs_cannot_write_after_a_cl
     drop(s);
     let _ = std::fs::remove_dir_all(&lib);
 }
+#[test]
+fn print_templates_are_saved_with_the_library_preferences() {
+    let lib = temp_dir("print-templates");
+    {
+        let mut s = Session::new().with_fs();
+        s.open_library(&lib, true).unwrap();
+        s.execute("print.set", &json!({"layout": {"columns": 2}})).unwrap();
+        s.execute("print.saveTemplate", &json!({"name": "Pair"})).unwrap();
+        s.close_library().unwrap();
+    }
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    let names: Vec<String> = s.print_templates.iter().map(|t| t.name.clone()).collect();
+    assert_eq!(names, ["Pair"]);
+    assert_eq!(s.print_templates[0].layout.columns, 2);
+    let _ = std::fs::remove_dir_all(&lib);
+}

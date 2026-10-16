@@ -1040,6 +1040,15 @@
   "Previous Photo": "Photo précédente",
   "Print": "Imprimer",
   "Print…": "Imprimer…",
+  "Show guides": "Afficher les repères",
+  "Rulers": "Règles",
+  "Cell dimensions": "Dimensions des cellules",
+  "Resolution": "Résolution",
+  "Print template": "Modèle d'impression",
+  "Template name": "Nom du modèle",
+  "Save template": "Enregistrer le modèle",
+  "Rename template": "Renommer le modèle",
+  "Delete template": "Supprimer le modèle",
   "Profile": "Profil",
   "Profile Browser": "Navigateur de profils",
   "Profile Distortion": "Distorsion du profil",
@@ -2241,10 +2250,5 @@
   "Previous slide": "Diapositive précédente",
   "Next slide": "Diapositive suivante",
   "Slide": "Diapositive",
-  "Select photos to show.": "Sélectionnez des photos à afficher.",
-  "Set Location": "Définir le lieu",
-  "Only photos without a position": "Seulement les photos sans position",
-  "Drag photos onto the map to give them a GPS position.": "Faites glisser des photos sur la carte pour leur donner une position GPS.",
-  "photo placed on the map": "photo placée sur la carte",
-  "photos placed on the map": "photos placées sur la carte"
+  "Select photos to show.": "Sélectionnez des photos à afficher."
 }

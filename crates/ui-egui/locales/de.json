@@ -1093,6 +1093,15 @@
   "Previous Photo": "Vorheriges Foto",
   "Print": "Drucken",
   "Print…": "Drucken…",
+  "Show guides": "Hilfslinien zeigen",
+  "Rulers": "Lineale",
+  "Cell dimensions": "Zellenmaße",
+  "Resolution": "Auflösung",
+  "Print template": "Druckvorlage",
+  "Template name": "Name der Vorlage",
+  "Save template": "Vorlage speichern",
+  "Rename template": "Vorlage umbenennen",
+  "Delete template": "Vorlage löschen",
   "Profile": "Profil",
   "Profile Browser": "Profilbrowser",
   "Profile Distortion": "Profil-Verzeichnung",
@@ -2242,10 +2251,5 @@
   "Previous slide": "Vorheriges Dia",
   "Next slide": "Nächstes Dia",
   "Slide": "Dia",
-  "Select photos to show.": "Fotos zum Zeigen auswählen.",
-  "Set Location": "Ort festlegen",
-  "Only photos without a position": "Nur Fotos ohne Position",
-  "Drag photos onto the map to give them a GPS position.": "Ziehe Fotos auf die Karte, um ihnen eine GPS-Position zu geben.",
-  "photo placed on the map": "Foto auf der Karte platziert",
-  "photos placed on the map": "Fotos auf der Karte platziert"
+  "Select photos to show.": "Fotos zum Zeigen auswählen."
 }

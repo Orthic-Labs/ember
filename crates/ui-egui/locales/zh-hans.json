@@ -1092,6 +1092,15 @@
   "Previous Photo": "上一张照片",
   "Print": "打印",
   "Print…": "打印…",
+  "Show guides": "显示参考线",
+  "Rulers": "标尺",
+  "Cell dimensions": "单元格尺寸",
+  "Resolution": "分辨率",
+  "Print template": "打印模板",
+  "Template name": "模板名称",
+  "Save template": "保存模板",
+  "Rename template": "重命名模板",
+  "Delete template": "删除模板",
   "Profile": "配置文件",
   "Profile Browser": "配置文件浏览器",
   "Profile Distortion": "配置文件扭曲",
@@ -2243,10 +2252,5 @@
   "Previous slide": "上一张",
   "Next slide": "下一张",
   "Slide": "幻灯片",
-  "Select photos to show.": "请选择要放映的照片。",
-  "Set Location": "设置位置",
-  "Only photos without a position": "仅显示无位置的照片",
-  "Drag photos onto the map to give them a GPS position.": "将照片拖到地图上，即可为其设置 GPS 位置。",
-  "photo placed on the map": "张照片已放到地图上",
-  "photos placed on the map": "张照片已放到地图上"
+  "Select photos to show.": "请选择要放映的照片。"
 }

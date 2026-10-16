@@ -284,6 +284,8 @@ pub struct Session {
     pub book: book::Model,
     /// The Classic Print job in use (`print.set`, `print.applyTemplate`, ...); not persisted.
     pub print: print::Model,
+    /// The user's Classic Print templates (`print.saveTemplate`), persisted in prefs.json.
+    pub print_templates: Vec<print::PrintTemplate>,
     /// Metadata presets (`metadata.*`), persisted in prefs.json.
     pub metadata_presets: Vec<cmd::metadata::MetadataPreset>,
     /// Saved filter-bar settings (`filter.*`), persisted in prefs.json.
@@ -410,6 +412,7 @@ impl Session {
             slideshow_templates: Vec::new(),
             book: book::Model::default(),
             print: print::Model::default(),
+            print_templates: Vec::new(),
             metadata_presets: Vec::new(),
             filter_presets: Vec::new(),
             curve_presets: Vec::new(),

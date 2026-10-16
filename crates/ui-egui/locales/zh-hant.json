@@ -1092,6 +1092,15 @@
   "Previous Photo": "上一張照片",
   "Print": "列印",
   "Print…": "列印…",
+  "Show guides": "顯示參考線",
+  "Rulers": "標尺",
+  "Cell dimensions": "儲存格尺寸",
+  "Resolution": "解析度",
+  "Print template": "列印範本",
+  "Template name": "範本名稱",
+  "Save template": "儲存範本",
+  "Rename template": "重新命名範本",
+  "Delete template": "刪除範本",
   "Profile": "描述檔",
   "Profile Browser": "描述檔瀏覽器",
   "Profile Distortion": "描述檔變形校正",
@@ -2241,10 +2250,5 @@
   "Previous slide": "上一張",
   "Next slide": "下一張",
   "Slide": "投影片",
-  "Select photos to show.": "請選擇要放映的照片。",
-  "Set Location": "設定位置",
-  "Only photos without a position": "僅顯示無位置的照片",
-  "Drag photos onto the map to give them a GPS position.": "將照片拖到地圖上，即可為其設定 GPS 位置。",
-  "photo placed on the map": "張照片已放到地圖上",
-  "photos placed on the map": "張照片已放到地圖上"
+  "Select photos to show.": "請選擇要放映的照片。"
 }

@@ -3,14 +3,15 @@
 //! a single image, a contact sheet, a picture package (cells packed onto one page) and a custom
 //! grid. Geometry is in millimetres, so a page keeps its proportions at any ppi (resolution
 //! independence). A job writes PDF or JPEG only: OS printing needs a platform API this build lacks.
-//! The print lives with the session; it is not saved with the library.
+//! The print job lives with the session; user print templates are saved with the library preferences.
 use crate::Session;
 use crate::book::{self, Rect, font_px, line_height, text_line};
 use crate::contact_sheet::{Pdf, blit};
-use crate::export::{SharpenAmount, SharpenFor, encode_image, output_sharpen};
+use crate::export::{SharpenAmount, SharpenFor, encode_image, named_space, output_sharpen};
 use crate::proof::{self, ProofIntent};
 use crate::slideshow::{self, Fields};
 use lightcraft_catalog::PhotoId;
+use lightcraft_codecs::icc;
 use lightcraft_pipeline::{OutputDepth, OutputSpace, Proof};
 use lightcraft_raster::Rgba8;
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,8 @@ const MIN_CELL_MM: f64 = 5.0;
 const EPS: f64 = 1e-6;
 /// The colour of printed text.
 const TEXT_COLOUR: [u8; 3] = [32, 32, 32];
+/// The message of a print stopped from its progress row; nothing is written.
+pub const CANCELLED: &str = "the print was cancelled";
 
 /// The whole print job, edited through `print.set` and `print.applyTemplate`.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -190,6 +193,24 @@ impl Default for Job {
             profile: String::new(),
             intent: "perceptual".into(),
         }
+    }
+}
+
+/// A user print template: the layout, image and picture-package settings a template sets (the job and
+/// page options stay). Built-in templates are [`builtin_templates`]; the user's are saved with the
+/// library preferences.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct PrintTemplate {
+    pub name: String,
+    pub layout: Layout,
+    pub image: ImageSettings,
+    pub package: Vec<CellSize>,
+}
+
+impl Default for PrintTemplate {
+    fn default() -> Self {
+        Self { name: String::new(), layout: Layout::default(), image: ImageSettings::default(), package: Vec::new() }
     }
 }
 
@@ -391,6 +412,45 @@ pub fn cells_mm(m: &Model) -> Result<Vec<RectMm>, String> {
     Ok(relative.into_iter().map(|r| RectMm { x: r.x + l.margin_mm, y: r.y + l.margin_mm, ..r }).collect())
 }
 
+/// The guides a print view draws over its page preview, in millimetres from the paper's top-left
+/// corner. The output never has them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GuideLines {
+    /// The paper's size.
+    pub paper: (f64, f64),
+    /// The bleed beyond the trim (the paper's edge), when a bleed is set.
+    pub bleed: Option<RectMm>,
+    /// Ruler ticks along the top edge (`x`) and the left edge (`y`); empty without rulers.
+    pub ruler_x: Vec<f64>,
+    pub ruler_y: Vec<f64>,
+    /// Each cell and its size label; empty without dimensions.
+    pub cells: Vec<(RectMm, String)>,
+}
+
+/// The guides for the print's settings, or `None` when they are hidden.
+pub fn guide_lines(m: &Model) -> Result<Option<GuideLines>, String> {
+    let g = &m.guides;
+    if !g.show {
+        return Ok(None);
+    }
+    let (pw, ph) = paper_mm(&m.layout)?;
+    let ticks = |len: f64| -> Vec<f64> { (0..).map(|i: u32| f64::from(i) * 10.0).take_while(|t| *t <= len + EPS).collect() };
+    let bleed = (g.bleed_mm > 0.0).then(|| RectMm { x: -g.bleed_mm, y: -g.bleed_mm, w: pw + 2.0 * g.bleed_mm, h: ph + 2.0 * g.bleed_mm });
+    let cells: Vec<(RectMm, String)> = if g.dimensions {
+        cells_mm(m)?
+            .into_iter()
+            .map(|c| {
+                let label = format!("{:.0} × {:.0} mm", c.w, c.h);
+                (c, label)
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let (ruler_x, ruler_y) = if g.rulers { (ticks(pw), ticks(ph)) } else { (Vec::new(), Vec::new()) };
+    Ok(Some(GuideLines { paper: (pw, ph), bleed, ruler_x, ruler_y, cells }))
+}
+
 /// The photo (an index into the selection) each cell of each page shows; `None` = an empty cell.
 /// With `repeat_one` each photo gets a page of its own, repeated in every cell.
 pub fn plan(m: &Model, photos: usize) -> Result<Vec<Vec<Option<usize>>>, String> {
@@ -565,14 +625,34 @@ pub fn render_page(session: &mut Session, m: &Model, photos: &[PhotoId], index: 
     Ok(img)
 }
 
-/// The print as a PDF: one page per print page, each a JPEG at `ppi` on a paper of the layout's size.
+/// The sRGB profile the print's pages are written in: photos are sRGB after any soft proof.
+fn output_profile() -> Vec<u8> {
+    icc::write_named(named_space(OutputSpace::Srgb))
+}
+
+/// The print as a PDF: one page per print page, each a JPEG at `ppi` on a paper of the layout's size,
+/// coloured by the embedded sRGB profile.
 pub fn export_pdf(session: &mut Session, m: &Model, photos: &[PhotoId], ppi: f64) -> Result<Vec<u8>, String> {
+    export_pdf_with(session, m, photos, ppi, &mut |_, _| true)
+}
+
+/// [`export_pdf`] that calls `progress(done, pages)` before each page; `false` cancels, and nothing is written.
+pub fn export_pdf_with(
+    session: &mut Session,
+    m: &Model,
+    photos: &[PhotoId],
+    ppi: f64,
+    progress: &mut dyn FnMut(usize, usize) -> bool,
+) -> Result<Vec<u8>, String> {
     let pages = plan(m, photos.len())?.len();
     let (w_mm, h_mm) = paper_mm(&m.layout)?;
     let (w, h) = page_size(w_mm, h_mm, ppi)?;
-    let mut doc = Pdf::new(pages, (w_mm * 72.0 / 25.4, h_mm * 72.0 / 25.4));
+    let mut doc = Pdf::new(pages, (w_mm * 72.0 / 25.4, h_mm * 72.0 / 25.4)).with_icc(output_profile());
     let mut total = 0usize;
     for i in 0..pages {
+        if !progress(i, pages) {
+            return Err(CANCELLED.into());
+        }
         let jpg = encode_image(&render_page(session, m, photos, i, ppi)?, &slideshow::jpeg_options())?;
         total = total.saturating_add(jpg.len());
         if total > MAX_PDF_BYTES {
@@ -585,11 +665,25 @@ pub fn export_pdf(session: &mut Session, m: &Model, photos: &[PhotoId], ppi: f64
 
 /// One JPEG per print page at `ppi`, named `print-0001.jpg`, `print-0002.jpg`, ...
 pub fn export_jpegs(session: &mut Session, m: &Model, photos: &[PhotoId], ppi: f64) -> Result<Vec<(String, Vec<u8>)>, String> {
+    export_jpegs_with(session, m, photos, ppi, &mut |_, _| true)
+}
+
+/// [`export_jpegs`] that calls `progress(done, pages)` before each page; `false` cancels.
+pub fn export_jpegs_with(
+    session: &mut Session,
+    m: &Model,
+    photos: &[PhotoId],
+    ppi: f64,
+    progress: &mut dyn FnMut(usize, usize) -> bool,
+) -> Result<Vec<(String, Vec<u8>)>, String> {
     let pages = plan(m, photos.len())?.len();
     let (w_mm, h_mm) = paper_mm(&m.layout)?;
     page_size(w_mm, h_mm, ppi)?;
     let mut files = Vec::with_capacity(pages);
     for i in 0..pages {
+        if !progress(i, pages) {
+            return Err(CANCELLED.into());
+        }
         let img = render_page(session, m, photos, i, ppi)?;
         files.push((format!("print-{:04}.jpg", i + 1), encode_image(&img, &slideshow::jpeg_options())?));
     }
@@ -723,6 +817,67 @@ mod tests {
         m.page.info_text.clear();
         let plain = render_page(&mut s, &m, &ids, 0, 72.0).unwrap();
         assert!(plain != expanded, "the info text was not drawn");
+    }
+
+    #[test]
+    fn guides_are_drawn_for_the_preview_and_never_on_the_output() {
+        let mut s = Session::with_demo();
+        let ids = photos(&s, 1);
+        let mut m = Model::default();
+        m.layout.style = "single".into();
+        let g = guide_lines(&m).unwrap().unwrap();
+        assert_eq!(g.paper, (210.0, 297.0));
+        assert_eq!(g.bleed.map(|b| (b.x, b.y, b.w)), Some((-3.0, -3.0, 216.0)), "3 mm beyond the trim");
+        assert_eq!(g.ruler_x.first(), Some(&0.0));
+        assert_eq!(g.ruler_x.last(), Some(&200.0), "ticks every 10 mm up to the paper's width");
+        assert_eq!(g.ruler_y.len(), 30);
+        assert_eq!(g.cells.len(), 1);
+        assert_eq!(g.cells[0].1, "190 × 277 mm");
+        m.guides.show = false;
+        assert!(guide_lines(&m).unwrap().is_none());
+        m.guides = Guides { rulers: false, dimensions: false, bleed_mm: 0.0, show: true };
+        let g = guide_lines(&m).unwrap().unwrap();
+        assert!(g.bleed.is_none() && g.ruler_x.is_empty() && g.ruler_y.is_empty() && g.cells.is_empty());
+        // the guides belong to the preview: the page is the same with them shown or hidden
+        m.guides.show = true;
+        let shown = render_page(&mut s, &m, &ids, 0, 72.0).unwrap();
+        m.guides.show = false;
+        let hidden = render_page(&mut s, &m, &ids, 0, 72.0).unwrap();
+        assert!(shown == hidden, "a guide was drawn on the output");
+    }
+
+    #[test]
+    fn the_pdf_embeds_the_srgb_profile_and_the_jpegs_carry_one_too() {
+        let mut s = Session::with_demo();
+        let ids = photos(&s, 1);
+        let mut m = Model::default();
+        m.layout.style = "single".into();
+        let doc = export_pdf(&mut s, &m, &ids, 72.0).unwrap();
+        let text = String::from_utf8_lossy(&doc);
+        assert!(text.contains("/ColorSpace [/ICCBased "), "the page is not coloured by an embedded profile");
+        assert!(text.contains("/N 3"), "the profile stream is missing");
+        let jpg = export_jpegs(&mut s, &m, &ids, 72.0).unwrap().remove(0).1;
+        assert!(jpg.windows(12).any(|w| w == b"ICC_PROFILE\0"), "the JPEG has no ICC profile");
+    }
+
+    #[test]
+    fn a_print_reports_progress_per_page_and_a_cancel_writes_nothing() {
+        let mut s = Session::with_demo();
+        let ids = photos(&s, 3);
+        let mut m = Model::default();
+        m.layout.columns = 1;
+        m.layout.rows = 2;
+        let mut seen: Vec<(usize, usize)> = Vec::new();
+        let doc = export_pdf_with(&mut s, &m, &ids, 72.0, &mut |done: usize, pages: usize| {
+            seen.push((done, pages));
+            true
+        })
+        .unwrap();
+        assert!(!doc.is_empty());
+        assert_eq!(seen, vec![(0, 2), (1, 2)]);
+        let stopped = export_pdf_with(&mut s, &m, &ids, 72.0, &mut |done: usize, _| done < 1);
+        assert_eq!(stopped.unwrap_err(), CANCELLED);
+        assert_eq!(export_jpegs_with(&mut s, &m, &ids, 72.0, &mut |_, _| false).unwrap_err(), CANCELLED);
     }
 
     #[test]
