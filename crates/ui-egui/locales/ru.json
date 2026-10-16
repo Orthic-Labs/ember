@@ -2152,5 +2152,13 @@
   "Ember project": "Сайт Ember",
   "Files with the same content as another file in this import: only the first is imported.": "Файлы с тем же содержимым, что и другой файл этого импорта: импортируется только первый.",
   "No graphics processor found: Ember renders on the CPU, which is much slower. Details in Help → System Info.": "Графический процессор не найден: Ember выполняет рендеринг на CPU, а это намного медленнее. Подробности: Справка → Сведения о системе.",
-  "On NixOS, start it from `nix develop`.": "В NixOS запускайте его из `nix develop`."
+  "On NixOS, start it from `nix develop`.": "В NixOS запускайте его из `nix develop`.",
+  "日本語": "日本語",
+  "繁體中文（台灣）": "繁體中文（台灣）",
+  "Largest long edge the Detail view renders at; larger is sharper on big displays but slower.": "Наибольшая длинная сторона, до которой рендерится вид «Детализация»; больше — четче на больших экранах, но медленнее.",
+  "Face names written to XMP by Lightroom and other apps show up here.": "Имена лиц, записанные в XMP программами Lightroom и другими приложениями, отображаются здесь.",
+  "Include selected photos": "Включить выбранные фото",
+  "imported earlier switch over with Photo ▸ Reload from Disk.": "импортированные ранее, переключаются через Фото → Перезагрузить с диска.",
+  "Canon EOS R5 Mark II C-RAW files that opened as \"preview only\" (more than half of them, depending on the": "Файлы Canon EOS R5 Mark II C-RAW, которые открывались как «только для просмотра» (более половины из них, в зависимости от",
+  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "сцены), теперь проявляются по данным матрицы всеми инструментами правки, как и другие RAW-файлы камеры. Фото"
 }
