@@ -577,10 +577,7 @@ fn paint(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui, t: &To
         painter.rect_filled(pill, 4.0, t.chrome.gamma_multiply(0.9));
         painter.galley(pill.min + pad, galley, t.text);
         if !online {
-            let r = ui.put(
-                Rect::from_min_size(pos2(pill.right() + 6.0, pill.top()), vec2(90.0, pill.height())),
-                egui::Button::new(tr("Settings…")),
-            );
+            let r = ui.put(Rect::from_min_size(pos2(pill.right() + 6.0, pill.top()), vec2(90.0, pill.height())), egui::Button::new(tr("Settings…")));
             register(ctx, "button:mapSettings", r.rect);
             if r.clicked()
                 && let Err(e) = app.run("app.settings", json!({}))
@@ -804,10 +801,8 @@ mod tests {
     #[test]
     fn a_click_hits_the_nearest_marker_within_reach_and_nothing_further() {
         let view = View::new(48.0, 2.0, 8.0);
-        let clusters = vec![
-            Cluster { lat: 48.0, lon: 2.0, ids: vec![PhotoId(1)] },
-            Cluster { lat: 48.0, lon: 2.05, ids: vec![PhotoId(2), PhotoId(3)] },
-        ];
+        let clusters =
+            vec![Cluster { lat: 48.0, lon: 2.0, ids: vec![PhotoId(1)] }, Cluster { lat: 48.0, lon: 2.05, ids: vec![PhotoId(2), PhotoId(3)] }];
         let (dx, dy) = view.offset(48.0, 2.05);
         assert_eq!(marker_at(&view, &clusters, (0.0, 0.0), HIT_R), Some(0));
         assert_eq!(marker_at(&view, &clusters, (dx + 3.0, dy - 2.0), HIT_R), Some(1));

@@ -402,14 +402,7 @@ mod tests {
             let (lat, lon) = unproject(x, y, 5.0);
             (PhotoId(id), lat, lon)
         };
-        vec![
-            at(1, 60.0, 60.0),
-            at(2, 100.0, 100.0),
-            at(3, 300.0, 300.0),
-            at(4, 305.0, 305.0),
-            at(5, 300.0, 300.0),
-            (PhotoId(6), 40.0, f64::NAN),
-        ]
+        vec![at(1, 60.0, 60.0), at(2, 100.0, 100.0), at(3, 300.0, 300.0), at(4, 305.0, 305.0), at(5, 300.0, 300.0), (PhotoId(6), 40.0, f64::NAN)]
     }
 
     fn sizes(zoom: f64) -> Vec<usize> {

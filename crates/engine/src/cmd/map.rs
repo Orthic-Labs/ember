@@ -95,7 +95,15 @@ fn set_location(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("photo.setLocation", "Set Location", [], None, "{lat, lon, ids?} or {clear: true, ids?} → {changed, photos, lat, lon} — sets the GPS position of the photos (the selection when no `ids`), or removes it with `clear`; one undo step for all of them. Place names are left as they are. A photo dropped on the Map uses it", always, set_location),
+        cmd!(
+            "photo.setLocation",
+            "Set Location",
+            [],
+            None,
+            "{lat, lon, ids?} or {clear: true, ids?} → {changed, photos, lat, lon} — sets the GPS position of the photos (the selection when no `ids`), or removes it with `clear`; one undo step for all of them. Place names are left as they are. A photo dropped on the Map uses it",
+            always,
+            set_location
+        ),
         cmd!(query "map.markers", "Map Markers", [], None, "{zoom?: 0 to 19 (3), cellPx?: pixels within which photos share a marker (56), selected?: bool (only the selected photos)} → {photos, markers: [{lat, lon, count, ids}]} — the shown photos that have a GPS position, grouped into the markers the Map draws at that zoom (ids: the first 200)", always, markers),
     ]
 }
