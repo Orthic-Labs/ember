@@ -43,6 +43,25 @@ fn photo_assessment_prepare_only_preserves_source_and_requires_new_output() {
 }
 
 #[test]
+fn ai_search_prepare_only_prints_the_request_without_network_or_key() {
+    let result = Command::new(BIN)
+        .args(["ai", "search", "sunset photos from Lisbon, 4+ stars, picks only", "--prepare-only", "--today", "2026-10-16"])
+        .env_remove("SCALEDOWN_API_KEY")
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+    let body: Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(body["model"], "extract-1");
+    assert!(body["messages"][0]["content"].as_str().unwrap().contains("Lisbon"));
+    assert!(body["response_format"]["json_schema"]["schema"]["properties"]["rating"].is_object());
+    // a real call needs the key; missing text and bad dates are errors
+    let no_key = Command::new(BIN).args(["ai", "search", "beach"]).env_remove("SCALEDOWN_API_KEY").output().unwrap();
+    assert!(!no_key.status.success());
+    assert!(!Command::new(BIN).args(["ai", "search", "--prepare-only"]).output().unwrap().status.success());
+    assert!(!Command::new(BIN).args(["ai", "search", "x", "--prepare-only", "--today", "soon"]).output().unwrap().status.success());
+}
+
+#[test]
 fn look_extract_then_apply_lands_a_photo_on_the_samples_statistics() {
     // samples: two bright, flat renders; the photo to match: the darker demo library frame
     let a = tmp("look-sample-a.png");

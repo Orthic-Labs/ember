@@ -8,14 +8,55 @@ use lightcraft_engine::{Session, SourceLevel, catalog::PhotoId};
 use lightcraft_photo_ai::{
     CONTROLS, Proxy,
     network::{OpenRouter, preflight},
+    scaledown::ScaleDown,
 };
 use lightcraft_pipeline::auto::auto_tone;
 use lightcraft_raster::Rgba8;
 use serde_json::{Value, json};
 
+/// `ai search "<text>" [--prepare-only] [--today YYYY-MM-DD]`: natural-language library search to a
+/// `library.filter` patch through ScaleDown Extract. Only the typed text (and a date) is sent.
+fn search(args: &[String]) -> Result<(), String> {
+    let mut text = None;
+    let mut prepare = false;
+    let mut today = None;
+    let mut i = 0usize;
+    while let Some(arg) = args.get(i) {
+        match arg.as_str() {
+            "--prepare-only" => prepare = true,
+            "--today" => {
+                i += 1;
+                let value = args.get(i).ok_or("--today: missing value")?;
+                today = Some(lightcraft_photo_ai::search::valid_date(value).filter(|d| d.len() == 10).ok_or("--today expects YYYY-MM-DD")?);
+            }
+            a if a.starts_with('-') => return Err(format!("unknown ai search option {a}")),
+            t if text.is_none() => text = Some(t.to_owned()),
+            _ => return Err("ai search takes one quoted search text".into()),
+        }
+        i += 1;
+    }
+    let text = text.ok_or("ai search expects a quoted search text")?;
+    let today = today.unwrap_or_else(lightcraft_photo_ai::scaledown::today_utc);
+    if prepare {
+        let body = lightcraft_photo_ai::search::request_body(&text, Some(&today))?;
+        println!("{}", serde_json::to_string_pretty(&body).map_err(|_| "could not encode request")?);
+        return Ok(());
+    }
+    let key = std::env::var("SCALEDOWN_API_KEY").map_err(|_| "set SCALEDOWN_API_KEY securely, or use --prepare-only")?;
+    let cancel = AtomicBool::new(false);
+    let found = ScaleDown::new(key)?.extract_search_on(&text, Some(&today), &cancel)?;
+    let filter = lightcraft_photo_ai::search::entities_to_filter_json(&found);
+    let out = json!({"entities": found, "command": "library.filter", "filter": filter});
+    println!("{}", serde_json::to_string_pretty(&out).map_err(|_| "could not encode result")?);
+    Ok(())
+}
+
 pub fn run(args: &[String]) -> Result<(), String> {
+    if args.first().map(String::as_str) == Some("search") {
+        return search(args.get(1..).unwrap_or_default());
+    }
     if args.first().map(String::as_str) != Some("compare") {
-        return Err("ai expects compare; see --help".into());
+        return Err("ai expects compare or search; see --help".into());
     }
     let mut output = None;
     let mut selected = Vec::new();

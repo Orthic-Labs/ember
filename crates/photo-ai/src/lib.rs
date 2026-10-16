@@ -13,6 +13,9 @@ use sha2::{Digest, Sha256};
 pub mod culling;
 #[cfg(all(feature = "network", not(target_arch = "wasm32")))]
 pub mod network;
+#[cfg(all(feature = "network", not(target_arch = "wasm32")))]
+pub mod scaledown;
+pub mod search;
 
 pub const PROMPT: &str = include_str!("../prompt.txt");
 pub const SCHEMA: &str = include_str!("../assessment.schema.json");

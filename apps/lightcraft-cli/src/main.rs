@@ -12,6 +12,7 @@
 //! lightcraft-cli controls [--json]
 //! lightcraft-cli cull score --predictions FILE --labels FILE [--out FILE] [--split test]
 //! lightcraft-cli cull baseline --manifest FILE [--reject-below 0..100] [--out FILE]
+//! lightcraft-cli ai search "TEXT" [--prepare-only] [--today YYYY-MM-DD]
 //! lightcraft-cli ai personal train --manifest FILE --out NEW_MODEL
 //! lightcraft-cli ai personal extract --manifest FILE --out NEW_MANIFEST
 //! lightcraft-cli ai personal evaluate --manifest FILE --model FILE [--out NEW_REPORT]
@@ -132,6 +133,9 @@ USAGE:
       Score read-only culling predictions against explicit shoot-level labels.
   lightcraft-cli cull baseline --manifest FILE [--reject-below 0..100] [--out FILE]
       Measure classical culling on explicit files in a disposable in-memory catalog.
+  lightcraft-cli ai search "TEXT" [--prepare-only] [--today YYYY-MM-DD]
+      Turn a natural-language library search into a library.filter patch via ScaleDown (SCALEDOWN_API_KEY).
+      Only the typed text and today's date are sent; --prepare-only prints the request without network.
   lightcraft-cli ai personal extract --manifest FILE --out NEW_MANIFEST
       Extract canonical Personal Auto feature schema v2 (28 numeric fields) from explicit labelled photos.
   lightcraft-cli ai personal train --manifest FILE --out NEW_MODEL

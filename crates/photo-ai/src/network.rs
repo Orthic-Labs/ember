@@ -77,7 +77,7 @@ impl OpenRouter {
     }
 }
 
-fn echoes_key(bytes: &[u8], key: &str) -> bool {
+pub(crate) fn echoes_key(bytes: &[u8], key: &str) -> bool {
     fn contains(value: &Value, key: &str) -> bool {
         match value {
             Value::String(text) => text.contains(key),
@@ -89,7 +89,7 @@ fn echoes_key(bytes: &[u8], key: &str) -> bool {
     std::str::from_utf8(bytes).is_ok_and(|text| text.contains(key)) || serde_json::from_slice::<Value>(bytes).is_ok_and(|value| contains(&value, key))
 }
 
-fn limits(cancel: &AtomicBool, seconds: u64) -> Limits<'_> {
+pub(crate) fn limits(cancel: &AtomicBool, seconds: u64) -> Limits<'_> {
     Limits {
         connect: Duration::from_secs(5),
         stall: Duration::from_secs(30),
@@ -98,7 +98,7 @@ fn limits(cancel: &AtomicBool, seconds: u64) -> Limits<'_> {
     }
 }
 
-fn read_body(mut response: lightcraft_fetch::http::Response, limits: &Limits<'_>, cap: usize) -> Result<Vec<u8>, String> {
+pub(crate) fn read_body(mut response: lightcraft_fetch::http::Response, limits: &Limits<'_>, cap: usize) -> Result<Vec<u8>, String> {
     if !(200..300).contains(&response.status) {
         return Err(format!("provider HTTP {}; no retry performed", response.status));
     }
