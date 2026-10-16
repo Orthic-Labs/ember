@@ -1714,3 +1714,95 @@ fn legacy_shared_sidecar_is_read_and_seeds_split_sidecars() {
     let _ = std::fs::remove_dir_all(&src);
     let _ = std::fs::remove_dir_all(&lib);
 }
+
+/// A face drawn by hand (`faces.addRegion`) is added unnamed, named, undone and removed (`faces.removeRegion`), each as
+/// one undo step; a hostile or unknown box changes nothing.
+#[test]
+fn a_drawn_face_is_added_named_undone_and_removed() {
+    let src = temp_dir("region-manual");
+    write_png(&src.join("portrait.png"), 9);
+    let mut s = Session::new().with_fs();
+    s.execute("library.import", &json!({"paths": [src.to_string_lossy()]})).unwrap();
+    let id = s.active().unwrap();
+    let count = |s: &Session| s.catalog.photo(id).unwrap().meta.regions.len();
+    let before = count(&s);
+    let r = s.execute("faces.addRegion", &json!({"rect": [0.1, 0.2, 0.3, 0.4]})).unwrap();
+    let index = usize::try_from(r["index"].as_u64().unwrap()).unwrap();
+    assert_eq!(r["manual"], true);
+    assert_eq!(count(&s), before + 1);
+    let added = s.catalog.photo(id).unwrap().meta.regions[index].clone();
+    assert_eq!(added.kind, lightcraft_meta::RegionKind::Face);
+    assert!(added.name.is_none());
+    assert_eq!(added.description.as_deref(), Some("Drawn in Ember"));
+    assert!((added.rect.x0 - 0.1).abs() < 1e-9 && (added.rect.x1 - 0.4).abs() < 1e-9 && (added.rect.y1 - 0.6).abs() < 1e-9, "{:?}", added.rect);
+    s.execute("faces.setName", &json!({"id": id.0, "index": index, "name": "Ann"})).unwrap();
+    assert_eq!(s.catalog.photo(id).unwrap().meta.regions[index].name.as_deref(), Some("Ann"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.catalog.photo(id).unwrap().meta.regions[index].name.is_none(), "the name is undone");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(count(&s), before, "the box is undone");
+    // a box named at once, then removed: errors for a face that is not there, and an undo brings it back
+    s.execute("faces.addRegion", &json!({"photo": id.0, "rect": [0.1, 0.2, 0.3, 0.4], "name": "Ann"})).unwrap();
+    let index = count(&s) - 1;
+    for missing in [json!({"face": {"photo": id.0, "index": 99}}), json!({"face": {"photo": id.0}}), json!({})] {
+        assert!(s.execute("faces.removeRegion", &missing).is_err(), "{missing}");
+    }
+    let gone = s.execute("faces.removeRegion", &json!({"face": {"photo": id.0, "index": index}})).unwrap();
+    assert_eq!(gone["name"], "Ann");
+    assert_eq!(count(&s), before);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.catalog.photo(id).unwrap().meta.regions[index].name.as_deref(), Some("Ann"), "the removal is undone");
+    let _ = std::fs::remove_dir_all(&src);
+}
+
+/// A box must have a positive size and lie inside the photo; anything else, and an unknown photo, is an error.
+#[test]
+fn an_invalid_drawn_box_is_refused() {
+    let src = temp_dir("region-invalid");
+    write_png(&src.join("portrait.png"), 9);
+    let mut s = Session::new().with_fs();
+    s.execute("library.import", &json!({"paths": [src.to_string_lossy()]})).unwrap();
+    let id = s.active().unwrap();
+    for rect in [
+        json!([0.5, 0.5, 0.6, 0.1]),
+        json!([0.1, 0.1, 0.0, 0.2]),
+        json!([0.1, 0.1, 0.2, -0.2]),
+        json!([-0.1, 0.1, 0.2, 0.2]),
+        json!([0.1, 0.1, 1.5, 0.2]),
+        json!([0.1, 0.1, 0.2]),
+        json!([0.1, 0.1, "a", 0.2]),
+        json!([0.1, null, 0.2, 0.2]),
+        json!({"x0": 0.1, "y0": 0.1, "x1": 0.3, "y1": 0.3}),
+    ] {
+        assert!(s.execute("faces.addRegion", &json!({"rect": rect.clone()})).is_err(), "{rect}");
+    }
+    assert!(s.execute("faces.addRegion", &json!({"photo": 999_999, "rect": [0.1, 0.1, 0.2, 0.2]})).is_err(), "no such photo");
+    assert!(s.execute("faces.addRegion", &json!({})).is_err(), "no rect");
+    assert!(s.catalog.photo(id).unwrap().meta.regions.is_empty(), "nothing was added");
+    let _ = std::fs::remove_dir_all(&src);
+}
+
+/// A drawn face that is named reaches the sidecar's regions on the next metadata save, with its name and its box, marked
+/// as drawn in Ember; an unnamed drawn face alone writes no regions block, as for any unnamed face.
+#[test]
+fn a_named_drawn_face_is_written_to_the_sidecar_regions() {
+    let src = temp_dir("region-manual-sidecar");
+    write_png(&src.join("portrait.png"), 9);
+    let mut s = Session::new().with_fs();
+    s.execute("library.import", &json!({"paths": [src.join("portrait.png").to_string_lossy()]})).unwrap();
+    let id = only(&s);
+    s.execute("library.select", &json!({"ids": [id.0]})).unwrap();
+    s.execute("faces.addRegion", &json!({"rect": [0.1, 0.2, 0.3, 0.4]})).unwrap();
+    s.execute("photo.saveMetadataToFile", &json!({})).unwrap();
+    let out = std::fs::read_to_string(src.join("portrait.xmp")).unwrap();
+    assert!(!out.contains("mwg-rs:Regions"), "no named face, no regions block: {out}");
+    s.execute("faces.addRegion", &json!({"rect": [0.5, 0.2, 0.3, 0.4], "name": "Ann"})).unwrap();
+    s.execute("photo.saveMetadataToFile", &json!({})).unwrap();
+    let out = std::fs::read_to_string(src.join("portrait.xmp")).unwrap();
+    let regions = lightcraft_meta::parse_xmp(&out).unwrap().metadata.regions;
+    assert_eq!(regions.len(), 2, "{out}");
+    let named = regions.iter().find(|r| r.name.as_deref() == Some("Ann")).unwrap();
+    assert_eq!(named.description.as_deref(), Some("Drawn in Ember"), "{out}");
+    assert!((named.rect.x0 - 0.5).abs() < 1e-6 && (named.rect.y1 - 0.6).abs() < 1e-6, "{:?}", named.rect);
+    let _ = std::fs::remove_dir_all(&src);
+}

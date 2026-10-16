@@ -701,6 +701,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         if app.ui.name_edit.as_ref().is_some_and(|e| e.photo != id.0) {
             app.ui.name_edit = None;
         }
+        crate::face_tag::overlay(app, ui, &p, &map, img_rect, &photo, d.orientation);
         let hints = super::faces::hints_for(app, id.0);
         let people = if app.ui.name_edit.is_some() { app.caches.person_names(&app.session.catalog) } else { Default::default() };
         // while the name box is open and recognition is not set up, the box offers the next step
@@ -758,7 +759,10 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                     }
                     _ => map,
                 };
-                general_interaction(app, ui, &resp, &map, img_rect, main_area, native, aspect)
+                // Tag Face mode takes the drag for drawing a face box instead
+                if !app.ui.face_tag {
+                    general_interaction(app, ui, &resp, &map, img_rect, main_area, native, aspect);
+                }
             }
         }
     }

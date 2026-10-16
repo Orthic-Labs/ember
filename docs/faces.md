@@ -1,7 +1,7 @@
 # Faces
 
 Ember reads the face names other apps (reference editor, digiKam…) write into your photos, shows them in the loupe
-(boxes you can switch off, resize and remove) and groups photos by person in the People view. This page is about the
+(boxes you can switch off, resize, remove, and draw by hand where detection missed one) and groups photos by person in the People view. This page is about the
 *models* that find and recognise faces by themselves.
 
 ## Nothing is bundled; every model is an opt-in download
@@ -198,6 +198,23 @@ The detector's output matches OpenCV's own YuNet on a 45-photo public-domain tes
 mean box overlap 0.97), including marble busts and paintings, with no false boxes on the landscape and architecture
 photos in the set.
 
+## Drawing a face yourself
+
+Detection misses some faces, so a face can be drawn by hand. **Photo ▸ Tag Face** (`faces.addRegion`) turns on Tag Face
+mode in the loupe, with the face boxes showing: drag a box over the face, then type its name in the box that opens. Enter
+adds the face with the name typed (an empty name adds it unnamed), and Escape cancels without adding anything. The drag is taken from the
+picture as it is shown, so zoom and pan are respected; a box smaller than 8 points on screen is a click, not a face.
+
+- A drawn face is marked as drawn in Ember (its description says so), so a later **Detect Faces** run does not replace it.
+  Like a named face it is not embedded at once: the background index embeds it with the others.
+- `faces.addRegion {photo?, rect: [x, y, w, h], name?}` takes the box normalized to the photo's upright frame. A box must
+  have a positive size and lie inside the photo (each of x, y, w, h in 0 to 1); anything else is an error and changes nothing.
+- A drawn face that is named reaches the sidecar's regions on the next metadata save, like any named face. A drawn face
+  without a name writes no regions block by itself.
+- **Right-click a face box ▸ Remove Face** (`faces.removeRegion {face: {photo, index}}`) removes a face box, drawn or found by
+  detection, in one undo step. Like the other face-box edits it does not rewrite the sidecar.
+- Every step is one undo step (Edit ▸ Undo). In Tag Face mode a drag draws a box rather than panning the photo.
+
 ## Suggesting who is in a photo
 
 With **Recognise faces** switched on in Settings ▸ Faces and a recognition model chosen (**Use**; the switch cannot be
@@ -313,7 +330,7 @@ suggestions it would make and how many were right.
 
 All of this is reachable from the control channel, the CLI and MCP: `faces.models.list`, `faces.models.inspect {path}`,
 `faces.models.install {path, acknowledged: true, activate?}`, `faces.models.download {id, acknowledged: true}` (then `faces.models.downloads`, which also installs what has arrived, and `faces.models.downloadCancel {id}`), `faces.models.remove {id}`, `faces.models.select {id}`,
-`faces.enable {enabled?}`, `faces.detect {ids?, apply?}`, `faces.index {budgetMs?, ids?}`, `faces.pump` (what the app calls every frame), `faces.suggest {ids?, threshold?, margin?}`, `faces.person {name, more?}` (a person's faces and the unnamed faces that look like them), `faces.unnamed {limit?}` (every unnamed face, look-alikes together, with suggested names), `faces.clusters {limit?, minSize?}` (the unnamed faces grouped by likeness, largest group first; read-only), `faces.setName {id?, index, name}`, `faces.nameFaces {faces: [{photo, index}], name}` (name many at once, one undo step; a face marked not that person is skipped), `faces.rejectName {id, index, name, rejected?}` ("Not this person": stored in the catalog, undoable, the sidecar is not touched; suggestions, "more like them" and look-alike groups keep that face away from that name; `rejected: false` clears it) and `faces.evaluate`. `acknowledged` must be `true`: the caller has shown the user the terms and the user agreed. Installing makes the model the one in use and switches recognition on unless `activate` is `false`.
+`faces.enable {enabled?}`, `faces.detect {ids?, apply?}`, `faces.index {budgetMs?, ids?}`, `faces.pump` (what the app calls every frame), `faces.suggest {ids?, threshold?, margin?}`, `faces.person {name, more?}` (a person's faces and the unnamed faces that look like them), `faces.unnamed {limit?}` (every unnamed face, look-alikes together, with suggested names), `faces.clusters {limit?, minSize?}` (the unnamed faces grouped by likeness, largest group first; read-only), `faces.setName {id?, index, name}`, `faces.nameFaces {faces: [{photo, index}], name}` (name many at once, one undo step; a face marked not that person is skipped), `faces.rejectName {id, index, name, rejected?}` ("Not this person": stored in the catalog, undoable, the sidecar is not touched; suggestions, "more like them" and look-alike groups keep that face away from that name; `rejected: false` clears it) and `faces.evaluate`, `faces.addRegion {photo?, rect: [x, y, w, h], name?}` and `faces.removeRegion {face: {photo, index}}` (faces drawn by hand, see above). `acknowledged` must be `true`: the caller has shown the user the terms and the user agreed. Installing makes the model the one in use and switches recognition on unless `activate` is `false`.
 
 ## Find Blemishes
 

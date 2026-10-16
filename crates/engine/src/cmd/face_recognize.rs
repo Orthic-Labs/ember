@@ -96,6 +96,72 @@ fn set_name(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"id": id.0, "index": index, "name": name}))
 }
 
+/// What a face region drawn by hand says in its description, so it can be told from one that detection or XMP made.
+pub(crate) const MANUAL: &str = "Drawn in Ember";
+
+/// Whether a face region was drawn by hand (`faces.addRegion`).
+pub(crate) fn is_manual(r: &lightcraft_meta::Region) -> bool {
+    r.description.as_deref() == Some(MANUAL)
+}
+
+/// The photo a command names (`photo`), or the active one.
+fn photo_param(s: &Session, p: &Value, c: &str) -> Result<lightcraft_catalog::PhotoId> {
+    match p.get("photo") {
+        None | Some(Value::Null) => s.active().ok_or_else(|| bad(c, "no photo")),
+        Some(v) => v.as_u64().map(lightcraft_catalog::PhotoId).ok_or_else(|| bad(c, "`photo` must be a photo id")),
+    }
+}
+
+/// `faces.addRegion {photo?, rect: [x, y, w, h], name?}`: draw a face where detection missed one. `rect` is normalized to
+/// the photo's upright frame; it must have a positive size and lie inside the photo. The face is marked as drawn by hand
+/// (no embedding is made here: the background index embeds it like any other face). Naming makes it yours, as naming
+/// does. One undoable step; like naming, the sidecar is written by the next metadata save.
+fn add_region(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "faces.addRegion";
+    let id = photo_param(s, p, C)?;
+    let [x, y, w, h]: [f64; 4] = p
+        .get("rect")
+        .and_then(Value::as_array)
+        .and_then(|a| a.iter().map(|v| v.as_f64().filter(|x| x.is_finite())).collect::<Option<Vec<f64>>>())
+        .and_then(|v| v.try_into().ok())
+        .ok_or_else(|| bad(C, "`rect` is [x, y, w, h]: four finite numbers"))?;
+    if !(x >= 0.0 && y >= 0.0 && w > 0.0 && h > 0.0 && x + w <= 1.0 && y + h <= 1.0) {
+        return Err(bad(C, "the box must have a positive size and lie inside the photo (each of x, y, w, h in 0 to 1)"));
+    }
+    let name = name_param(p, C)?;
+    let mut meta = s.catalog.photo(id).ok_or_else(|| bad(C, "no such photo"))?.meta.clone();
+    let rect = lightcraft_geom::Rect { x0: x, y0: y, x1: x + w, y1: y + h };
+    meta.regions.push(lightcraft_meta::Region {
+        rect,
+        kind: lightcraft_meta::RegionKind::Face,
+        name: name.clone(),
+        description: Some(MANUAL.into()),
+    });
+    let index = meta.regions.len() - 1;
+    s.commit("Tag Face", Op::SetMeta { id, meta: Box::new(meta) })?;
+    s.skip_auto_write = true;
+    Ok(json!({"photo": id.0, "index": index, "name": name, "manual": true}))
+}
+
+/// `faces.removeRegion {face: {photo, index}}`: delete one face box, drawn by hand or found by detection (or from XMP).
+/// One undoable step; like the other face-box edits it does not rewrite the sidecar.
+fn remove_region(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "faces.removeRegion";
+    let face = p.get("face").ok_or_else(|| bad(C, "missing `face` ({photo, index})"))?;
+    let id = face.get("photo").and_then(Value::as_u64).map(lightcraft_catalog::PhotoId).ok_or_else(|| bad(C, "missing `face.photo`"))?;
+    let index =
+        face.get("index").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok()).ok_or_else(|| bad(C, "missing or invalid `face.index`"))?;
+    let mut meta = s.catalog.photo(id).ok_or_else(|| bad(C, "no such photo"))?.meta.clone();
+    if !meta.regions.get(index).is_some_and(|r| r.kind == lightcraft_meta::RegionKind::Face) {
+        return Err(bad(C, "no such face"));
+    }
+    let gone = meta.regions.remove(index);
+    let manual = is_manual(&gone);
+    s.commit("Remove Face", Op::SetMeta { id, meta: Box::new(meta) })?;
+    s.skip_auto_write = true;
+    Ok(json!({"photo": id.0, "index": index, "name": gone.name, "manual": manual}))
+}
+
 /// `faces.mergePeople {from, into}`: every face named `from` (case-insensitively) is named `into`, so two people who are
 /// one person become one, as one undo step. Catalog-only, like naming: the sidecars are not touched.
 fn merge_people(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1335,6 +1401,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id, index, name, rejected?: true} — the face is not `name`: suggestions and \"more like them\" skip that pair from now on (stored in the catalog, persists); rejected: false clears it; one undoable step; the sidecar is not touched",
             super::always,
             reject_name
+        ),
+        cmd!(
+            "faces.addRegion",
+            "Tag Face",
+            [],
+            None,
+            "{photo?, rect: [x, y, w, h], name?} → {photo, index, name, manual} — draw a face that detection missed: a box normalized to the photo's upright frame (positive size, inside the photo), marked as drawn by hand; named when `name` is given; one undoable step; the sidecar is written by the next metadata save, like naming",
+            super::always,
+            add_region
+        ),
+        cmd!(
+            "faces.removeRegion",
+            "Remove Face",
+            [],
+            None,
+            "{face: {photo, index}} → {photo, index, name, manual} — remove one face box, drawn by hand or found by detection; one undoable step; the sidecar is not rewritten",
+            super::always,
+            remove_region
         ),
         cmd!(
             "faces.setName",

@@ -705,6 +705,15 @@ pub struct UiState {
     /// A face's name being typed in the loupe.
     #[serde(skip)]
     pub name_edit: Option<NameEdit>,
+    /// Tag Face mode: drag a box over a face that detection missed, then name it (`face_tag.rs`).
+    #[serde(skip)]
+    pub face_tag: bool,
+    /// The box drawn in Tag Face mode and the name being typed for it: the box in the photo's upright frame.
+    #[serde(skip)]
+    pub face_draft: Option<(lightcraft_geom::Rect, NameEdit)>,
+    /// The right-click menu on a face box: the photo, the box's index and where the menu opened.
+    #[serde(skip)]
+    pub face_menu: Option<(u64, usize, egui::Pos2)>,
     /// The person whose page the People view shows (their faces and the faces that look like them); `None`: everyone.
     #[serde(skip)]
     pub person_page: Option<String>,
@@ -1255,6 +1264,9 @@ impl Default for UiState {
             sidebar: Default::default(),
             collapsed_sidebar: Vec::new(),
             name_edit: None,
+            face_tag: false,
+            face_draft: None,
+            face_menu: None,
             person_page: None,
             person_from: None,
             last_person: None,

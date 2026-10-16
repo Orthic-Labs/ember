@@ -72,6 +72,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("view.people", "People", None, "View"),
     ("view.person", "Show Person", None, ""),
     ("view.faceBoxes", "Face Boxes", None, "View"),
+    ("faces.tagMode", "Tag Face", None, "Photo"),
     ("view.reference", "Reference View", Some("Shift+R"), "View"),
     ("photo.setReference", "Set as Reference Photo", None, ""),
     ("compare.swap", "Swap Compare Photos", None, "View"),
@@ -544,6 +545,11 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         "view.faceBoxes" => {
             app.ui.face_boxes = p.get("show").and_then(Value::as_bool).unwrap_or(!app.ui.face_boxes);
             Ok(json!({"show": app.ui.face_boxes}))
+        }
+        "faces.tagMode" => {
+            app.ui.face_tag = p.get("on").and_then(Value::as_bool).unwrap_or(!app.ui.face_tag);
+            app.ui.face_draft = None;
+            Ok(json!({"on": app.ui.face_tag}))
         }
         "view.people" => {
             // Everyone; the page just left stays one click away (the chip next to the title)

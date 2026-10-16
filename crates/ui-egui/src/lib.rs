@@ -16,6 +16,7 @@ pub mod date_picker;
 pub mod docking;
 pub mod early_access;
 pub mod export_task;
+pub mod face_tag;
 pub mod hdr_view;
 pub mod headless;
 pub mod i18n;
