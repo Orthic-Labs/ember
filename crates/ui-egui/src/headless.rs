@@ -4004,7 +4004,7 @@ mod tests {
         assert_eq!(h.app.session.active().map(|p| p.0), Some(vis[1]));
         let right = h.app.ui.right;
         h.request("ui.key", json!({"key": "i"}), t);
-        assert_eq!(h.app.ui.info_overlay, InfoOverlay::Basic);
+        assert_eq!(h.app.ui.info_overlay, InfoOverlay::Info1);
         assert_eq!(h.app.ui.right, right, "I doesn't open the Info panel in full screen");
         let img = h.snapshot(SETTLE);
         // no chrome: the frame's corners are black
@@ -4018,7 +4018,7 @@ mod tests {
         assert_eq!(h.app.ui.view, crate::state::ViewMode::PhotoGrid, "Esc leaves full screen only, back to where it was entered");
         h.request("ui.set", json!({"view": "detail"}), t);
         h.request("ui.key", json!({"key": "i", "cmd": true}), t);
-        assert_eq!(h.app.ui.info_overlay, InfoOverlay::Exposure);
+        assert_eq!(h.app.ui.info_overlay, InfoOverlay::Info2);
         h.request("ui.key", json!({"key": "i", "cmd": true}), t);
         assert_eq!(h.app.ui.info_overlay, InfoOverlay::Off);
         h.request("ui.key", json!({"key": "f", "cmd": true, "shift": true}), t);

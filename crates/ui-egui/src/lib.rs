@@ -18,6 +18,7 @@ pub mod headless;
 pub mod i18n;
 pub mod icons;
 pub mod import;
+pub mod info_overlay;
 pub mod lightroom_import;
 pub mod links;
 pub mod menu_level;

@@ -644,7 +644,9 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                     p.text(canvas.center() + vec2(0.0, 12.0), Align2::CENTER_CENTER, e, t.font(12.0), t.text_dim);
                 }
                 None => {
-                    p.text(canvas.center(), Align2::CENTER_CENTER, crate::i18n::tr("Rendering…"), t.font(13.0), t.text_dim);
+                    if app.ui.view_options.render_message {
+                        p.text(canvas.center(), Align2::CENTER_CENTER, crate::i18n::tr("Rendering…"), t.font(13.0), t.text_dim);
+                    }
                 }
             }
         }
@@ -788,9 +790,10 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         let over = if over.is_positive() { over } else { canvas };
         match failed {
             Some(e) => failed_pill(ui, app, &photo, canvas, over, nav, "loupe:renderFailed", e),
-            None => {
+            None if app.ui.view_options.render_message => {
                 loupe_pill(ui, canvas, over, nav, "loupe:rendering", crate::i18n::tr("Rendering…"), false);
             }
+            None => {}
         }
     }
     if let Some(why) = photo.preview_only.as_deref().filter(|_| !fullscreen) {
@@ -809,40 +812,19 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     });
 }
 
-/// The info overlay at the canvas' top left (`view.infoOverlay`): file name with the capture date
-/// and size, or with the camera and exposure.
+/// The info overlay at the canvas' top left (`view.infoOverlay`): the lines Info 1 or Info 2 show,
+/// as View Options set them (`crate::info_overlay`).
 fn info_overlay(app: &LightcraftApp, p: &egui::Painter, canvas: Rect, photo: &lightcraft_catalog::Photo) {
     use crate::state::InfoOverlay;
-    let lines: Vec<String> = match app.ui.info_overlay {
+    let config = match app.ui.info_overlay {
         InfoOverlay::Off => return,
-        InfoOverlay::Basic => {
-            let date = photo.captured.as_deref().unwrap_or(&photo.imported);
-            vec![photo.file_name.clone(), format!("{} · {} × {}", pretty_date(date), photo.width, photo.height)]
-        }
-        InfoOverlay::Exposure => {
-            let m = &photo.meta;
-            let mut exp = Vec::new();
-            if !m.shutter.is_empty() {
-                exp.push(format!("{} s", m.shutter));
-            }
-            if let Some(a) = m.aperture {
-                exp.push(format!("f/{a:.1}"));
-            }
-            if let Some(i) = m.iso {
-                exp.push(format!("ISO {i}"));
-            }
-            if let Some(f) = m.focal_mm {
-                exp.push(format!("{f:.0} mm"));
-            }
-            let camera = [m.camera.as_str(), m.lens.as_str()].iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join(" · ");
-            let mut v = vec![photo.file_name.clone()];
-            v.push(if exp.is_empty() { "No exposure information".into() } else { exp.join("  ") });
-            if !camera.is_empty() {
-                v.push(camera);
-            }
-            v
-        }
+        InfoOverlay::Info1 => &app.ui.view_options.info1,
+        InfoOverlay::Info2 => &app.ui.view_options.info2,
     };
+    let lines = crate::info_overlay::lines(photo, config, &|l| app.session.catalog.label_name(l));
+    if lines.is_empty() {
+        return;
+    }
     let t = Tokens::get(p.ctx());
     let mut y = canvas.top() + 12.0;
     for (i, l) in lines.iter().enumerate() {
@@ -1074,11 +1056,6 @@ fn preview_only_pill(ui: &mut egui::Ui, canvas: Rect, reason: &str) {
     ui.interact(r, egui::Id::new("preview-only-pill"), Sense::hover()).on_hover_text(crate::widgets::preview_only_explanation(reason));
 }
 
-/// `2026-09-30T12:00:00` → `2026-09-30 12:00`.
-fn pretty_date(iso: &str) -> String {
-    let d = iso.replacen('T', " ", 1);
-    d.get(..16).map(str::to_string).unwrap_or(d)
-}
 
 /// Size of the Navigator mini map (points).
 const NAV_W: f32 = 180.0;

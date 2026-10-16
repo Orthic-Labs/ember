@@ -113,24 +113,27 @@ pub enum GridBadges {
     Never,
 }
 
-/// The loupe's info overlay (Cmd+I cycles; I in the full-screen preview).
+/// The loupe's info overlay (Cmd+I cycles Off → Info 1 → Info 2; I in the full-screen preview). Its
+/// lines are set in View Options (`crate::info_overlay::ViewOptions`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum InfoOverlay {
     #[default]
     Off,
-    /// File name, capture date and dimensions.
-    Basic,
-    /// File name, camera, lens and exposure (shutter, aperture, ISO, focal length).
-    Exposure,
+    /// The first overlay. Saved as `basic` before View Options (file name, date, dimensions).
+    #[serde(alias = "basic")]
+    Info1,
+    /// The second overlay. Saved as `exposure` before View Options (exposure, camera).
+    #[serde(alias = "exposure")]
+    Info2,
 }
 
 impl InfoOverlay {
     pub fn next(self) -> InfoOverlay {
         match self {
-            InfoOverlay::Off => InfoOverlay::Basic,
-            InfoOverlay::Basic => InfoOverlay::Exposure,
-            InfoOverlay::Exposure => InfoOverlay::Off,
+            InfoOverlay::Off => InfoOverlay::Info1,
+            InfoOverlay::Info1 => InfoOverlay::Info2,
+            InfoOverlay::Info2 => InfoOverlay::Off,
         }
     }
 }
@@ -737,6 +740,8 @@ pub struct UiState {
     pub slideshow: Option<(f64, f64, bool)>,
     /// Info overlay on the loupe.
     pub info_overlay: InfoOverlay,
+    /// View Options: the two info overlays' lines and the render message (`view.viewOptions`).
+    pub view_options: crate::info_overlay::ViewOptions,
     /// Navigator mini map in the loupe while zoomed in.
     pub navigator: bool,
     /// App preferences (Settings dialog).
@@ -1030,6 +1035,8 @@ pub enum Dialog {
     },
     About,
     Shortcuts,
+    /// View Options (`view.viewOptions`): the info overlays' lines, applied as they are changed.
+    ViewOptions,
 }
 
 fn yes() -> bool {
@@ -1158,6 +1165,7 @@ impl Default for UiState {
             keyword_list_selected: None,
             dragging_keyword: None,
             info_overlay: InfoOverlay::Off,
+            view_options: crate::info_overlay::ViewOptions::default(),
             navigator: true,
             settings: AppSettings::default(),
             window_fullscreen: None,

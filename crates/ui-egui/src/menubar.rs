@@ -136,6 +136,7 @@ const LAYOUT: &[(&str, &[&str])] = &[
             "view.histogram",
             "view.navigator",
             "view.infoOverlay",
+            "view.viewOptions",
             "@Appearance",
             "---",
             "view.fullScreenPreview",

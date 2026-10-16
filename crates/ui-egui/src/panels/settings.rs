@@ -649,7 +649,7 @@ fn interface_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
     check(ui, "settings.navigator", &mut app.ui.navigator, "Show the Navigator while zoomed in");
     row(ui, t, crate::i18n::tr("Info overlay"), |ui| {
         use crate::state::InfoOverlay as I;
-        choices(ui, "settingsInfo", &[(I::Off, "Off"), (I::Basic, "File & date"), (I::Exposure, "Exposure")], &mut app.ui.info_overlay);
+        choices(ui, "settingsInfo", &[(I::Off, "Off"), (I::Info1, "Info 1"), (I::Info2, "Info 2")], &mut app.ui.info_overlay);
     });
     heading(ui, t, crate::i18n::tr("Keyboard"));
     check(

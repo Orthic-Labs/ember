@@ -263,6 +263,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
         Dialog::SamModel { .. } => "Download the SAM 3 Model?",
         Dialog::About => "About Ember",
         Dialog::Shortcuts => "Keyboard Shortcuts",
+        Dialog::ViewOptions => "View Options",
     }
     .to_string();
     let frame = egui::Frame::window(&ctx.global_style()).inner_margin(egui::Margin::symmetric(16, 12));
@@ -1201,6 +1202,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     }
                 }
                 Dialog::Shortcuts => crate::panels::keymap::body(app, ui, &t),
+                Dialog::ViewOptions => crate::panels::view_options::body(app, ui, &t),
             });
             ui.add_space(4.0);
             ui.horizontal(|ui| {
@@ -1210,7 +1212,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 let informational = unusable_model
                     || matches!(
                         dlg,
-                        Dialog::About | Dialog::Shortcuts | Dialog::Settings { .. } | Dialog::SystemInfo { .. } | Dialog::AllMetadata { .. } | Dialog::WhatsNew
+                        Dialog::About | Dialog::Shortcuts | Dialog::ViewOptions | Dialog::Settings { .. } | Dialog::SystemInfo { .. } | Dialog::AllMetadata { .. } | Dialog::WhatsNew
                     );
                 let sam = &app.session.segmenter;
                 let (sam_installed, sam_running, sam_failed) = (sam.installed(), sam.download_status().running, sam.download_status().error.is_some());
@@ -1755,7 +1757,7 @@ pub fn confirm_dialog(app: &mut LightcraftApp, dlg: &Dialog) -> Result<serde_jso
         }
         Dialog::RemoveFolder { path, disk, .. } => app.run("library.removeFolder", json!({"path": path, "disk": disk})),
         d @ Dialog::SynchronizeFolder { .. } => crate::sync::confirm(app, d),
-        Dialog::About | Dialog::Shortcuts | Dialog::Settings { .. } => Ok(serde_json::Value::Null),
+        Dialog::About | Dialog::Shortcuts | Dialog::ViewOptions | Dialog::Settings { .. } => Ok(serde_json::Value::Null),
     }
 }
 

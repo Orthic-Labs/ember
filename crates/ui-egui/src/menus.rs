@@ -117,6 +117,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("view.lightsOut", "Lights Out", Some("Shift+L"), "View"),
     ("view.enterFullScreen", "Enter Full Screen", Some("Cmd+Shift+F"), "View"),
     ("view.infoOverlay", "Cycle Info Overlay", Some("Cmd+I"), "View"),
+    ("view.viewOptions", "View Options…", None, "View"),
     ("view.navigator", "Navigator", None, "View"),
     ("panel.edit", "Edit", Some("E"), "Window"),
     ("panel.profiles", "Profile Browser", None, "Window"),
@@ -641,17 +642,21 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             app.ui.info_overlay = match p.get("mode").and_then(Value::as_str) {
                 Some(m) => match serde_json::from_value(json!(m)) {
                     Ok(v) => v,
-                    Err(_) => return Some(Err(format!("unknown info overlay `{m}` (off|basic|exposure)"))),
+                    Err(_) => return Some(Err(format!("unknown info overlay `{m}` (off|info1|info2)"))),
                 },
                 None => app.ui.info_overlay.next(),
             };
             let label = match app.ui.info_overlay {
                 crate::state::InfoOverlay::Off => "Info Overlay Off",
-                crate::state::InfoOverlay::Basic => "Info Overlay: File",
-                crate::state::InfoOverlay::Exposure => "Info Overlay: Exposure",
+                crate::state::InfoOverlay::Info1 => "Info Overlay: Info 1",
+                crate::state::InfoOverlay::Info2 => "Info Overlay: Info 2",
             };
             app.toast(&ctx, label);
             Ok(json!({"infoOverlay": app.ui.info_overlay}))
+        }
+        "view.viewOptions" => {
+            app.ui.dialog = Some(Dialog::ViewOptions);
+            Ok(Value::Null)
         }
         "view.navigator" => {
             app.ui.navigator = !app.ui.navigator;
