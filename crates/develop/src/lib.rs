@@ -171,6 +171,30 @@ mod tests {
         assert_eq!(partial.lens_override, Some(LensOverride { make: "Sigma".into(), model: String::new() }));
     }
 
+    /// Settings saved before Lens Blur's `enabled` became optional wrote `"enabled": false` for every photo; that
+    /// must still read as unedited, with the default's hash. A deliberate off switch on a live amount survives.
+    #[test]
+    fn legacy_lens_blur_off_reads_as_unedited() {
+        let d = DevelopSettings::default();
+        let legacy = json!({"lens_blur": {"enabled": false, "amount": 0.0, "focal_distance": 0.0, "focal_range": 0.0}});
+        let s = d.merged(&legacy).unwrap();
+        assert!(s.is_unedited());
+        assert_eq!(s.lens_blur.enabled, None);
+        assert_eq!(s.hash64(), d.hash64());
+        let mut full = d.to_json();
+        full["lens_blur"] = legacy["lens_blur"].clone();
+        let s = DevelopSettings::from_json(&full).unwrap();
+        assert!(s.is_unedited());
+        assert_eq!(s.hash64(), d.hash64());
+
+        let mut off = d.clone();
+        off.lens_blur = LensBlur { enabled: Some(false), amount: 40.0, ..LensBlur::default() };
+        let back = DevelopSettings::from_json(&off.to_json()).unwrap();
+        assert_eq!(back, off);
+        assert_eq!(back.lens_blur.enabled, Some(false));
+        assert!(!back.is_unedited());
+    }
+
     #[test]
     fn serde_roundtrip_default_and_edited() {
         let mut s = DevelopSettings::default();
