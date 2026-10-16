@@ -410,8 +410,8 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 
 | Id | Feature | Tier | Status | Evidence | Missing / notes |
 |---|---|---|---|---|---|
-| LR-ENH-DIALOG | Enhance dialog | P2 | ⬜ | | [#68](https://github.com/Orthic-Labs/ember/issues/68) |
-| LR-ENH-INPLACE | In-place enhance | P2 | ⬜ | | [#69](https://github.com/Orthic-Labs/ember/issues/69) |
+| LR-ENH-DIALOG | Enhance dialog | P2 | 🟡 | `cmd:photo.enhance`, `crates/ui-egui/src/panels/dialogs.rs` (`Dialog::Enhance`), `crates/ui-egui/src/tests_enhance.rs`: Photo ▸ Enhance… opens the dialog with AI Denoise (amount) and Raw Details, applied to the selection. Super Resolution is shown disabled with a note: no SR model exists (gap 11, still 0%) | [#68](https://github.com/Orthic-Labs/ember/issues/68) |
+| LR-ENH-INPLACE | In-place enhance | P2 | 🟡 | `cmd:photo.enhance` (`crates/engine/src/cmd/denoise.rs`, `enhance`), `crates/engine/src/tests_denoise.rs` (`enhance_sets_denoise_and_raw_details_in_one_undo_step_and_refuses_super_resolution`): the photo keeps its original; Denoise and Raw Details are settings on it, with the denoised picture cached (the AI Denoise job holds its own activity row), and no DNG is written. Super Resolution missing (gap 11) | [#69](https://github.com/Orthic-Labs/ember/issues/69) |
 
 ## Q. HDR (HDR)
 
@@ -611,7 +611,7 @@ visible menu bar yet: the menu model is only exposed through the control channel
 | MENU-PHOTO-CREATEVERSION | Create Version… | P1 | ✅ | `cmd:version.create` | no name prompt |
 | MENU-PHOTO-STACK | Stack submenu | P1 | ✅ | `cmd:stack.group`, `cmd:stack.ungroup`, `cmd:dialog.autoStack` | |
 | MENU-PHOTO-MERGE | Photo merge submenu | P2 | ✅ | `cmd:dialog.mergeHdr`, `cmd:dialog.mergePanorama`, `cmd:dialog.mergeHdrPanorama`, `cmd:merge.hdrLast` | |
-| MENU-PHOTO-ENHANCE | Enhance… | P2 | ⬜ | | [#98](https://github.com/Orthic-Labs/ember/issues/98) |
+| MENU-PHOTO-ENHANCE | Enhance… | P2 | 🟡 | `cmd:photo.enhance`, `crates/ui-egui/src/menus.rs` (`dialog.enhance`): Photo ▸ Enhance… in the Photo menu, enabled with a photo active; Super Resolution is refused and shown disabled (gap 11) | [#98](https://github.com/Orthic-Labs/ember/issues/98) |
 | MENU-PHOTO-AUTO | Auto settings | P0 | ✅ | `cmd:develop.auto` | followed by Auto Noise Reduction (`cmd:develop.autoNoise`, Ember-only) |
 | MENU-PHOTO-BW | Convert to B&W | P0 | ✅ | `cmd:develop.treatment` | |
 | MENU-PHOTO-RESET | Reset edits / crop | P0 | ✅ | `cmd:develop.reset`, `cmd:crop.reset` | |

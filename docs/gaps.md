@@ -1,6 +1,6 @@
 # Gaps: where Ember falls short of reference editor
 
-> **Last reviewed:** 2026-10-16 · **Last updated:** 2026-10-16 · **Change:** minor (gap 28 shrunk: F1, Tab, F5, F8, `[` `]` and the grid `\` filter bar in egui)
+> **Last reviewed:** 2026-10-17 · **Last updated:** 2026-10-17 · **Change:** minor (gap 28 shrunk: F1, Tab, F5, F8, `[` `]` and the grid `\` filter bar in egui)
 
 Every known shortfall, one entry each, ranked by user impact (how many reference editor users hit it, and
 how hard it blocks them), then by effort. **Agents pick work from the top** (the first entry nobody is
@@ -82,6 +82,7 @@ loader qualification remain separate evidence; AI gaps stay open. See [corpus co
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | Gap 11: Photo ▸ Enhance… (#68, #69, #98) sets AI Denoise and Raw Details on the photo in one undo step; Super Resolution still 0% (shown disabled) |
 | 2026-10-16 | minor | Gap 11 narrows: Detail ▸ Raw Details turns on a higher-quality Bayer demosaic (opt-in, off for every existing edit; X-Trans still to do) |
 | 2026-10-16 | minor | Gap 14: View ▸ HDR Display and the macOS EDR headroom query land; the display is still SDR until the surface can be HDR |
 | 2026-10-13 | minor | Gap 8 narrows: Nikon Z 6II / Z 8 / Z f NEFs use the camera's in-file distortion correction (`docs/nikon-lens-corrections.md`) |

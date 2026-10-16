@@ -221,6 +221,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("app.openLogFolder", "Open Log Folder", None, "Help"),
     ("app.whatsNew", "What's New", None, "Help"),
     ("dialog.cull", "Assisted Culling…", None, "Photo"),
+    ("dialog.enhance", "Enhance…", None, "Photo"),
     ("app.help", "Ember Help", None, "Help"),
     ("app.discord", "Ember Community…", None, "Help"),
     ("app.feedback", "Send Feedback…", None, "Help"),
@@ -2008,7 +2009,7 @@ pub fn ui_enabled(app: &LightcraftApp, id: &str) -> bool {
         "library.selectOnlyActive" => app.session.active().is_some(),
         "dialog.contactSheet" | "app.contactSheet" => !cfg!(target_arch = "wasm32") && app.session.active().is_some() && app.export.is_none(),
         s if s.starts_with("panel.") || s.starts_with("tool.") || s.starts_with("section.") => app.session.active().is_some() || s == "panel.close",
-        "app.export" | "dialog.export" | "dialog.createPreset" | "dialog.rename" | "dialog.captureTime" | "dialog.copySettings" => {
+        "app.export" | "dialog.export" | "dialog.createPreset" | "dialog.rename" | "dialog.captureTime" | "dialog.copySettings" | "dialog.enhance" => {
             app.session.active().is_some()
         }
         "photo.tagFromTracklog" => app.session.active().is_some() && app.services.pick_tracklog.is_some(),
