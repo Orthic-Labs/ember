@@ -783,3 +783,47 @@ mod tests {
         assert!(rig.text.starts_with("Lisbon") && rig.text.ends_with('X') && rig.text != "X", "{:?}", rig.text);
     }
 }
+
+/// Source-scan guard: every text box outside this file is a `TextField`, so each one gets the context menu,
+/// Esc and the edit-end report. A site still on `egui::TextEdit` is listed in `SKIPPED` with its reason.
+#[cfg(test)]
+mod no_raw_text_edit {
+    use std::path::{Path, PathBuf};
+
+    /// Sites still on `egui::TextEdit`, as (path under `src`, reason). Empty: every site is a `TextField`.
+    const SKIPPED: &[(&str, &str)] = &[];
+
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, out);
+            } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+                out.push(path);
+            }
+        }
+    }
+
+    #[test]
+    fn no_text_edit_outside_text_field() {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        walk(&src, &mut files);
+        assert!(files.len() > 20, "the scan found only {} source files under {}", files.len(), src.display());
+        let mut hits = Vec::new();
+        for path in files {
+            let rel = path.strip_prefix(&src).unwrap_or(&path).to_string_lossy().replace('\', "/");
+            if rel == "text_field.rs" || SKIPPED.iter().any(|(skipped, _)| *skipped == rel.as_str()) {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&path) else { continue };
+            for (n, line) in text.lines().enumerate() {
+                if line.contains("TextEdit::") {
+                    hits.push(format!("{rel}:{}", n + 1));
+                }
+            }
+        }
+        assert!(hits.is_empty(), "egui::TextEdit outside text_field.rs (use TextField, or list the site in SKIPPED with a reason): {hits:?}");
+    }
+}
