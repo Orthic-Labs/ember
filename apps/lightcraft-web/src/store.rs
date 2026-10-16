@@ -145,7 +145,7 @@ impl Originals {
     pub fn hooks(&self) -> (FileLoader, FileProbe) {
         let s = self.clone();
         let loader: FileLoader = Arc::new(move |path: &str, max_edge: usize| {
-            let bytes = s.get(path).ok_or_else(|| format!("{path}: the original is still loading from browser storage"))?;
+            let bytes = s.get(path).ok_or_else(|| format!("{path}: the original {}", crate::retry::STILL_LOADING))?;
             load_bytes(&bytes, max_edge)
         });
         let s = self.clone();
@@ -216,6 +216,19 @@ mod tests {
         assert!(s.take_wanted().is_empty());
         s.insert("h1", Arc::from(vec![1u8, 2]));
         assert_eq!(&*s.get("web/h1/b.jpg").unwrap(), &[1, 2]);
+    }
+
+    /// The engine hooks' miss is the error the host parks commands on (`retry`), and it queued the load.
+    #[test]
+    fn loader_miss_is_recognized_as_still_loading() {
+        let store = Originals::default();
+        let (load, _) = store.hooks();
+        let e = match load("web/h9/a.png", 64) {
+            Err(e) => e,
+            Ok(_) => panic!("a miss was expected"),
+        };
+        assert!(crate::retry::is_still_loading(&e), "{e}");
+        assert_eq!(store.take_wanted(), vec!["h9".to_string()], "the miss queued the load");
     }
 
     #[test]

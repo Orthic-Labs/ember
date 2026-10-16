@@ -21,6 +21,7 @@
 pub mod backup;
 pub mod bench;
 pub mod files;
+pub mod retry;
 pub mod store;
 pub mod wire;
 

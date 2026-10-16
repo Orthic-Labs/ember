@@ -196,11 +196,23 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
 
 ## Not yet
 
-- **Auto-adjustments run on the main thread** (they need the original's pixels there). Right
-  after a reload, the first such command on a photo whose original isn't in memory yet fails with
-  "still loading" and works a moment later. Exports no longer do (see *Exports run in the render
-  workers*), except the *Original*/DNG and Denoise cases above, which still read the original on
-  the main thread. [#192](https://github.com/Orthic-Labs/ember/issues/192)
+- **Auto-adjustments still compute on the main thread** ([#192](https://github.com/Orthic-Labs/ember/issues/192)
+  stays open for it). Exports already run in the render workers (*Exports run in the render
+  workers*); what is left is `develop.auto*` (Auto Settings, Auto Slider, Auto to Selection, Auto B&W
+  Mix, Auto Noise), whose measuring runs inside the engine's synchronous command on the photo's
+  thumbnail-level source. The worker mechanism the web build has (render workers, a `WireExport`
+  style job) fits it, but the command has to become two-phase (measure in a worker, then apply the
+  result as one undo step on the main thread), and slicing it into chunks on the main thread would
+  break the one-undo-step batch. That is an engine change, not a web-host one, and is not done.
+  What is fixed: **the "still loading" failure after a reload.** The browser host parks a
+  `develop.auto*` command that fails because the original is still coming from storage
+  (`apps/lightcraft-web/src/retry.rs`) and runs it again every 50 ms until it works, fails for
+  another reason, or 60 s pass; the failed read has already queued the load. Only `command()` calls
+  are parked (`web.stats` → `commandsWaitingForOriginals`); a key press in the UI right after a
+  reload still reports it, though the active photo's original is prefetched from the first frame.
+  The *Original*/DNG and Denoise export cases above also still read the original on the main thread
+  and do not wait. The park/retry state is covered by native unit tests; the browser check (first
+  command after reload succeeds) is not run yet.
 - **Durability is "a frame later" for user actions, by design** ([#193](https://github.com/Orthic-Labs/ember/issues/193)):
   the catalog's `Store` is synchronous and browser storage is not (OPFS writable streams,
   IndexedDB), so a click or key command can't be written before it returns. It is written by the

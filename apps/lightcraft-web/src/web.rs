@@ -19,6 +19,7 @@ use crate::backup::{ACTIVE_LIBRARY, DEFAULT_LIBRARY_DIR, PREVIOUS_LIBRARY, valid
 use crate::bench::Bench;
 use crate::exports::ExportHost;
 use crate::files::{Durability, Files, FlushOp, LIBRARY_FILES};
+use crate::retry::Parked;
 use crate::safety::{self, notice};
 use crate::store::{Originals, content_hash, download_name, storage_key};
 use crate::wire::ThumbIndex;
@@ -572,6 +573,8 @@ struct WebApp {
     ui_written: Vec<u8>,
     /// Replies to [`command`] calls whose writes are still on their way to browser storage.
     held: Vec<(serde_json::Value, Reply)>,
+    /// [`command`] calls waiting for an original to load from storage (`retry`).
+    parked: Parked<(String, String, Reply)>,
 }
 
 impl WebApp {
@@ -683,6 +686,7 @@ impl WebApp {
             last_save: 0.0,
             ui_written,
             held: Vec::new(),
+            parked: Parked::default(),
         }
     }
 
@@ -805,6 +809,7 @@ impl WebApp {
             "library": self.lib_dir,
             "dirty": self.files.is_dirty(),
             "flushing": self.files.is_flushing(),
+            "commandsWaitingForOriginals": self.parked.len(),
             // "durable" | "pending" (written in memory, on its way to storage) | "failed" (see saveError)
             "durability": match self.files.durability() {
                 Durability::Durable => "durable",
@@ -848,10 +853,20 @@ impl WebApp {
         notice(msg);
     }
 
-    fn run_inbox(&mut self) {
+    /// Run the commands from JavaScript: new ones, and ones parked until an original loaded.
+    fn run_inbox(&mut self, ctx: &egui::Context) {
+        let now = perf_now();
         let inbox = INBOX.with(|q| std::mem::take(&mut *q.borrow_mut()));
-        for (id, params, (resolve, reject)) in inbox {
-            let params: serde_json::Value = serde_json::from_str(&params).unwrap_or(json!({}));
+        let mut todo: Vec<(f64, (String, String, Reply))> = inbox.into_iter().map(|cmd| (now, cmd)).collect();
+        // parked commands run again; the ones that waited too long fail with their last error
+        let (retry, expired) = self.parked.take(now);
+        for w in expired {
+            let (_, _, (_, reject)) = w.item;
+            let _ = reject.call1(&JsValue::NULL, &w.error.into());
+        }
+        todo.extend(retry.into_iter().map(|w| (w.since_ms, w.item)));
+        for (since, (id, params_text, (resolve, reject))) in todo {
+            let params: serde_json::Value = serde_json::from_str(&params_text).unwrap_or(json!({}));
             let r = if id == "web.stats" { Ok(self.web_stats()) } else { self.app.run(&id, params) };
             match r {
                 // the caller learns the outcome only once its writes are in browser storage
@@ -859,10 +874,17 @@ impl WebApp {
                 Ok(v) => {
                     let _ = resolve.call1(&JsValue::NULL, &v.to_string().into());
                 }
+                // the original is still coming from storage (the miss queued its load): run it again
+                Err(e) if crate::retry::waits_for_originals(&id) && crate::retry::is_still_loading(&e) && self.backend.is_some() => {
+                    self.parked.park((id, params_text, (resolve, reject)), since, e);
+                }
                 Err(e) => {
                     let _ = reject.call1(&JsValue::NULL, &e.into());
                 }
             }
+        }
+        if !self.parked.is_empty() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(crate::retry::RETRY_EVERY_MS));
         }
     }
 
@@ -901,7 +923,7 @@ impl eframe::App for WebApp {
             let now = ctx.input(|i| i.time);
             self.app.ui.toast = Some((text, now + NOTICE_SECS, None));
         }
-        self.run_inbox();
+        self.run_inbox(ctx);
         self.import_preset_files();
         self.import_dropped(ctx);
         self.load_originals(ctx);
