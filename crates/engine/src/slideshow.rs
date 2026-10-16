@@ -65,17 +65,11 @@ impl Default for Options {
 }
 
 /// The colour behind the photos: solid, or a vertical gradient from `color` to `gradient_to`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Backdrop {
     pub color: [u8; 3],
     pub gradient_to: Option<[u8; 3]>,
-}
-
-impl Default for Backdrop {
-    fn default() -> Self {
-        Self { color: [0, 0, 0], gradient_to: None }
-    }
 }
 
 /// Text drawn over each photo. Templates may use `{file}`, `{title}`, `{caption}`, `{copyright}`,
@@ -142,28 +136,23 @@ impl Default for Playback {
 }
 
 /// A named set of settings: built-in ones ([`builtin_templates`]) or the user's, saved with the library.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Template {
     pub name: String,
     pub model: Model,
 }
 
-impl Default for Template {
-    fn default() -> Self {
-        Self { name: String::new(), model: Model::default() }
-    }
-}
-
 /// The built-in templates.
 pub fn builtin_templates() -> Vec<Template> {
-    let mut white = Model::default();
-    white.backdrop = Backdrop { color: [255, 255, 255], gradient_to: None };
+    let mut white = Model { backdrop: Backdrop { color: [255, 255, 255], gradient_to: None }, ..Model::default() };
     white.overlays.color = [32, 32, 32];
     white.titles.color = [32, 32, 32];
-    let mut framed = Model::default();
-    framed.options = Options { stroke_width: 0.012, stroke_color: [240, 240, 240], shadow: true, zoom_to_fill: false };
-    framed.backdrop = Backdrop { color: [40, 40, 44], gradient_to: Some([8, 8, 10]) };
+    let framed = Model {
+        options: Options { stroke_width: 0.012, stroke_color: [240, 240, 240], shadow: true, zoom_to_fill: false },
+        backdrop: Backdrop { color: [40, 40, 44], gradient_to: Some([8, 8, 10]) },
+        ..Model::default()
+    };
     vec![
         Template { name: "Black".into(), model: Model::default() },
         Template { name: "White".into(), model: white },
@@ -308,7 +297,7 @@ impl Timeline {
 
     /// What is on screen at `t` seconds. Without `repeat`, `None` from the end of the timeline on.
     pub fn frame_at(&self, t: f64) -> Option<Frame> {
-        if self.entries.is_empty() || !(self.total > 0.0) {
+        if self.entries.is_empty() || self.total.is_nan() || self.total <= 0.0 {
             return None;
         }
         let t = if t.is_finite() && t > 0.0 { t } else { 0.0 };

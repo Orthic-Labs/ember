@@ -7,7 +7,7 @@ use std::path::Path;
 use lightcraft_catalog::{MediaKind, Op, Source};
 use serde_json::{Value, json};
 
-use super::{CommandSpec, bad, cmd, has_active, has_selection};
+use super::{CommandSpec, bad, bool_or, cmd, has_active, has_selection};
 use crate::{Result, Session};
 
 /// `<stem>.dng`, then `<stem>-2.dng`, `<stem>-3.dng`… next to `path`.

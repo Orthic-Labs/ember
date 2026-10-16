@@ -356,7 +356,7 @@ pub fn train(manifest: &SplitManifest, cfg: &TrainConfig) -> Result<TrainSummary
     let mut running_n = 0u64;
     for step in start..cfg.steps {
         opt.set_learning_rate(learning_rate(step, cfg.steps, cfg.warmup, cfg.lr, cfg.lr_min));
-        if step > start && step % cfg.refresh_every == 0 {
+        if step > start && step.is_multiple_of(cfg.refresh_every) {
             pool.visit_next();
         }
         let examples = pool.batch(step, cfg.batch);
@@ -373,7 +373,7 @@ pub fn train(manifest: &SplitManifest, cfg: &TrainConfig) -> Result<TrainSummary
         running += loss as f64;
         running_n += 1;
         let done = step + 1;
-        if done % cfg.log_every == 0 {
+        if done.is_multiple_of(cfg.log_every) {
             let line = serde_json::json!({
                 "step": done, "loss": running / running_n as f64,
                 "lr": learning_rate(step, cfg.steps, cfg.warmup, cfg.lr, cfg.lr_min),
@@ -385,7 +385,7 @@ pub fn train(manifest: &SplitManifest, cfg: &TrainConfig) -> Result<TrainSummary
             running_n = 0;
         }
         let mut improved = false;
-        if done % cfg.val_every == 0 || done == cfg.steps {
+        if done.is_multiple_of(cfg.val_every) || done == cfg.steps {
             let v = validate(&net, &val, &device, cfg.batch)?;
             let line = serde_json::json!({"step": done, "val_loss": v.loss, "val_mse": v.mse});
             println!("{line}");
@@ -399,7 +399,7 @@ pub fn train(manifest: &SplitManifest, cfg: &TrainConfig) -> Result<TrainSummary
         if improved {
             save_atomic(&varmap, &cfg.out_dir.join("best.safetensors"))?;
         }
-        if done % cfg.ckpt_every == 0 || done == cfg.steps {
+        if done.is_multiple_of(cfg.ckpt_every) || done == cfg.steps {
             let ck = cfg.out_dir.join(format!("ckpt-{done:08}.safetensors"));
             save_atomic(&varmap, &ck)?;
             save_atomic(&varmap, &cfg.out_dir.join("latest.safetensors"))?;

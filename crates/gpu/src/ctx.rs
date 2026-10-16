@@ -71,7 +71,7 @@ const MODULES: &[Module] = &[
         bindings: &[("src", false, "f32"), ("dst", true, "f32"), ("coverage", false, "u32")],
         entries: &["orient", "sample_affine", "sample_warp"],
     },
-    Module { src: include_str!("wgsl/histogram.wgsl"), bindings: &[("src", false, "u32"), ("hist", true, "atomic<u32>")], entries: &["main"] },
+    Module { src: include_str!("wgsl/histogram.wgsl"), bindings: &[("src", false, "u32"), ("hist", true, "atomic<u32>")], entries: &["histogram"] },
 ];
 
 struct Kernel {

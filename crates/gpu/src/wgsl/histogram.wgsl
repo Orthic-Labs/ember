@@ -5,7 +5,7 @@
 // P: 0 window w, 1 window h, 2 frame w, 3 window x, 4 window y, 5 sample stride, 6 sampled w,
 // 7 sampled h.
 @compute @workgroup_size(16, 16)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+fn histogram(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= P[6] || gid.y >= P[7] {
         return;
     }
