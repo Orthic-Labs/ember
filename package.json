@@ -26,6 +26,7 @@
     "release:evidence:verify": "node scripts/desktop/evidence-verify.mjs"
   },
   "dependencies": {
+    "@rightkit/app-update": "0.2.5",
     "@rightkit/platform-ui": "0.2.8",
     "@rightkit/react-shell": "0.6.5",
     "@rightkit/tauri-shell": "0.1.1",

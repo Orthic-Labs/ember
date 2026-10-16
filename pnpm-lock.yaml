@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@rightkit/app-update':
+        specifier: 0.2.5
+        version: 0.2.5
       '@rightkit/platform-ui':
         specifier: 0.2.8
         version: 0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.1)
@@ -62,6 +65,9 @@ packages:
 
   '@oxc-project/types@0.154.0':
     resolution: {integrity: sha512-KYOUGQFlLWR+s4QMV2Q9ko38TZm7EdO87Qm7rvZLqk/webse/cDjtyxKhg/47l0byCbs/k46LT8qc4PKjAikzA==}
+
+  '@rightkit/app-update@0.2.5':
+    resolution: {integrity: sha512-NVfIXXnGqf7plqJhnAzYByd185jb/KdCWT9bgWPaLZh3hnsI2oRszFKh7fc0X84SkihcAuuKrTvQtMrHzJhF8Q==}
 
   '@rightkit/ci@0.2.45':
     resolution: {integrity: sha512-IJyZYLo3qKGHZjjtPQm7TcF1gA51XtQTw3iLGU7NOU14c7SQhVPVT4GqvwNCMcod45oOU26EZLhPCc3118Unsw==}
@@ -200,9 +206,6 @@ packages:
 
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
-
-  '@tauri-apps/api@2.12.1':
-    resolution: {integrity: sha512-DeyFHa3wynpyoqTDikDEDGTJIq4LQ5USfolQGRmGIWT6JMADyxZBTDa5cAdT3tDg73rUXufPaCwN7aXBos4OnQ==}
 
   '@tauri-apps/api@2.12.4':
     resolution: {integrity: sha512-pVmfis+4zT8H0Qhp3xPZx9Ju7kpzvA6rr/PSJPyuwfvucTQ8sVt61NYU9KMkK703UFlYadFmjKA4HhybOtN0gg==}
@@ -502,6 +505,8 @@ snapshots:
 
   '@oxc-project/types@0.154.0': {}
 
+  '@rightkit/app-update@0.2.5': {}
+
   '@rightkit/ci@0.2.45': {}
 
   '@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.1)':
@@ -575,9 +580,6 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
-  '@tauri-apps/api@2.12.1':
-    optional: true
-
   '@tauri-apps/api@2.12.4': {}
 
   '@tauri-apps/cli-darwin-arm64@2.12.3':
@@ -629,7 +631,7 @@ snapshots:
 
   '@tauri-apps/plugin-os@2.4.0':
     dependencies:
-      '@tauri-apps/api': 2.12.1
+      '@tauri-apps/api': 2.12.4
     optional: true
 
   '@types/react-dom@19.3.0(@types/react@19.3.0)':
