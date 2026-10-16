@@ -111,7 +111,7 @@ fn classic_keymap_entries_name_existing_commands() {
     }
 }
 
-/// KEYC-PANELS: Tab, ⇧Tab and F5–F8 (T has no command yet; solo mode is Alt-click, not a key).
+/// KEYC-PANELS: Tab, ⇧Tab, T and F5–F8 (solo mode is Alt-click, not a key).
 #[test]
 fn keyc_panels_keys_dispatch_the_panel_commands() {
     assert_dispatch(
@@ -119,6 +119,7 @@ fn keyc_panels_keys_dispatch_the_panel_commands() {
         &[
             ("Tab", "view.panels"),
             ("Shift+Tab", "view.sidePanels"),
+            ("T", "view.toolbar"),
             ("F5", "view.topPanel"),
             ("F6", "view.filmstrip"),
             ("F7", "view.leftPanel"),

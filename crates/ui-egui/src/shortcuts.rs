@@ -81,6 +81,8 @@ pub const CLASSIC_KEYS: &[(&str, &str)] = &[
     ("C", "view.compare"),
     ("L", "view.lightsOut"),
     ("I", "view.infoOverlay"),
+    // T: the bottom toolbar (view modes, sort, ratings and zoom)
+    ("T", "view.toolbar"),
     ("R", "panel.crop"),
     ("K", "tool.brush"),
     ("M", "tool.linear"),

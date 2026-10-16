@@ -52,6 +52,22 @@ fn solo_mode_keeps_one_edit_section_open_and_survives_a_save() {
     assert!(!h.app.ui.single_panel, "without `on` the command flips Solo Mode");
 }
 
+/// The bottom toolbar (#146): `view.toolbar` shows or hides it, and the choice is saved with the UI state.
+#[test]
+fn toolbar_command_toggles_the_bottom_bar_and_survives_a_save() {
+    let mut h = demo([1400.0, 900.0], json!({"view": "detail"}));
+    assert!(h.app.ui.toolbar, "the bottom toolbar is shown by default");
+    let r = h.app.run("view.toolbar", json!({})).unwrap();
+    assert_eq!(r["toolbar"], false);
+    assert!(!h.app.ui.toolbar);
+    let saved = serde_json::to_string(&h.app.ui).unwrap();
+    let back = serde_json::from_str::<crate::UiState>(&saved).unwrap().sanitized();
+    assert!(!back.toolbar, "the toolbar stays hidden after a save and load");
+    let r = h.app.run("view.toolbar", json!({"on": true})).unwrap();
+    assert_eq!(r["toolbar"], true);
+    h.step();
+}
+
 #[test]
 fn side_panels_resize_by_their_inner_edge_and_remember_it() {
     let mut h = demo([1400.0, 900.0], json!({"view": "detail", "right": "edit", "leftPanel": true}));

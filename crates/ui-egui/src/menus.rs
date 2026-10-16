@@ -80,6 +80,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("compare.makeSelect", "Make Candidate the Select", None, "View"),
     ("view.autoAdvance", "Auto Advance", None, "Photo"),
     ("view.filmstrip", "Filmstrip", Some("/"), "View"),
+    ("view.toolbar", "Toolbar", None, "View"),
     // Classic panel keys: F5 top bar, F8 right panel, Tab every panel at once (restored by Tab again)
     ("view.topPanel", "Top Bar", Some("F5"), "View"),
     ("view.rightPanel", "Right Panel", Some("F8"), "View"),
@@ -778,6 +779,12 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 Some(f) => f(&mut app.session),
                 None => Err("not available here: on the desktop the library is a folder; back it up with your other files".into()),
             }
+        }
+        "view.toolbar" => {
+            // {on?: bool} (flips when omitted): the bottom toolbar under the loupe and grids
+            let on = p.get("on").and_then(Value::as_bool).unwrap_or(!app.ui.toolbar);
+            app.ui.toolbar = on;
+            Ok(json!({"toolbar": on}))
         }
         "view.filmstrip" => {
             app.ui.filmstrip = !app.ui.filmstrip;

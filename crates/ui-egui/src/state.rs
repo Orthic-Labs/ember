@@ -586,6 +586,10 @@ fn top_bar_shown() -> bool {
     true
 }
 
+fn toolbar_shown() -> bool {
+    true
+}
+
 /// Brush settings kept in one of the Masking panel's brush slots, A or B (#63).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -630,6 +634,9 @@ pub struct UiState {
     /// Presets column: show a live thumbnail of the photo with each preset.
     pub preset_thumbs: bool,
     pub filmstrip: bool,
+    /// The bottom toolbar under the loupe and grids: view modes, sort, ratings and zoom (`view.toolbar`, T in the Classic layer).
+    #[serde(default = "toolbar_shown")]
+    pub toolbar: bool,
     /// The top bar (workspace switch and title row; F5 shows or hides it).
     #[serde(default = "top_bar_shown")]
     pub top_bar: bool,
@@ -1231,6 +1238,7 @@ impl Default for UiState {
             presets: false,
             preset_thumbs: false,
             filmstrip: true,
+            toolbar: true,
             top_bar: true,
             panels_hidden: None,
             zoom: Zoom::Fit,
