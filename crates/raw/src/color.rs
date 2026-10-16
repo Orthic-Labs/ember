@@ -443,4 +443,70 @@ mod tests {
         let m = grey_world(&img);
         assert!((m[0] - 2.0).abs() < 1e-3 && (m[1] - 1.0).abs() < 1e-6 && (m[2] - 1.25).abs() < 1e-3, "{m:?}");
     }
+
+    /// `ForwardMatrix` for `cam` (XYZ → camera) lit by `white`, normalised like a real file's (white → D50).
+    fn forward_for(cam: &Mat3, white: Xy) -> Mat3 {
+        let n = cam.apply(white.to_xyz());
+        let fm = bradford(white, D50).mul(&cam.inverse().unwrap()).mul(&Mat3::diag(n[0], n[1], n[2]));
+        let s = D50.to_xyz()[1] / fm.apply([1.0; 3])[1];
+        Mat3(fm.0.map(|r| r.map(|v| v * s)))
+    }
+
+    fn rows_close(a: &Mat3, b: &Mat3, tol: f64) -> bool {
+        (0..3).all(|i| close(a.0[i], b.0[i], tol))
+    }
+
+    /// DNG spec ch. 6: both matrix pairs are interpolated by inverse correlated colour temperature, clamped
+    /// at the calibration illuminants: the endpoints give one illuminant's matrices alone, the midpoint in
+    /// mired half of each.
+    #[test]
+    fn dual_illuminant_forward_matrices_interpolate_by_inverse_temperature() {
+        let (fa, fb) = (forward_for(&cam_a(), cct::temp_tint_to_xy(2856.0, 0.0)), forward_for(&cam_b(), D65));
+        let both = ColorData {
+            illuminant: [17, 21],
+            color_matrix: [Some(cam_a()), Some(cam_b())],
+            forward_matrix: [Some(fa), Some(fb)],
+            ..Default::default()
+        };
+        let only = |m: Mat3, f: Mat3, ill: u16| ColorData { illuminant: [ill, 0], color_matrix: [Some(m), None], forward_matrix: [Some(f), None], ..Default::default() };
+        let (warm, cool) = (cct::temp_tint_to_xy(2300.0, 0.0), cct::temp_tint_to_xy(12000.0, 0.0));
+        assert_eq!(illuminant_weight(&both, warm), 1.0);
+        assert_eq!(illuminant_weight(&both, cool), 0.0);
+        assert!(rows_close(&camera_to_xyz_d50(&both, warm), &camera_to_xyz_d50(&only(cam_a(), fa, 17), warm), 1e-12));
+        assert!(rows_close(&camera_to_xyz_d50(&both, cool), &camera_to_xyz_d50(&only(cam_b(), fb, 21), cool), 1e-12));
+        let mid = cct::temp_tint_to_xy(2.0 / (1.0 / 2856.0 + 1.0 / 6504.0), 0.0);
+        let g = illuminant_weight(&both, mid);
+        assert!((g - 0.5).abs() < 0.02, "{g}");
+        let blended = ColorData {
+            illuminant: [17, 0],
+            color_matrix: [Some(lerp(&cam_a(), &cam_b(), g)), None],
+            forward_matrix: [Some(lerp(&fa, &fb, g)), None],
+            ..Default::default()
+        };
+        assert!(rows_close(&camera_to_xyz_d50(&both, mid), &camera_to_xyz_d50(&blended, mid), 1e-12));
+    }
+
+    /// A DNG with only `ColorMatrix1` (or only `ColorMatrix2`) uses it for every white; without a forward
+    /// matrix the camera → XYZ path is its inverse adapted from the white to D50.
+    #[test]
+    fn a_single_colour_matrix_serves_every_white() {
+        for (illuminant, pair) in [([17u16, 0], [Some(cam_a()), None]), ([0u16, 21], [None, Some(cam_b())])] {
+            let color = ColorData { illuminant, color_matrix: pair, ..Default::default() };
+            let m = pair[0].or(pair[1]).unwrap();
+            for t in [2300.0, 4000.0, 6504.0, 12000.0] {
+                let w = cct::temp_tint_to_xy(t, 0.0);
+                assert_eq!(xyz_to_camera(&color, w).0, m.0);
+                let expect = bradford(w, D50).mul(&m.inverse().unwrap());
+                assert!(rows_close(&camera_to_xyz_d50(&color, w), &expect, 1e-12), "{t}");
+                let tr = camera_transform_of(&color, w);
+                assert!(!tr.matrix_is_fallback);
+                let n = camera_neutral(&color, w);
+                let out = tr.matrix.apply(std::array::from_fn(|i| n[i] * f64::from(tr.wb[i])));
+                assert!((out[0] - out[1]).abs() < 1e-5 && (out[1] - out[2]).abs() < 1e-5, "{t}: {out:?}");
+            }
+        }
+        // unknown illuminant codes with two matrices fall back to A and D65 and stay in range
+        let unknown = ColorData { illuminant: [0, 0], color_matrix: [Some(cam_a()), Some(cam_b())], ..Default::default() };
+        assert!((0.0..=1.0).contains(&illuminant_weight(&unknown, D65)));
+    }
 }
