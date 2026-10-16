@@ -548,3 +548,26 @@ fn naming_faces_tags_their_photos_and_the_person_filter_shows_just_them() {
     assert!(s.visible_cloned().is_empty());
     let _ = std::fs::remove_dir_all(&d);
 }
+
+#[test]
+fn merging_two_people_names_all_their_faces_as_one_undoable_step() {
+    let d = temp("merge-people");
+    let (mut s, _) = setup(&d, 64);
+    let (a, b) = two_photos(&s);
+    set_regions(&mut s, a, vec![region(0.1, Some("Ann")), region(0.5, Some("Bob"))]);
+    set_regions(&mut s, b, vec![region(0.1, Some("ann"))]);
+    let r = s.execute("faces.mergePeople", &json!({"from": " ANN ", "into": "Anne"})).unwrap();
+    assert_eq!((r["named"].clone(), r["photos"].clone()), (json!(2), json!(2)), "{r}");
+    assert_eq!(s.execute("faces.person", &json!({"name": "Ann"})).unwrap()["total"], json!(0));
+    assert_eq!(s.execute("faces.person", &json!({"name": "Anne"})).unwrap()["total"], json!(2));
+    assert_eq!(s.execute("faces.person", &json!({"name": "Bob"})).unwrap()["total"], json!(1), "other people are left alone");
+    // one undo step brings the old name back
+    s.undo_step().unwrap();
+    assert_eq!(s.execute("faces.person", &json!({"name": "Ann"})).unwrap()["total"], json!(2));
+    assert_eq!(s.execute("faces.person", &json!({"name": "Anne"})).unwrap()["total"], json!(0));
+    // nobody by that name, and missing names, are refused
+    assert!(s.execute("faces.mergePeople", &json!({"from": "Nobody", "into": "Anne"})).is_err());
+    assert!(s.execute("faces.mergePeople", &json!({"from": "Ann"})).is_err());
+    assert!(s.execute("faces.mergePeople", &json!({"from": "Ann", "into": "  "})).is_err());
+    let _ = std::fs::remove_dir_all(&d);
+}

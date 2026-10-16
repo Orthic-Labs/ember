@@ -92,6 +92,40 @@ fn set_name(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"id": id.0, "index": index, "name": name}))
 }
 
+/// `faces.mergePeople {from, into}`: every face named `from` (case-insensitively) is named `into`, so two people who are
+/// one person become one, as one undo step. Catalog-only, like naming: the sidecars are not touched.
+fn merge_people(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "faces.mergePeople";
+    let from = p.get("from").and_then(Value::as_str).map(str::trim).filter(|n| !n.is_empty()).ok_or_else(|| bad(C, "missing `from`"))?;
+    let into = p.get("into").and_then(Value::as_str).map(str::trim).filter(|n| !n.is_empty()).ok_or_else(|| bad(C, "missing `into`"))?;
+    if into.chars().count() > 200 || into.chars().any(char::is_control) {
+        return Err(bad(C, "a name is at most 200 characters, without control characters"));
+    }
+    let key = from.to_lowercase();
+    let (mut ops, mut moved) = (Vec::new(), 0usize);
+    for ph in s.catalog.photos().filter(|ph| ph.in_library()) {
+        let mut meta = ph.meta.clone();
+        let mut here = 0usize;
+        for r in meta.regions.iter_mut().filter(|r| r.kind == lightcraft_meta::RegionKind::Face) {
+            if r.name.as_deref().map(str::trim).is_some_and(|n| n.to_lowercase() == key) {
+                r.name = Some(into.to_string());
+                here += 1;
+            }
+        }
+        if here > 0 {
+            moved += here;
+            ops.push(Op::SetMeta { id: ph.id, meta: Box::new(meta) });
+        }
+    }
+    if ops.is_empty() {
+        return Err(bad(C, "nobody is named that"));
+    }
+    let photos = ops.len();
+    s.commit("Merge People", Op::Batch { ops })?;
+    s.skip_auto_write = true;
+    Ok(json!({"from": from, "into": into, "named": moved, "photos": photos}))
+}
+
 /// Most faces `faces.unnamed` lists.
 const MAX_UNNAMED: usize = 3000;
 
@@ -1037,6 +1071,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{name, more?: 120} → {name, total, confirmed: [{photo, index, rect}], more: [{photo, index, rect, score}], ready, pendingPhotos} — the faces named `name` across the library, and the unnamed faces that look most like them (best first, already embedded ones only, once recognition is on); confirm one with `faces.setName`",
             super::always,
             person
+        ),
+        cmd!(
+            "faces.mergePeople",
+            "Merge People",
+            [],
+            None,
+            "{from, into} → {named, photos} — every face named `from` (case-insensitively) is named `into`, so one person becomes the other; one undoable step; the sidecars are not touched",
+            super::always,
+            merge_people
         ),
         cmd!(
             "faces.setName",
