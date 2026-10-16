@@ -2163,5 +2163,15 @@
   "≥  at least": "≥  최소",
   "⌘-drag to straighten, ⇧G Guided Upright, a grid while transforming.": "⌘-드래그하여 수평 맞추기, ⇧G 가이드 수직, 변형 중 격자.",
   "日本語": "日本語",
-  "繁體中文（台灣）": "繁體中文（台灣）"
+  "繁體中文（台灣）": "繁體中文（台灣）",
+  "Find faces in photos automatically": "사진에서 얼굴을 자동으로 찾기",
+  "Looks for faces in photos that have none, while recognition runs. Finding them needs the detector below.": "인식이 실행되는 동안 얼굴 영역이 없는 사진에서 얼굴을 찾습니다. 찾으려면 아래의 검출기가 필요합니다.",
+  "Use the model's own match strictness": "모델 고유의 일치 엄격도 사용",
+  "Match strictness": "일치 엄격도",
+  "Higher is stricter: fewer suggestions, each one surer.": "높을수록 엄격합니다. 제안은 줄어들지만 각각 더 확실합니다.",
+  "Your face data": "얼굴 데이터",
+  "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "잊기를 실행하면 모든 얼굴 임베딩과 자동으로 찾은 이름 없는 얼굴이 삭제되고 인식이 꺼집니다. 이름이 붙은 얼굴은 남습니다.",
+  "Forget All Face Data…": "모든 얼굴 데이터 잊기…",
+  "Forget": "잊기",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "얼굴 임베딩 {embeddings}개와 이름 없는 얼굴 {regions}개를 잊었습니다."
 }

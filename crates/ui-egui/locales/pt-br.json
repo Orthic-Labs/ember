@@ -2162,5 +2162,15 @@
   "⌘-drag to straighten, ⇧G Guided Upright, a grid while transforming.": "⌘-arrastar para endireitar, ⇧G Vertical guiado, uma grade durante a transformação.",
   "imported earlier switch over with Photo ▸ Reload from Disk.": "importadas antes mudam com Foto → Recarregar do disco.",
   "Canon EOS R5 Mark II C-RAW files that opened as \"preview only\" (more than half of them, depending on the": "Arquivos C-RAW da Canon EOS R5 Mark II que abriram como “somente pré-visualização” (mais da metade deles, dependendo da",
-  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "cena) agora são revelados a partir dos dados do sensor com todas as ferramentas de edição, como os outros raws da câmera. Fotos"
+  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "cena) agora são revelados a partir dos dados do sensor com todas as ferramentas de edição, como os outros raws da câmera. Fotos",
+  "Find faces in photos automatically": "Encontrar rostos nas fotos automaticamente",
+  "Looks for faces in photos that have none, while recognition runs. Finding them needs the detector below.": "Procura rostos em fotos que não têm nenhum, enquanto o reconhecimento está ativo. Encontrá-los precisa do detector abaixo.",
+  "Use the model's own match strictness": "Usar a exigência de correspondência própria do modelo",
+  "Match strictness": "Exigência de correspondência",
+  "Higher is stricter: fewer suggestions, each one surer.": "Quanto mais alto, mais rigoroso: menos sugestões, cada uma mais segura.",
+  "Your face data": "Seus dados de rostos",
+  "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "Esquecer apaga todos os embeddings de rostos e os rostos sem nome encontrados automaticamente, e desliga o reconhecimento. Rostos com nome são mantidos.",
+  "Forget All Face Data…": "Esquecer todos os dados de rostos…",
+  "Forget": "Esquecer",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "{embeddings} embeddings de rostos e {regions} rostos sem nome esquecidos."
 }

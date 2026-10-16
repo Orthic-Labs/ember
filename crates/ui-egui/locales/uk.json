@@ -2163,5 +2163,15 @@
   "Include selected photos": "Включити вибрані фото",
   "imported earlier switch over with Photo ▸ Reload from Disk.": "імпортовані раніше, перемикаються через Фото → Перезавантажити з диска.",
   "Canon EOS R5 Mark II C-RAW files that opened as \"preview only\" (more than half of them, depending on the": "Файли Canon EOS R5 Mark II C-RAW, які відкривалися як «лише перегляд» (понад половина з них, залежно від",
-  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "сцени), тепер опрацьовуються за даними сенсора всіма інструментами редагування, як і інші RAW-файли камери. Фото"
+  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "сцени), тепер опрацьовуються за даними сенсора всіма інструментами редагування, як і інші RAW-файли камери. Фото",
+  "Find faces in photos automatically": "Автоматично знаходити обличчя на фотографіях",
+  "Looks for faces in photos that have none, while recognition runs. Finding them needs the detector below.": "Поки працює розпізнавання, шукає обличчя на фотографіях, де їх ще немає. Для пошуку потрібен детектор нижче.",
+  "Use the model's own match strictness": "Використовувати суворість збігу моделі за замовчуванням",
+  "Match strictness": "Суворість збігу",
+  "Higher is stricter: fewer suggestions, each one surer.": "Чим вище, тим суворіше: менше підказок, але кожна точніша.",
+  "Your face data": "Дані про обличчя",
+  "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "Забуття видаляє всі вектори облич і автоматично знайдені безіменні обличчя, а розпізнавання вимикається. Обличчя з іменами залишаються.",
+  "Forget All Face Data…": "Забути всі дані про обличчя…",
+  "Forget": "Забути",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "Забуто векторів облич: {embeddings}, безіменних облич: {regions}."
 }

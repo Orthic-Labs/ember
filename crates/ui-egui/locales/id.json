@@ -2163,5 +2163,15 @@
   "≥  at least": "≥  setidaknya",
   "⌘-drag to straighten, ⇧G Guided Upright, a grid while transforming.": "⌘-seret untuk meluruskan, ⇧G Tegak Berpemandu, kisi saat mentransformasi.",
   "日本語": "Bahasa Jepang",
-  "繁體中文（台灣）": "Tionghoa Tradisional (Taiwan)"
+  "繁體中文（台灣）": "Tionghoa Tradisional (Taiwan)",
+  "Find faces in photos automatically": "Temukan wajah di foto secara otomatis",
+  "Looks for faces in photos that have none, while recognition runs. Finding them needs the detector below.": "Mencari wajah di foto yang belum punya wajah selama pengenalan berjalan. Untuk menemukannya diperlukan detektor di bawah.",
+  "Use the model's own match strictness": "Gunakan ketegasan kecocokan bawaan model",
+  "Match strictness": "Ketegasan kecocokan",
+  "Higher is stricter: fewer suggestions, each one surer.": "Makin tinggi makin ketat: saran lebih sedikit, masing-masing lebih yakin.",
+  "Your face data": "Data wajah Anda",
+  "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "Melupakan menghapus semua embedding wajah dan wajah tanpa nama yang ditemukan otomatis, dan mematikan pengenalan. Wajah yang sudah diberi nama tetap disimpan.",
+  "Forget All Face Data…": "Lupakan Semua Data Wajah…",
+  "Forget": "Lupakan",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "{embeddings} embedding wajah dan {regions} wajah tanpa nama dilupakan."
 }

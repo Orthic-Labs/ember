@@ -2165,5 +2165,15 @@
   "⌘-drag to straighten, ⇧G Guided Upright, a grid while transforming.": "⌘-ドラッグで傾きを補正、⇧G ガイド付き垂直補正、変形中のグリッド。",
   "imported earlier switch over with Photo ▸ Reload from Disk.": "以前に読み込んだ写真は、写真 → ディスクから再読み込み で切り替わります。",
   "Canon EOS R5 Mark II C-RAW files that opened as \"preview only\" (more than half of them, depending on the": "「プレビューのみ」として開かれた Canon EOS R5 Mark II の C-RAW ファイル（そのうち半数以上、場面によって",
-  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "場面）は、カメラのほかの RAW と同様に、すべての編集ツールでセンサーデータから現像されるようになりました。写真は"
+  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "場面）は、カメラのほかの RAW と同様に、すべての編集ツールでセンサーデータから現像されるようになりました。写真は",
+  "Find faces in photos automatically": "写真の顔を自動的に検出",
+  "Looks for faces in photos that have none, while recognition runs. Finding them needs the detector below.": "認識の実行中、顔の登録がない写真から顔を探します。検出には下の検出器が必要です。",
+  "Use the model's own match strictness": "モデル既定の一致の厳しさを使う",
+  "Match strictness": "一致の厳しさ",
+  "Higher is stricter: fewer suggestions, each one surer.": "高いほど厳しくなります。候補は減りますが、それぞれの確度は高くなります。",
+  "Your face data": "顔のデータ",
+  "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "忘れると、すべての顔の特徴データと、自動で見つかった名前のない顔が削除され、認識はオフになります。名前付きの顔は残ります。",
+  "Forget All Face Data…": "顔のデータをすべて忘れる…",
+  "Forget": "忘れる",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "顔の特徴データ {embeddings} 件と名前のない顔 {regions} 件を削除しました。"
 }

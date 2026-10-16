@@ -2163,5 +2163,15 @@
   "≥  at least": "≥  tối thiểu",
   "⌘-drag to straighten, ⇧G Guided Upright, a grid while transforming.": "⌘-kéo để làm thẳng, ⇧G Thẳng đứng có hướng dẫn, lưới khi biến đổi.",
   "日本語": "Tiếng Nhật",
-  "繁體中文（台灣）": "Tiếng Trung phồn thể (Đài Loan)"
+  "繁體中文（台灣）": "Tiếng Trung phồn thể (Đài Loan)",
+  "Find faces in photos automatically": "Tự động tìm khuôn mặt trong ảnh",
+  "Looks for faces in photos that have none, while recognition runs. Finding them needs the detector below.": "Trong khi nhận diện chạy, tìm khuôn mặt trong các ảnh chưa có khuôn mặt nào. Cần bộ phát hiện bên dưới để tìm.",
+  "Use the model's own match strictness": "Dùng mức nghiêm ngặt khớp mặc định của mô hình",
+  "Match strictness": "Mức nghiêm ngặt khớp",
+  "Higher is stricter: fewer suggestions, each one surer.": "Càng cao càng nghiêm: ít gợi ý hơn, mỗi gợi ý chắc chắn hơn.",
+  "Your face data": "Dữ liệu khuôn mặt của bạn",
+  "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "Quên sẽ xóa mọi embedding khuôn mặt và các khuôn mặt chưa đặt tên được tìm tự động, đồng thời tắt nhận diện. Khuôn mặt đã đặt tên được giữ lại.",
+  "Forget All Face Data…": "Quên mọi dữ liệu khuôn mặt…",
+  "Forget": "Quên",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "Đã quên {embeddings} embedding khuôn mặt và {regions} khuôn mặt chưa đặt tên."
 }

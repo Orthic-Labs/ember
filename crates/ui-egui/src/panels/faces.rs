@@ -221,6 +221,36 @@ pub fn settings_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
         }
     }
     hint(ui, t, "Suggests who is in a photo from the faces you have named. Everything stays on your computer.");
+    let mut detect = list["detect"].as_bool().unwrap_or(true);
+    let r = ui.checkbox(&mut detect, crate::i18n::tr("Find faces in photos automatically"));
+    register(ui.ctx(), "check:settings.facesDetect", r.rect);
+    if r.changed() {
+        match app.run("faces.preferences", json!({"detect": detect})) {
+            Ok(_) => app.caches.faces_epoch += 1,
+            Err(e) => app.toast(ui.ctx(), e),
+        }
+    }
+    hint(ui, t, crate::i18n::tr("Looks for faces in photos that have none, while recognition runs. Finding them needs the detector below."));
+    // match strictness: the threshold name suggestions use, or the model's own
+    let saved = list["threshold"].as_f64();
+    let mut own = saved.is_none();
+    let r = ui.checkbox(&mut own, crate::i18n::tr("Use the model's own match strictness"));
+    register(ui.ctx(), "check:settings.facesOwnThreshold", r.rect);
+    if r.changed() {
+        let params = if own { json!({"threshold": null}) } else { json!({"threshold": 0.45}) };
+        let _ = app.run("faces.preferences", params);
+        app.caches.faces_epoch += 1;
+    }
+    if !own {
+        let mut value = saved.unwrap_or(0.45) as f32;
+        let r = ui.add(egui::Slider::new(&mut value, 0.0..=0.9).text(crate::i18n::tr("Match strictness")));
+        register(ui.ctx(), "slider:settings.facesThreshold", r.rect);
+        if r.drag_stopped() || (r.changed() && !r.dragged()) {
+            let _ = app.run("faces.preferences", json!({"threshold": value}));
+            app.caches.faces_epoch += 1;
+        }
+        hint(ui, t, crate::i18n::tr("Higher is stricter: fewer suggestions, each one surer."));
+    }
     if !runtime {
         hint(ui, t, "This build cannot run recognition models: they can be added and chosen, not used.");
     } else if !usable {
@@ -256,6 +286,46 @@ pub fn settings_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
     for e in list["catalog"]["errors"].as_array().into_iter().flatten().filter_map(Value::as_str).take(3) {
         ui.add(egui::Label::new(RichText::new(format!("catalog.json: {e}")).font(t.font(11.5)).color(t.caution)).wrap());
     }
+    heading(ui, t, crate::i18n::tr("Your face data"));
+    hint(
+        ui,
+        t,
+        crate::i18n::tr("Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay."),
+    );
+    let confirm = egui::Id::new("faces-forget-confirm");
+    let asking = ui.data(|d| d.get_temp::<bool>(confirm)).unwrap_or(false);
+    ui.horizontal(|ui| {
+        if !asking {
+            let r = ui.button(crate::i18n::tr("Forget All Face Data…"));
+            register(ui.ctx(), "button:settingsForgetFaces", r.rect);
+            if r.clicked() {
+                ui.data_mut(|d| d.insert_temp(confirm, true));
+            }
+        } else {
+            let r = ui.button(crate::i18n::tr("Forget"));
+            register(ui.ctx(), "button:settingsForgetFacesConfirm", r.rect);
+            if r.clicked() {
+                ui.data_mut(|d| d.remove::<bool>(confirm));
+                match app.run("faces.forget", json!({})) {
+                    Ok(v) => {
+                        app.caches.faces_epoch += 1;
+                        let embeddings = v["embeddings"].as_u64().unwrap_or(0);
+                        let regions = v["unnamedRegions"].as_u64().unwrap_or(0);
+                        let text = crate::i18n::tr_format!(
+                            "Forgot {embeddings} face embeddings and {regions} unnamed faces.",
+                            embeddings = embeddings,
+                            regions = regions
+                        );
+                        app.toast(ui.ctx(), text);
+                    }
+                    Err(e) => app.toast(ui.ctx(), e),
+                }
+            }
+            if ui.button(crate::i18n::tr("Cancel")).clicked() {
+                ui.data_mut(|d| d.remove::<bool>(confirm));
+            }
+        }
+    });
     if let Some(d) = all.iter().find(|m| m["role"] == "detector") {
         ui.add_space(4.0);
         hint(ui, t, &format!("Faces are found by {} ({}, included).", d["name"].as_str().unwrap_or("the detector"), mb(d["sizeBytes"].as_u64())));

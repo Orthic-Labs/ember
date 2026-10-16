@@ -21,12 +21,24 @@ use super::{CommandSpec, always, bad, cmd, str_param};
 use crate::face_download::{self, State};
 use crate::{EngineError, Result, Session};
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub(super) struct FaceSettings {
     pub(super) enabled: bool,
     /// The installed recogniser in use.
     pub(super) embedder: Option<String>,
+    /// Whether the background scan finds faces in photos that have none. On by default; it runs only while recognition
+    /// is on, and the detector runs on this computer.
+    pub(super) detect: bool,
+    /// How alike two faces must be to be suggested as the same person (a cosine similarity from -1 to 1); `None` is the
+    /// chosen model's own threshold.
+    pub(super) threshold: Option<f32>,
+}
+
+impl Default for FaceSettings {
+    fn default() -> Self {
+        FaceSettings { enabled: false, embedder: None, detect: true, threshold: None }
+    }
 }
 
 fn fail(what: &str, e: impl std::fmt::Display) -> EngineError {
@@ -57,7 +69,7 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     })
 }
 
-fn write_settings(dir: &Path, st: &FaceSettings) -> Result<()> {
+pub(super) fn write_settings(dir: &Path, st: &FaceSettings) -> Result<()> {
     std::fs::create_dir_all(dir).map_err(|e| fail("could not create the face models folder", e))?;
     write_atomic(&dir.join("settings.json"), &serde_json::to_vec_pretty(st).map_err(|e| fail("settings", e))?)
 }
@@ -195,6 +207,8 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
         "dir": dir.as_ref().map(|d| d.display().to_string()),
         "enabled": settings.enabled,
         "embedder": settings.embedder,
+        "detect": settings.detect,
+        "threshold": settings.threshold,
         // Native builds always have the pure-Rust runner; model files/background scanning remain native-only.
         "runtime": cfg!(not(target_arch = "wasm32")),
         "models": models,
@@ -511,6 +525,60 @@ fn enable(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"enabled": st.enabled}))
 }
 
+fn preferences(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "faces.preferences";
+    let dir = models_dir(s, C)?;
+    let mut st = read_settings(&dir);
+    if let Some(v) = p.get("detect") {
+        st.detect = v.as_bool().ok_or_else(|| bad(C, "`detect` must be true or false"))?;
+    }
+    if let Some(v) = p.get("threshold") {
+        st.threshold = match v {
+            Value::Null => None,
+            v => Some(
+                v.as_f64()
+                    .filter(|t| (-1.0..=1.0).contains(t))
+                    .ok_or_else(|| bad(C, "`threshold` is a similarity from -1 to 1, or null for the model's own"))? as f32,
+            ),
+        };
+    }
+    if p.get("detect").is_some() || p.get("threshold").is_some() {
+        write_settings(&dir, &st)?;
+    }
+    Ok(json!({"detect": st.detect, "threshold": st.threshold}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn face_settings_default_to_detecting_with_recognition_off() {
+        let d = FaceSettings::default();
+        assert!(!d.enabled && d.detect && d.embedder.is_none() && d.threshold.is_none());
+        // a settings file written before these keys existed keeps their defaults
+        let old: FaceSettings = serde_json::from_str(r#"{"enabled":true,"embedder":"sface"}"#).unwrap();
+        assert!(old.enabled && old.detect && old.threshold.is_none());
+        assert_eq!(old.embedder.as_deref(), Some("sface"));
+    }
+
+    #[test]
+    fn face_settings_round_trip_and_a_damaged_file_reads_as_defaults() {
+        let dir = std::env::temp_dir().join(format!("lc-face-settings-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let st = FaceSettings { enabled: true, embedder: Some("sface".into()), detect: false, threshold: Some(0.3) };
+        write_settings(&dir, &st).unwrap();
+        let back = read_settings(&dir);
+        assert!(back.enabled && !back.detect);
+        assert_eq!(back.embedder.as_deref(), Some("sface"));
+        assert_eq!(back.threshold, Some(0.3));
+        std::fs::write(dir.join("settings.json"), b"{ not json").unwrap();
+        let damaged = read_settings(&dir);
+        assert!(!damaged.enabled && damaged.detect && damaged.threshold.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(query "faces.models.list", "Face Models", [], None, "{} → {dir, enabled, embedder, runtime, models: [{id, name, role, licence{name, commercial, url, notice}, provenance, source, sizeBytes, known, installed, selected}]}", always, list),
@@ -523,5 +591,6 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!(query "faces.models.remove", "Remove Face Model", [], None, "{id} — delete an installed model", always, remove),
         cmd!(query "faces.models.select", "Choose Face Recognition Model", [], None, "{id: installed recogniser | null}", always, select),
         cmd!(query "faces.enable", "Face Recognition On/Off", [], None, "{enabled?: bool} (toggles when omitted)", always, enable),
+        cmd!(query "faces.preferences", "Face Preferences", [], None, "{detect?: bool, threshold?: number | null} → {detect, threshold} — whether the background scan finds faces in photos that have none (on by default; it only runs while recognition is on, and the detector runs on this computer) and the match strictness `faces.suggest` uses when it is not given: a cosine similarity from -1 to 1, higher is stricter; null is the chosen model's own threshold", always, preferences),
     ]
 }

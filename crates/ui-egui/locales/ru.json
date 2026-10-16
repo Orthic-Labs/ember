@@ -2163,5 +2163,15 @@
   "Include selected photos": "Включить выбранные фото",
   "imported earlier switch over with Photo ▸ Reload from Disk.": "импортированные ранее, переключаются через Фото → Перезагрузить с диска.",
   "Canon EOS R5 Mark II C-RAW files that opened as \"preview only\" (more than half of them, depending on the": "Файлы Canon EOS R5 Mark II C-RAW, которые открывались как «только для просмотра» (более половины из них, в зависимости от",
-  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "сцены), теперь проявляются по данным матрицы всеми инструментами правки, как и другие RAW-файлы камеры. Фото"
+  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "сцены), теперь проявляются по данным матрицы всеми инструментами правки, как и другие RAW-файлы камеры. Фото",
+  "Find faces in photos automatically": "Автоматически находить лица на фотографиях",
+  "Looks for faces in photos that have none, while recognition runs. Finding them needs the detector below.": "Пока работает распознавание, ищет лица на фотографиях, где их ещё нет. Для поиска нужен детектор ниже.",
+  "Use the model's own match strictness": "Использовать строгость совпадения модели по умолчанию",
+  "Match strictness": "Строгость совпадения",
+  "Higher is stricter: fewer suggestions, each one surer.": "Чем выше, тем строже: меньше подсказок, но каждая точнее.",
+  "Your face data": "Данные о лицах",
+  "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "При забывании удаляются все векторы лиц и автоматически найденные безымянные лица, распознавание выключается. Лица с именами остаются.",
+  "Forget All Face Data…": "Забыть все данные о лицах…",
+  "Forget": "Забыть",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "Забыто векторов лиц: {embeddings}, безымянных лиц: {regions}."
 }

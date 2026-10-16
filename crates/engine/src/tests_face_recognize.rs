@@ -343,6 +343,63 @@ fn faces_person_lists_a_persons_faces_and_looks_for_more_only_while_recognition_
     let _ = std::fs::remove_dir_all(&d);
 }
 
+#[test]
+fn the_saved_match_strictness_decides_how_many_faces_are_suggested() {
+    let d = temp("strictness");
+    let (mut s, _) = setup(&d, 64);
+    let (a, b) = two_photos(&s);
+    set_regions(&mut s, a, vec![region(0.1, Some("Ann")), region(0.5, Some("Bob"))]);
+    set_regions(&mut s, b, vec![region(0.1, None), region(0.5, None), region(0.7, None)]);
+    let suggested = |s: &mut Session| -> usize {
+        let r = s.execute("faces.suggest", &json!({"ids": [b.0], "margin": -2.0, "budgetMs": 60_000})).unwrap();
+        r["photos"][0]["faces"].as_array().unwrap().iter().filter(|f| f["suggestion"].is_object()).count()
+    };
+    s.execute("faces.preferences", &json!({"threshold": -1.0})).unwrap();
+    assert_eq!(suggested(&mut s), 3, "every unnamed face is suggested a name at -1");
+    s.execute("faces.preferences", &json!({"threshold": 2.0})).unwrap();
+    assert_eq!(suggested(&mut s), 0, "nothing reaches 2");
+    // a threshold given with the call wins over the saved one
+    let r = s.execute("faces.suggest", &json!({"ids": [b.0], "threshold": -1.0, "margin": -2.0, "budgetMs": 60_000})).unwrap();
+    assert_eq!(r["threshold"], json!(-1.0), "{r}");
+    // null goes back to the model's own threshold
+    let r = s.execute("faces.preferences", &json!({"threshold": null})).unwrap();
+    assert!(r["threshold"].is_null(), "{r}");
+    assert!(s.execute("faces.preferences", &json!({"threshold": 1.5})).is_err());
+    assert!(s.execute("faces.preferences", &json!({"detect": "yes"})).is_err());
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn forgetting_face_data_clears_embeddings_and_unnamed_detections_and_reports_counts() {
+    let d = temp("forget");
+    let (mut s, _) = setup(&d, 64);
+    let (a, b) = two_photos(&s);
+    let detected = |x: f64| Region { description: Some("Detected by YuNet 2023mar".into()), ..region(x, None) };
+    set_regions(&mut s, a, vec![detected(0.1), region(0.5, Some("Ann")), region(0.7, None)]);
+    set_regions(&mut s, b, vec![detected(0.3)]);
+    s.execute("faces.enable", &json!({"enabled": true})).unwrap();
+    s.execute("faces.index", &json!({"budgetMs": 60_000})).unwrap();
+    s.faces.scanned.insert(a.0);
+    assert_eq!(s.faces.index.len(), 4);
+    let undo = s.undo.len();
+    let r = s.execute("faces.forget", &json!({})).unwrap();
+    assert_eq!(r["embeddings"], 4, "{r}");
+    assert_eq!(r["scannedPhotos"], 1, "{r}");
+    assert_eq!((r["unnamedRegions"].clone(), r["photos"].clone(), r["recognitionWasOn"].clone()), (json!(2), json!(2), json!(true)), "{r}");
+    assert_eq!(s.undo.len(), undo + 1, "one undo step for the regions");
+    assert_eq!((s.faces.index.len(), s.faces.scanned.len()), (0, 0));
+    let kept = &s.catalog.photo(a).unwrap().meta.regions;
+    assert_eq!(kept.len(), 2, "the named face and the drawn one stay");
+    assert!(kept.iter().any(|r| r.name.as_deref() == Some("Ann")));
+    assert!(s.catalog.photo(b).unwrap().meta.regions.is_empty());
+    let listed = s.execute("faces.models.list", &json!({})).unwrap();
+    assert_eq!(listed["enabled"], false, "recognition stays off until the user turns it on");
+    // forgetting again finds nothing and says so
+    let r = s.execute("faces.forget", &json!({})).unwrap();
+    assert_eq!((r["embeddings"].clone(), r["unnamedRegions"].clone(), r["recognitionWasOn"].clone()), (json!(0), json!(0), json!(false)), "{r}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 fn unit64(parts: &[(usize, f32)]) -> Vec<f32> {
     let mut v = vec![0.0f32; 64];
     for (i, x) in parts {

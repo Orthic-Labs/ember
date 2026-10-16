@@ -2162,5 +2162,15 @@
   "⌘-drag to straighten, ⇧G Guided Upright, a grid while transforming.": "⌘-arrastrar para enderezar, ⇧G Vertical guiada, una cuadrícula al transformar.",
   "imported earlier switch over with Photo ▸ Reload from Disk.": "importadas antes cambian al usar Foto → Recargar desde el disco.",
   "Canon EOS R5 Mark II C-RAW files that opened as \"preview only\" (more than half of them, depending on the": "Archivos C-RAW de Canon EOS R5 Mark II que se abrían como “solo vista previa” (más de la mitad, según la",
-  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "escena) ahora se revelan a partir de los datos de su sensor con todas las herramientas de edición, como los demás RAW de la cámara. Las fotos"
+  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "escena) ahora se revelan a partir de los datos de su sensor con todas las herramientas de edición, como los demás RAW de la cámara. Las fotos",
+  "Find faces in photos automatically": "Buscar caras en las fotos automáticamente",
+  "Looks for faces in photos that have none, while recognition runs. Finding them needs the detector below.": "Mientras el reconocimiento está activo, busca caras en las fotos que no tienen ninguna. Para encontrarlas hace falta el detector de abajo.",
+  "Use the model's own match strictness": "Usar la exigencia de coincidencia propia del modelo",
+  "Match strictness": "Exigencia de coincidencia",
+  "Higher is stricter: fewer suggestions, each one surer.": "Más alto es más estricto: menos sugerencias, cada una más segura.",
+  "Your face data": "Tus datos faciales",
+  "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "Olvidar borra todas las incrustaciones faciales y las caras encontradas automáticamente sin nombre, y desactiva el reconocimiento. Las caras con nombre se conservan.",
+  "Forget All Face Data…": "Olvidar todos los datos faciales…",
+  "Forget": "Olvidar",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "Se olvidaron {embeddings} incrustaciones faciales y {regions} caras sin nombre."
 }

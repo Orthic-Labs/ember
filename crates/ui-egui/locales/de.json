@@ -2163,5 +2163,15 @@
   "Suggests who is in a photo from the faces you have named. Everything stays on your computer.": "Schlägt vor, wer auf einem Foto zu sehen ist, anhand der Gesichter, die Sie benannt haben. Alles bleibt auf Ihrem Computer.",
   "This build cannot run recognition models: they can be added and chosen, not used.": "Diese Version kann Erkennungsmodelle nicht ausführen: Sie können hinzugefügt und gewählt, aber nicht verwendet werden.",
   "Detect Faces (Photo menu) needs it: a small one-time download.": "„Gesichter erkennen“ (Menü Foto) benötigt es: ein kleiner Download, einmalig.",
-  "Face names written to XMP by Lightroom and other apps show up here.": "In XMP von Lightroom und anderen Apps geschriebene Gesichtsnamen erscheinen hier."
+  "Face names written to XMP by Lightroom and other apps show up here.": "In XMP von Lightroom und anderen Apps geschriebene Gesichtsnamen erscheinen hier.",
+  "Find faces in photos automatically": "Gesichter in Fotos automatisch finden",
+  "Looks for faces in photos that have none, while recognition runs. Finding them needs the detector below.": "Sucht bei laufender Erkennung in Fotos ohne Gesichter nach Gesichtern. Dafür braucht es den unten stehenden Detektor.",
+  "Use the model's own match strictness": "Die Übereinstimmungsstrenge des Modells verwenden",
+  "Match strictness": "Übereinstimmungsstrenge",
+  "Higher is stricter: fewer suggestions, each one surer.": "Höher heißt strenger: weniger Vorschläge, jeder sicherer.",
+  "Your face data": "Deine Gesichtsdaten",
+  "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "Beim Vergessen werden alle Gesichts-Einbettungen und die automatisch gefundenen, unbenannten Gesichter gelöscht, und die Erkennung wird ausgeschaltet. Benannte Gesichter bleiben.",
+  "Forget All Face Data…": "Alle Gesichtsdaten vergessen…",
+  "Forget": "Vergessen",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "{embeddings} Gesichts-Einbettungen und {regions} unbenannte Gesichter vergessen."
 }

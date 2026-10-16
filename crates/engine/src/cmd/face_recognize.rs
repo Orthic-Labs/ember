@@ -254,7 +254,7 @@ mod imp {
 
     use super::super::bad;
     use super::super::face_detect::{LABEL, MARK};
-    use super::super::face_models::{finish_downloads, installed_models, read_settings};
+    use super::super::face_models::{finish_downloads, installed_models, read_settings, write_settings};
     use super::Similar;
     use crate::faces_worker::{Done, EDGE, PREFETCH, Pace, Prepared, Worker, max_workers, process, target_workers};
     use crate::{Result, Session};
@@ -331,7 +331,8 @@ mod imp {
             photo.meta.regions.iter().filter(|r| r.kind == RegionKind::Face && s.faces.index.needs(id.0, &r.rect)).map(|r| r.rect).collect();
         // finding faces needs the detector the user may not have downloaded: such a photo is left unsearched, not marked as searched
         let detector = crate::cmd::face_detect::detector(s).ok();
-        let detect = search && detector.is_some() && needs_search(s, &photo);
+        // automatic finding can be switched off (faces.preferences); Detect Faces always works
+        let detect = search && detector.is_some() && needs_search(s, &photo) && s.face_models_dir.as_deref().is_none_or(|d| read_settings(d).detect);
         if todo.is_empty() && !detect {
             return None;
         }
@@ -819,7 +820,9 @@ mod imp {
         let targets = s.targets(p)?;
         let model_threshold = embedder.manifest().thresholds.match_cosine;
         let num = |k: &str| p.get(k).and_then(Value::as_f64).filter(|v| v.is_finite()).map(|v| v as f32);
-        let threshold = num("threshold").or(model_threshold).unwrap_or(DEFAULT_THRESHOLD);
+        // a threshold given with the call wins, then the one saved by faces.preferences, then the model's own
+        let saved = s.face_models_dir.as_deref().and_then(|d| read_settings(d).threshold);
+        let threshold = num("threshold").or(saved).or(model_threshold).unwrap_or(DEFAULT_THRESHOLD);
         let margin = num("margin").unwrap_or(DEFAULT_MARGIN);
         // the photos asked about are embedded first, then the named faces they are compared with, within the budget
         let budget = Duration::from_millis(p.get("budgetMs").and_then(Value::as_u64).unwrap_or(1500).min(600_000));
@@ -873,6 +876,82 @@ mod imp {
             json!({"model": s.faces.index.tag, "threshold": threshold, "margin": margin, "galleryFaces": gallery.len(), "pendingPhotos": pending_photos, "photos": photos}),
         )
     }
+    /// An unnamed face the detector found: the only kind of region forgetting removes.
+    fn unnamed_detection(r: &Region) -> bool {
+        r.kind == RegionKind::Face && r.name.is_none() && super::super::face_detect::is_detected(r)
+    }
+
+    /// `faces.forget`: all face data goes. Every embedding and the record of which photos were searched are deleted from
+    /// the library folder, the unnamed faces the detector found are removed as one undo step (named faces, drawn ones and
+    /// those from XMP stay), and recognition is switched off so the background scan does not rebuild the data by itself.
+    pub fn forget(s: &mut Session, _: &Value) -> Result<Value> {
+        let embeddings = s.faces.index.len();
+        let scanned = s.faces.scanned.len();
+        let dir = s.library.as_ref().filter(|l| l.on_disk).map(|l| l.dir.clone());
+        let scan_path = dir.as_ref().map(|d| d.join("face-scanned.bin"));
+        // what is still unwritten goes to the files first; both records are then cleared in memory
+        let (tag, dim, index_path) = (s.faces.index.tag.clone(), s.faces.index.dim, s.faces.index.path.clone());
+        s.faces.index.reset(&tag, dim, None);
+        s.faces.index.path = index_path;
+        s.faces.scanned.reset(None);
+        let mut files = 0;
+        if let Some(dir) = &dir
+            && let Ok(entries) = std::fs::read_dir(dir)
+        {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let ours = name == "face-scanned.bin" || (name.starts_with("face-embeddings-") && name.ends_with(".bin"));
+                if ours && std::fs::remove_file(entry.path()).is_ok() {
+                    files += 1;
+                }
+            }
+        }
+        s.faces.scanned.reset(scan_path);
+        s.faces.scan_failed.clear();
+        s.faces.queue.clear();
+        s.faces.queue_stamp = None;
+        s.faces.in_flight.clear();
+        // work begun for the data just forgotten is dropped when it arrives
+        s.faces.epoch += 1;
+        let mut ops = Vec::new();
+        let (mut regions, mut photos) = (0usize, 0usize);
+        for photo in s.catalog.photos() {
+            let n = photo.meta.regions.iter().filter(|r| unnamed_detection(r)).count();
+            if n == 0 {
+                continue;
+            }
+            let mut meta = photo.meta.clone();
+            meta.regions.retain(|r| !unnamed_detection(r));
+            regions += n;
+            photos += 1;
+            ops.push(Op::SetMeta { id: photo.id, meta: Box::new(meta) });
+        }
+        if !ops.is_empty() {
+            s.commit("Forget Face Data", Op::Batch { ops })?;
+            // regions are not written to XMP, so no sidecar is rewritten
+            s.skip_auto_write = true;
+        }
+        let was_on = match s.face_models_dir.clone() {
+            Some(d) => {
+                let mut st = read_settings(&d);
+                let was = st.enabled;
+                st.enabled = false;
+                write_settings(&d, &st)?;
+                was
+            }
+            None => false,
+        };
+        s.faces.enabled_seen = None;
+        Ok(json!({
+            "embeddings": embeddings,
+            "scannedPhotos": scanned,
+            "unnamedRegions": regions,
+            "photos": photos,
+            "filesRemoved": files,
+            "recognitionWasOn": was_on,
+        }))
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -1030,6 +1109,10 @@ mod imp {
         Ok(serde_json::json!({"active": false}))
     }
 
+    pub fn forget(_: &mut Session, _: &Value) -> Result<Value> {
+        Err(bad("faces.forget", "this build cannot run face recognition"))
+    }
+
     pub fn similar(_: &mut Session, _: &str, _: usize) -> super::Similar {
         super::Similar { items: Vec::new(), ready: false, pending: 0 }
     }
@@ -1085,6 +1168,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{limit?: 600} → {total, faces: [{photo, index, rect, view, suggestion: {name, score} | null}], ordered, ready} — the faces nobody has named; with recognition running, look-alikes are next to each other and a face the named ones recognise carries the name they suggest. `view` is the box to show the face by. Name them with `faces.nameFaces`",
             super::always,
             unnamed
+        ),
+        cmd!(
+            "faces.forget",
+            "Forget Face Data",
+            [],
+            None,
+            "{} → {embeddings, scannedPhotos, unnamedRegions, photos, filesRemoved, recognitionWasOn} — forget all face data: every embedding and the record of which photos were searched are deleted from the library folder, and the unnamed faces the detector found are removed as one undo step (named faces, drawn ones and those from XMP stay). Face recognition is switched off, so the background scan does not rebuild the data by itself",
+            super::always,
+            imp::forget
         ),
         cmd!(
             "faces.nameFaces",

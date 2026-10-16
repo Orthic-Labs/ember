@@ -2164,5 +2164,15 @@
   "⌘-drag to straighten, ⇧G Guided Upright, a grid while transforming.": "⌘-拖动以拉直，⇧G 引导式透视校正，变换时显示网格。",
   "imported earlier switch over with Photo ▸ Reload from Disk.": "之前导入的照片通过 照片 → 从磁盘重新读取 切换过来。",
   "Canon EOS R5 Mark II C-RAW files that opened as \"preview only\" (more than half of them, depending on the": "以“仅预览”方式打开的 Canon EOS R5 Mark II C-RAW 文件（超过一半，取决于",
-  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "场景）现在与相机的其他原始文件一样，可通过所有编辑工具从传感器数据进行处理。照片"
+  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "场景）现在与相机的其他原始文件一样，可通过所有编辑工具从传感器数据进行处理。照片",
+  "Find faces in photos automatically": "自动在照片中查找人脸",
+  "Looks for faces in photos that have none, while recognition runs. Finding them needs the detector below.": "识别运行时，在尚无人脸的照片中查找人脸。查找需要下方的检测器。",
+  "Use the model's own match strictness": "使用模型自带的匹配严格度",
+  "Match strictness": "匹配严格度",
+  "Higher is stricter: fewer suggestions, each one surer.": "数值越高越严格：建议更少，但每条更可靠。",
+  "Your face data": "人脸数据",
+  "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "忘记将删除所有人脸嵌入数据和自动找到的未命名人脸，并关闭识别。已命名的人脸保留。",
+  "Forget All Face Data…": "忘记所有人脸数据…",
+  "Forget": "忘记",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "已忘记 {embeddings} 个人脸嵌入数据和 {regions} 个未命名人脸。"
 }

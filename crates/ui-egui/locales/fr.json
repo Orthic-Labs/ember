@@ -2162,5 +2162,15 @@
   "⌘-drag to straighten, ⇧G Guided Upright, a grid while transforming.": "⌘-glisser pour redresser, ⇧G Verticales guidées, une grille pendant la transformation.",
   "imported earlier switch over with Photo ▸ Reload from Disk.": "importées précédemment basculent avec Photo → Recharger depuis le disque.",
   "Canon EOS R5 Mark II C-RAW files that opened as \"preview only\" (more than half of them, depending on the": "Les fichiers C-RAW du Canon EOS R5 Mark II qui s'ouvraient en « aperçu uniquement » (plus de la moitié d'entre eux, selon la",
-  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "scène) se développent désormais à partir de leurs données de capteur avec tous les outils de retouche, comme les autres RAW de l'appareil. Les photos"
+  "scene) now develop from their sensor data with every editing tool, like the camera's other raws. Photos": "scène) se développent désormais à partir de leurs données de capteur avec tous les outils de retouche, comme les autres RAW de l'appareil. Les photos",
+  "Find faces in photos automatically": "Trouver automatiquement les visages dans les photos",
+  "Looks for faces in photos that have none, while recognition runs. Finding them needs the detector below.": "Pendant que la reconnaissance tourne, recherche des visages dans les photos qui n'en ont pas. Le détecteur ci-dessous est nécessaire pour les trouver.",
+  "Use the model's own match strictness": "Utiliser la rigueur de correspondance propre au modèle",
+  "Match strictness": "Rigueur de correspondance",
+  "Higher is stricter: fewer suggestions, each one surer.": "Plus haut = plus strict : moins de suggestions, chacune plus sûre.",
+  "Your face data": "Vos données de visages",
+  "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.": "Oublier supprime toutes les empreintes de visages et les visages trouvés automatiquement sans nom, et désactive la reconnaissance. Les visages nommés sont conservés.",
+  "Forget All Face Data…": "Oublier toutes les données de visages…",
+  "Forget": "Oublier",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "{embeddings} empreintes de visages et {regions} visages sans nom oubliés."
 }
