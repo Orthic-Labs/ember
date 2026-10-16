@@ -699,10 +699,8 @@ fn regions_block(x: &mut String, meta: &Metadata) {
         return;
     }
     let quarter = std::f64::consts::FRAC_PI_2;
-    let turn = match meta.orientation.map(Orientation::to_exif) {
-        Some(v @ (3 | 6 | 8)) => v,
-        _ => 0,
-    };
+    // Only the pure rotations turn the boxes; mirrored orientations are written as stored.
+    let turn = meta.orientation.map(Orientation::to_exif).filter(|v| matches!(v, 3 | 6 | 8)).unwrap_or(0);
     x.push_str("   <mwg-rs:Regions rdf:parseType=\"Resource\">\n");
     if let (Some(w), Some(h)) = (meta.width, meta.height) {
         x.push_str(&format!("    <mwg-rs:AppliedToDimensions rdf:parseType=\"Resource\" stDim:w=\"{w}\" stDim:h=\"{h}\" stDim:unit=\"pixel\"/>\n"));
