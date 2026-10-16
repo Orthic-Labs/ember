@@ -624,6 +624,6 @@ mod tests {
                 assert!(catalog.contains_key(label), "{code}: “{label}”");
             }
         }
-        assert_eq!(Locale::ALL.len(), 12, "a language added: list its file above");
+        assert_eq!(Locale::ALL.len(), 13, "a language added: list its file above");
     }
 }

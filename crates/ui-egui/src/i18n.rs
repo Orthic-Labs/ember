@@ -128,6 +128,7 @@ language_table! {
     Uk, "uk", "Українська", "Cyrl", include_str!("../locales/uk.json");
     Id, "id", "Bahasa Indonesia", "Latn", include_str!("../locales/id.json");
     Vi, "vi", "Tiếng Việt", "Latn", include_str!("../locales/vi.json");
+    Ko, "ko", "한국어", "Kore", include_str!("../locales/ko.json");
 }
 
 // The settings file stores the BCP-47 code (`"zh-hans"`), never the Rust variant name, so a
@@ -671,6 +672,7 @@ mod tests {
             ("app.language.ukrainian", Locale::Uk),
             ("app.language.indonesian", Locale::Id),
             ("app.language.vietnamese", Locale::Vi),
+            ("app.language.korean", Locale::Ko),
         ];
         // One command per language, and every command reachable from the menu table.
         assert_eq!(commands.len(), Locale::ALL.len());

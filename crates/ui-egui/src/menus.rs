@@ -26,6 +26,7 @@ pub const LANGUAGE_COMMANDS: &[UiCommand] = &[
     ("app.language.ukrainian", crate::i18n::Locale::Uk.name(), None, "Edit>Language"),
     ("app.language.indonesian", crate::i18n::Locale::Id.name(), None, "Edit>Language"),
     ("app.language.vietnamese", crate::i18n::Locale::Vi.name(), None, "Edit>Language"),
+    ("app.language.korean", crate::i18n::Locale::Ko.name(), None, "Edit>Language"),
 ];
 
 /// Every UI command: the languages, then everything else. `xtask parity` reads both tables from
@@ -50,6 +51,7 @@ pub fn language_from_command(id: &str) -> Option<crate::i18n::Locale> {
         "app.language.ukrainian" => Some(crate::i18n::Locale::Uk),
         "app.language.indonesian" => Some(crate::i18n::Locale::Id),
         "app.language.vietnamese" => Some(crate::i18n::Locale::Vi),
+        "app.language.korean" => Some(crate::i18n::Locale::Ko),
         _ => None,
     }
 }
