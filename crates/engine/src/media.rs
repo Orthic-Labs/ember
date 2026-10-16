@@ -371,6 +371,12 @@ pub struct MediaCache {
     /// photo with the default key has no entry); a photo whose key no longer agrees has its decoded sources dropped
     /// ([`Self::sync_source_key`]).
     source_keys: HashMap<PhotoId, SourceKey>,
+    /// Photos whose raw denoise strength is being dragged (an open interaction): their sources keep the strength they
+    /// were last decoded with, so scrubbing the slider decodes nothing; the release is the one decode ([`Self::set_held`]).
+    held: std::collections::HashSet<PhotoId>,
+    /// Per photo, the raw denoise strength its sources are wanted at now: a queued load for another strength gives up
+    /// before it decodes ([`Self::raw_denoise_file_loader`]).
+    raw_wanted: HashMap<PhotoId, Arc<std::sync::atomic::AtomicU8>>,
     pub file_probe: Option<FileProbe>,
     pub preview_loader: Option<PreviewLoader>,
     /// Reads a photo file's bytes (Photo Merge); `None` = the local file system.
@@ -450,6 +456,8 @@ impl Default for MediaCache {
             raw_denoise_loader: None,
             activity: None,
             source_keys: Default::default(),
+            held: Default::default(),
+            raw_wanted: Default::default(),
             file_probe: None,
             preview_loader: None,
             file_bytes: None,
@@ -708,10 +716,27 @@ impl MediaCache {
     /// The key photo `p`'s decoded sources are made with: Raw Details when its setting is on and this build can, and the
     /// quantised raw denoise strength when it is on and this build can. The default key (both off) is the old one.
     pub fn source_key(&self, p: &Photo) -> SourceKey {
-        SourceKey {
-            detail: p.develop.enhance.raw_details && self.file_loader_detailed.is_some(),
-            raw_denoise: if self.raw_denoise_loader.is_some() { SourceKey::raw_denoise_of(&p.develop) } else { 0 },
-        }
+        let raw_denoise = if self.raw_denoise_loader.is_none() {
+            0
+        } else if self.held.contains(&p.id) {
+            // mid-drag: the strength the sources were last made with, not the one under the slider
+            self.source_keys.get(&p.id).map_or(0, |k| k.raw_denoise)
+        } else {
+            SourceKey::raw_denoise_of(&p.develop)
+        };
+        SourceKey { detail: p.develop.enhance.raw_details && self.file_loader_detailed.is_some(), raw_denoise }
+    }
+
+    /// The photos whose settings are being dragged (see [`Self::held`]): until they are let go, a changed raw denoise
+    /// strength neither drops their decoded sources nor starts another decode.
+    pub fn set_held(&mut self, ids: impl IntoIterator<Item = PhotoId>) {
+        self.held.clear();
+        self.held.extend(ids);
+    }
+
+    /// The cell holding the strength photo `id`'s sources are wanted at.
+    fn raw_wanted_cell(&mut self, id: PhotoId) -> Arc<std::sync::atomic::AtomicU8> {
+        self.raw_wanted.entry(id).or_default().clone()
     }
 
     /// What a decoded source of photo `p` is accepted into the cache by: its file's content, and its [`SourceKey`] when that
@@ -738,17 +763,26 @@ impl MediaCache {
             } else {
                 self.source_keys.insert(p.id, want);
             }
+            // a load still queued for the strength before gives up when it starts
+            self.raw_wanted_cell(p.id).store(want.raw_denoise, std::sync::atomic::Ordering::Relaxed);
         }
         want
     }
 
     /// The loader of photos with Raw Noise Reduction `strength` (`1..=100`, with Raw Details when `detail`): the denoising
     /// loader, which holds an activity row while it works on anything larger than a thumbnail.
-    fn raw_denoise_file_loader(&self, detail: bool, strength: u8) -> Option<FileLoader> {
+    fn raw_denoise_file_loader(&mut self, id: PhotoId, detail: bool, strength: u8) -> Option<FileLoader> {
         let make = self.raw_denoise_loader.as_ref()?;
         let inner = make(detail, f64::from(strength));
         let activity = self.activity.clone();
+        let wanted = self.raw_wanted_cell(id);
         Some(Arc::new(move |path: &str, max_edge: usize| {
+            // Superseded while it waited its turn: the strength moved on, and what this would make is refused when it
+            // lands ([`Media::source_identity`]). A decode already running is not interrupted (the denoiser has no cancel
+            // point); its result is discarded.
+            if max_edge > crate::files::RAW_SMALL_EDGE && wanted.load(std::sync::atomic::Ordering::Relaxed) != strength {
+                return Err("raw noise reduction changed before the decode started".into());
+            }
             let _task = activity
                 .as_ref()
                 .filter(|_| max_edge > crate::files::RAW_SMALL_EDGE)
@@ -762,7 +796,7 @@ impl MediaCache {
         let mut r = self.source_ref_plain(p, level, cached);
         if key.raw_denoise > 0
             && let SourceRef::File { loader: loader @ Some(_), .. } = &mut r
-            && let Some(l) = self.raw_denoise_file_loader(key.detail, key.raw_denoise)
+            && let Some(l) = self.raw_denoise_file_loader(p.id, key.detail, key.raw_denoise)
         {
             *loader = Some(l);
         } else if key.detail
@@ -1267,16 +1301,24 @@ pub fn source_info(p: &Photo) -> SourceInfo {
 }
 
 impl crate::Session {
+    /// Tells the decoded-source cache which photos are being dragged (an open interaction), so a raw denoise strength
+    /// scrubbed under the slider re-decodes nothing until it is let go ([`Media::set_held`]). Called before any source is
+    /// asked for or accepted; an export never holds ([`Self::export_job`]).
+    pub(crate) fn sync_hold(&mut self) {
+        let ids: Vec<PhotoId> = self.interaction.iter().flat_map(|i| i.originals.iter().map(|(id, _)| *id)).collect();
+        self.media.set_held(ids);
+    }
+
     /// Build a render job for `id` fitting `max_w × max_h`. `before` renders the unedited look.
     pub fn render_job(&mut self, id: PhotoId, max_w: usize, max_h: usize, before: bool, apply_crop: bool) -> Option<RenderJob> {
-        self.build_job(id, max_w, max_h, before, apply_crop, None)
+        self.build_job(id, max_w, max_h, before, apply_crop, None, true)
     }
 
     /// A grid/filmstrip thumbnail job: the long edge is rounded up to one of [`THUMB_SIZES`]
     /// (≥ `long_edge`) and the result comes from / goes to the thumbnail cache (memory + disk).
     pub fn thumb_job(&mut self, id: PhotoId, long_edge: usize) -> Option<RenderJob> {
         let b = thumb_bucket(long_edge);
-        self.build_job(id, b, b, false, true, Some(b))
+        self.build_job(id, b, b, false, true, Some(b), true)
     }
 
     fn build_job(
@@ -1287,7 +1329,13 @@ impl crate::Session {
         before: bool,
         apply_crop: bool,
         thumb_bucket: Option<usize>,
+        hold: bool,
     ) -> Option<RenderJob> {
+        if hold {
+            self.sync_hold();
+        } else {
+            self.media.set_held([]);
+        }
         let p = self.catalog.photo(id)?.clone();
         let settings = if before { Arc::new(self.before_settings(&p)) } else { p.develop.clone() };
         let level = SourceLevel::for_size(if thumb_bucket.is_some() {
@@ -1369,6 +1417,7 @@ impl crate::Session {
     /// hash, so a variant renders once; `key` is derived from the same hash, so a frontend can
     /// keep one texture per variant.
     pub fn variant_job(&mut self, id: PhotoId, settings: &DevelopSettings, edge: usize) -> Option<RenderJob> {
+        self.sync_hold();
         let p = self.catalog.photo(id)?.clone();
         let edge = edge.clamp(16, SourceLevel::Thumb.max_edge());
         let level = SourceLevel::Thumb;
@@ -1398,6 +1447,7 @@ impl crate::Session {
     /// `edge` pixels across (≤ 512). The source level is the smallest that keeps the face sharp, up
     /// to the preview. Cached like [`Self::variant_job`], and `key` likewise follows the content.
     pub fn face_job(&mut self, id: PhotoId, face: lightcraft_geom::Rect, edge: usize) -> Option<RenderJob> {
+        self.sync_hold();
         let p = self.catalog.photo(id)?.clone();
         // `face` is on the upright (EXIF-oriented) photo; the crop below is in the frame after the
         // user's Rotate Left/Right, so carry the box (and the photo's size) over to it.
@@ -1595,6 +1645,7 @@ impl crate::Session {
     /// Accept a finished job's loaded source into the cache. What the decode learnt about the file that the catalog
     /// has wrong is corrected too ([`Self::learn_as_shot_wb`]).
     pub fn accept(&mut self, r: &RenderResult) {
+        self.sync_hold();
         if let Some(src) = &r.loaded
             && r.source_key.is_none_or(|key| self.catalog.photo(r.photo).is_some_and(|p| self.media.source_identity(p) == key))
         {
@@ -1656,7 +1707,8 @@ impl crate::Session {
         space: lightcraft_pipeline::OutputSpace,
         depth: lightcraft_pipeline::OutputDepth,
     ) -> Result<RenderJob, String> {
-        let mut job = self.render_job(id, max_w, max_h, false, true).ok_or("no such photo")?;
+        // An export is made from the committed strength, never from what a slider drag holds the cache at.
+        let mut job = self.build_job(id, max_w, max_h, false, true, None, false).ok_or("no such photo")?;
         // An export is made from the denoised picture its Denoise amount asks for, made when the job runs if the
         // background queue has not got to it. (A source kept in memory may lack the picture, so the job reads the file.)
         if let Some(wanted) = self.denoise_for_export(id, &job.settings)? {
@@ -1685,6 +1737,7 @@ impl crate::Session {
 
     /// The source proxy for pixel-statistics commands (auto tone/WB), loading synchronously.
     pub fn source_now(&mut self, id: PhotoId, level: SourceLevel) -> Result<Arc<Rgb32f>, String> {
+        self.sync_hold();
         let p = self.catalog.photo(id).ok_or("no such photo")?.clone();
         let r = self.media.source_ref(&p, level).load_source()?;
         let image = r.image.clone();
@@ -1978,6 +2031,95 @@ mod thumbnail_hash_tests {
         let fresh = s.thumb_job(PhotoId(1), 256).unwrap().run();
         s.accept(&fresh);
         assert_eq!(s.media.source_usage().0, 1);
+    }
+    /// A fake raw-denoise loader that records the strength of every decode it is asked for.
+    fn counting_denoiser(s: &mut crate::Session) -> Arc<std::sync::Mutex<Vec<u8>>> {
+        let plain: FileLoader = Arc::new(|_, _| Ok((Rgb32f::new(8, 8), SourceInfo::default())));
+        s.media.file_loader = Some(plain);
+        let decoded: Arc<std::sync::Mutex<Vec<u8>>> = Default::default();
+        let log = decoded.clone();
+        let denoising: RawDenoiseLoader = Arc::new(move |_, strength| {
+            let log = log.clone();
+            let load: FileLoader = Arc::new(move |_, _| {
+                log.lock().unwrap().push(strength as u8);
+                Ok((Rgb32f::new(9, 9), SourceInfo::default()))
+            });
+            load
+        });
+        s.media.raw_denoise_loader = Some(denoising);
+        decoded
+    }
+    fn set_strength(s: &mut crate::Session, strength: f64) {
+        let mut d = (*s.catalog.photo(PhotoId(1)).unwrap().develop).clone();
+        d.enhance.raw_denoise = strength;
+        s.set_develop(PhotoId(1), d, "Raw Noise Reduction").unwrap();
+    }
+    /// Scrubbing the Raw Noise Reduction slider (an open interaction) keeps rendering from the source decoded before the
+    /// drag; letting go decodes once, at the final strength.
+    #[test]
+    fn a_burst_of_raw_denoise_strengths_decodes_once_at_the_settled_one() {
+        let mut s = session();
+        let decoded = counting_denoiser(&mut s);
+        s.selection.active = Some(PhotoId(1));
+        set_strength(&mut s, 20.0);
+        let first = s.render_job(PhotoId(1), 256, 256, false, true).unwrap().run();
+        s.accept(&first);
+        assert_eq!(*decoded.lock().unwrap(), vec![20], "the first render decodes at the committed strength");
+        s.begin_interaction("Raw Noise Reduction").unwrap();
+        for strength in 21..=60 {
+            set_strength(&mut s, f64::from(strength));
+            let job = s.render_job(PhotoId(1), 256, 256, false, true).unwrap();
+            assert!(matches!(job.source, SourceRef::Loaded(_)), "strength {strength}: the drag renders from the cached source");
+            let r = job.run();
+            s.accept(&r);
+        }
+        assert_eq!(*decoded.lock().unwrap(), vec![20], "no decode while the slider moves");
+        s.end_interaction().unwrap();
+        let job = s.render_job(PhotoId(1), 256, 256, false, true).unwrap();
+        assert!(matches!(job.source, SourceRef::File { .. }), "the release asks for the one decode");
+        let r = job.run();
+        s.accept(&r);
+        assert_eq!(*decoded.lock().unwrap(), vec![20, 60], "one decode, at the final strength");
+        let again = s.render_job(PhotoId(1), 256, 256, false, true).unwrap();
+        assert!(matches!(again.source, SourceRef::Loaded(_)), "and it is cached for that strength");
+    }
+    /// A load made for the strength before the release lands as stale: it is refused, and a load still queued for it
+    /// gives up before it decodes.
+    #[test]
+    fn a_raw_denoise_decode_for_a_superseded_strength_is_refused_or_not_started() {
+        let mut s = session();
+        let decoded = counting_denoiser(&mut s);
+        set_strength(&mut s, 20.0);
+        let stale = s.render_job(PhotoId(1), 1500, 1500, false, true).unwrap();
+        let (queued, path) = match &stale.source {
+            SourceRef::File { loader: Some(l), path, .. } => (l.clone(), path.clone()),
+            _ => panic!("not a file source with a loader"),
+        };
+        set_strength(&mut s, 30.0);
+        let _fresh = s.render_job(PhotoId(1), 1500, 1500, false, true).unwrap();
+        assert!(queued(&path, 1500).is_err(), "the superseded load stops before decoding");
+        assert!(decoded.lock().unwrap().is_empty());
+        let level = stale.level;
+        s.accept(&stale.run());
+        assert!(!s.media.has_source(PhotoId(1), level), "and nothing it made is kept");
+    }
+    /// An export decodes at the strength its settings carry, even while a drag holds the cache at an older one.
+    #[test]
+    fn export_uses_the_current_raw_denoise_strength_while_a_newer_request_is_pending() {
+        let mut s = session();
+        let decoded = counting_denoiser(&mut s);
+        s.selection.active = Some(PhotoId(1));
+        set_strength(&mut s, 20.0);
+        let first = s.render_job(PhotoId(1), 256, 256, false, true).unwrap().run();
+        s.accept(&first);
+        s.begin_interaction("Raw Noise Reduction").unwrap();
+        set_strength(&mut s, 75.0);
+        let preview = s.render_job(PhotoId(1), 256, 256, false, true).unwrap();
+        assert!(matches!(preview.source, SourceRef::Loaded(_)), "the preview is held at the cached strength");
+        let job = s.export_job(PhotoId(1), 256, 256, lightcraft_pipeline::OutputSpace::Srgb, lightcraft_pipeline::OutputDepth::U8).unwrap();
+        assert!(matches!(job.source, SourceRef::File { .. }), "the export never takes the held source");
+        let _ = job.run();
+        assert_eq!(*decoded.lock().unwrap(), vec![20, 75], "the export decoded at 75");
     }
     /// A panic while rendering (here in the decoder) used to end the pool's worker thread without
     /// an answer, so the view that asked showed "Rendering…" forever. It is the job's failure now,
