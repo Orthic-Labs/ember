@@ -304,6 +304,8 @@ pub struct LightcraftApp {
     pub perf: Perf,
     /// macOS: the host draws the traffic lights over our top bar.
     pub integrated_titlebar: bool,
+    /// macOS: what a double-click on the top bar does (the system's "Double-click a window's title bar to" setting).
+    pub double_click_action: titlebar::DoubleClickAction,
     /// The host installed a native menu bar (no in-window menus then).
     pub native_menu: bool,
     /// Shortcuts the native menu bar currently handles (`Cmd+Z`, `G`…): the egui shortcut handler
@@ -453,6 +455,7 @@ impl LightcraftApp {
             perf: Perf::default(),
             caches: Caches::default(),
             integrated_titlebar: false,
+            double_click_action: titlebar::DoubleClickAction::default(),
             native_menu: false,
             native_shortcuts: Default::default(),
             recording_shortcut: None,

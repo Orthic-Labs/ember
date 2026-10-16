@@ -7,6 +7,7 @@ use egui::ViewportCommand;
 use serde_json::json;
 
 use crate::headless::Headless;
+use crate::titlebar::DoubleClickAction;
 use crate::{LightcraftApp, Services};
 
 const T: Duration = Duration::from_secs(20);
@@ -52,6 +53,28 @@ fn double_click_on_the_empty_bar_zooms_then_restores() {
     h.request("ui.click", json!({"x": p.x, "y": p.y, "count": 2}), T);
     play(&mut h);
     assert_eq!(h.window_commands, vec![ViewportCommand::Maximized(true), ViewportCommand::Maximized(false)]);
+}
+
+// Scenario: with the system's "Minimize" double-click action, double-clicking the empty bar minimizes the window
+#[test]
+fn double_click_on_the_empty_bar_minimizes_when_the_system_says_so() {
+    let mut h = integrated();
+    h.app.double_click_action = DoubleClickAction::Minimize;
+    let p = empty_spot(&h);
+    h.request("ui.click", json!({"x": p.x, "y": p.y, "count": 2}), T);
+    play(&mut h);
+    assert_eq!(h.window_commands, vec![ViewportCommand::Minimized(true)]);
+}
+
+// Scenario: with the system's "None" double-click action, double-clicking the empty bar does nothing
+#[test]
+fn double_click_on_the_empty_bar_does_nothing_when_the_system_says_so() {
+    let mut h = integrated();
+    h.app.double_click_action = DoubleClickAction::Nothing;
+    let p = empty_spot(&h);
+    h.request("ui.click", json!({"x": p.x, "y": p.y, "count": 2}), T);
+    play(&mut h);
+    assert!(h.window_commands.is_empty(), "{:?}", h.window_commands);
 }
 
 // Scenario: dragging the empty top bar starts a window move

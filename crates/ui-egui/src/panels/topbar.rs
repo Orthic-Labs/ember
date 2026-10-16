@@ -11,7 +11,7 @@ use crate::widgets::{icon_button, register};
 /// The bar doubles as the window's title bar: dragging its empty space moves the window and a
 /// double-click zooms or restores it. Registered before the bar's widgets so they win the click.
 fn window_handle(app: &LightcraftApp, ui: &mut egui::Ui, content: Rect, margin_left: f32, margin_right: f32) {
-    use crate::titlebar::{Gesture, WindowState, command_for};
+    use crate::titlebar::{Gesture, Hovered, WindowState, command_for, press_lands_on_widget};
     let bar = Rect::from_min_max(pos2(content.left() - margin_left, content.top()), pos2(content.right() + margin_right, content.bottom()));
     register(ui.ctx(), "region:titlebar", bar);
     let handle = egui::Id::new("titlebar-handle");
@@ -22,9 +22,14 @@ fn window_handle(app: &LightcraftApp, ui: &mut egui::Ui, content: Rect, margin_l
     let memo = egui::Id::new("titlebar-press-on-widget");
     if resp.is_pointer_button_down_on() && ctx.input(|i| i.pointer.primary_pressed()) {
         let hovered = ctx.interaction_snapshot(|s| s.hovered.clone());
-        let on_widget =
-            hovered.iter().any(|id| *id != handle && ctx.read_response(*id).is_some_and(|r| r.sense.senses_click() || r.sense.senses_drag()));
-        ctx.data_mut(|d| d.insert_temp(memo, on_widget));
+        let hits: Vec<Hovered> = hovered
+            .iter()
+            .map(|id| {
+                let senses_pointer = ctx.read_response(*id).is_some_and(|r| r.sense.senses_click() || r.sense.senses_drag());
+                Hovered { is_handle: *id == handle, senses_pointer }
+            })
+            .collect();
+        ctx.data_mut(|d| d.insert_temp(memo, press_lands_on_widget(&hits)));
     }
     let on_widget = ctx.data(|d| d.get_temp::<bool>(memo)).unwrap_or(false);
     let gesture = if resp.double_clicked_by(egui::PointerButton::Primary) {
@@ -36,7 +41,7 @@ fn window_handle(app: &LightcraftApp, ui: &mut egui::Ui, content: Rect, margin_l
     };
     if let Some(g) = gesture {
         let window = WindowState { maximized: ui.input(|i| i.viewport().maximized).unwrap_or(false), fullscreen: app.window_is_fullscreen };
-        if let Some(cmd) = command_for(g, window) {
+        if let Some(cmd) = command_for(g, window, app.double_click_action) {
             ui.ctx().send_viewport_cmd(cmd);
         }
     }

@@ -103,6 +103,21 @@ impl eframe::App for App {
     }
 }
 
+/// The macOS "Double-click a window's title bar to" choice (`AppleActionOnDoubleClick`), read at start-up. The bar
+/// keeps zooming when the value is missing.
+#[cfg(target_os = "macos")]
+fn double_click_action() -> lightcraft_ui_egui::titlebar::DoubleClickAction {
+    use objc2_foundation::{NSString, NSUserDefaults};
+    let key = NSString::from_str("AppleActionOnDoubleClick");
+    let value = NSUserDefaults::standardUserDefaults().stringForKey(&key).map(|v| v.to_string());
+    lightcraft_ui_egui::titlebar::parse_double_click_action(value.as_deref())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn double_click_action() -> lightcraft_ui_egui::titlebar::DoubleClickAction {
+    lightcraft_ui_egui::titlebar::DoubleClickAction::default()
+}
+
 /// The window's renderer (egui-wgpu): eframe's defaults, with Ember's backend choice — DX12
 /// alone on Windows unless `LIGHTCRAFT_GPU_BACKEND` / `WGPU_BACKEND` say otherwise (issue #136:
 /// with Vulkan in the set, wgpu loads the Vulkan driver even when it then picks DX12).
@@ -897,6 +912,7 @@ fn main() -> eframe::Result {
                 }
                 lightcraft_ui_egui::i18n::set_language(app.ui.language);
                 app.integrated_titlebar = cfg!(target_os = "macos");
+                app.double_click_action = double_click_action();
                 app.notices.extend(prefs_warning);
                 app.notices.extend(launch_notices);
                 app.notices.extend(window_notice);
