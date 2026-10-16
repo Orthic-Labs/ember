@@ -15,16 +15,15 @@
 //! and only then does a small pointer file ([`ACTIVE_LIBRARY`]) switch to the restored library.
 //! The library that was there before stays in storage.
 //!
-//! No zip64: a backup holds at most [`MAX_BYTES`] and 65 535 entries.
+//! Backups past 4 GB or 65 535 entries are written as zip64 (the end record and each entry that
+//! needs it carry the 64-bit fields) and read back the same way; one entry is still at most 4 GB,
+//! since each is held in memory whole. Restores read at most [`MAX_RESTORE_ENTRY_BYTES`] per entry.
 
 /// Storage key of the file naming the library folder in use (absent: `library`).
 pub const ACTIVE_LIBRARY: &str = "active-library";
 
 /// The default library folder.
 pub const DEFAULT_LIBRARY_DIR: &str = "library";
-
-/// Largest backup (offsets are 32-bit without zip64).
-pub const MAX_BYTES: u64 = 0xFFFF_FFFF - (64 << 20);
 
 /// Largest single entry restore reads into memory. Browser restores are deliberately bounded
 /// per entry even though the zip format itself allows almost 4 GiB entries.
@@ -36,6 +35,14 @@ pub const MAX_RESTORE_DIRECTORY_BYTES: u64 = 64 << 20;
 const LOCAL_SIG: u32 = 0x0403_4b50;
 const CENTRAL_SIG: u32 = 0x0201_4b50;
 const END_SIG: u32 = 0x0605_4b50;
+const END64_SIG: u32 = 0x0606_4b50;
+const LOC64_SIG: u32 = 0x0706_4b50;
+/// Header id of the zip64 extra field.
+const ZIP64_EXTRA: u16 = 1;
+/// A 32-bit field holding this says "see the zip64 field".
+const SAT32: u32 = u32::MAX;
+/// A 16-bit count holding this says "see the zip64 field".
+const SAT16: u16 = u16::MAX;
 /// General-purpose flag bit 11: names are UTF-8.
 const UTF8: u16 = 0x0800;
 /// 1980-01-01 00:00 in MS-DOS format (date, time).
@@ -83,12 +90,15 @@ fn u16le(v: &mut Vec<u8>, x: u16) {
 fn u32le(v: &mut Vec<u8>, x: u32) {
     v.extend_from_slice(&x.to_le_bytes());
 }
+fn u64le(v: &mut Vec<u8>, x: u64) {
+    v.extend_from_slice(&x.to_le_bytes());
+}
 
 struct Central {
     name: String,
     crc: u32,
     size: u32,
-    offset: u32,
+    offset: u64,
 }
 
 /// Writes a stored (uncompressed) zip piece by piece: [`ZipWriter::entry`] returns the local
@@ -104,14 +114,9 @@ impl ZipWriter {
     pub fn entry(&mut self, name: &str, data: &[u8]) -> Result<Vec<u8>, String> {
         let size = u32::try_from(data.len()).map_err(|_| format!("{name}: larger than 4 GB"))?;
         let name_len = u16::try_from(name.len()).map_err(|_| format!("{name}: name too long"))?;
-        if self.entries.len() >= usize::from(u16::MAX) {
-            return Err("too many files for one backup".into());
-        }
         let header_len = 30 + u64::from(name_len);
-        if self.offset + header_len + u64::from(size) > MAX_BYTES {
-            return Err("the library is too large for one backup file (4 GB)".into());
-        }
-        let offset = u32::try_from(self.offset).map_err(|_| "backup too large".to_string())?;
+        let end = self.offset.checked_add(header_len + u64::from(size)).ok_or("the library is too large for one backup file")?;
+        let offset = self.offset;
         let crc = crc32fast::hash(data);
         let mut h = Vec::with_capacity(header_len as usize);
         u32le(&mut h, LOCAL_SIG);
@@ -126,18 +131,20 @@ impl ZipWriter {
         u16le(&mut h, name_len);
         u16le(&mut h, 0); // extra
         h.extend_from_slice(name.as_bytes());
-        self.offset += header_len + u64::from(size);
+        self.offset = end;
         self.entries.push(Central { name: name.to_string(), crc, size, offset });
         Ok(h)
     }
 
-    /// The central directory and end record (emit last).
+    /// The central directory and end record (emit last). Entries past 4 GB, and a directory that
+    /// needs it, get zip64 fields.
     pub fn finish(self) -> Result<Vec<u8>, String> {
         let mut cd = Vec::new();
         for e in &self.entries {
+            let big = e.offset >= u64::from(SAT32);
             u32le(&mut cd, CENTRAL_SIG);
-            u16le(&mut cd, 20); // made by
-            u16le(&mut cd, 20); // needed
+            u16le(&mut cd, if big { 45 } else { 20 }); // made by
+            u16le(&mut cd, if big { 45 } else { 20 }); // needed
             u16le(&mut cd, UTF8);
             u16le(&mut cd, 0);
             u16le(&mut cd, 0);
@@ -145,26 +152,57 @@ impl ZipWriter {
             u32le(&mut cd, e.crc);
             u32le(&mut cd, e.size);
             u32le(&mut cd, e.size);
-            u16le(&mut cd, e.name.len() as u16);
-            u16le(&mut cd, 0); // extra
+            u16le(&mut cd, u16::try_from(e.name.len()).map_err(|_| format!("{}: name too long", e.name))?);
+            u16le(&mut cd, if big { 12 } else { 0 }); // extra
             u16le(&mut cd, 0); // comment
             u16le(&mut cd, 0); // disk
             u16le(&mut cd, 0); // internal attrs
             u32le(&mut cd, 0); // external attrs
-            u32le(&mut cd, e.offset);
+            u32le(&mut cd, if big { SAT32 } else { u32::try_from(e.offset).unwrap_or(SAT32) });
             cd.extend_from_slice(e.name.as_bytes());
+            if big {
+                // only the offset overflowed: the extra field holds just that
+                u16le(&mut cd, ZIP64_EXTRA);
+                u16le(&mut cd, 8);
+                u64le(&mut cd, e.offset);
+            }
         }
-        let cd_offset = u32::try_from(self.offset).map_err(|_| "backup too large".to_string())?;
-        let cd_size = u32::try_from(cd.len()).map_err(|_| "backup too large".to_string())?;
-        let n = self.entries.len() as u16;
+        let cd_offset = self.offset;
+        let cd_size = cd.len() as u64;
+        let n = self.entries.len() as u64;
+        let zip64 = cd_offset >= u64::from(SAT32) || cd_size >= u64::from(SAT32) || n >= u64::from(SAT16);
         let mut out = cd;
+        if zip64 {
+            let end64_at = cd_offset + cd_size;
+            u32le(&mut out, END64_SIG);
+            u64le(&mut out, 44); // size of the rest of this record
+            u16le(&mut out, 45);
+            u16le(&mut out, 45);
+            u32le(&mut out, 0); // this disk
+            u32le(&mut out, 0); // disk with the directory
+            u64le(&mut out, n);
+            u64le(&mut out, n);
+            u64le(&mut out, cd_size);
+            u64le(&mut out, cd_offset);
+            u32le(&mut out, LOC64_SIG);
+            u32le(&mut out, 0); // disk with the zip64 end record
+            u64le(&mut out, end64_at);
+            u32le(&mut out, 1); // disks
+        }
         u32le(&mut out, END_SIG);
         u16le(&mut out, 0);
         u16le(&mut out, 0);
-        u16le(&mut out, n);
-        u16le(&mut out, n);
-        u32le(&mut out, cd_size);
-        u32le(&mut out, cd_offset);
+        if zip64 {
+            u16le(&mut out, SAT16);
+            u16le(&mut out, SAT16);
+            u32le(&mut out, SAT32);
+            u32le(&mut out, SAT32);
+        } else {
+            u16le(&mut out, u16::try_from(n).unwrap_or(SAT16));
+            u16le(&mut out, u16::try_from(n).unwrap_or(SAT16));
+            u32le(&mut out, u32::try_from(cd_size).unwrap_or(SAT32));
+            u32le(&mut out, u32::try_from(cd_offset).unwrap_or(SAT32));
+        }
         u16le(&mut out, 0); // comment
         Ok(out)
     }
@@ -186,23 +224,40 @@ fn rd16(b: &[u8], at: usize) -> Option<u16> {
     Some(u16::from_le_bytes(b.get(at..at + 2)?.try_into().ok()?))
 }
 fn rd32(b: &[u8], at: usize) -> Option<u32> {
-    Some(u32::from_le_bytes(b.get(at..at + 4)?.try_into().ok()?))
+    Some(u32::from_le_bytes(b.get(at..at.checked_add(4)?)?.try_into().ok()?))
+}
+fn rd64(b: &[u8], at: usize) -> Option<u64> {
+    Some(u64::from_le_bytes(b.get(at..at.checked_add(8)?)?.try_into().ok()?))
 }
 
 /// How many bytes from the end of a zip to read to find its end record.
 pub fn tail_len(file_len: u64) -> u64 {
-    file_len.min(22 + 65_535)
+    // the end record with its longest comment, plus the zip64 locator and end record before it
+    file_len.min(22 + 65_535 + 20 + 56)
 }
 
-/// The central directory's (offset, size) from the last [`tail_len`] bytes of a zip.
+/// The central directory's (offset, size) from the last [`tail_len`] bytes of a zip (zip64 too).
 pub fn find_central(tail: &[u8]) -> Result<(u64, u64), String> {
     let at = (0..tail.len().saturating_sub(21)).rev().find(|&i| rd32(tail, i) == Some(END_SIG)).ok_or("not a zip file (no end record)")?;
+    let entries = rd16(tail, at + 10).ok_or("truncated zip")?;
     let size = rd32(tail, at + 12).ok_or("truncated zip")?;
     let offset = rd32(tail, at + 16).ok_or("truncated zip")?;
-    if size == u32::MAX || offset == u32::MAX {
-        return Err("zip64 backups are not supported".into());
+    let saturated = size == SAT32 || offset == SAT32 || entries == SAT16;
+    let locator = at.checked_sub(20).filter(|&l| rd32(tail, l) == Some(LOC64_SIG));
+    match (saturated, locator) {
+        (true, Some(loc)) => {
+            // the zip64 end record sits right before its locator (extensible data isn't supported)
+            let rec = loc
+                .checked_sub(56)
+                .filter(|&r| rd32(tail, r) == Some(END64_SIG) && rd64(tail, r + 4) == Some(44))
+                .ok_or("this zip64 backup has a layout that isn't supported")?;
+            let size = rd64(tail, rec + 40).ok_or("truncated zip")?;
+            let offset = rd64(tail, rec + 48).ok_or("truncated zip")?;
+            Ok((offset, size))
+        }
+        (true, None) if size == SAT32 || offset == SAT32 => Err("damaged zip: the zip64 end record is missing".into()),
+        _ => Ok((u64::from(offset), u64::from(size))),
     }
-    Ok((u64::from(offset), u64::from(size)))
 }
 
 /// Parse a central directory.
@@ -216,16 +271,55 @@ pub fn parse_central(cd: &[u8]) -> Result<Vec<ZipEntry>, String> {
         let bad = || "damaged zip directory".to_string();
         let method = rd16(cd, i + 10).ok_or_else(bad)?;
         let crc = rd32(cd, i + 16).ok_or_else(bad)?;
-        let size = rd32(cd, i + 24).ok_or_else(bad)?;
+        let size32 = rd32(cd, i + 24).ok_or_else(bad)?;
         let n = usize::from(rd16(cd, i + 28).ok_or_else(bad)?);
         let extra = usize::from(rd16(cd, i + 30).ok_or_else(bad)?);
         let comment = usize::from(rd16(cd, i + 32).ok_or_else(bad)?);
-        let header = rd32(cd, i + 42).ok_or_else(bad)?;
+        let header32 = rd32(cd, i + 42).ok_or_else(bad)?;
         let name = cd.get(i + 46..i + 46 + n).ok_or_else(bad)?;
-        out.push(ZipEntry { name: String::from_utf8_lossy(name).into_owned(), crc, size: u64::from(size), header: u64::from(header), method });
+        let extra_bytes = cd.get(i + 46 + n..i + 46 + n + extra).ok_or_else(bad)?;
+        let (size, header) = zip64_fields(extra_bytes, size32, rd32(cd, i + 20).ok_or_else(bad)?, header32).ok_or_else(bad)?;
+        out.push(ZipEntry { name: String::from_utf8_lossy(name).into_owned(), crc, size, header, method });
         i += 46 + n + extra + comment;
     }
     Ok(out)
+}
+
+/// The entry's real (size, header offset): the 32-bit fields, or the zip64 extra field's values for
+/// the ones that hold the saturated marker (in the order uncompressed size, compressed size, offset).
+/// `None` when a marker has no value behind it.
+fn zip64_fields(extra: &[u8], size32: u32, csize32: u32, header32: u32) -> Option<(u64, u64)> {
+    if size32 != SAT32 && csize32 != SAT32 && header32 != SAT32 {
+        return Some((u64::from(size32), u64::from(header32)));
+    }
+    let mut i = 0;
+    while i + 4 <= extra.len() {
+        let id = rd16(extra, i)?;
+        let len = usize::from(rd16(extra, i + 2)?);
+        let body = extra.get(i + 4..i + 4 + len)?;
+        if id == ZIP64_EXTRA {
+            let mut at = 0;
+            let mut next = |wanted: bool| -> Option<Option<u64>> {
+                if !wanted {
+                    return Some(None);
+                }
+                let v = rd64(body, at)?;
+                at += 8;
+                Some(Some(v))
+            };
+            let size = next(size32 == SAT32)?;
+            let csize = next(csize32 == SAT32)?;
+            let header = next(header32 == SAT32)?;
+            let size = size.unwrap_or(u64::from(size32));
+            // stored entries only: both sizes must agree
+            if csize.is_some_and(|c| c != size) {
+                return None;
+            }
+            return Some((size, header.unwrap_or(u64::from(header32))));
+        }
+        i += 4 + len;
+    }
+    None
 }
 
 /// Offset of an entry's data from its local header's first 30 bytes.
@@ -353,8 +447,73 @@ mod tests {
 
     #[test]
     fn size_limits_are_errors_not_panics() {
-        let mut w = ZipWriter { offset: MAX_BYTES - 10, ..Default::default() };
+        let mut w = ZipWriter { offset: u64::MAX - 10, ..Default::default() };
         assert!(w.entry("x", &[0; 64]).is_err());
+        assert!(ZipWriter::default().entry(&"n".repeat(70_000), b"x").is_err());
+    }
+
+    fn central_of(zip_tail: &[u8]) -> Vec<ZipEntry> {
+        let (off, size) = find_central(zip_tail).unwrap();
+        let _ = off;
+        parse_central(&zip_tail[..size as usize]).unwrap()
+    }
+
+    #[test]
+    fn backups_past_4_gb_are_zip64_and_read_back() {
+        // as if 5 GB of originals were already written
+        let mut w = ZipWriter { offset: 5 << 30, ..Default::default() };
+        let _ = w.entry("library/catalog.snap", b"{}").unwrap();
+        let _ = w.entry("originals/abc/IMG 1.jpg", &[7; 100]).unwrap();
+        let tail = w.finish().unwrap();
+        let (off, size) = find_central(&tail).unwrap();
+        assert!(off > (5 << 30), "directory offset past 4 GB: {off}");
+        assert_eq!(size as usize + 20 + 56 + 22, tail.len());
+        let entries = parse_central(&tail[..size as usize]).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].name, "library/catalog.snap");
+        assert_eq!(entries[0].header, 5 << 30);
+        assert_eq!(entries[0].size, 2);
+        assert_eq!(entries[1].header, (5 << 30) + 30 + "library/catalog.snap".len() as u64 + 2);
+        assert_eq!(entries[1].size, 100);
+        // a damaged zip64 end record is an error, not a wrong directory
+        let mut broken = tail.clone();
+        let at = tail.len() - 22 - 20 - 56;
+        broken[at] ^= 0xFF;
+        assert!(find_central(&broken).is_err());
+        // a saturated field with nothing behind it is rejected too
+        let mut no_extra = tail.clone();
+        let cd = &mut no_extra[..size as usize];
+        cd[30..32].copy_from_slice(&0u16.to_le_bytes()); // first entry: extra length 0
+        assert!(parse_central(cd).is_err());
+    }
+
+    #[test]
+    fn small_backups_stay_plain_zip() {
+        let mut w = ZipWriter::default();
+        let _ = w.entry("a", b"x").unwrap();
+        let tail = w.finish().unwrap();
+        assert!(!tail.windows(4).any(|x| x == LOC64_SIG.to_le_bytes()), "no zip64 records");
+        assert_eq!(central_of(&tail).len(), 1);
+    }
+
+    #[test]
+    fn more_than_65535_entries_are_zip64() {
+        let mut w = ZipWriter::default();
+        let mut zip = Vec::new();
+        for i in 0..70_000u32 {
+            let name = format!("originals/h{i}/p.jpg");
+            zip.extend(w.entry(&name, b"x").unwrap());
+            zip.push(b'x');
+        }
+        zip.extend(w.finish().unwrap());
+        let tail = &zip[zip.len() - tail_len(zip.len() as u64) as usize..];
+        let (off, size) = find_central(tail).unwrap();
+        let entries = parse_central(&zip[off as usize..(off + size) as usize]).unwrap();
+        assert_eq!(entries.len(), 70_000);
+        assert_eq!(entries[69_999].name, "originals/h69999/p.jpg");
+        let e = &entries[69_999];
+        let start = data_offset(e, &zip[e.header as usize..e.header as usize + 30]).unwrap() as usize;
+        verify(e, &zip[start..start + e.size as usize]).unwrap();
     }
 
     #[test]

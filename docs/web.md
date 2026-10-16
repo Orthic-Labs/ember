@@ -110,7 +110,7 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
     grant it, a notice says the library may be evicted under storage pressure.
   - **File ▸ Back Up Library…** downloads a zip of the library files and every stored original
     (`originals/<hash>/<file name>`, so an unzipped backup is browsable; entries are stored, not
-    compressed; at most 4 GB). **File ▸ Restore Library from Backup…** reads such a zip into a
+    compressed; zip64 past 4 GB or 65 535 files, one original at most 4 GB). **File ▸ Restore Library from Backup…** reads such a zip into a
     new library folder (`library-restored-<time>/`; originals already stored are skipped, every
     entry's checksum is verified, and each restored original must match its content hash) and
     only then switches to it (`active-library` names the folder in use) and reloads: the previous
@@ -191,8 +191,7 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
   photo that panics while its thumbnail renders can do so again after a reload; there is no
   `?safe` start that skips rendering yet); removing photos doesn't delete their stored originals
   (`originals/<hash>`; they are kept, and included in backups); restored-over libraries stay in
-  storage until the site's data is cleared; backups larger than 4 GB need zip64, which isn't
-  written yet. [#194](https://github.com/Orthic-Labs/ember/issues/194)
+  storage until the site's data is cleared. [#194](https://github.com/Orthic-Labs/ember/issues/194)
 - **Control channel / MCP.** These are desktop-only, because they need a TCP socket.
 - **AVIF export** is native only: its encoder (`ravif`, `rav1e`) is compiled out on wasm32, so the browser
   build doesn't offer the format in the export dialog (issue #196). [#196](https://github.com/Orthic-Labs/ember/issues/196)
