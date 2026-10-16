@@ -625,7 +625,8 @@ fn set_native_viewport(control: &rightkit_qa::control::Control, width: u64, heig
             const content = rect('.lc-content');
             const exact = (r) => r && r.display !== 'none' && Math.abs(r.width - viewport.width) <= 1 && Math.abs(r.height - viewport.height) <= 1 && Math.abs(r.bottom - viewport.height) <= 1;
             const child = (r) => r && r.display !== 'none' && r.width >= 1 && r.height >= 1 && Math.abs(r.bottom - viewport.height) <= 1;
-            return outer.every(exact) && child(body) && child(plane) && child(content);
+            // on a miss, the rects become `last result` in the timeout message
+            return (outer.every(exact) && child(body) && child(plane) && child(content)) || { viewport, outer, body, plane, content };
         })();"#;
     let layout_settled = wait_for_dom(control, layout);
     assert_eq!(layout_settled.as_bool(), Some(true), "native viewport layout must settle after resize");
@@ -1802,7 +1803,11 @@ fn native_hidden_control_journeys() {
                         .expect("settings focus restoration query must execute");
                     assert_eq!(restored["rootInert"].as_bool(), Some(false), "background inert state must be restored");
                     assert_eq!(restored["rootHidden"], Value::Null, "background aria-hidden state must be restored");
-                    assert_eq!(restored["focus"], pre_modal_focus, "focus must return to actual pre-modal target");
+                    // WebKit does not focus a button on click, so on macOS the palette leaves focus on <body>; the modal
+                    // then restores the palette trigger that opened it, which is where a keyboard user expects focus.
+                    let trigger = json!({"tag": "BUTTON", "id": "", "className": "rk-search rk-search--trigger", "aria": "Jump to (command palette)"});
+                    let expected = if pre_modal_focus["tag"] == "BODY" { &trigger } else { &pre_modal_focus };
+                    assert_eq!(&restored["focus"], expected, "focus must return to actual pre-modal target (pre-modal: {pre_modal_focus})");
                 });
                 with_control(&binary, scenario, &inputs.catalog, |control, _data| {
                     let metadata_name = "QA Settings Metadata";
