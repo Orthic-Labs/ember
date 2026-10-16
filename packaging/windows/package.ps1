@@ -143,7 +143,9 @@ Remove-Item -Force -ErrorAction SilentlyContinue ([IO.Path]::ChangeExtension($Ms
 & (Join-Path $PSScriptRoot 'sign.ps1') $Msi
 
 # ---- portable zip ------------------------------------------------------------------------------
-$Portable = Join-Path $TargetDir "windows-package\lightcraft-$Version-windows-$Arch-portable"
+# One fixed folder name inside the zip, never a per-version one: unpacking an update over the old copy keeps the same path
+# (macOS ties privacy grants to the path; Adrian 2026-10-17: no new folder for any build).
+$Portable = Join-Path $TargetDir "windows-package\portable-$Arch\Ember"
 Remove-Item -Recurse -Force $Portable -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Portable | Out-Null
 Copy-Item (Join-Path $Stage '*.exe') $Portable

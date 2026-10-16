@@ -206,7 +206,8 @@ fi
 
 # ---- CLI ---------------------------------------------------------------------------------------
 echo "==> building $CLI_ZIP"
-CLI_DIR="$WORK/lightcraft-cli-$VERSION-macos-$ARCH"
+# Fixed folder name inside the zip, never a per-version one (Adrian 2026-10-17: one fixed path for every build).
+CLI_DIR="$WORK/lightcraft-cli"
 mkdir -p "$CLI_DIR"
 cp "$WORK/bin/lightcraft-cli" "$CLI_DIR/"
 copy_docs "$CLI_DIR"

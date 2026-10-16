@@ -15,6 +15,47 @@ const required = [
   "apps/lightcraft-desktop/tests/native_qualification.rs",
 ];
 
+// Adrian 2026-10-17: one bundle id and one fixed install path for every build and channel. macOS ties privacy grants to
+// path + identity, so no per-channel id, no per-version/digest folder, and no differently-named copy for dev runs.
+function checkInstallIdentity() {
+  const text = (file) => readFileSync(path.join(repoRoot, file), "utf8");
+  const ID = "com.orthiclabs.ember";
+  const tauri = readJson("apps/lightcraft-desktop/tauri.conf.json");
+  if (tauri.identifier !== ID) fail(`tauri.conf.json identifier must be ${ID}, found ${tauri.identifier}`);
+  for (const overlay of ["tauri.macos.conf.json", "tauri.windows.conf.json"]) {
+    if ("identifier" in readJson(`apps/lightcraft-desktop/${overlay}`)) fail(`${overlay} must not override the bundle identifier`);
+  }
+  const holders = [
+    ["crates/engine/src/branding.rs", /APPLICATION_ID: &str = "([^"]+)"/],
+    ["apps/lightcraft/src/main.rs", /const APP_ID: &str = "([^"]+)"/],
+    ["nix/package.nix", /appId = "([^"]+)"/],
+    ["packaging/macos/Info.plist.in", /<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/],
+    ["ios/project.yml", /^\s*PRODUCT_BUNDLE_IDENTIFIER: (\S+)$/m],
+    ["packaging/linux/package.sh", /^APP_ID=(\S+)$/m],
+    ["packaging/freebsd/package.sh", /^APP_ID=(\S+)$/m],
+    ["packaging/linux/flatpak-bundle.sh", /^APP_ID=(\S+)$/m],
+  ];
+  for (const [file, pattern] of holders) {
+    const found = pattern.exec(text(file))?.[1];
+    if (found !== ID) fail(`${file} must carry the single app id ${ID}, found ${found ?? "none"}`);
+  }
+  const release = text("right-release.config.mjs");
+  const installs = [...release.matchAll(/install: \{[^}]*\}/g)].map((match) => match[0]);
+  if (installs.length !== 2) fail("right-release.config.mjs must declare exactly the mac and win development installs");
+  for (const install of installs) {
+    if (/\$\{|version|sha|digest|candidate|temp|tmp|\.previous|\.dev|\.beta|canary/i.test(install.replace(/productName|targetTriple|bundleDirectory|manifestPath/g, ""))) {
+      fail(`development install path must be one fixed path, found ${install}`);
+    }
+  }
+  if (!release.includes("destination: '/Applications/Ember.app'") || !release.includes("path.join(process.env.LOCALAPPDATA || '.', 'Ember', 'lightcraft-desktop.exe')")) {
+    fail("development installs must stay at /Applications/Ember.app and %LOCALAPPDATA%\Ember\lightcraft-desktop.exe");
+  }
+  for (const [file, pattern] of [["packaging/windows/package.ps1", /^\$Portable = .*$/m], ["packaging/macos/package.sh", /^CLI_DIR=.*$/m]]) {
+    const line = pattern.exec(text(file))?.[0] ?? "";
+    if (!line || /version/i.test(line)) fail(`${file} must unpack into a fixed folder name, found: ${line || "none"}`);
+  }
+}
+
 function checkRequiredFiles() {
   for (const file of required) requireFile(path.join(repoRoot, file), file);
 }
@@ -105,9 +146,10 @@ function checkSourceContracts() {
   if (!/MAX_SLICE = 512/.test(web) || !/generation/.test(web)) fail("library slice cache must remain generation-bound & capped");
 }
 
+checkInstallIdentity();
 checkRequiredFiles();
 checkPins();
 checkNativeConfig();
 checkFixtures();
 checkSourceContracts();
-console.log("desktop static contract: PASS (source, pins, native config, fixtures, IPC/cache contracts)");
+console.log("desktop static contract: PASS (source, pins, native config, install identity, fixtures, IPC/cache contracts)");
