@@ -31,7 +31,7 @@ mod hdr_display;
 mod logging;
 #[cfg(target_os = "macos")]
 mod native_menu;
-#[cfg(any(target_os = "macos", windows))]
+#[cfg(any(target_os = "macos", windows, target_os = "linux"))]
 mod screen_profile;
 mod window_gpu;
 
@@ -573,10 +573,10 @@ fn services(cc: &eframe::CreationContext<'_>, log_file: Option<&std::path::Path>
                 .unwrap_or_default()
         })),
         // macOS and Windows don't colour-manage the window: previews follow the profile of the
-        // screen it is on (#787, #84)
-        #[cfg(any(target_os = "macos", windows))]
+        // screen it is on (#787, #84); Linux asks colord for the primary output's profile
+        #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
         screen_profile: Some(Box::new(screen_profile::icc)),
-        #[cfg(not(any(target_os = "macos", windows)))]
+        #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
         screen_profile: None,
         pick_display_profile: Some(Box::new(|| {
             let mut d = file_dialog()

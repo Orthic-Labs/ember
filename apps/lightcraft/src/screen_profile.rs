@@ -1,4 +1,4 @@
-//! The ICC profile of the screen showing LightCraft's window (macOS and Windows).
+//! The ICC profile of the screen showing LightCraft's window (macOS, Windows and Linux).
 //!
 //! macOS colour-manages windows that say what colour space they draw in. wgpu leaves the window's
 //! Metal layer without one for sRGB content, which Core Animation shows without colour matching, so
@@ -11,8 +11,11 @@
 //!
 //! macOS asks AppKit for the window's screen; Windows asks which profile the system assigned to
 //! the monitor the window is on (`lightcraft_sysmem::window_monitor_profile`, the one unsafe FFI
-//! helper) and reads that file. A missing, unreadable or invalid profile is `None`: sRGB.
-#![cfg_attr(target_os = "macos", allow(dead_code))]
+//! helper) and reads that file. Linux asks colord (the colour daemon GNOME and KDE keep monitor
+//! profiles in) over the system D-Bus for the default profile of the primary display output; it
+//! can't tell which output the window is on, so a window on a secondary monitor still gets the
+//! primary one's profile. A missing, unreadable or invalid profile is `None`: sRGB.
+#![cfg_attr(not(target_os = "linux"), allow(dead_code))]
 
 #[cfg(target_os = "macos")]
 use objc2::MainThreadMarker;
@@ -41,6 +44,68 @@ pub fn icc() -> Option<Vec<u8>> {
 #[cfg(windows)]
 pub fn icc() -> Option<Vec<u8>> {
     read_cached(&lightcraft_sysmem::window_monitor_profile()?)
+}
+
+/// The default profile colord assigns to the primary display output, or `None` without colord, a
+/// display device or a readable profile. Asked at most every few seconds (and rarely again after a
+/// failure), so a missing daemon can't stall the UI thread that polls this.
+#[cfg(target_os = "linux")]
+pub fn icc() -> Option<Vec<u8>> {
+    use std::time::{Duration, Instant};
+    const REFRESH: Duration = Duration::from_secs(3);
+    const RETRY_AFTER_FAILURE: Duration = Duration::from_secs(30);
+    static LAST: Mutex<Option<(Instant, Option<Vec<u8>>)>> = Mutex::new(None);
+    let mut last = LAST.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((at, value)) = last.as_ref()
+        && at.elapsed() < if value.is_some() { REFRESH } else { RETRY_AFTER_FAILURE }
+    {
+        return value.clone();
+    }
+    let value = colord_profile_path().and_then(|path| read_cached(&path));
+    *last = Some((Instant::now(), value.clone()));
+    value
+}
+
+/// One colord display device, as far as choosing its profile goes.
+struct Output {
+    /// colord's `OutputPriority` metadata says "primary".
+    primary: bool,
+    /// The file of the device's default (first) profile, when it has one.
+    profile: Option<PathBuf>,
+}
+
+/// The profile of the primary output, else of the first output that has one.
+fn pick_output_profile(outputs: &[Output]) -> Option<&Path> {
+    let with_profile = |primary_only: bool| outputs.iter().find(|o| o.profile.is_some() && (o.primary || !primary_only));
+    with_profile(true).or_else(|| with_profile(false)).and_then(|o| o.profile.as_deref())
+}
+
+/// Ask colord (`org.freedesktop.ColorManager`, system bus) for the display devices and their
+/// default profiles' files.
+#[cfg(target_os = "linux")]
+fn colord_profile_path() -> Option<PathBuf> {
+    use std::collections::HashMap;
+    use zbus::blocking::{Proxy, connection::Builder};
+    use zbus::zvariant::OwnedObjectPath;
+    const DEST: &str = "org.freedesktop.ColorManager";
+    let conn = Builder::system().ok()?.method_timeout(std::time::Duration::from_secs(2)).build().ok()?;
+    let manager = Proxy::new(&conn, DEST, "/org/freedesktop/ColorManager", "org.freedesktop.ColorManager").ok()?;
+    let devices: Vec<OwnedObjectPath> = manager.call("GetDevicesByKind", &("display",)).ok()?;
+    let mut outputs = Vec::new();
+    for device in devices.iter().take(16) {
+        let Ok(device) = Proxy::new(&conn, DEST, device.as_str().to_string(), "org.freedesktop.ColorManager.Device") else { continue };
+        let metadata: HashMap<String, String> = device.get_property("Metadata").unwrap_or_default();
+        let primary = metadata.get("OutputPriority").is_some_and(|p| p == "primary");
+        let profiles: Vec<OwnedObjectPath> = device.get_property("Profiles").unwrap_or_default();
+        // colord lists the profile in use first
+        let profile = profiles.first().and_then(|path| {
+            let profile = Proxy::new(&conn, DEST, path.as_str().to_string(), "org.freedesktop.ColorManager.Profile").ok()?;
+            let file: String = profile.get_property("Filename").ok()?;
+            (!file.is_empty()).then(|| PathBuf::from(file))
+        });
+        outputs.push(Output { primary, profile });
+    }
+    pick_output_profile(&outputs).map(Path::to_path_buf)
 }
 
 /// The screen's current extended-dynamic-range headroom: the brightest component value it can show
@@ -165,6 +230,18 @@ mod tests {
         std::fs::write(&path, b"broken").unwrap();
         assert_eq!(read_cached(&path), None);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_primary_output_wins_and_outputs_without_a_profile_are_skipped() {
+        let out = |primary: bool, file: Option<&str>| Output { primary, profile: file.map(PathBuf::from) };
+        let pick = |outputs: &[Output]| pick_output_profile(outputs).map(|p| p.to_string_lossy().to_string());
+        assert_eq!(pick(&[]), None);
+        assert_eq!(pick(&[out(true, None), out(false, None)]), None);
+        assert_eq!(pick(&[out(false, Some("a.icc")), out(true, Some("b.icc"))]), Some("b.icc".into()));
+        // a primary output without a profile: the first output that has one
+        assert_eq!(pick(&[out(false, None), out(true, None), out(false, Some("c.icc"))]), Some("c.icc".into()));
+        assert_eq!(pick(&[out(false, Some("a.icc")), out(false, Some("b.icc"))]), Some("a.icc".into()));
     }
 
     #[test]
