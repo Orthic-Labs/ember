@@ -808,7 +808,7 @@ pub struct UiState {
     /// the photo that applies to: not an edit, and forgotten on moving to another photo or quitting.
     #[serde(skip)]
     pub grading_hidden: Option<(lightcraft_catalog::PhotoId, [bool; 3])>,
-    /// Active on-canvas tool: "", "brush", "linear", "radial", "wbPicker", "straighten", "remove".
+    /// Active on-canvas tool: "", "brush", "linear", "radial", "wbPicker", "pointColor", "straighten", "remove".
     pub tool: String,
     pub brush_size: f32,
     pub brush_feather: f32,

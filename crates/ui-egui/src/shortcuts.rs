@@ -91,6 +91,8 @@ pub const CLASSIC_KEYS: &[(&str, &str)] = &[
     ("Shift+M", "tool.radial"),
     ("Shift+J", "view.clipping"),
     ("Shift+Q", "view.visualizeSpots"),
+    // ⇧W: the Point Color picker tool (W stays the White Balance Selector)
+    ("Shift+W", "tool.pointColor"),
     // Q: Spot Removal, the Remove panel (the primary keymap has it on H)
     ("Q", "panel.remove"),
     // ⌘⌥1–7 switch modules: Library, Develop, Map, Slideshow, Print. Book (⌘⌥4) and Web (⌘⌥7) have no module yet.

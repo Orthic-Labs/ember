@@ -152,6 +152,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("tool.linear", "Linear Gradient", Some("L"), "Window>Tools"),
     ("tool.radial", "Radial Gradient", Some("R"), "Window>Tools"),
     ("tool.wbPicker", "White Balance Selector", Some("W"), "Window>Tools"),
+    // ⇧W in the Classic layer: the Point Color sample picker (the Edit panel's Point Color flyout)
+    ("tool.pointColor", "Point Color", None, "Window>Tools"),
     ("tool.none", "No Tool", None, ""),
     // brush size / feather of the active brush (Masking brush, Remove tool and its selected spot)
     ("brush.smaller", "Decrease Brush Size", Some("["), "Window>Tools"),
@@ -1289,6 +1291,14 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                     app.ui.right = RightPanel::Edit;
                     app.ui.view = ViewMode::Detail;
                     app.ui.tool = "wbPicker".into();
+                }
+                "pointColor" => {
+                    app.ui.right = RightPanel::Edit;
+                    app.ui.view = ViewMode::Detail;
+                    if !app.ui.flyout_open("pointColor") {
+                        app.ui.toggle_flyout("pointColor");
+                    }
+                    app.ui.tool = "pointColor".into();
                 }
                 other => return Some(Err(format!("unknown tool `{other}`"))),
             }

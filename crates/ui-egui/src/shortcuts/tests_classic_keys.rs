@@ -253,7 +253,7 @@ fn keyc_metadata_keys_dispatch_the_metadata_commands() {
     );
 }
 
-/// KEYC-DEVELOP: V, ⌘U, ⇧⌘U, R, Q, K, M, ⇧M, ⇧J and ⇧Q (⇧W has no Point Color tool yet).
+/// KEYC-DEVELOP: V, ⌘U, ⇧⌘U, R, Q, K, M, ⇧M, ⇧J, ⇧Q and ⇧W (Point Color).
 #[test]
 fn keyc_develop_keys_dispatch_the_develop_commands() {
     assert_dispatch(
@@ -269,8 +269,24 @@ fn keyc_develop_keys_dispatch_the_develop_commands() {
             ("Shift+M", "tool.radial"),
             ("Shift+J", "view.clipping"),
             ("Shift+Q", "view.visualizeSpots"),
+            ("Shift+W", "tool.pointColor"),
         ],
     );
+}
+
+/// KEYC-DEVELOP: ⇧W picks the Point Color tool and opens its flyout while the Classic keymap is on; unbound while it is off.
+#[test]
+fn classic_shift_w_picks_point_color_only_with_the_classic_keymap() {
+    let mut h = library();
+    h.app.ui.right = RightPanel::None;
+    h.app.ui.tool.clear();
+    press(&mut h, "W", false, false, true);
+    assert_eq!(h.app.ui.tool, "", "Shift+W has no binding while the Classic keymap is off");
+    h.app.run("app.classicKeymap", json!({"on": true})).unwrap();
+    press(&mut h, "W", false, false, true);
+    assert_eq!(h.app.ui.tool, "pointColor");
+    assert_eq!(h.app.ui.right, RightPanel::Edit);
+    assert!(h.app.ui.flyout_open("pointColor"), "the Point Color flyout opens with its picker");
 }
 
 /// KEYC-DEVELOP: Q opens the Remove (spot removal) panel while the Classic keymap is on, and is unbound while it is off.
