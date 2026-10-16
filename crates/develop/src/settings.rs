@@ -1211,7 +1211,7 @@ impl Default for RedEye {
 /// is a proxy (subject in front, background behind) until a depth model exists; `focal_near` and
 /// `focal_far` bound the band of that depth that stays sharp.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
+#[serde(default, from = "LensBlurRaw")]
 pub struct LensBlur {
     /// `None`: on whenever `amount` is above zero; `Some(false)`: switched off.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1232,6 +1232,40 @@ pub struct LensBlur {
 impl Default for LensBlur {
     fn default() -> Self {
         Self { enabled: None, amount: 0.0, focal_near: 0.0, focal_far: 40.0, shape: 0.0, highlight_boost: 30.0 }
+    }
+}
+
+/// The stored shape of [`LensBlur`]. Settings saved before `enabled` became optional always wrote
+/// `"enabled": false`; an off switch on a zero amount is not an edit, so it reads back as `None`.
+#[derive(Deserialize)]
+#[serde(default)]
+struct LensBlurRaw {
+    enabled: Option<bool>,
+    amount: f64,
+    focal_near: f64,
+    focal_far: f64,
+    shape: f64,
+    highlight_boost: f64,
+}
+
+impl Default for LensBlurRaw {
+    fn default() -> Self {
+        let d = LensBlur::default();
+        Self {
+            enabled: d.enabled,
+            amount: d.amount,
+            focal_near: d.focal_near,
+            focal_far: d.focal_far,
+            shape: d.shape,
+            highlight_boost: d.highlight_boost,
+        }
+    }
+}
+
+impl From<LensBlurRaw> for LensBlur {
+    fn from(r: LensBlurRaw) -> Self {
+        let enabled = if r.enabled == Some(false) && (r.amount.is_nan() || r.amount <= 0.0) { None } else { r.enabled };
+        Self { enabled, amount: r.amount, focal_near: r.focal_near, focal_far: r.focal_far, shape: r.shape, highlight_boost: r.highlight_boost }
     }
 }
 
