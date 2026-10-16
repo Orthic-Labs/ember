@@ -315,13 +315,16 @@ pub fn sidecar_packet(p: &Photo, cat: &lightcraft_catalog::Catalog) -> String {
 /// [`sidecar_packet`], without any location (GPS, sublocation, city, state, country) when
 /// `remove_location` is set (an export with "Remove location info").
 pub fn sidecar_packet_with(p: &Photo, cat: &lightcraft_catalog::Catalog, remove_location: bool) -> String {
-    packet(p, cat, remove_location, false)
+    packet(p, cat, remove_location, None)
 }
 
 /// The packet a sidecar save writes: [`sidecar_packet`], and the photo's regions too when it has a named face
-/// (see [`has_named_face`]).
+/// (see [`has_named_face`]) and its file's stored frame can be read (see [`stored_frame`]).
 fn sidecar_save_packet(p: &Photo, cat: &lightcraft_catalog::Catalog) -> String {
-    packet(p, cat, false, true)
+    // Without the frame the boxes can't be turned into the file's own frame, so no block is written: a box another
+    // application places wrongly is worse than none. The sidecar keeps whatever regions it already has.
+    let frame = if has_named_face(&p.meta.regions) { stored_frame(p) } else { None };
+    packet(p, cat, false, frame)
 }
 
 /// Whether a photo has a named face: the trigger for writing its regions into a sidecar.
@@ -329,7 +332,27 @@ fn has_named_face(regions: &[lightcraft_meta::Region]) -> bool {
     regions.iter().any(|r| r.kind == lightcraft_meta::RegionKind::Face && r.name.as_deref().is_some_and(|n| !n.trim().is_empty()))
 }
 
-fn packet(p: &Photo, cat: &lightcraft_catalog::Catalog, remove_location: bool, with_regions: bool) -> String {
+/// The stored frame of a photo's file: what its regions' boxes are relative to in other applications, which read
+/// `mwg-rs:Regions` against the stored image, before its Exif orientation is applied.
+#[derive(Clone, Copy)]
+struct StoredFrame {
+    orientation: lightcraft_meta::Orientation,
+    width: Option<u32>,
+    height: Option<u32>,
+}
+
+/// The stored frame of a photo's file, read from its metadata (the image itself is never decoded). `None` when the
+/// file can't be read (a demo photo, or a file that is missing or unreadable). A file with no orientation tag is
+/// upright, as the preview path reads it; the metadata reader doesn't report a malformed Exif block, so one that
+/// doesn't parse is also read as upright.
+fn stored_frame(p: &Photo) -> Option<StoredFrame> {
+    let bytes = std::fs::read(file_path(p)?).ok()?;
+    let m = lightcraft_meta::extract(&bytes);
+    Some(StoredFrame { orientation: m.orientation.unwrap_or(lightcraft_meta::Orientation::Normal), width: m.width, height: m.height })
+}
+
+/// The packet for a photo: the regions too when `regions` is given (the file's stored frame, see [`sidecar_save_packet`]).
+fn packet(p: &Photo, cat: &lightcraft_catalog::Catalog, remove_location: bool, regions: Option<StoredFrame>) -> String {
     let nz = |s: &str| (!s.trim().is_empty()).then(|| s.to_string());
     let meta = lightcraft_meta::Metadata {
         software: Some("Ember".into()),
@@ -357,11 +380,11 @@ fn packet(p: &Photo, cat: &lightcraft_catalog::Catalog, remove_location: bool, w
     if remove_location {
         (meta.sublocation, meta.city, meta.state, meta.country, meta.gps) = (None, None, None, None, None);
     }
-    // All of the photo's regions, so reading the sidecar back gives the same list. Orientation and size are
-    // left out: Ember doesn't keep the file's EXIF orientation, so the boxes are written upright, unrotated.
-    let with_regions = with_regions && has_named_face(&p.meta.regions);
-    if with_regions {
+    // All of the photo's regions, so reading the sidecar back gives the same list. The photo's regions are upright,
+    // so the writer needs the file's orientation to turn each box into the stored frame, and the stored size.
+    if let Some(frame) = regions {
         meta.regions = p.meta.regions.clone();
+        (meta.orientation, meta.width, meta.height) = (Some(frame.orientation), frame.width, frame.height);
     }
     let settings = serde_json::to_string(&*p.develop).unwrap_or_default();
     let flag = match p.flag {
@@ -373,7 +396,7 @@ fn packet(p: &Photo, cat: &lightcraft_catalog::Catalog, remove_location: bool, w
     if !remove_location && !p.meta.location.trim().is_empty() {
         lc.push(("location", p.meta.location.as_str()));
     }
-    if with_regions { lightcraft_meta::write_xmp_lc_with_regions(&meta, &lc) } else { lightcraft_meta::write_xmp_lc(&meta, &lc) }
+    if regions.is_some() { lightcraft_meta::write_xmp_lc_with_regions(&meta, &lc) } else { lightcraft_meta::write_xmp_lc(&meta, &lc) }
 }
 
 /// The properties Ember writes and owns in a sidecar: replaced on every save (removed when

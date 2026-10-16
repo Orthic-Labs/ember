@@ -640,6 +640,56 @@ fn a_photo_without_named_faces_writes_no_regions_block() {
     let _ = std::fs::remove_dir_all(&lib);
 }
 
+/// A photo whose file is Exif orientation 6 gets its named-face box in the file's stored frame, turned by
+/// `mwg-rs:Rotation`, and reading that sidecar back gives the same upright box and name.
+#[test]
+fn a_rotated_files_regions_are_written_in_its_stored_frame() {
+    let src = temp_dir("regions-turned");
+    let lib = temp_dir("regions-turned-lib");
+    write_jpeg_oriented(&src.join("portrait.jpg"), 6);
+    std::fs::write(src.join("portrait.xmp"), MWG_REGIONS).unwrap();
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    s.execute("library.import", &json!({"paths": [src.join("portrait.jpg").to_string_lossy()]})).unwrap();
+    let id = only(&s);
+    let have = s.catalog.photo(id).unwrap().meta.regions.clone();
+    assert_eq!(have.len(), 1, "the sidecar's face was read");
+    s.execute("library.select", &json!({"ids": [id.0]})).unwrap();
+    std::fs::remove_file(src.join("portrait.xmp")).unwrap();
+    s.execute("photo.saveMetadataToFile", &json!({"ids": [id.0]})).unwrap();
+    let out = std::fs::read_to_string(src.join("portrait.xmp")).unwrap();
+    assert!(out.contains("mwg-rs:Rotation"), "the box is written in the stored frame: {out}");
+    let back = lightcraft_meta::parse_xmp(&out).unwrap().metadata.regions;
+    assert!(same_regions(&have, &back), "{have:?} written as {back:?}
+{out}");
+    let _ = std::fs::remove_dir_all(&src);
+    let _ = std::fs::remove_dir_all(&lib);
+}
+
+/// A named face is written only when the file's stored frame can be read: with the file gone, the save writes no
+/// `mwg-rs:Regions`, and the photo keeps its region in the library.
+#[test]
+fn an_unreadable_file_writes_no_regions() {
+    let src = temp_dir("regions-unreadable");
+    let lib = temp_dir("regions-unreadable-lib");
+    write_png(&src.join("portrait.png"), 9);
+    std::fs::write(src.join("portrait.xmp"), MWG_REGIONS).unwrap();
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    s.execute("library.import", &json!({"paths": [src.join("portrait.png").to_string_lossy()]})).unwrap();
+    let id = only(&s);
+    assert_eq!(s.catalog.photo(id).unwrap().meta.regions.len(), 1, "the sidecar's face was read");
+    s.execute("library.select", &json!({"ids": [id.0]})).unwrap();
+    std::fs::remove_file(src.join("portrait.xmp")).unwrap();
+    std::fs::remove_file(src.join("portrait.png")).unwrap();
+    s.execute("photo.saveMetadataToFile", &json!({"ids": [id.0]})).unwrap();
+    let out = std::fs::read_to_string(src.join("portrait.xmp")).unwrap();
+    assert!(!out.contains("mwg-rs:Regions"), "{out}");
+    assert_eq!(s.catalog.photo(id).unwrap().meta.regions.len(), 1, "the library keeps the region");
+    let _ = std::fs::remove_dir_all(&src);
+    let _ = std::fs::remove_dir_all(&lib);
+}
+
 fn synthetic_dng(xmp: &str) -> Vec<u8> {
     synthetic_dng_with(Some(xmp), lightcraft_meta::Metadata::default())
 }
@@ -1215,6 +1265,20 @@ fn write_jpeg(path: &Path, capture: Option<&str>) {
         lightcraft_meta::write_exif(&lightcraft_meta::Metadata { capture_time: lightcraft_meta::DateTime::parse_iso(c), ..Default::default() })
     });
     let meta = lightcraft_codecs::EncodeMeta { exif: exif.as_deref(), ..Default::default() };
+    let bytes = lightcraft_codecs::encode_jpeg(&lightcraft_codecs::EncodeImage::rgba8(&img), 90, Default::default(), &meta).unwrap();
+    std::fs::write(path, bytes).unwrap();
+}
+
+/// A JPEG with Exif orientation `orientation` (the stored pixels are unchanged).
+fn write_jpeg_oriented(path: &Path, orientation: u16) {
+    let (w, h) = (32usize, 24usize);
+    let data: Vec<[u8; 4]> = (0..w * h).map(|i| [(i % w * 7) as u8, (i / w * 9) as u8, 90, 255]).collect();
+    let img = lightcraft_raster::Rgba8 { width: w, height: h, data };
+    let exif = lightcraft_meta::write_exif(&lightcraft_meta::Metadata {
+        orientation: Some(lightcraft_meta::Orientation::from_exif(orientation)),
+        ..Default::default()
+    });
+    let meta = lightcraft_codecs::EncodeMeta { exif: Some(exif.as_slice()), ..Default::default() };
     let bytes = lightcraft_codecs::encode_jpeg(&lightcraft_codecs::EncodeImage::rgba8(&img), 90, Default::default(), &meta).unwrap();
     std::fs::write(path, bytes).unwrap();
 }

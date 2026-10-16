@@ -84,10 +84,13 @@ write them, from sidecars and from XMP embedded in the file. Named faces become 
 - **Written only into a sidecar that has none.** A save writes the photo's regions as `mwg-rs:Regions` (all of them, so
   they read back as they are) when the photo has a named face and the sidecar has no `mwg-rs:Regions`. A sidecar that has
   one, from any application, keeps that block byte for byte, and later saves don't touch it: faces named, renamed or
-  removed in Ember then reach only the library. A photo without a named face writes no block. Boxes are written upright,
-  without `mwg-rs:Rotation` or `AppliedToDimensions`, because Ember doesn't keep the file's Exif orientation; another
-  application that applies an orientation may place boxes differently on a photo whose file is rotated or mirrored.
-  Removing or resizing a box in the loupe changes the library only.
+  removed in Ember then reach only the library. A photo without a named face writes no block. Boxes are written in the
+  file's stored frame, the one other applications read them against: for Exif orientation 3, 6 or 8 each box is turned
+  with `mwg-rs:Rotation` as reference editor does, and `AppliedToDimensions` names the stored size. The orientation is
+  read from the file's metadata when the save runs. If the file can't be read (a demo photo, or a file that is missing
+  or unreadable), no block is written. A malformed Exif block reads as upright, as the preview path reads it. MWG can't
+  say "mirrored", so boxes on a photo whose file is mirrored (orientations 2, 4, 5, 7) are written unturned, and another
+  application may place them differently. Removing or resizing a box in the loupe changes the library only.
 - **Areas**: `stArea:x`/`y` are the box's centre, `w`/`h` its size, normalized to the photo (`stArea:unit="pixel"`
   areas are divided by `mwg-rs:AppliedToDimensions`, and dropped without it). Boxes are clipped to the photo; one
   that misses it entirely, or has a non-finite, zero or negative size, is skipped (the rest of the list is kept).
