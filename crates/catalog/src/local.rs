@@ -305,7 +305,8 @@ impl Op {
             | Op::SetKeyword { .. }
             | Op::SetBrowsed { .. }
             | Op::SetFolderRecord { .. }
-            | Op::SetFaceRejection { .. } => {}
+            | Op::SetFaceRejection { .. }
+            | Op::SetSavedLocation { .. } => {}
         }
     }
 }

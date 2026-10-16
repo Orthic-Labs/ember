@@ -19,6 +19,7 @@ pub mod journal;
 pub mod keywords;
 pub mod local;
 pub mod lock;
+pub mod locations;
 pub mod model;
 pub mod query;
 pub mod rules;
@@ -34,6 +35,7 @@ pub use dates::{DateRun, GroupBy};
 pub use folders::{FolderNode, FolderRecord};
 pub use journal::{Journal, LoadReport, PersistStats, SnapshotPolicy, SnapshotTiming};
 pub use keywords::KeywordNode;
+pub use locations::{LocationId, SavedLocation};
 use lightcraft_develop::DevelopSettings;
 pub use local::{DEFAULT_FORGET_DAYS, ForgetPlan, folder_of};
 pub use lock::{LibraryLock, LockError, LockOwner};
@@ -259,6 +261,12 @@ pub enum Op {
         person: String,
         rejected: bool,
     },
+    /// Save a location under `id` (`Some`: add it, or replace it, as a rename or a privacy change does), or delete it
+    /// (`None`). Undo restores the record it replaced. Format version 10.
+    SetSavedLocation {
+        id: LocationId,
+        location: Option<SavedLocation>,
+    },
     /// Several ops as one step (undo applies the inverses in reverse).
     Batch {
         ops: Vec<Op>,
@@ -306,6 +314,11 @@ pub struct Catalog {
     /// Faces the user said are not a given person (see [`FaceRejection`]). Format version 9.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     face_rejections: Vec<FaceRejection>,
+    /// Saved locations (named circles, see [`locations`]) and the next id to hand out. Format version 10.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) saved_locations: BTreeMap<LocationId, SavedLocation>,
+    #[serde(default)]
+    pub(crate) next_location: u64,
     /// Increments on every applied op.
     #[serde(skip)]
     pub revision: u64,
@@ -816,6 +829,17 @@ impl Catalog {
                 }
                 Op::SetFaceRejection { photo, rect, person, rejected: was }
             }
+            Op::SetSavedLocation { id, location } => {
+                let old = match location {
+                    Some(loc) => {
+                        loc.check().map_err(CatalogError::Invalid)?;
+                        self.next_location = self.next_location.max(id.0.saturating_add(1));
+                        self.saved_locations.insert(id, loc)
+                    }
+                    None => self.saved_locations.remove(&id),
+                };
+                Op::SetSavedLocation { id, location: old }
+            }
             Op::Batch { ops } => {
                 let mut inverses = Vec::with_capacity(ops.len());
                 for op in ops {
@@ -1017,6 +1041,8 @@ mod tests_journal;
 mod tests_local;
 #[cfg(test)]
 mod tests_lock;
+
+mod tests_locations;
 #[cfg(test)]
 mod tests_repair;
 #[cfg(test)]

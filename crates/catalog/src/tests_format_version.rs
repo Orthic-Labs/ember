@@ -213,8 +213,9 @@ fn op_variants_are_versioned() {
             Op::SetAsShotWb { .. } => 7,
             Op::SetHistoryCursor { .. } => 8,
             Op::SetFaceRejection { .. } => 9,
+            Op::SetSavedLocation { .. } => 10,
         }
     }
-    let newest = since(&Op::SetFaceRejection { photo: PhotoId(1), rect: Default::default(), person: String::new(), rejected: true });
+    let newest = since(&Op::SetSavedLocation { id: LocationId(1), location: None });
     assert_eq!(newest, VERSION, "the newest op's version must be the current format version");
 }

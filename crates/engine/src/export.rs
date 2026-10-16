@@ -766,6 +766,9 @@ pub struct ExportOptions {
     pub photos_album: String,
     /// The curve of an HDR AVIF: PQ (default) or HLG.
     pub hdr_transfer: HdrCurve,
+    /// HDR output: the most headroom (stops above SDR white, 0 to 5) the file keeps; brighter highlights are clamped to it.
+    /// `None` keeps the edit's own headroom limit (`develop.hdr`); a cap above that limit changes nothing.
+    pub hdr_max_ev: Option<f64>,
 }
 
 impl Default for ExportOptions {
@@ -796,6 +799,7 @@ impl Default for ExportOptions {
             add_to_photos: false,
             photos_album: String::new(),
             hdr_transfer: HdrCurve::Pq,
+            hdr_max_ev: None,
         }
     }
 }
@@ -838,6 +842,7 @@ pub const OPTION_PARAMS: &[&str] = &[
     "addToPhotos",
     "photosAlbum",
     "hdrTransfer",
+    "hdrMaxEv",
 ];
 
 /// Why an export can't add its files to Apple Photos on this platform (`None`: it can, when the
@@ -1015,6 +1020,9 @@ impl ExportOptions {
                 "sharpen" => parses(k, v, |s| SharpenFor::parse(s).is_some(), &["none", "screen", "matte", "glossy"])?,
                 "sharpenAmount" => parses(k, v, |s| SharpenAmount::parse(s).is_some(), &["low", "standard", "high"])?,
                 "hdrTransfer" => one_of(k, v, &["pq", "hlg"])?,
+                "hdrMaxEv" => {
+                    num(k, v, 0.0, lightcraft_develop::Hdr::MAX_EV_LIMIT)?;
+                }
                 "conflict" => parses(k, v, |s| Conflict::parse(s).is_some(), &["unique", "overwrite", "skip"])?,
                 "tiffCompression" => one_of(k, v, &["none", "lzw", "zip", "deflate"])?,
                 "jxlEffort" => one_of(k, v, &["fast", "normal"])?,
@@ -1154,6 +1162,12 @@ impl ExportOptions {
             add_to_photos: p.get("addToPhotos").and_then(Value::as_bool).unwrap_or(d.add_to_photos),
             photos_album: s("photosAlbum").map_or(d.photos_album, |a| a.trim().to_string()),
             hdr_transfer: s("hdrTransfer").and_then(HdrCurve::parse).unwrap_or(d.hdr_transfer),
+            hdr_max_ev: p
+                .get("hdrMaxEv")
+                .and_then(Value::as_f64)
+                .filter(|v| v.is_finite())
+                .map(|v| v.clamp(0.0, lightcraft_develop::Hdr::MAX_EV_LIMIT))
+                .or(d.hdr_max_ev),
         }
     }
 
@@ -1571,15 +1585,16 @@ pub fn encode_deep(img: &DeepImage, o: &ExportOptions, meta: Option<&Metadata>) 
     r.map_err(|e| e.to_string())
 }
 
-/// Whether the export of `photo` under `o` leaves out its location (GPS and place names).
-/// (`photo` and `catalog` let library-level privacy rules add to the export option.)
-pub fn removes_location(_photo: &lightcraft_catalog::Photo, _catalog: &lightcraft_catalog::Catalog, o: &ExportOptions) -> bool {
-    o.remove_location
+/// Whether the export of `photo` under `o` leaves out its location (GPS and place names). A photo inside a
+/// private saved location always does (issue #116), whatever the export option says.
+pub fn removes_location(photo: &lightcraft_catalog::Photo, catalog: &lightcraft_catalog::Catalog, o: &ExportOptions) -> bool {
+    o.remove_location || catalog.in_private_location(photo)
 }
 
 /// The metadata to embed for `photo` under `o.metadata` / `o.remove_location`. `None` = embed nothing.
 /// Keywords follow the catalog's keyword list (`Catalog::export_keywords`).
 pub fn export_metadata(photo: &lightcraft_catalog::Photo, catalog: &lightcraft_catalog::Catalog, o: &ExportOptions) -> Option<Metadata> {
+    let remove_location = removes_location(photo, catalog, o);
     let m = &photo.meta;
     let text = |s: &str| (!s.trim().is_empty()).then(|| s.to_string());
     // copyright info (also under "copyright only"): notice, creator, status, usage terms, info URL
@@ -1601,7 +1616,7 @@ pub fn export_metadata(photo: &lightcraft_catalog::Photo, catalog: &lightcraft_c
     out.caption = text(&m.caption);
     out.alt_text = text(&m.alt_text);
     out.extended_description = text(&m.extended_description);
-    if !o.remove_location {
+    if !remove_location {
         out.sublocation = text(&m.location);
         out.city = text(&m.city);
         out.state = text(&m.state);
@@ -1614,7 +1629,7 @@ pub fn export_metadata(photo: &lightcraft_catalog::Photo, catalog: &lightcraft_c
     out.rating = (photo.rating > 0).then_some(photo.rating as i8);
     // Pixels are exported upright: orientation is baked in.
     out.orientation = Some(lightcraft_meta::Orientation::Normal);
-    if !o.remove_location {
+    if !remove_location {
         out.gps = m.gps.map(|(latitude, longitude)| Gps { latitude, longitude, altitude: None });
     }
     if o.metadata == MetadataPolicy::All {
@@ -1715,6 +1730,17 @@ pub fn prepare_batch(session: &mut crate::Session, ids: &[lightcraft_catalog::Ph
     ids.iter().enumerate().map(|(i, id)| prepare_guarded(session, *id, o, i + 1, guard.clone())).collect()
 }
 
+/// Limits the headroom an HDR render may reach to `cap` stops above SDR white ([`ExportOptions::hdr_max_ev`]); the render's
+/// cache key follows. A cap at or above the edit's own headroom limit, or an SDR render, is left alone.
+fn cap_headroom(job: &mut crate::media::RenderJob, cap: Option<f64>) {
+    let Some(cap) = cap.filter(|c| c.is_finite()) else { return };
+    if job.settings.hdr.enabled && cap < job.settings.hdr.max_ev {
+        let cap = cap.clamp(0.0, lightcraft_develop::Hdr::MAX_EV_LIMIT);
+        std::sync::Arc::make_mut(&mut job.settings).hdr.max_ev = cap;
+        job.key ^= cap.to_bits().wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    }
+}
+
 fn prepare_guarded(
     session: &mut crate::Session,
     id: lightcraft_catalog::PhotoId,
@@ -1740,12 +1766,21 @@ fn prepare_guarded(
         let label = p.file_name.clone();
         let meta = export_metadata(p, &session.catalog, o);
         let gain_map = o.hdr_output() && o.format == ExportFormat::Jpeg;
-        let job = session.export_job(id, w, h, o.effective_space(), o.effective_depth())?;
+        let mut job = session.export_job(id, w, h, o.effective_space(), o.effective_depth())?;
+        if job.request.depth == OutputDepth::F32Hdr {
+            cap_headroom(&mut job, o.hdr_max_ev);
+        }
         let weight = render_weight(full_px, long, job.level, w.saturating_mul(h));
         if let Some(why) = too_big_for_memory((w, h), native_px, weight, crate::memory::total_ram()) {
             return Err(format!("{label}: {why}"));
         }
-        let hdr_job = if gain_map { Some(session.export_job(id, w, h, o.effective_space(), OutputDepth::F32Hdr)?) } else { None };
+        let hdr_job = if gain_map {
+            let mut hj = session.export_job(id, w, h, o.effective_space(), OutputDepth::F32Hdr)?;
+            cap_headroom(&mut hj, o.hdr_max_ev);
+            Some(hj)
+        } else {
+            None
+        };
         (Work::Render(Box::new(RenderWork { job, hdr_job, meta, opts: o.clone() })), weight)
     } else {
         let lightcraft_catalog::Source::File { path } = &p.source else {
@@ -2461,6 +2496,27 @@ mod tests {
         let jpg = encode_with_metadata(&test_image(), &ExportOptions::default(), Some(&m)).unwrap();
         let back = lightcraft_meta::extract(&jpg);
         assert_eq!((back.keywords, back.hierarchical_keywords), (m.keywords.clone(), m.hierarchical_keywords.clone()));
+    }
+
+    #[test]
+    fn a_private_saved_location_leaves_its_photos_location_out_of_exports() {
+        use lightcraft_catalog::{Catalog, LocationId, Op, Photo, PhotoId, Source, locations::SavedLocation};
+        let photo = |id: u64, gps: (f64, f64)| {
+            let mut p = Photo::new(PhotoId(id), Source::Demo { scene: 0 }, "a.jpg", "jpeg", 10, 10, "2026-09-30T00:00:00");
+            p.meta.gps = Some(gps);
+            p.meta.city = "Somewhere".into();
+            p
+        };
+        let mut c = Catalog::new();
+        let home = SavedLocation { name: "Home".into(), lat: 43.0, lon: -110.0, radius_m: 500.0, private: true };
+        c.apply(Op::SetSavedLocation { id: LocationId(1), location: Some(home) }).unwrap();
+        let (inside, outside) = (photo(1, (43.0, -110.0)), photo(2, (44.0, -110.0)));
+        let o = ExportOptions::default();
+        assert!(removes_location(&inside, &c, &o) && !removes_location(&outside, &c, &o));
+        let m = export_metadata(&inside, &c, &o).unwrap();
+        assert!(m.gps.is_none() && m.city.is_none(), "a photo in a private location exports no location");
+        let m = export_metadata(&outside, &c, &o).unwrap();
+        assert!(m.gps.is_some() && m.city.is_some(), "a photo outside it keeps its location");
     }
 
     #[test]
