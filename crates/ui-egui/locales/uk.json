@@ -2298,5 +2298,12 @@
   "Output profile": "Профіль виводу",
   "Output Profile": "Профіль виводу",
   "Export Print PDF": "Експорт PDF для друку",
-  "Choose Print Output Profile": "Вибрати профіль виводу для друку"
+  "Choose Print Output Profile": "Вибрати профіль виводу для друку",
+  "Trim": "Обрізання",
+  "Set In": "Початок",
+  "Set Out": "Кінець",
+  "Clear Trim": "Скинути обрізання",
+  "Start the clip at the frame on screen": "Почати кліп з кадру на екрані",
+  "End the clip at the frame on screen": "Закінчити кліп на кадрі на екрані",
+  "Keep the whole clip again": "Знову використовувати весь кліп"
 }

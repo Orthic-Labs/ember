@@ -2298,5 +2298,12 @@
   "Output profile": "출력 프로필",
   "Output Profile": "출력 프로필",
   "Export Print PDF": "인쇄 PDF 내보내기",
-  "Choose Print Output Profile": "인쇄 출력 프로필 선택"
+  "Choose Print Output Profile": "인쇄 출력 프로필 선택",
+  "Trim": "트림",
+  "Set In": "시작점 설정",
+  "Set Out": "종료점 설정",
+  "Clear Trim": "트림 해제",
+  "Start the clip at the frame on screen": "화면에 보이는 프레임에서 클립을 시작합니다",
+  "End the clip at the frame on screen": "화면에 보이는 프레임에서 클립을 끝냅니다",
+  "Keep the whole clip again": "클립 전체를 다시 사용합니다"
 }

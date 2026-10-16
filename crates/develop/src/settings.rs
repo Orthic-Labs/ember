@@ -156,6 +156,12 @@ pub struct DevelopSettings {
     /// cached preview stays valid).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub poster_time: Option<f64>,
+    /// A video's trim (`video.setTrim`): the in and out points (seconds) of the part of the clip exports keep. `None` is the clip's
+    /// start or end. The file is never cut. Not written while unset, so settings without a trim keep their JSON and `hash64`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trim_in: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trim_out: Option<f64>,
 }
 
 impl Default for DevelopSettings {
@@ -191,6 +197,8 @@ impl Default for DevelopSettings {
             calibration: Calibration::default(),
             disabled_sections: Vec::new(),
             poster_time: None,
+            trim_in: None,
+            trim_out: None,
         }
     }
 }

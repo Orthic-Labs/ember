@@ -35,7 +35,7 @@ humans pick work from **[Top gaps](#top-gaps)**; whoever lands a feature updates
 | O. Merge (MERGE) | 4 | 0 | 0 | 0 | — | — |
 | P. Enhance (ENH) | 0 | 0 | 2 | 0 | — | — |
 | Q. HDR (HDR) | 2 | 3 | 0 | 0 | — | — |
-| R. Video (VID) | 0 | 0 | 5 | 1 | — | 0/2 (0%) |
+| R. Video (VID) | 0 | 1 | 4 | 1 | — | 0/2 (0%) |
 | S. Export (EXP) | 15 | 3 | 0 | 0 | 7/7 (100%) | 7/7 (100%) |
 | T. Share (SHARE) | 0 | 0 | 0 | 4 | — | — |
 | U. Map & location (MAP) | 0 | 1 | 1 | 0 | — | 0/1 (0%) |
@@ -45,9 +45,9 @@ humans pick work from **[Top gaps](#top-gaps)**; whoever lands a feature updates
 | Y. Menus | 84 | 0 | 4 | 8 | 47/47 (100%) | 23/23 (100%) |
 | Z. Keyboard shortcuts (desktop) | 76 | 3 | 3 | 1 | 49/52 (94%) | 23/24 (96%) |
 | reference catalog editor extras | 34 | 16 | 35 | 8 | — | 24/26 (92%) |
-| **Total** | 408 | 51 | 71 | 35 | 192/200 (96%) | 146/157 (93%) |
+| **Total** | 408 | 52 | 70 | 35 | 192/200 (96%) | 146/157 (93%) |
 
-Weighted completion (✅ = 1, 🟡 = ½, 🚫 left out): **81.8%** of 530 in-scope rows — P0 98.0% of 200 · P1 95.5% of 157 · P2 50.3% of 172.
+Weighted completion (✅ = 1, 🟡 = ½, 🚫 left out): **81.9%** of 530 in-scope rows — P0 98.0% of 200 · P1 95.9% of 157 · P2 50.3% of 172.
 <!-- /parity:summary -->
 
 ## Top gaps and shortcut notes
@@ -428,7 +428,7 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 | Id | Feature | Tier | Status | Evidence | Missing / notes |
 |---|---|---|---|---|---|
 | LR-VID-PLAY | Video playback | P1 | ⬜ | `crates/catalog/src/model.rs` | videos can be catalogued (kind, duration); no player [#73](https://github.com/Orthic-Labs/ember/issues/73) |
-| LR-VID-TRIM | Trim | P1 | ⬜ | | [#74](https://github.com/Orthic-Labs/ember/issues/74) |
+| LR-VID-TRIM | Trim | P1 | 🟡 | `cmd:video.setTrim`, `cmd:video.clearTrim`, `crates/video/src/trim.rs`, `crates/ui-egui/src/video_trim.rs` | non-destructive in and out points kept in the develop settings (seconds, held inside the clip, in before out, one undo step, absent from the JSON while unset so no hash changes); the loupe has a Trim row with Set In and Set Out at the frame on screen (the poster frame until the player exists) and Clear Trim; tests `set_trim_stores_the_points_as_one_undo_step`, `a_trim_is_refused_outside_the_clip_and_changes_nothing`; missing: draggable handles on the player's scrubber and playback held to the range, both with the player ([#73](https://github.com/Orthic-Labs/ember/issues/73)) [#74](https://github.com/Orthic-Labs/ember/issues/74) |
 | LR-VID-EDIT | Edits on video | P2 | ⬜ | | [#75](https://github.com/Orthic-Labs/ember/issues/75) |
 | LR-VID-COVER | Cover frame | P2 | ⬜ | | [#76](https://github.com/Orthic-Labs/ember/issues/76) |
 | LR-VID-EXPORT | Video export | P2 | ⬜ | | [#77](https://github.com/Orthic-Labs/ember/issues/77) |
@@ -843,6 +843,7 @@ Latin stays upright. Advanced Japanese composition remains open. Regression cove
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | LR-VID-TRIM ⬜→🟡 (#74): `video.setTrim` and `video.clearTrim` keep non-destructive in and out points in the develop settings, and the loupe has a Trim row (Set In, Set Out, Clear Trim); handles on the player's scrubber wait for the player |
 | 2026-10-17 | minor | KEYC-DEVELOP (#153): ⇧W picks the Point Color tool in the Classic layer (`cmd:tool.pointColor`); every key in the title is bound, status ✅ (the ellipsis in the title is not checked key by key); the Point Color tool existed in develop, so no colour tool is added |
 | 2026-10-17 | minor | KEYC-PANELS (#146): T toggles the bottom toolbar (`cmd:view.toolbar`, persisted); KEYC-PANELS ✅ (every key in the title is bound; solo mode is Alt-click) |
 | 2026-10-17 | minor | KEYC-PANELS (#146): Solo Mode (`cmd:view.soloMode`, Alt-click on an Edit section header; the last section opened stays open); status unchanged (🟡: T open) |

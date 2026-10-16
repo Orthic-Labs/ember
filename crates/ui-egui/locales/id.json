@@ -2298,5 +2298,12 @@
   "Output profile": "Profil output",
   "Output Profile": "Profil output",
   "Export Print PDF": "Ekspor PDF cetak",
-  "Choose Print Output Profile": "Pilih profil output cetak"
+  "Choose Print Output Profile": "Pilih profil output cetak",
+  "Trim": "Pangkas",
+  "Set In": "Setel awal",
+  "Set Out": "Setel akhir",
+  "Clear Trim": "Hapus pangkasan",
+  "Start the clip at the frame on screen": "Mulai klip dari bingkai yang tampil",
+  "End the clip at the frame on screen": "Akhiri klip pada bingkai yang tampil",
+  "Keep the whole clip again": "Simpan seluruh klip lagi"
 }

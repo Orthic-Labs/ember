@@ -2297,5 +2297,12 @@
   "Output profile": "Profil de sortie",
   "Output Profile": "Profil de sortie",
   "Export Print PDF": "Exporter le PDF d’impression",
-  "Choose Print Output Profile": "Choisir le profil de sortie d’impression"
+  "Choose Print Output Profile": "Choisir le profil de sortie d’impression",
+  "Trim": "Couper",
+  "Set In": "Point d’entrée",
+  "Set Out": "Point de sortie",
+  "Clear Trim": "Effacer la coupe",
+  "Start the clip at the frame on screen": "Faire commencer le clip à l’image affichée",
+  "End the clip at the frame on screen": "Faire finir le clip à l’image affichée",
+  "Keep the whole clip again": "Garder de nouveau tout le clip"
 }

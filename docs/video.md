@@ -1,6 +1,6 @@
 # Video
 
-*Last updated: 2026-10-17 (foundation: probe and poster frame; issues #73, #76).*
+*Last updated: 2026-10-17 (foundation: probe and poster frame; trim; issues #73, #74, #76).*
 
 Ember catalogues videos, shows a poster frame for each in the grid, the loupe and exports, and lets you choose which frame that is.
 Playback comes next (silent first, #73); this page records what exists and how it is built.
@@ -63,6 +63,19 @@ the sidecar; tests that need a real clip skip without it.
   so no existing settings hash changes; once set, the thumbnail cache key changes and the decoded sources are dropped.
 - Frames larger than a thumbnail show as "Reading Video Frame" in the activity stack, with a stop button that kills the child process.
 
+## Trim
+
+`video.setTrim {id?, in?, out?}` stores the in and out points (seconds) of the part of a clip that exports keep, in the photo's develop
+settings (`trim_in`, `trim_out`); `video.clearTrim {id?}` keeps the whole clip again. The file is never cut.
+
+- A point left out of `setTrim` stays as it is and `null` clears it. Points are held to the clip: an out point at or past the end is no
+  out point, an in point at or past the end is refused, and in must be before out with at least 0.05 s between them
+  (`lightcraft_video::check_trim`). A clip whose duration is not known (imported without the sidecar) is checked only against itself.
+- Each call is one undo step (a History entry, "Set Trim" or "Clear Trim"). The fields are absent from the JSON while unset, so no
+  existing settings hash changes; a trim is a choice of range, not an edit of the picture (`is_unedited` ignores it).
+- The loupe shows a Trim row at the bottom of a video that has a duration: the points, **Set In** and **Set Out** (at the frame on
+  screen, which is the poster frame until the player exists) and **Clear Trim**. The player's scrubber gets draggable handles with it.
+
 ## Licence
 
 FFmpeg is LGPL-2.1-or-later and is **not in this repository**. It is run as a separate program, never linked. Release bundles that include
@@ -72,5 +85,6 @@ decision in `CLAUDE.md` ("Pure Rust ... except the verified LGPL ffmpeg sidecar"
 
 ## Not yet
 
-Silent playback (play/pause, seek, a player in the loupe), audio, a grid badge and duration label, a poster chooser in the UI, video
-export and the bundling of the sidecar into the installers (release tooling), and Linux.
+Silent playback (play/pause, seek, a player in the loupe) with trim handles on its scrubber and playback held to the trimmed range, audio,
+a grid badge and duration label, a poster chooser in the UI, video export (which will honour the trim) and the bundling of the sidecar
+into the installers (release tooling), and Linux.

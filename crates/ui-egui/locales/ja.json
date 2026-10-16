@@ -2300,5 +2300,12 @@
   "Output profile": "出力プロファイル",
   "Output Profile": "出力プロファイル",
   "Export Print PDF": "印刷用 PDF を書き出す",
-  "Choose Print Output Profile": "印刷の出力プロファイルを選択"
+  "Choose Print Output Profile": "印刷の出力プロファイルを選択",
+  "Trim": "トリム",
+  "Set In": "イン点を設定",
+  "Set Out": "アウト点を設定",
+  "Clear Trim": "トリムを解除",
+  "Start the clip at the frame on screen": "表示中のフレームからクリップを開始します",
+  "End the clip at the frame on screen": "表示中のフレームでクリップを終了します",
+  "Keep the whole clip again": "クリップ全体を再び使用します"
 }

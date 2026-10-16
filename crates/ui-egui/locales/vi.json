@@ -2298,5 +2298,12 @@
   "Output profile": "Hồ sơ đầu ra",
   "Output Profile": "Hồ sơ đầu ra",
   "Export Print PDF": "Xuất PDF in",
-  "Choose Print Output Profile": "Chọn hồ sơ đầu ra in"
+  "Choose Print Output Profile": "Chọn hồ sơ đầu ra in",
+  "Trim": "Cắt",
+  "Set In": "Đặt điểm vào",
+  "Set Out": "Đặt điểm ra",
+  "Clear Trim": "Xóa đoạn cắt",
+  "Start the clip at the frame on screen": "Bắt đầu clip từ khung hình đang hiển thị",
+  "End the clip at the frame on screen": "Kết thúc clip tại khung hình đang hiển thị",
+  "Keep the whole clip again": "Giữ lại toàn bộ clip"
 }

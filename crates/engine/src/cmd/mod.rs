@@ -43,6 +43,7 @@ mod query;
 mod slideshow;
 mod sync;
 mod video;
+mod video_trim;
 mod xmp;
 
 use serde::Serialize;
@@ -184,6 +185,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(print::specs());
         v.extend(calibrate::specs());
         v.extend(video::specs());
+        v.extend(video_trim::specs());
         v
     })
 }

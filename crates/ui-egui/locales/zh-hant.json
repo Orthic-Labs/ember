@@ -2297,5 +2297,12 @@
   "Output profile": "輸出設定檔",
   "Output Profile": "輸出設定檔",
   "Export Print PDF": "匯出列印 PDF",
-  "Choose Print Output Profile": "選擇列印輸出設定檔"
+  "Choose Print Output Profile": "選擇列印輸出設定檔",
+  "Trim": "剪輯",
+  "Set In": "設定入點",
+  "Set Out": "設定出點",
+  "Clear Trim": "清除剪輯",
+  "Start the clip at the frame on screen": "從畫面上顯示的影格開始剪輯",
+  "End the clip at the frame on screen": "在畫面上顯示的影格結束剪輯",
+  "Keep the whole clip again": "恢復使用整段剪輯"
 }

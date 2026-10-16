@@ -48,6 +48,7 @@ pub mod tasks;
 pub mod text_field;
 pub mod theme;
 pub mod titlebar;
+pub mod video_trim;
 pub mod widgets;
 
 #[cfg(test)]

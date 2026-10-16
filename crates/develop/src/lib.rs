@@ -67,13 +67,15 @@ impl DevelopSettings {
     }
 
     /// True if nothing differs from a fresh default (ignoring white balance "as shot" values, and
-    /// the rendering process and a video's poster time: those are not edits).
+    /// the rendering process, a video's poster time and its trim: those are not edits).
     pub fn is_unedited(&self) -> bool {
         let mut a = self.clone();
         let d = DevelopSettings::default();
         a.wb = d.wb;
         a.process = d.process;
         a.poster_time = d.poster_time;
+        a.trim_in = d.trim_in;
+        a.trim_out = d.trim_out;
         a == d
     }
 
@@ -285,6 +287,22 @@ mod tests {
         assert_ne!(on.hash64(), s.hash64());
         assert_eq!(DevelopSettings::from_json(&on.to_json()).unwrap(), on);
         assert!(on.is_unedited(), "a poster time is a choice of frame, not an edit");
+    }
+
+    #[test]
+    fn an_unset_trim_is_not_serialized_so_existing_hashes_stay() {
+        let s = DevelopSettings::default();
+        let json = s.to_json();
+        assert!(json.get("trim_in").is_none() && json.get("trim_out").is_none(), "no trim must not change the settings JSON or hash64");
+        let mut on = s.clone();
+        on.trim_in = Some(1.5);
+        on.trim_out = Some(9.0);
+        let json = on.to_json();
+        assert_eq!(json.get("trim_in").and_then(serde_json::Value::as_f64), Some(1.5));
+        assert_eq!(json.get("trim_out").and_then(serde_json::Value::as_f64), Some(9.0));
+        assert_ne!(on.hash64(), s.hash64());
+        assert_eq!(DevelopSettings::from_json(&on.to_json()).unwrap(), on);
+        assert!(on.is_unedited(), "a trim is a choice of range, not an edit");
     }
 
     #[test]

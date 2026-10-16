@@ -24,6 +24,9 @@ use lightcraft_raster::Rgba8;
 use serde_json::Value;
 
 mod sidecar;
+mod trim;
+
+pub use trim::{MIN_TRIM_SECS, Trim, check_trim, kept_range};
 
 /// File extensions (lower case) Ember treats as video. The engine's import list contains every one of them.
 pub const EXTENSIONS: &[&str] = &["mp4", "m4v", "mov", "mkv", "webm", "avi", "mts", "m2ts"];

@@ -2299,5 +2299,12 @@
   "Output profile": "输出配置文件",
   "Output Profile": "输出配置文件",
   "Export Print PDF": "导出打印 PDF",
-  "Choose Print Output Profile": "选择打印输出配置文件"
+  "Choose Print Output Profile": "选择打印输出配置文件",
+  "Trim": "剪辑",
+  "Set In": "设置入点",
+  "Set Out": "设置出点",
+  "Clear Trim": "清除剪辑",
+  "Start the clip at the frame on screen": "从屏幕上显示的帧开始剪辑",
+  "End the clip at the frame on screen": "在屏幕上显示的帧结束剪辑",
+  "Keep the whole clip again": "恢复使用整个剪辑"
 }
