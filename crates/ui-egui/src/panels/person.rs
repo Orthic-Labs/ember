@@ -91,6 +91,8 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, name: &str) {
     let page = page_for(app, name, now);
     let shown_name = if page.name.is_empty() { name.to_string() } else { page.name.clone() };
     ui.add_space(8.0);
+    // set by the Merge menu; applied once the header is drawn
+    let mut merge_into: Option<String> = None;
     ui.horizontal(|ui| {
         ui.add_space(PAD - 4.0);
         let back = ui.button("‹ People");
@@ -109,8 +111,34 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, name: &str) {
                 let _ = app.run("library.filter", json!({"person": shown_name}));
                 let _ = app.run("view.photoGrid", json!({}));
             }
+            // "Merge into…": this person is another of the named people. The list is read only when the menu is open.
+            let merge = ui.menu_button("Merge into…", |ui| {
+                let others: Vec<String> = app
+                    .session
+                    .catalog
+                    .people()
+                    .into_iter()
+                    .map(|p| p.name)
+                    .filter(|n| !n.trim().eq_ignore_ascii_case(shown_name.trim()))
+                    .collect();
+                if others.is_empty() {
+                    ui.label("No other people to merge into");
+                }
+                for other in others {
+                    if ui.button(&other).clicked() {
+                        merge_into = Some(other);
+                    }
+                }
+            });
+            register(ui.ctx(), "person:merge", merge.response.rect);
+            merge.response.on_hover_text("Name all of this person's faces as another person, one undo step");
         });
     });
+    if let Some(target) = merge_into {
+        let _ = app.run("faces.mergePeople", json!({"from": shown_name, "into": target}));
+        let _ = app.run("view.person", json!({"name": target}));
+        return;
+    }
     ui.add_space(6.0);
     if page.total == 0 {
         super::empty_message(
