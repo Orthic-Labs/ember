@@ -323,6 +323,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     let r = ui.checkbox(pick_best, crate::i18n::tr("Pick the sharpest photo of each burst"));
                     crate::widgets::register(ui.ctx(), "check:cullPick", r.rect);
                     ui.label(egui::RichText::new(crate::i18n::tr("Scores stay on the photos: filter or make smart albums with Focus and Best of Similar Shots.")).color(t.text_dim));
+                    ui.label(egui::RichText::new(crate::i18n::tr("Suggestions are reviewed before anything is flagged.")).color(t.text_dim));
                 }
                 Dialog::WhatsNew => {
                     egui::ScrollArea::vertical().max_height(list_height(ui, 460.0)).auto_shrink([false, true]).show(ui, |ui| {
@@ -1724,13 +1725,8 @@ pub fn confirm_dialog(app: &mut LightcraftApp, dlg: &Dialog) -> Result<serde_jso
         Dialog::DenoiseModel { info, accepted } => crate::panels::denoise::install(app, info, *accepted),
         Dialog::FaceModel { path, info, accepted } => crate::panels::faces::install(app, path, info, *accepted),
         Dialog::AllMetadata { .. } | Dialog::SystemInfo { .. } | Dialog::WhatsNew => Ok(serde_json::Value::Null),
-        Dialog::Cull { reject_below, pick_best } => {
-            let mut p = json!({"pickBest": pick_best});
-            if *reject_below > 0.0 {
-                p["rejectBelow"] = json!(reject_below);
-            }
-            app.run("photo.analyze", p)
-        }
+        // the analysis runs in the background; its proposal is reviewed before anything is flagged (#44)
+        Dialog::Cull { reject_below, pick_best } => crate::cull_review::start(app, *reject_below, *pick_best),
         Dialog::SmartRules { id, name, rules, parent } => {
             // refused before anything changes (not even the name)
             if let Some(problem) = rules.check_for(&app.session.catalog, id.map(lightcraft_catalog::AlbumId)).first() {

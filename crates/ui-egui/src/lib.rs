@@ -11,6 +11,7 @@ pub mod brush_live;
 mod command_error;
 pub mod control;
 pub mod credits;
+pub mod cull_review;
 pub mod date_picker;
 pub mod docking;
 pub mod early_access;
@@ -61,6 +62,8 @@ mod tests_copy_paste_dialogs;
 mod tests_crop_rotate;
 #[cfg(test)]
 mod tests_crop_tool;
+#[cfg(test)]
+mod tests_cull_review;
 #[cfg(test)]
 mod tests_curve;
 #[cfg(test)]
@@ -396,6 +399,8 @@ pub struct LightcraftApp {
     /// Where the host renders and encodes exports instead of this thread (the web's workers,
     /// #192); `None`: in the foreground, or on a thread of [`Services::write_shared`].
     pub export_offload: Option<export_task::ExportOffload>,
+    /// Assisted Culling's analysis and reviewed proposal, until it is applied or discarded (#44).
+    pub cull_review: cull_review::CullReview,
     /// Background file-system work of other commands (Find Missing Photos, auto import…).
     pub tasks: tasks::Tasks,
     /// The files of the last finished background export (`ui.inspect` → `export.last`).
@@ -506,6 +511,7 @@ impl LightcraftApp {
             hdr_headroom_read: None,
             library_problem: None,
             activity_expanded: false,
+            cull_review: Default::default(),
             model_setup: Default::default(),
         }
     }
@@ -1371,6 +1377,8 @@ impl LightcraftApp {
         panels::dialogs::show(self, &ctx);
         panels::library_problem::show(self, &ctx);
         export_task::poll(self, &ctx);
+        cull_review::poll(self, &ctx);
+        cull_review::show(self, &ctx);
         panels::activity::show(self, &ctx);
         export_task::poll_photos(self, &ctx);
         pick::poll(self, &ctx);
