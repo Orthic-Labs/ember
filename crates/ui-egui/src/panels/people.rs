@@ -1,7 +1,7 @@
 //! People: a card per person named on faces (read from XMP): a close-up of their face and how many photos they are in
 //! (a small number on the picture). A click opens that person's page (`person.rs`): only their cropped faces, and the
-//! faces that look like them. Below the people, the faces nobody has named yet (`unnamed.rs`), to be named a group at a
-//! time.
+//! faces that look like them. Below the people, the faces nobody has named yet (`unnamed.rs`): first the look-alike
+//! groups, stacked with their counts, each named at once, then every unnamed face.
 //!
 //! The thumbnail-size slider in the bottom bar sizes the faces here too (with its own smaller and larger limits), and
 //! every face is cut from the same kind of box (the detector's, once the scan has looked at it), so faces are shown
@@ -22,6 +22,9 @@ const HEADER_H: f32 = 44.0;
 const NAME_H: f32 = 26.0;
 /// The unnamed-faces heading and its hints.
 const SECTION_H: f32 = 70.0;
+/// The look-alike groups' heading, and a group's label under its picture (its count and its button).
+const GROUPS_H: f32 = 30.0;
+const GROUP_LABEL_H: f32 = 52.0;
 
 /// `thumb` (the thumbnail slider, 90 to 480) as a position between `low` and `high`.
 fn between(thumb: f32, low: f32, high: f32) -> f32 {
@@ -107,8 +110,11 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         let named_h = if people.is_empty() { 40.0 } else { PAD + rows as f32 * row_h };
         let (tile_cols, tile_row) = (columns(width, tile), tile + GAP);
         let tile_rows = unnamed.faces.len().div_ceil(tile_cols);
+        let group_row = tile + GROUP_LABEL_H + GAP;
+        let groups_h = if unnamed.clusters.is_empty() { 0.0 } else { GROUPS_H + unnamed.clusters.len().div_ceil(tile_cols) as f32 * group_row };
         let section_top = named_h + 6.0;
-        let (area, _) = ui.allocate_exact_size(vec2(width, section_top + SECTION_H + tile_rows as f32 * tile_row + PAD), Sense::hover());
+        let grid_top = section_top + SECTION_H + groups_h;
+        let (area, _) = ui.allocate_exact_size(vec2(width, grid_top + tile_rows as f32 * tile_row + PAD), Sense::hover());
         let visible = |top: f32, rows: usize, row_h: f32| {
             let first = ((viewport.top() - top) / row_h).floor().max(0.0) as usize;
             let last = (((viewport.bottom() - top) / row_h).ceil().max(0.0) as usize).min(rows);
@@ -137,7 +143,17 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         let top = area.top() + section_top;
         ui.painter().line_segment([pos2(area.left() + PAD, top), pos2(area.right() - PAD, top)], Stroke::new(1.0, t.button_border));
         super::unnamed::section_header(app, ui, &unnamed, pos2(area.left() + PAD, top + 14.0), area.right() - PAD);
-        let grid_top = section_top + SECTION_H;
+        // the look-alike groups, stacked, each with its count and a button to name it
+        if !unnamed.clusters.is_empty() {
+            let heading = area.top() + section_top + SECTION_H;
+            let title = crate::i18n::tr("Look-alike groups");
+            ui.painter().text(pos2(area.left() + PAD, heading + 14.0), Align2::LEFT_CENTER, title, t.semibold(13.0), t.text);
+            let groups_top = heading + GROUPS_H;
+            for (i, group) in unnamed.clusters.iter().enumerate() {
+                let min = pos2(area.left() + PAD + (i % tile_cols) as f32 * (tile + GAP), groups_top + (i / tile_cols) as f32 * group_row);
+                super::unnamed::cluster_card(app, ui, group, Rect::from_min_size(min, vec2(tile, tile + GROUP_LABEL_H)), tile, ppp);
+            }
+        }
         for row in visible(grid_top, tile_rows, tile_row) {
             for col in 0..tile_cols {
                 let i = row * tile_cols + col;

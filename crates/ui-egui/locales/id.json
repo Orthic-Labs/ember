@@ -2178,5 +2178,7 @@
   "GPU choice": "Pilihan GPU",
   "High performance": "Performa tinggi",
   "Power saving": "Hemat daya",
-  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Hemat daya memilih GPU terintegrasi jika ada. Perubahan berlaku saat GPU dimulai berikutnya."
+  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Hemat daya memilih GPU terintegrasi jika ada. Perubahan berlaku saat GPU dimulai berikutnya.",
+  "Look-alike groups": "Grup wajah yang mirip",
+  "Name this person": "Beri nama orang ini"
 }

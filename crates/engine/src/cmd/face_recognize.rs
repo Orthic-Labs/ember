@@ -35,7 +35,8 @@ fn apply_name(region: &mut lightcraft_meta::Region, name: &Option<String>) {
 }
 
 /// `faces.nameFaces {faces: [{photo, index}], name}`: name (or clear) many face regions at once, as one undo step: what
-/// naming a group of look-alikes does.
+/// naming a group of look-alikes does. A face the user marked "not this person" for `name` is left unnamed (counted as
+/// `skipped`), so a group can be named without undoing that mark.
 fn name_faces(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "faces.nameFaces";
     let name = name_param(p, C)?;
@@ -52,29 +53,32 @@ fn name_faces(s: &mut Session, p: &Value) -> Result<Value> {
         };
         by_photo.entry(photo).or_default().push(index);
     }
-    let (mut ops, mut named) = (Vec::new(), 0usize);
+    let (mut ops, mut named, mut skipped) = (Vec::new(), 0usize, 0usize);
     for (photo, indexes) in by_photo {
         let id = lightcraft_catalog::PhotoId(photo);
         let Some(photo) = s.catalog.photo(id) else { continue };
         let mut meta = photo.meta.clone();
         let before = named;
         for i in indexes {
-            if let Some(region) = meta.regions.get_mut(i).filter(|r| r.kind == lightcraft_meta::RegionKind::Face) {
-                apply_name(region, &name);
-                named += 1;
+            let Some(region) = meta.regions.get_mut(i).filter(|r| r.kind == lightcraft_meta::RegionKind::Face) else { continue };
+            if name.as_deref().is_some_and(|n| s.catalog.is_face_rejected(id, &region.rect, n)) {
+                skipped += 1;
+                continue;
             }
+            apply_name(region, &name);
+            named += 1;
         }
         if named > before {
             ops.push(Op::SetMeta { id, meta: Box::new(meta) });
         }
     }
     if ops.is_empty() {
-        return Err(bad(C, "none of those faces exist"));
+        return Err(bad(C, if skipped > 0 { "those faces are marked not this person" } else { "none of those faces exist" }));
     }
     let photos = ops.len();
     s.commit(if name.is_some() { "Name Faces" } else { "Clear Face Names" }, Op::Batch { ops })?;
     s.skip_auto_write = true;
-    Ok(json!({"named": named, "photos": photos, "name": name}))
+    Ok(json!({"named": named, "photos": photos, "name": name, "skipped": skipped}))
 }
 
 /// `faces.setName {id?, index, name}`: name (or, with `null` or an empty name, un-name) one face region. Naming
@@ -171,15 +175,7 @@ struct Arranged {
 /// faces that look alike are next to each other, and a face the named faces recognise carries the name they suggest.
 fn unnamed(s: &mut Session, p: &Value) -> Result<Value> {
     let limit = p.get("limit").and_then(Value::as_u64).map_or(600, |n| usize::try_from(n).unwrap_or(600)).clamp(1, MAX_UNNAMED);
-    let mut all: Vec<(u64, usize, lightcraft_geom::Rect)> = Vec::new();
-    for ph in s.catalog.photos().filter(|ph| ph.in_library()) {
-        for (index, r) in ph.meta.regions.iter().enumerate() {
-            if r.kind == lightcraft_meta::RegionKind::Face && r.name.is_none() {
-                all.push((ph.id.0, index, r.rect));
-            }
-        }
-    }
-    all.sort_by_key(|(photo, index, _)| (*photo, *index));
+    let mut all = unnamed_faces(s);
     let total = all.len();
     let arranged = imp::arrange_unnamed(s, &mut all, limit);
     all.truncate(limit);
@@ -192,6 +188,65 @@ fn unnamed(s: &mut Session, p: &Value) -> Result<Value> {
         })
         .collect();
     Ok(json!({"total": total, "faces": faces, "ordered": arranged.ordered, "ready": arranged.ready}))
+}
+
+/// Every unnamed face in the library, in photo order: `(photo, region index, box)`.
+fn unnamed_faces(s: &Session) -> Vec<(u64, usize, lightcraft_geom::Rect)> {
+    let mut all: Vec<(u64, usize, lightcraft_geom::Rect)> = Vec::new();
+    for ph in s.catalog.photos().filter(|ph| ph.in_library()) {
+        for (index, r) in ph.meta.regions.iter().enumerate() {
+            if r.kind == lightcraft_meta::RegionKind::Face && r.name.is_none() {
+                all.push((ph.id.0, index, r.rect));
+            }
+        }
+    }
+    all.sort_by_key(|(photo, index, _)| (*photo, *index));
+    all
+}
+
+/// Most unnamed faces `faces.clusters` groups in one call (the first in photo order). Grouping looks at every pair of
+/// the faces in a pass, so a refresh stays near half a gigaflop: faces beyond this wait for the next call.
+const MAX_GROUPED: usize = 2000;
+/// Faces grouped per pass: the first `GROUP_PASS` together, then the next, and so on (groups never span two passes).
+const GROUP_PASS: usize = 1000;
+/// Most groups `faces.clusters` lists, largest first.
+const MAX_GROUPS: usize = 40;
+
+/// What grouping the unnamed faces found.
+struct Grouped {
+    /// Recognition is on and a model is loaded (otherwise nothing is grouped).
+    ready: bool,
+    /// Faces that were grouped (at most `MAX_GROUPED`, in photo order).
+    considered: usize,
+    /// The groups: `(photo, region index, box)` of each face, largest first.
+    groups: Vec<Vec<(u64, usize, lightcraft_geom::Rect)>>,
+}
+
+/// `faces.clusters {limit?: 40, minSize?: 2}`: the unnamed faces that look alike, grouped (see `cluster`), largest group
+/// first. Each group lists its faces, so `faces.nameFaces` over one group names them all in one undoable step. Read-only.
+fn clusters(s: &mut Session, p: &Value) -> Result<Value> {
+    let limit = p.get("limit").and_then(Value::as_u64).map_or(MAX_GROUPS, |n| usize::try_from(n).unwrap_or(MAX_GROUPS)).clamp(1, MAX_GROUPS);
+    let min = p.get("minSize").and_then(Value::as_u64).map_or(2, |n| usize::try_from(n).unwrap_or(2)).max(1);
+    let all = unnamed_faces(s);
+    let total = all.len();
+    let grouped = imp::group_unnamed(s, &all);
+    let groups: Vec<Value> = grouped
+        .groups
+        .iter()
+        .filter(|g| g.len() >= min)
+        .take(limit)
+        .map(|g| {
+            let faces: Vec<Value> = g
+                .iter()
+                .map(|(photo, index, rect)| {
+                    let view = s.face_view(lightcraft_catalog::PhotoId(*photo), *rect);
+                    json!({"photo": photo, "index": index, "rect": rect_json(rect), "view": rect_json(&view)})
+                })
+                .collect();
+            json!({"size": g.len(), "faces": faces})
+        })
+        .collect();
+    Ok(json!({"total": total, "considered": grouped.considered, "ready": grouped.ready, "clusters": groups}))
 }
 
 /// What looking for faces that resemble a person found.
@@ -801,6 +856,60 @@ mod imp {
         super::Arranged { ordered: grouped, ready: true, suggestions }
     }
 
+    /// Groups the unnamed faces `all` by likeness: the first `MAX_GROUPED` of them that are embedded, in the order given.
+    /// The threshold is the match strictness saved in Settings, else the model's own, as `faces.suggest` uses. A face the
+    /// user marked "not this person" for a name is kept apart from any face that resembles that name.
+    pub fn group_unnamed(s: &mut Session, all: &[(u64, usize, Rect)]) -> super::Grouped {
+        let none = super::Grouped { ready: false, considered: 0, groups: Vec::new() };
+        let Some(dir) = s.face_models_dir.clone() else { return none };
+        if !enabled_cached(s, &dir) {
+            return none;
+        }
+        let Ok(embedder) = current_with(s, "faces.clusters", false) else { return none };
+        let threshold = read_settings(&dir).threshold.or(embedder.manifest().thresholds.match_cosine).unwrap_or(DEFAULT_THRESHOLD);
+        let faces: Vec<((u64, usize, Rect), Arc<[f32]>)> =
+            all.iter().filter_map(|f| Some((*f, s.faces.index.get(f.0, &f.2)?.clone()))).take(super::MAX_GROUPED).collect();
+        // the named faces: their name (lower-cased) and embedding
+        let mut gallery: Vec<(String, Arc<[f32]>)> = Vec::new();
+        for ph in s.catalog.photos().filter(|ph| ph.in_library()) {
+            for r in ph.meta.regions.iter().filter(|r| r.kind == RegionKind::Face) {
+                if let (Some(n), Some(e)) = (r.name.as_deref(), s.faces.index.get(ph.id.0, &r.rect)) {
+                    gallery.push((n.trim().to_lowercase(), e.clone()));
+                }
+            }
+        }
+        let names: std::collections::BTreeSet<String> = gallery.iter().map(|(n, _)| n.clone()).collect();
+        // the names each unnamed face was marked "not this person" for
+        let marked: Vec<Vec<String>> = faces
+            .iter()
+            .map(|((photo, _, rect), _)| {
+                let id = lightcraft_catalog::PhotoId(*photo);
+                names.iter().map(String::as_str).filter(|n| s.catalog.is_face_rejected(id, rect, n)).map(str::to_string).collect()
+            })
+            .collect();
+        // the marked names that each face resembles (as a suggestion would score it)
+        let marked_names: std::collections::BTreeSet<&str> = marked.iter().flatten().map(String::as_str).collect();
+        let mut resembles: Vec<Vec<String>> = vec![Vec::new(); faces.len()];
+        for name in marked_names {
+            let refs: Vec<(&str, &[f32])> = gallery.iter().filter(|(n, _)| n.as_str() == name).map(|(n, e)| (n.as_str(), &e[..])).collect();
+            for (j, (_, e)) in faces.iter().enumerate() {
+                if matching::rank(&e[..], &refs).first().is_some_and(|c| c.score >= threshold)
+                    && let Some(r) = resembles.get_mut(j)
+                {
+                    r.push(name.to_string());
+                }
+            }
+        }
+        let cannot = |i: usize, j: usize| {
+            marked.get(i).is_some_and(|m| m.iter().any(|n| resembles.get(j).is_some_and(|r| r.contains(n))))
+        };
+        let embs: Vec<&[f32]> = faces.iter().map(|(_, e)| &e[..]).collect();
+        let grouped = lightcraft_faces::cluster::cluster(&embs, threshold, super::GROUP_PASS, &cannot);
+        let groups: Vec<Vec<(u64, usize, Rect)>> =
+            grouped.into_iter().map(|g| g.into_iter().filter_map(|i| faces.get(i).map(|(f, _)| *f)).collect()).collect();
+        super::Grouped { ready: true, considered: faces.len(), groups }
+    }
+
     /// Whether face recognition is switched on, looked up at most once a second.
     fn enabled_cached(s: &mut Session, dir: &std::path::Path) -> bool {
         if let Some((t, on)) = s.faces.enabled_seen
@@ -1117,6 +1226,10 @@ mod imp {
         super::Similar { items: Vec::new(), ready: false, pending: 0 }
     }
 
+    pub fn group_unnamed(_: &mut Session, _: &[(u64, usize, lightcraft_geom::Rect)]) -> super::Grouped {
+        super::Grouped { ready: false, considered: 0, groups: Vec::new() }
+    }
+
     pub fn arrange_unnamed(_: &mut Session, _: &mut Vec<(u64, usize, lightcraft_geom::Rect)>, _: usize) -> super::Arranged {
         super::Arranged { ordered: false, ready: false, suggestions: Default::default() }
     }
@@ -1183,9 +1296,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Name Faces",
             [],
             None,
-            "{faces: [{photo, index}], name} → {named, photos} — name (or, with a null or empty name, clear) many face regions as one undoable step; the sidecar is not touched",
+            "{faces: [{photo, index}], name} → {named, photos, skipped} — name (or, with a null or empty name, clear) many face regions as one undoable step; a face marked \"not this person\" for that name is skipped; the sidecar is not touched",
             super::always,
             name_faces
+        ),
+        cmd!(
+            query "faces.clusters",
+            "Unnamed Face Groups",
+            [],
+            None,
+            "{limit?: 40, minSize?: 2} → {total, considered, ready, clusters: [{size, faces: [{photo, index, rect, view}]}]} — the unnamed faces grouped by likeness (average link at the saved match strictness, else the model's own), largest group first; a face marked \"not this person\" for a name stays apart from that name's look-alikes. Read-only: name a group with `faces.nameFaces` over its faces, one undoable step",
+            super::always,
+            clusters
         ),
         cmd!(
             query "faces.person",

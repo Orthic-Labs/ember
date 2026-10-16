@@ -252,5 +252,6 @@
   "Page {n} of {pages}": "Page {n} sur {pages}",
   "Burst {n}": "Rafale {n}",
   "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested} suggestions, {accepted} acceptées. Rien n'est marqué tant que vous n'appliquez pas.",
-  "Applied {n} culling flags": "{n} marqueurs de tri appliqués"
+  "Applied {n} culling flags": "{n} marqueurs de tri appliqués",
+  "{n} faces": "{n} visages"
 }

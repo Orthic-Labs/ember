@@ -11,6 +11,7 @@
 
 pub mod align;
 pub mod catalog;
+pub mod cluster;
 pub mod graph;
 pub mod hash;
 pub mod known;

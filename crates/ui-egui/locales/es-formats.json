@@ -252,5 +252,6 @@
   "Page {n} of {pages}": "Página {n} de {pages}",
   "Burst {n}": "Ráfaga {n}",
   "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested} sugerencias, {accepted} aceptadas. No se marca nada hasta que apliques.",
-  "Applied {n} culling flags": "Se aplicaron {n} marcas de selección"
+  "Applied {n} culling flags": "Se aplicaron {n} marcas de selección",
+  "{n} faces": "{n} rostros"
 }

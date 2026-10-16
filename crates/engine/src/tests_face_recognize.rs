@@ -657,3 +657,76 @@ fn not_this_person_is_remembered_for_that_face_and_undoable() {
     assert!(s.execute("faces.rejectName", &json!({"id": 999_999, "index": 0, "name": "Ann"})).is_err());
     let _ = std::fs::remove_dir_all(&d);
 }
+
+#[test]
+fn unnamed_faces_are_grouped_by_likeness_and_a_group_is_named_in_one_step() {
+    let d = temp("groups");
+    let (mut s, _) = setup(&d, 64);
+    s.execute("faces.index", &json!({"budgetMs": 0})).unwrap();
+    let (a, b) = two_photos(&s);
+    let c = s.catalog.photos().map(|p| p.id).find(|id| *id != a && *id != b).unwrap();
+    set_regions(&mut s, a, vec![region(0.1, Some("Ann")), region(0.5, None), region(0.7, None)]);
+    set_regions(&mut s, b, vec![region(0.1, None), region(0.5, None)]);
+    set_regions(&mut s, c, vec![region(0.3, None)]);
+    let put = |s: &mut Session, id: PhotoId, x: f64, v: Vec<f32>| s.faces.index.insert(id.0, &region(x, None).rect, v);
+    put(&mut s, a, 0.1, unit64(&[(0, 1.0)])); // Ann, named
+    put(&mut s, a, 0.5, unit64(&[(1, 1.0)])); // like Bob
+    put(&mut s, a, 0.7, unit64(&[(0, 0.96), (4, 0.25)])); // like Ann
+    put(&mut s, b, 0.1, unit64(&[(0, 0.97), (2, 0.2)])); // like Ann
+    put(&mut s, b, 0.5, unit64(&[(1, 0.98), (2, 0.2)])); // like Bob
+    put(&mut s, c, 0.3, unit64(&[(1, 0.97), (3, 0.2)])); // like Bob
+    let faces_of = |g: &Value| -> Vec<(u64, u64)> {
+        let mut k: Vec<(u64, u64)> =
+            g["faces"].as_array().unwrap().iter().map(|f| (f["photo"].as_u64().unwrap(), f["index"].as_u64().unwrap())).collect();
+        k.sort_unstable();
+        k
+    };
+    let mut bob = vec![(a.0, 1), (b.0, 1), (c.0, 0)];
+    bob.sort_unstable();
+    let mut ann = vec![(a.0, 2), (b.0, 0)];
+    ann.sort_unstable();
+    // two groups, largest first: the three like Bob, then the two like Ann
+    let r = s.execute("faces.clusters", &json!({})).unwrap();
+    assert_eq!((r["total"].clone(), r["considered"].clone(), r["ready"].clone()), (json!(5), json!(5), json!(true)), "{r}");
+    let groups = r["clusters"].as_array().unwrap();
+    assert_eq!(groups.len(), 2, "{r}");
+    assert_eq!((groups[0]["size"].clone(), faces_of(&groups[0])), (json!(3), bob.clone()), "{r}");
+    assert_eq!((groups[1]["size"].clone(), faces_of(&groups[1])), (json!(2), ann.clone()), "{r}");
+    assert_eq!(s.execute("faces.clusters", &json!({"minSize": 1})).unwrap()["clusters"].as_array().unwrap().len(), 2);
+    // "not this person": the Ann-like face in b is marked not Ann, so it stays apart from the face in a that is Ann
+    s.execute("faces.rejectName", &json!({"id": b.0, "index": 0, "name": "Ann"})).unwrap();
+    let r = s.execute("faces.clusters", &json!({"minSize": 1})).unwrap();
+    let sizes: Vec<u64> = r["clusters"].as_array().unwrap().iter().map(|g| g["size"].as_u64().unwrap()).collect();
+    assert_eq!(sizes, vec![3, 1, 1], "{r}");
+    let grouped_together = r["clusters"].as_array().unwrap().iter().any(|g| {
+        let k = faces_of(g);
+        k.contains(&(b.0, 0)) && k.contains(&(a.0, 2))
+    });
+    assert!(!grouped_together, "a face marked not Ann is never grouped with the Ann-like face");
+    s.execute("faces.rejectName", &json!({"id": b.0, "index": 0, "name": "Ann", "rejected": false})).unwrap();
+    // naming the Bob group names its three faces in one undo step, except the one marked not Bob
+    s.execute("faces.rejectName", &json!({"id": c.0, "index": 0, "name": "Bob"})).unwrap();
+    let undo = s.undo.len();
+    let list: Vec<Value> = groups[0]["faces"].as_array().unwrap().iter().map(|f| json!({"photo": f["photo"], "index": f["index"]})).collect();
+    let n = s.execute("faces.nameFaces", &json!({"faces": list, "name": "Bob"})).unwrap();
+    assert_eq!((n["named"].clone(), n["skipped"].clone()), (json!(2), json!(1)), "{n}");
+    assert_eq!(s.undo.len(), undo + 1, "one step for the whole group");
+    assert_eq!(s.catalog.photo(a).unwrap().meta.regions[1].name.as_deref(), Some("Bob"));
+    assert_eq!(s.catalog.photo(b).unwrap().meta.regions[1].name.as_deref(), Some("Bob"));
+    assert!(s.catalog.photo(c).unwrap().meta.regions[0].name.is_none(), "the face marked not Bob stays unnamed");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.catalog.photo(a).unwrap().meta.regions[1].name.is_none(), "undo takes the whole group back");
+    assert!(s.catalog.photo(b).unwrap().meta.regions[1].name.is_none());
+    // a group whose faces are all marked is refused
+    s.execute("faces.rejectName", &json!({"id": a.0, "index": 1, "name": "Bob"})).unwrap();
+    s.execute("faces.rejectName", &json!({"id": b.0, "index": 1, "name": "Bob"})).unwrap();
+    assert!(s.execute("faces.nameFaces", &json!({"faces": [{"photo": a.0, "index": 1}, {"photo": b.0, "index": 1}], "name": "Bob"})).is_err());
+    // odd limits are tolerated, and with recognition off nothing is grouped
+    for odd in [json!({"limit": 0}), json!({"limit": "x"}), json!({"minSize": u64::MAX}), json!({"limit": u64::MAX})] {
+        assert!(s.execute("faces.clusters", &odd).is_ok(), "{odd}");
+    }
+    s.execute("faces.enable", &json!({"enabled": false})).unwrap();
+    let r = s.execute("faces.clusters", &json!({})).unwrap();
+    assert_eq!((r["ready"].clone(), r["clusters"].as_array().map(Vec::len)), (json!(false), Some(0)), "{r}");
+    let _ = std::fs::remove_dir_all(&d);
+}

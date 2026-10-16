@@ -252,5 +252,6 @@
   "Page {n} of {pages}": "Страница {n} из {pages}",
   "Burst {n}": "Серия {n}",
   "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "Предложений: {suggested}, принято: {accepted}. Ничего не помечается, пока вы не примените.",
-  "Applied {n} culling flags": "Применено отметок отбора: {n}"
+  "Applied {n} culling flags": "Применено отметок отбора: {n}",
+  "{n} faces": "{n} лиц"
 }

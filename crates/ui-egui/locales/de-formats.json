@@ -252,5 +252,6 @@
   "Page {n} of {pages}": "Seite {n} von {pages}",
   "Burst {n}": "Serie {n}",
   "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested} Vorschläge, {accepted} angenommen. Es wird nichts markiert, bis Sie anwenden.",
-  "Applied {n} culling flags": "{n} Auswahlmarkierungen angewendet"
+  "Applied {n} culling flags": "{n} Auswahlmarkierungen angewendet",
+  "{n} faces": "{n} Gesichter"
 }

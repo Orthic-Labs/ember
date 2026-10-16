@@ -23,6 +23,12 @@ pub struct UnnamedFace {
     pub suggestion: Option<String>,
 }
 
+/// A group of look-alike unnamed faces (`faces.clusters`), largest first: all of its faces, so naming the group names them all.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Cluster {
+    pub faces: Vec<UnnamedFace>,
+}
+
 /// What `faces.unnamed` said.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Unnamed {
@@ -33,6 +39,8 @@ pub struct Unnamed {
     pub ordered: bool,
     /// Recognition is running.
     pub ready: bool,
+    /// The look-alike groups of two or more faces, from `faces.clusters`.
+    pub clusters: Vec<Cluster>,
 }
 
 fn rect_of(v: &Value) -> Option<lightcraft_geom::Rect> {
@@ -55,7 +63,17 @@ pub fn parse(v: &Value) -> Unnamed {
         faces: v["faces"].as_array().map(|a| a.iter().filter_map(face_of).collect()).unwrap_or_default(),
         ordered: v["ordered"] == true,
         ready: v["ready"] == true,
+        clusters: Vec::new(),
     }
+}
+
+/// The look-alike groups in `faces.clusters`' answer: a group of one is no group, and odd entries are left out.
+pub fn clusters_of(v: &Value) -> Vec<Cluster> {
+    let groups = v["clusters"].as_array().into_iter().flatten();
+    groups
+        .filter_map(|g| g["faces"].as_array().map(|f| Cluster { faces: f.iter().filter_map(face_of).collect() }))
+        .filter(|c| c.faces.len() >= 2)
+        .collect()
 }
 
 /// The unnamed faces, asked for again only when the catalog changed, or (while the scan runs and learns more faces) at
@@ -69,7 +87,8 @@ pub fn faces(app: &mut LightcraftApp, now: f64) -> Arc<Unnamed> {
         return list.clone();
     }
     let v = app.session.execute("faces.unnamed", &json!({})).unwrap_or(Value::Null);
-    let list = Arc::new(parse(&v));
+    let groups = app.session.execute("faces.clusters", &json!({})).unwrap_or(Value::Null);
+    let list = Arc::new(Unnamed { clusters: clusters_of(&groups), ..parse(&v) });
     // what was selected and has since been named (or removed) is no longer selected
     let present: std::collections::HashSet<(u64, usize)> = list.faces.iter().map(|f| (f.photo, f.index)).collect();
     app.ui.unnamed_selected.retain(|k| present.contains(k));
@@ -223,6 +242,53 @@ pub fn section_header(app: &mut LightcraftApp, ui: &mut egui::Ui, list: &Unnamed
     }
 }
 
+/// How far each face behind a group's top face is offset (down and to the right).
+const STACK_STEP: f32 = 4.0;
+
+/// Select a group's faces and put the keyboard in the name box, so the naming bar names them all at once.
+fn select_group(app: &mut LightcraftApp, cluster: &Cluster) {
+    app.ui.unnamed_selected.clear();
+    app.ui.unnamed_selected.extend(cluster.faces.iter().map(|f| (f.photo, f.index)));
+    app.ui.unnamed_anchor = None;
+    app.ui.unnamed_focus = true;
+}
+
+/// One look-alike group in the People view, in a cell `edge` wide: its top face with the next ones stacked behind it, how
+/// many faces it has, and a button that selects them all for naming.
+pub fn cluster_card(app: &mut LightcraftApp, ui: &mut egui::Ui, cluster: &Cluster, r: Rect, edge: f32, ppp: f32) {
+    let t = Tokens::get(ui.ctx());
+    let Some(top) = cluster.faces.first() else { return };
+    let picture = Rect::from_min_size(r.min, vec2(edge, edge));
+    let job = app.session.face_job(lightcraft_catalog::PhotoId(top.photo), top.view, (edge * ppp).ceil() as usize);
+    let tex = job.and_then(|job| app.renderer.variant(job));
+    let p = ui.painter();
+    for k in (1..cluster.faces.len().min(3)).rev() {
+        let step = STACK_STEP * k as f32;
+        let back = Rect::from_min_size(picture.min + vec2(step, step), vec2(edge, edge));
+        p.rect_filled(back, 3.0, t.canvas);
+        p.rect_stroke(back, 3.0, Stroke::new(1.0, t.button_border), StrokeKind::Inside);
+    }
+    p.rect_filled(picture, 3.0, t.canvas);
+    if let Some(tex) = tex {
+        p.image(tex.tex.id(), picture, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+    }
+    // how many faces the group has, on the picture
+    let g = p.layout_no_wrap(cluster.faces.len().to_string(), t.font(11.5), Color32::WHITE);
+    let pill = Rect::from_min_size(pos2(picture.right() - g.size().x - 14.0, picture.bottom() - g.size().y - 11.0), g.size() + vec2(10.0, 6.0));
+    p.rect_filled(pill, 4.0, Color32::from_black_alpha(175));
+    p.galley(pill.min + vec2(5.0, 3.0), g, Color32::WHITE);
+    let label = crate::i18n::tr_format!("{n} faces", n = cluster.faces.len());
+    p.text(pos2(picture.left() + 2.0, picture.bottom() + 18.0), Align2::LEFT_CENTER, label, t.font(12.0), t.text_dim);
+    let b = ui.put(
+        Rect::from_min_size(pos2(picture.left(), picture.bottom() + 26.0), vec2(edge.min(160.0), 24.0)),
+        egui::Button::new(crate::i18n::tr("Name this person")),
+    );
+    register(ui.ctx(), format!("unnamed:group:{}:{}", top.photo, top.index), b.rect);
+    if b.clicked() {
+        select_group(app, cluster);
+    }
+}
+
 /// One face tile, number `i` of `list`.
 pub fn tile(app: &mut LightcraftApp, ui: &mut egui::Ui, list: &Unnamed, i: usize, r: Rect, f: &UnnamedFace, ppp: f32) {
     let t = Tokens::get(ui.ctx());
@@ -295,5 +361,21 @@ mod tests {
         for bad in [Value::Null, json!([]), json!({"faces": 5, "total": -1})] {
             assert_eq!(parse(&bad), Unnamed::default(), "{bad}");
         }
+    }
+
+    #[test]
+    fn a_group_of_one_is_no_group_and_odd_groups_are_left_out() {
+        let face = |photo: u64| json!({"photo": photo, "index": 0, "rect": {"x0": 0.1, "y0": 0.1, "x1": 0.3, "y1": 0.4}});
+        let v = json!({"clusters": [
+            {"size": 2, "faces": [face(3), face(4)]},
+            {"size": 1, "faces": [face(5)]},
+            {"size": 2},
+            "junk",
+        ]});
+        let groups = clusters_of(&v);
+        assert_eq!(groups.len(), 1, "{groups:?}");
+        assert_eq!(groups[0].faces.iter().map(|f| f.photo).collect::<Vec<_>>(), vec![3, 4]);
+        assert!(clusters_of(&Value::Null).is_empty());
+        assert_eq!(parse(&v).clusters, Vec::new(), "the groups come from faces.clusters, not faces.unnamed");
     }
 }

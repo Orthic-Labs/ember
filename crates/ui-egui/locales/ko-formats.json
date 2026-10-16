@@ -202,6 +202,7 @@
   "{n} change{} couldn't be written to disk: {e}\nIf you quit now, {} lost.": "변경 {n}건{}을 디스크에 기록할 수 없습니다: {e}\n지금 종료하면 {}이(가) 손실됩니다.",
   "{n} change{} saved in memory but not written to disk: {e}\nEmber retries automatically; quitting now would lose {}.": "변경 {n}건{}이 메모리에만 저장되고 디스크에 기록되지 않았습니다: {e}\nEmber가 자동으로 재시도합니다. 지금 종료하면 {}이(가) 손실됩니다.",
   "{n} change{} saved in memory but not written to disk: {e} — Ember will retry": "변경 {n}건{}이 메모리에만 저장되고 디스크에 기록되지 않았습니다: {e} — Ember가 재시도합니다",
+  "{n} faces": "얼굴 {n}개",
   "{n} found · {sel} selected": "{n}개 찾음 · {sel}개 선택됨",
   "{n} photos": "사진 {n}장",
   "{n} photos in {} are hidden by the filters above": "{}의 사진 {n}장이 위 필터에 의해 숨겨져 있습니다",

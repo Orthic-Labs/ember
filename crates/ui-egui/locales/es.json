@@ -2177,5 +2177,7 @@
   "GPU choice": "Elección de GPU",
   "High performance": "Alto rendimiento",
   "Power saving": "Ahorro de energía",
-  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Ahorro de energía prefiere la GPU integrada, si la hay. Un cambio se aplica la próxima vez que se inicie la GPU."
+  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Ahorro de energía prefiere la GPU integrada, si la hay. Un cambio se aplica la próxima vez que se inicie la GPU.",
+  "Look-alike groups": "Grupos de rostros parecidos",
+  "Name this person": "Nombrar a esta persona"
 }

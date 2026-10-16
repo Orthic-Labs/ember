@@ -2178,5 +2178,7 @@
   "GPU choice": "Выбор GPU",
   "High performance": "Высокая производительность",
   "Power saving": "Экономия энергии",
-  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Экономия энергии предпочитает встроенный GPU, если он есть. Изменение действует при следующем запуске GPU."
+  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Экономия энергии предпочитает встроенный GPU, если он есть. Изменение действует при следующем запуске GPU.",
+  "Look-alike groups": "Группы похожих лиц",
+  "Name this person": "Назвать этого человека"
 }

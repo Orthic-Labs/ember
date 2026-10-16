@@ -2180,5 +2180,7 @@
   "GPU choice": "GPU の選択",
   "High performance": "高パフォーマンス",
   "Power saving": "省電力",
-  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "省電力では、内蔵 GPU がある場合はそれを優先します。変更は次回 GPU の起動時に反映されます。"
+  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "省電力では、内蔵 GPU がある場合はそれを優先します。変更は次回 GPU の起動時に反映されます。",
+  "Look-alike groups": "よく似た顔のグループ",
+  "Name this person": "この人物に名前を付ける"
 }

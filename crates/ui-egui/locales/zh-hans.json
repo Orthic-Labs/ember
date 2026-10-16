@@ -2179,5 +2179,7 @@
   "GPU choice": "GPU 选择",
   "High performance": "高性能",
   "Power saving": "节能",
-  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "节能会优先使用集成显卡（如果有）。更改将在下次启动 GPU 时生效。"
+  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "节能会优先使用集成显卡（如果有）。更改将在下次启动 GPU 时生效。",
+  "Look-alike groups": "相似面孔分组",
+  "Name this person": "为此人命名"
 }

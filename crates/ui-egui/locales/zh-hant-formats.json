@@ -252,5 +252,6 @@
   "Page {n} of {pages}": "第 {n} 頁，共 {pages} 頁",
   "Burst {n}": "連拍 {n}",
   "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested} 項建議，已接受 {accepted} 項。套用前不會標記任何相片。",
-  "Applied {n} culling flags": "已套用 {n} 個篩選標記"
+  "Applied {n} culling flags": "已套用 {n} 個篩選標記",
+  "{n} faces": "{n} 張臉"
 }

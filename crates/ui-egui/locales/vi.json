@@ -2178,5 +2178,7 @@
   "GPU choice": "Chọn GPU",
   "High performance": "Hiệu năng cao",
   "Power saving": "Tiết kiệm điện",
-  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Tiết kiệm điện ưu tiên GPU tích hợp nếu có. Thay đổi có hiệu lực lần GPU khởi động tiếp theo."
+  "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Tiết kiệm điện ưu tiên GPU tích hợp nếu có. Thay đổi có hiệu lực lần GPU khởi động tiếp theo.",
+  "Look-alike groups": "Nhóm khuôn mặt giống nhau",
+  "Name this person": "Đặt tên cho người này"
 }
