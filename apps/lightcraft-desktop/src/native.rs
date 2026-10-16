@@ -769,15 +769,36 @@ fn response(status: u16, body: Vec<u8>, content_type: &str) -> Response<Vec<u8>>
 const PRIMARY_IDENTIFIER: &str = lightcraft_engine::branding::APPLICATION_ID;
 const MAX_PERSISTED_LIBRARY_PATH: usize = 8_192;
 
+/// The QA switches (`--qa`, `LIGHTCRAFT_DESKTOP_QA`, `RIGHTKIT_QA_HIDDEN`, `RIGHTKIT_QA_BACKGROUND`
+/// and their env values) exist only in a `qa-native` build. Without the feature none of them is read
+/// and a release build has no QA mode at all.
+#[cfg(feature = "qa-native")]
 fn qa_hidden_enabled(value: Option<&OsStr>) -> bool {
     value.and_then(|value| value.to_str().map(str::trim)).is_some_and(|value| value.eq_ignore_ascii_case("1") || value.eq_ignore_ascii_case("true"))
 }
 
-fn unattended_qa_enabled() -> bool {
-    std::env::args().any(|arg| arg == "--qa")
+#[cfg(not(feature = "qa-native"))]
+fn qa_hidden_enabled(_value: Option<&OsStr>) -> bool {
+    false
+}
+
+/// Whether this launch asks for QA mode: the `--qa` argument or one of the QA environment switches.
+#[cfg(feature = "qa-native")]
+fn qa_requested(args: &[String]) -> bool {
+    args.iter().any(|arg| arg == "--qa")
         || std::env::var_os("LIGHTCRAFT_DESKTOP_QA").is_some()
         || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_HIDDEN").as_deref())
         || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref())
+}
+
+#[cfg(not(feature = "qa-native"))]
+fn qa_requested(_args: &[String]) -> bool {
+    false
+}
+
+fn unattended_qa_enabled() -> bool {
+    let args: Vec<String> = std::env::args().collect();
+    qa_requested(&args)
 }
 
 fn reject_unattended_picker(action: &str, params: &Value, enforce: bool) -> Result<(), String> {
@@ -789,13 +810,7 @@ fn reject_unattended_picker(action: &str, params: &Value, enforce: bool) -> Resu
 }
 
 fn runtime_modes(args: &[String]) -> (bool, Option<PathBuf>) {
-    #[cfg(feature = "qa-native")]
-    let qa_env = std::env::var_os("LIGHTCRAFT_DESKTOP_QA").is_some()
-        || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_HIDDEN").as_deref())
-        || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref());
-    #[cfg(not(feature = "qa-native"))]
-    let qa_env = false;
-    let qa = args.iter().any(|arg| arg == "--qa") || qa_env;
+    let qa = qa_requested(args);
     #[cfg(feature = "qa-native")]
     let qa_data_dir = std::env::var_os("RIGHTKIT_QA_DATA_DIR").map(PathBuf::from);
     #[cfg(not(feature = "qa-native"))]
@@ -1005,10 +1020,7 @@ fn build_shell() -> rightkit_tauri_shell::Shell {
     // Ember owns fit/fill/100% & wheel zoom controls in its stage.
     let hardening = rightkit_tauri_shell::Hardening { block_zoom: false, ..Default::default() };
     let args: Vec<String> = std::env::args().collect();
-    let qa = args.iter().any(|arg| arg == "--qa")
-        || std::env::var_os("LIGHTCRAFT_DESKTOP_QA").is_some()
-        || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_HIDDEN").as_deref())
-        || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref());
+    let qa = qa_requested(&args);
     let (_, qa_data_dir) = runtime_modes(&args);
     let mut builder = rightkit_tauri_shell::Shell::builder("ember").app_name("Ember").main_label("main").hardening(hardening).show_on_ready(!qa);
     if let Some(data_dir) = qa_data_dir {
@@ -1338,6 +1350,29 @@ mod tests {
         assert!(startup_ready("main"));
         assert!(!marker.exists(), "frontend readiness clears startup guard");
         lightcraft_engine::gpu::backend::set_init_marker(None);
+    }
+
+    /// Without `qa-native` the QA switches are inert: `--qa` and the env values do not start QA mode.
+    #[cfg(not(feature = "qa-native"))]
+    #[test]
+    fn qa_switches_are_inert_without_qa_native() {
+        let args = vec!["lightcraft-desktop".to_string(), "--qa".to_string()];
+        assert!(!qa_requested(&args));
+        assert!(!runtime_modes(&args).0);
+        assert_eq!(runtime_modes(&args).1, None);
+        assert!(!qa_hidden_enabled(Some(OsStr::new("1"))));
+        assert!(!unattended_qa_enabled());
+    }
+
+    /// With `qa-native` the same switches are live.
+    #[cfg(feature = "qa-native")]
+    #[test]
+    fn qa_switches_are_live_with_qa_native() {
+        let args = vec!["lightcraft-desktop".to_string(), "--qa".to_string()];
+        assert!(qa_requested(&args));
+        assert!(runtime_modes(&args).0);
+        assert!(qa_hidden_enabled(Some(OsStr::new("1"))));
+        assert!(!qa_hidden_enabled(Some(OsStr::new("0"))));
     }
 
     #[test]
