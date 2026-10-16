@@ -15,6 +15,7 @@ mod container;
 pub mod cr3;
 mod datetime;
 mod exif;
+mod focus;
 mod gpx;
 mod iptc;
 pub mod tags;
@@ -98,6 +99,8 @@ pub struct Metadata {
     /// Millimetres.
     pub focal_length: Option<f64>,
     pub focal_length_35mm: Option<f64>,
+    /// Focus distance in metres (maker note, else Exif `SubjectDistance`); `None` when unknown or at infinity.
+    pub focus_distance: Option<f64>,
     pub flash: Option<Flash>,
     /// EV.
     pub exposure_bias: Option<f64>,
@@ -171,6 +174,7 @@ impl Metadata {
             iso,
             focal_length,
             focal_length_35mm,
+            focus_distance,
             flash,
             exposure_bias,
             exposure_program,

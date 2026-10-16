@@ -16,8 +16,14 @@ pub fn read_exif(bytes: &[u8]) -> Metadata {
 
 /// Like [`read_exif`] but reports a structurally invalid TIFF header / IFD0.
 pub fn try_read_exif(bytes: &[u8]) -> Result<Metadata, TiffError> {
-    let tiff = Tiff::parse(strip_exif_header(bytes))?;
-    Ok(from_tiff(&tiff))
+    let data = strip_exif_header(bytes);
+    let tiff = Tiff::parse(data)?;
+    let mut m = from_tiff(&tiff);
+    // the maker note's focus distance needs the buffer the maker note's offsets point into
+    if let Some(d) = crate::focus::maker_note_distance(&tiff, data) {
+        m.focus_distance = Some(d);
+    }
+    Ok(m)
 }
 
 fn text(ifd: Option<&Ifd>, tag: u16) -> Option<String> {
@@ -71,6 +77,7 @@ pub fn from_tiff(tiff: &Tiff) -> Metadata {
     .map(|v| v.min(u32::MAX as u64) as u32);
     m.focal_length = pos(either(t::FOCAL_LENGTH).and_then(|v| v.get_f64(0)));
     m.focal_length_35mm = pos(exif.and_then(|e| e.f64(t::FOCAL_LENGTH_35MM)));
+    m.focus_distance = crate::focus::subject_distance(tiff);
     m.exposure_bias = exif.and_then(|e| e.f64(t::EXPOSURE_BIAS)).filter(|v| v.is_finite() && v.abs() < 100.0);
     m.exposure_program = exif.and_then(|e| e.u16(t::EXPOSURE_PROGRAM));
     m.metering_mode = exif.and_then(|e| e.u16(t::METERING_MODE));

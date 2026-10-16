@@ -37,9 +37,23 @@ Normalisation follows lensfun's documentation: distortion and TCA radii are 1 at
 calibration frame (its `cropfactor` and `aspect-ratio`), vignetting radii 1 at its corner; the optical centre is
 the image centre (lensfun's `<center>` offsets are not read).
 
+## Focus distance
+
+Vignetting is calibrated per focus distance in the lensfun format, so a close-up needs the near calibration. The
+distance, in metres, is read when the file is read (`Metadata::focus_distance`, `crates/meta/src/focus.rs`):
+
+| Source | Tag | Unit |
+|---|---|---|
+| Canon maker note | `ShotInfo` (`0x0004`) entries 19 (`FocusDistanceUpper`) and 20 (`FocusDistanceLower`); the middle of the range, or the upper end alone | 0.01 m; 0 = not measured, 65535 = infinity |
+| Olympus / OM System maker note (new style) | `FocusInfo` sub-IFD (`0x2050`), `FocusDistance` (`0x0305`) | mm; 0 and the 32-bit all-ones value are not distances |
+| Exif `SubjectDistance` (all other makes) | `0x9206` | m; 0 = unknown, 0xFFFFFFFF = infinity |
+
+A maker-note value wins over `SubjectDistance`. Zero, non-finite, negative and 1 000 m or farther values count as
+unknown (infinity). A malformed maker note gives no distance and never an error.
+
 ## Limits
 
 - Only raws: rendered images (JPEG, HEIF, TIFF) are often already corrected in camera.
-- The focus distance is not read from maker notes yet: vignetting uses the farthest calibrated distance. [#217](https://github.com/Orthic-Labs/ember/issues/217)
+- The focus distance is read from the maker note of Canon (`ShotInfo`) and Olympus / OM System (`FocusInfo`) raws, else from the Exif `SubjectDistance` tag when the camera writes a real value (see [Focus distance](#focus-distance)). Other makers' distances are encrypted or undocumented to a confident level (Nikon `LensData`, Sony, Fujifilm, Pentax, Panasonic): without a distance, vignetting uses the farthest calibrated one. The Canon and Olympus layouts follow public tag documentation and are covered by synthetic maker notes, not yet by real files.
 - No manual make / model picker yet; matching is automatic. [#218](https://github.com/Orthic-Labs/ember/issues/218)
 - Not yet validated against real photos and another renderer; the tests use synthetic profiles and grids. [#219](https://github.com/Orthic-Labs/ember/issues/219)

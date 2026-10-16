@@ -42,7 +42,7 @@ pub fn lookup(db: &LensDb, m: &lightcraft_meta::Metadata, w: f64, h: f64, orient
     let camera = db.find_camera(m.make.as_deref().unwrap_or_default(), m.model.as_deref().unwrap_or_default());
     let lens = db.find_lens(m.lens_make.as_deref(), m.lens_model.as_deref()?, camera)?;
     let crop = frame_crop_factor(camera.map(|c| c.crop_factor), focal, m.focal_length_35mm);
-    let shot = Shot { focal, aperture: m.f_number, distance: None, crop_factor: crop, width: w, height: h };
+    let shot = Shot { focal, aperture: m.f_number, distance: m.focus_distance.filter(|d| d.is_finite() && *d > 0.0), crop_factor: crop, width: w, height: h };
     let corr = lens.correction(&shot)?;
     Some(lightcraft_pipeline::optics::reorient_lens(&corr, orientation, w, h))
 }
@@ -107,6 +107,33 @@ mod tests {
         assert!(lookup(&db, &lightcraft_meta::Metadata { focal_length: None, ..meta() }, 6000.0, 4000.0, Orientation::Normal).is_none());
         let other = lightcraft_meta::Metadata { lens_model: Some("70-200mm F4".into()), ..meta() };
         assert!(lookup(&db, &other, 6000.0, 4000.0, Orientation::Normal).is_none());
+    }
+
+    /// The focus distance read from the maker note picks the calibrated vignetting distance nearest it (in 1/d);
+    /// without one, or at the farthest calibrated distance, the profile is the infinity one.
+    #[test]
+    fn focus_distance_selects_the_calibrated_vignetting_distance() {
+        let db = LensDb::parse(
+            r#"<lensdatabase>
+              <camera><maker>Testcam</maker><model>TC-1</model><mount>T</mount><cropfactor>1.5</cropfactor></camera>
+              <lens><maker>Testcam</maker><model>Testcam 18-55mm f/3.5-5.6</model><mount>T</mount><cropfactor>1.5</cropfactor>
+                <calibration>
+                  <vignetting model="pa" focal="18" aperture="3.5" distance="1000" k1="-0.4" k2="0" k3="0" />
+                  <vignetting model="pa" focal="18" aperture="3.5" distance="0.5" k1="-0.1" k2="0" k3="0" />
+                </calibration>
+              </lens></lensdatabase>"#,
+        )
+        .unwrap();
+        let at = |d: Option<f64>| lookup(&db, &lightcraft_meta::Metadata { focus_distance: d, ..meta() }, 6000.0, 4000.0, Orientation::Normal).unwrap();
+        let far = at(None);
+        let near = at(Some(0.55));
+        assert_ne!(near, far, "a near focus differs from the farthest calibrated distance");
+        assert_eq!(at(Some(0.5)), near, "0.55 m is closest to the 0.5 m calibration");
+        assert_eq!(at(Some(900.0)), far, "far focus is the infinity calibration");
+        // a hostile distance is ignored
+        for bad in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            assert_eq!(at(Some(bad)), far, "{bad}");
+        }
     }
 
     /// A full-frame body in APS-C / Super 35 mode (an ILCE-1M2 at 70 mm records 105 mm equivalent) frames only the
