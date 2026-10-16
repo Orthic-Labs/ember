@@ -115,7 +115,7 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
     new library folder (`library-restored-<time>/`; originals already stored are skipped, every
     entry's checksum is verified, and each restored original must match its content hash) and
     only then switches to it (`active-library` names the folder in use) and reloads: the previous
-    library stays in storage. Both are web-only (`file.backupLibrary`, `file.restoreLibrary`; the
+    library stays in storage (see *Storage tidy-up*). Both are web-only (`file.backupLibrary`, `file.restoreLibrary`; the
     desktop library is a folder).
   - **`?safe` start** (add it to the address): the library opens with the renderer paused (no
     thumbnail, loupe render, embedded-preview stand-in or prefetch starts, and no render workers
@@ -124,6 +124,17 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
     the error (with a hint to use `?safe`) and the stored library stays intact; in the safe start
     the photo can be removed, or the library backed up, without decoding anything. Thumbnails
     stay blank there; reload without `?safe` to see photos again.
+  - **Storage tidy-up**, when the library opens (only in the tab holding the library lock, never
+    in a `?safe` start): a restore records the library it replaced (`previous-library`), and the
+    next start keeps the active library and that one and deletes older `library-*` folders,
+    including a half-written restore. Library folders from before restores recorded this one are
+    never deleted. Then stored originals that no kept library names are deleted (a plain scan of
+    the kept libraries' files for `web/<hash>/` paths, so a damaged catalog still protects its
+    photos; at most 500 per start; nothing is deleted unless the active library has catalog
+    files and every kept library's files could be read). A removed photo's original therefore
+    goes at the next start once the catalog no longer names it (the catalog's log is compacted
+    into its snapshot from time to time), not at once: Undo and the other tabs' state stay safe.
+    A notice says what was freed.
   - A failed save (quota exceeded, storage cleared) is not silent: the catalog then refuses new
     writes, so commands report `saved in memory but not written`, the top bar shows the unsaved
     warning (as on the desktop, see `docs/control-protocol.md`), and saving is retried every
@@ -195,11 +206,9 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
   it. The automation API is durable before it returns: `command()` (see *Automation*) resolves only
   once its writes reached storage, and rejects, saying the change is not saved, if storage refused
   them. A kill check for the user path is still to do (issue #193 stays open for it). [#193](https://github.com/Orthic-Labs/ember/issues/193)
-- **Data-safety gaps still open** (issue #107): a panic in a decoder still ends the page, since a
+- **Data safety: what is left** (issue #107): a panic in a decoder still ends the page, since a
   wasm32 panic aborts and can't be caught (a photo that panics while its thumbnail renders can do
-  so again after a reload: use the `?safe` start above); removing photos doesn't delete their stored originals
-  (`originals/<hash>`; they are kept, and included in backups); restored-over libraries stay in
-  storage until the site's data is cleared. [#194](https://github.com/Orthic-Labs/ember/issues/194)
+  so again after a reload: use the `?safe` start above). Nothing else is open. [#194](https://github.com/Orthic-Labs/ember/issues/194)
 - **Control channel / MCP.** These are desktop-only, because they need a TCP socket.
 - **AVIF export** is native only: its encoder (`ravif`, `rav1e`) is compiled out on wasm32, so the browser
   build doesn't offer the format in the export dialog (issue #196). [#196](https://github.com/Orthic-Labs/ember/issues/196)

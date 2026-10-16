@@ -13,8 +13,9 @@ use wasm_bindgen_futures::JsFuture;
 
 use crate::backend::Backend;
 use crate::backup::{
-    ACTIVE_LIBRARY, MAX_RESTORE_DIRECTORY_BYTES, MAX_RESTORE_ENTRY_BYTES, README, ZipEntry, ZipWriter, data_offset, find_central, original_entry,
-    parse_central, preflight_restore_entry, restore_key, restored_dir_name, tail_len, valid_hash, verify, verify_original, verify_original_hash,
+    ACTIVE_LIBRARY, DEFAULT_LIBRARY_DIR, MAX_RESTORE_DIRECTORY_BYTES, MAX_RESTORE_ENTRY_BYTES, PREVIOUS_LIBRARY, README, ZipEntry, ZipWriter,
+    data_offset, find_central, original_entry, parse_central, preflight_restore_entry, restore_key, restored_dir_name, tail_len, valid_hash, verify,
+    verify_original, verify_original_hash,
 };
 use crate::files::{Files, LIBRARY_FILES};
 use crate::store::storage_key;
@@ -285,6 +286,12 @@ pub async fn restore(file: web_sys::File, backend: Backend) -> Result<String, St
         backend.write(&entry.key, &data).await.map_err(|err| format!("storing {}: {err}", entry.zip.name))?;
         written += 1;
     }
+    // remember the library being replaced: it is kept (one generation) when the app tidies up
+    let replaced = match backend.read(ACTIVE_LIBRARY).await {
+        Ok(Some(d)) => String::from_utf8_lossy(&d).trim().to_string(),
+        _ => DEFAULT_LIBRARY_DIR.to_string(),
+    };
+    backend.write(PREVIOUS_LIBRARY, replaced.as_bytes()).await?;
     backend.write(ACTIVE_LIBRARY, dir.as_bytes()).await?;
     log::info!("lightcraft: restored {written} files into {dir}");
     Ok(dir)
@@ -294,7 +301,7 @@ pub async fn restore(file: web_sys::File, backend: Backend) -> Result<String, St
 pub fn pick_and_restore(backend: Backend, before_reload: impl FnOnce() + 'static) {
     let ok = confirm(
         "Restore an Ember library backup?\n\nThe backup becomes the library in this browser and the page reloads. \
-         The current library is not deleted: it stays in browser storage.",
+         The current library is not deleted: it stays in browser storage until you restore another backup.",
     );
     if !ok {
         return;

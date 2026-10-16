@@ -18,9 +18,21 @@
 //! Backups past 4 GB or 65 535 entries are written as zip64 (the end record and each entry that
 //! needs it carry the 64-bit fields) and read back the same way; one entry is still at most 4 GB,
 //! since each is held in memory whole. Restores read at most [`MAX_RESTORE_ENTRY_BYTES`] per entry.
+//!
+//! Cleaning up ([`abandoned_libraries`], [`orphaned_originals`]): a restore leaves the library it
+//! replaced in storage, and removing photos leaves their originals. At the next start (one tab, so
+//! nothing else is writing) the app keeps the active library and the one before it
+//! ([`PREVIOUS_LIBRARY`]), deletes older ones, and deletes stored originals that no kept library's
+//! files name.
 
 /// Storage key of the file naming the library folder in use (absent: `library`).
 pub const ACTIVE_LIBRARY: &str = "active-library";
+
+/// Storage key of the file naming the library folder the active one replaced (a restore writes it).
+pub const PREVIOUS_LIBRARY: &str = "previous-library";
+
+/// Most originals deleted in one start, so a huge clean-up can't hold up opening the library.
+pub const MAX_PRUNE_PER_START: usize = 500;
 
 /// The default library folder.
 pub const DEFAULT_LIBRARY_DIR: &str = "library";
@@ -367,6 +379,42 @@ pub fn verify_original(entry: &ZipEntry, hash: &str, data: &[u8]) -> Result<(), 
     Ok(())
 }
 
+/// Content hashes that `web/<hash>/<file name>` paths in `bytes` (a library file) name. A plain
+/// scan, so it also works on a damaged catalog and errs towards keeping originals.
+pub fn referenced_hashes(bytes: &[u8], out: &mut std::collections::HashSet<String>) {
+    const PREFIX: &[u8] = b"web/";
+    let mut i = 0;
+    while let Some(at) = bytes.get(i..).and_then(|rest| rest.windows(PREFIX.len()).position(|w| w == PREFIX)) {
+        let start = i + at + PREFIX.len();
+        let hash: Vec<u8> = bytes.get(start..).unwrap_or_default().iter().copied().take_while(u8::is_ascii_alphanumeric).collect();
+        if bytes.get(start + hash.len()) == Some(&b'/')
+            && let Ok(h) = String::from_utf8(hash)
+            && valid_hash(&h)
+        {
+            out.insert(h);
+        }
+        i = start;
+    }
+}
+
+/// Library folders (of `all`) to delete: every valid one except the active library and the one it
+/// replaced. Sorted, for stable logs.
+pub fn abandoned_libraries(all: &[String], active: &str, previous: Option<&str>) -> Vec<String> {
+    let mut out: Vec<String> =
+        all.iter().filter(|d| valid_library_dir(d) && d.as_str() != active && Some(d.as_str()) != previous).cloned().collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// Stored originals (`stored`: names in `originals/`) that no kept library names, at most `cap`.
+pub fn orphaned_originals(stored: &[String], referenced: &std::collections::HashSet<String>, cap: usize) -> Vec<String> {
+    let mut out: Vec<String> = stored.iter().filter(|h| valid_hash(h) && !referenced.contains(h.as_str())).cloned().collect();
+    out.sort();
+    out.truncate(cap);
+    out
+}
+
 /// A name for the restored library's folder.
 pub fn restored_dir_name(now_ms: f64) -> String {
     format!("library-restored-{}", now_ms.max(0.0) as u64)
@@ -514,6 +562,36 @@ mod tests {
         let e = &entries[69_999];
         let start = data_offset(e, &zip[e.header as usize..e.header as usize + 30]).unwrap() as usize;
         verify(e, &zip[start..start + e.size as usize]).unwrap();
+    }
+
+    #[test]
+    fn references_are_found_in_catalog_text() {
+        let mut refs = std::collections::HashSet::new();
+        let log = br#"{"op":"add","source":{"type":"file","path":"web/abc123/IMG 1.jpg"}}
+{"source":{"type":"file","path":"web/DEF456/a/b.png"}} web/nohash web//x web/bad-hash/y "web/zzz9/""#;
+        referenced_hashes(log, &mut refs);
+        let mut got: Vec<_> = refs.into_iter().collect();
+        got.sort();
+        assert_eq!(got, ["DEF456", "abc123", "zzz9"]);
+        let mut none = std::collections::HashSet::new();
+        referenced_hashes(b"", &mut none);
+        referenced_hashes(b"web/", &mut none);
+        referenced_hashes(b"web/abc", &mut none);
+        assert!(none.is_empty());
+    }
+
+    #[test]
+    fn cleanup_keeps_the_active_and_previous_library_and_what_they_name() {
+        let all: Vec<String> = ["library", "library-restored-1", "library-restored-2", "library-restored-3", "originals", "library-../x"]
+            .map(String::from)
+            .to_vec();
+        assert_eq!(abandoned_libraries(&all, "library-restored-3", Some("library-restored-2")), ["library", "library-restored-1"]);
+        assert_eq!(abandoned_libraries(&all, "library", None), ["library-restored-1", "library-restored-2", "library-restored-3"]);
+        let referenced: std::collections::HashSet<String> = ["a1".to_string()].into();
+        let stored: Vec<String> = ["a1", "b2", "c3", "../d4"].map(String::from).to_vec();
+        assert_eq!(orphaned_originals(&stored, &referenced, 10), ["b2", "c3"]);
+        assert_eq!(orphaned_originals(&stored, &referenced, 1), ["b2"]);
+        assert!(orphaned_originals(&stored, &["a1", "b2", "c3"].map(String::from).into(), 10).is_empty());
     }
 
     #[test]

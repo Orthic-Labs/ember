@@ -285,6 +285,49 @@ impl Backend {
         }
     }
 
+    /// Names of the library folders in storage (`library`, `library-restored-<time>`), valid or
+    /// not: the caller filters with `backup::valid_library_dir`.
+    pub async fn list_library_dirs(&self) -> Result<Vec<String>, String> {
+        match self {
+            Backend::Opfs(root) => Ok(dir_keys(root).await?.into_iter().filter(|n| n.starts_with("library")).collect()),
+            Backend::Idb(db) => {
+                let (_tx, store) = Self::idb_store(db, false)?;
+                let range = web_sys::IdbKeyRange::bound(&"library".into(), &"library\u{ffff}".into()).map_err(err)?;
+                let keys = idb_req(&store.get_all_keys_with_key(&range).map_err(err)?).await?;
+                let arr: js_sys::Array = keys.unchecked_into();
+                let mut dirs: Vec<String> =
+                    arr.iter().filter_map(|k| k.as_string()).filter_map(|k| k.split_once('/').map(|(d, _)| d.to_string())).collect();
+                dirs.sort();
+                dirs.dedup();
+                Ok(dirs)
+            }
+        }
+    }
+
+    /// Delete a folder and everything in it (a missing folder is fine).
+    pub async fn remove_tree(&self, dir: &str) -> Result<(), String> {
+        if dir.is_empty() || dir.contains('/') {
+            return Err(format!("not a folder name: {dir:?}"));
+        }
+        match self {
+            Backend::Opfs(root) => {
+                let opts = web_sys::FileSystemRemoveOptions::new();
+                opts.set_recursive(true);
+                match JsFuture::from(root.remove_entry_with_options(dir, &opts)).await {
+                    Ok(_) => Ok(()),
+                    Err(e) if Reflect::get(&e, &"name".into()).ok().and_then(|n| n.as_string()).as_deref() == Some("NotFoundError") => Ok(()),
+                    Err(e) => Err(err(e)),
+                }
+            }
+            Backend::Idb(db) => {
+                let (tx, store) = Self::idb_store(db, true)?;
+                let range = web_sys::IdbKeyRange::bound(&format!("{dir}/").into(), &format!("{dir}/\u{ffff}").into()).map_err(err)?;
+                store.delete(&range).map_err(err)?;
+                idb_done(&tx).await
+            }
+        }
+    }
+
     /// Delete everything (the "reset" escape hatch: `?reset` in the URL).
     pub async fn clear(&self) -> Result<(), String> {
         match self {

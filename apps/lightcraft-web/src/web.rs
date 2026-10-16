@@ -15,7 +15,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
 use crate::backend::Backend;
-use crate::backup::{ACTIVE_LIBRARY, DEFAULT_LIBRARY_DIR, valid_library_dir};
+use crate::backup::{ACTIVE_LIBRARY, DEFAULT_LIBRARY_DIR, PREVIOUS_LIBRARY, valid_library_dir};
 use crate::bench::Bench;
 use crate::exports::ExportHost;
 use crate::files::{Files, FlushOp, LIBRARY_FILES};
@@ -75,8 +75,10 @@ struct Options {
     workers: Option<usize>,
     reset: bool,
     /// `?safe`: open the library without rendering anything (no thumbnails, no previews, no
-    /// workers) to get out of a photo that crashes the page.
+    /// workers) and without tidying storage, to get out of a photo that crashes the page.
     safe: bool,
+    /// This page holds the library's one-tab lock, so nothing else writes storage (set by `start`).
+    exclusive: bool,
 }
 
 impl Options {
@@ -98,6 +100,7 @@ impl Options {
             workers: get("workers").and_then(|v| v.parse().ok()),
             reset: get("reset").is_some(),
             safe: get("safe").is_some(),
+            exclusive: false,
         }
     }
 }
@@ -317,6 +320,94 @@ async fn flush(files: Files, backend: Backend, dir: String, flushing: Rc<Cell<bo
     flushing.set(false);
 }
 
+/// Read a stored library folder's files into `refs` (the originals they name). `Err`: a file
+/// couldn't be read, so what it names is unknown.
+async fn read_references(b: &Backend, dir: &str, refs: &mut std::collections::HashSet<String>) -> Result<(), String> {
+    for name in LIBRARY_FILES {
+        if let Some(data) = b.read(&library_key(dir, name)).await? {
+            crate::backup::referenced_hashes(&data, refs);
+        }
+    }
+    Ok(())
+}
+
+/// Free storage nothing uses any more, before the library opens (so nothing is being imported):
+/// library folders older than the active one and the one it replaced (see `backup`), then stored
+/// originals that no kept library names. Every step errs towards keeping data: it does nothing
+/// unless the active library has catalog files, reads every kept library's files first, stops at
+/// the first failure, and deletes no library folder until a restore has recorded which one is the
+/// previous library (folders from before that stay, and keep their originals).
+async fn tidy_storage(b: &Backend, files: &Files, active: &str) {
+    if files.get("catalog.snap").is_none() && files.get("catalog.log").is_none() {
+        return;
+    }
+    let pointer = match b.read(PREVIOUS_LIBRARY).await {
+        Ok(Some(d)) => Some(String::from_utf8_lossy(&d).trim().to_string()).filter(|d| valid_library_dir(d) && d != active),
+        Ok(None) => None,
+        Err(e) => {
+            log::warn!("storage tidy-up skipped: {e}");
+            return;
+        }
+    };
+    let dirs = match b.list_library_dirs().await {
+        Ok(d) => d,
+        Err(e) => {
+            log::warn!("storage tidy-up skipped: {e}");
+            return;
+        }
+    };
+    let (kept, doomed): (Vec<String>, Vec<String>) = match &pointer {
+        Some(prev) => (vec![prev.clone()], crate::backup::abandoned_libraries(&dirs, active, Some(prev))),
+        None => (dirs.iter().filter(|d| valid_library_dir(d) && d.as_str() != active).cloned().collect(), Vec::new()),
+    };
+    let mut refs = std::collections::HashSet::new();
+    for name in LIBRARY_FILES {
+        if let Some(data) = files.get(name) {
+            crate::backup::referenced_hashes(&data, &mut refs);
+        }
+    }
+    for dir in &kept {
+        if let Err(e) = read_references(b, dir, &mut refs).await {
+            log::warn!("storage tidy-up skipped: reading {dir}: {e}");
+            return;
+        }
+    }
+    let mut freed_libraries = 0;
+    for dir in &doomed {
+        match b.remove_tree(dir).await {
+            Ok(()) => freed_libraries += 1,
+            Err(e) => {
+                log::warn!("removing the old library {dir}: {e}");
+                return;
+            }
+        }
+    }
+    let stored = match b.list("originals").await {
+        Ok(s) => s,
+        Err(e) => {
+            log::warn!("listing stored originals: {e}");
+            return;
+        }
+    };
+    let mut freed_originals = 0;
+    for hash in crate::backup::orphaned_originals(&stored, &refs, crate::backup::MAX_PRUNE_PER_START) {
+        match b.remove(&storage_key(&hash)).await {
+            Ok(()) => freed_originals += 1,
+            Err(e) => {
+                log::warn!("removing the unused original {hash}: {e}");
+                break;
+            }
+        }
+    }
+    if freed_libraries > 0 || freed_originals > 0 {
+        notice(format!(
+            "Freed browser storage: {freed_libraries} old library cop{}, {freed_originals} unused stored photo{}.",
+            if freed_libraries == 1 { "y" } else { "ies" },
+            if freed_originals == 1 { "" } else { "s" }
+        ));
+    }
+}
+
 /// Everything loaded before the UI starts.
 struct Boot {
     opts: Options,
@@ -372,6 +463,9 @@ async fn boot(opts: Options) -> Boot {
                 Ok(None) => {}
                 Err(e) => log::error!("reading {name}: {e}"),
             }
+        }
+        if opts.exclusive && !opts.safe && opts.store != "memory" {
+            tidy_storage(b, &files, &lib_dir).await;
         }
         if let Ok(Some(j)) = b.read(THUMB_INDEX).await {
             index = ThumbIndex::from_json(&j);
@@ -805,10 +899,12 @@ pub fn start(chinese_font: Vec<u8>) {
     if chinese_font.is_empty() {
         log::warn!("lightcraft: no Simplified Chinese font supplied; Chinese-only glyphs will show as boxes");
     }
-    let opts = Options::from_url();
+    let mut opts = Options::from_url();
     wasm_bindgen_futures::spawn_local(async move {
         // one tab per library: two would each keep their own copy and overwrite each other's saves
-        if opts.store != "memory" && safety::acquire_tab_lock().await == Some(false) {
+        let lock = if opts.store != "memory" { safety::acquire_tab_lock().await } else { None };
+        opts.exclusive = lock == Some(true);
+        if lock == Some(false) {
             safety::show_blocking(
                 "Ember is already open in another tab or window of this browser.\n\n\
                  Switch to that tab, or close it and reload this page. (Two tabs would overwrite each other's changes.)",
