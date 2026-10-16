@@ -1016,6 +1016,10 @@ pub struct Mask {
     /// Refine Edges 0..100: the mask's edges snap to the photo's (guided filter).
     #[serde(skip_serializing_if = "is_zero")]
     pub refine: f64,
+    /// Feather 0..100: softens the mask's edges (Gaussian, radius up to 2 % of the long edge, so
+    /// preview and export agree). 0 leaves the mask as drawn.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub feather: f64,
     /// Written by Auto (`develop.auto`): the next Auto replaces it. Never set on a mask a
     /// person made, whatever it is named.
     #[serde(skip_serializing_if = "is_false")]
@@ -1040,6 +1044,7 @@ impl Default for Mask {
             components: Vec::new(),
             adjust: LocalAdjustments::default(),
             refine: 0.0,
+            feather: 0.0,
             auto: false,
         }
     }

@@ -149,6 +149,14 @@ pub fn evaluate_one(m: &Mask, frame: &Frame, w: usize, h: usize, img: &Rgb32f, l
         }
         first = false;
     }
+    if m.feather > 0.0 {
+        // Feather: a Gaussian of the finished selection, its radius relative to the long edge
+        let k = (m.feather / 100.0).clamp(0.0, 1.0) as f32;
+        let sigma = 0.02 * frame.output_long(w, h) as f32 * k;
+        if sigma > 0.3 {
+            alpha = lightcraft_raster::blur::gaussian(&alpha, sigma);
+        }
+    }
     if m.refine > 0.0 {
         // Refine Edges: the mask's edges follow the photo's (window up to ~4 % of the long edge,
         // the width of a soft brush edge or gradient)
@@ -1036,6 +1044,84 @@ mod tests {
         };
         let (plain, sharp) = (step(&soft), step(&refined));
         assert!(sharp > plain * 1.5 && sharp > 0.1, "the edge in the mask follows the photo's: {plain} → {sharp}");
+    }
+
+    /// A soft left-to-right ramp mask over a photo with a hard luminance step at x = 0.5 of the
+    /// width, evaluated at `w × (2w/3)` pixels; returns the alpha row through the middle.
+    fn ramp_row(w: usize, feather: f64, refine: f64) -> Vec<f32> {
+        let h = w * 2 / 3;
+        let step = w / 2;
+        let img = Rgb32f::from_fn(w, h, |x, _| if x < step { [0.05; 3] } else { [0.6; 3] });
+        let log_l = Plane::from_fn(w, h, |x, _| if x < step { (0.05f32).log2() } else { (0.6f32).log2() });
+        let f = Frame::new(w, h, &Default::default(), true);
+        let m = Mask {
+            components: vec![MaskComponent {
+                name: None,
+                op: MaskOp::Add,
+                invert: false,
+                shape: MaskShape::Linear { start: Point::new(0.75, 0.5), end: Point::new(0.25, 0.5) },
+            }],
+            feather,
+            refine,
+            ..Default::default()
+        };
+        let a = evaluate_one(&m, &f, w, h, &img, &log_l, 0.0, None);
+        a.data[(h / 2) * w..(h / 2 + 1) * w].to_vec()
+    }
+
+    /// Feather 0 is the mask as drawn, and a default `Mask` deserializes from an old edit with it.
+    #[test]
+    fn feather_zero_is_the_mask_as_drawn() {
+        let a = ramp_row(120, 0.0, 0.0);
+        let b = ramp_row(120, 0.0, 0.0);
+        assert_eq!(a, b);
+        let old: Mask = serde_json::from_str(r#"{"id":3}"#).unwrap_or_default();
+        assert_eq!(old.feather, 0.0);
+        // a hard-edged shape stays hard at 0 and softens above it
+        let hard = |feather: f64| {
+            let (w, h) = (100usize, 60usize);
+            let img = Rgb32f::from_fn(w, h, |_, _| [0.3; 3]);
+            let log_l = img.map(crate::local::log_lum);
+            let f = Frame::new(w, h, &Default::default(), true);
+            let m = Mask {
+                components: vec![MaskComponent {
+                    name: None,
+                    op: MaskOp::Add,
+                    invert: false,
+                    shape: MaskShape::Radial { center: Point::new(0.5, 0.3), rx: 0.2, ry: 0.2, angle: 0.0, feather: 0.0, invert: false },
+                }],
+                feather,
+                ..Default::default()
+            };
+            evaluate_one(&m, &f, w, h, &img, &log_l, 0.0, None)
+        };
+        let (zero, soft) = (hard(0.0), hard(60.0));
+        let edge = |p: &Plane| (0..100).map(|x| p.data[18 * 100 + x]).filter(|v| *v > 0.05 && *v < 0.95).count();
+        assert!(edge(&soft) > edge(&zero) + 2, "feather softens: {} vs {}", edge(&zero), edge(&soft));
+    }
+
+    /// Edge refinement keeps the mask's transition on the photo's luminance step.
+    #[test]
+    fn refined_edge_stays_on_the_luminance_step() {
+        let w = 240;
+        let row = ramp_row(w, 0.0, 100.0);
+        let step = w / 2;
+        // the mask's 0.5 crossing, interpolated, sits within 2 px of the step
+        let i = (1..w).find(|&i| row[i - 1] < 0.5 && row[i] >= 0.5).or_else(|| (1..w).find(|&i| row[i - 1] >= 0.5 && row[i] < 0.5));
+        let i = i.expect("the refined mask crosses 0.5");
+        assert!((i as i64 - step as i64).abs() <= 2, "crossing at {i}, step at {step}");
+    }
+
+    /// Normalized radii: the same feather / refine at two resolutions gives the same alpha.
+    #[test]
+    fn feather_and_refine_do_not_depend_on_the_resolution() {
+        for (feather, refine) in [(50.0, 0.0), (0.0, 60.0), (40.0, 40.0)] {
+            let (small, big) = (ramp_row(150, feather, refine), ramp_row(300, feather, refine));
+            let worst = (0..150)
+                .map(|x| (small[x] - (big[2 * x] + big[2 * x + 1]) / 2.0).abs())
+                .fold(0.0f32, f32::max);
+            assert!(worst < 0.08, "feather {feather} refine {refine}: differs by {worst}");
+        }
     }
 
     /// Issue #157: a colour-range sample of one flat patch must not select a clearly different

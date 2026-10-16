@@ -399,6 +399,9 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
     };
     let out = slider(ui, &refine, m.refine, true, None);
     apply_slider_out(app, &refine, out, |app, v| app.run("mask.refine", json!({"value": v})));
+    let feather = ControlSpec { id: "feather", label: "Feather", ..refine };
+    let out = slider(ui, &feather, m.feather, true, None);
+    apply_slider_out(app, &feather, out, |app, v| app.run("mask.feather", json!({"value": v})));
     ui.add_space(30.0);
     let _ = Stroke::NONE;
 }

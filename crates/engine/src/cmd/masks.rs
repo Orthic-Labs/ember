@@ -522,6 +522,23 @@ pub fn specs() -> Vec<CommandSpec> {
             }
         ),
         cmd!(
+            "mask.feather",
+            "Feather Mask Edges",
+            [],
+            None,
+            "{id?, value: 0..100} — softens the mask's edges (Gaussian, radius relative to the long edge, up to 2 %; 0 = as drawn; rendered on the CPU)",
+            has_active,
+            |s, p| {
+                let v = f64_or(p, "value", 0.0).clamp(0.0, 100.0);
+                let mid = mask_id(p, s.active_mask, "mask.feather")?;
+                masks_edit(s, "mask.feather", "Feather Mask", |masks, _| {
+                    let i = find(masks, mid, "mask.feather")?;
+                    masks[i].feather = v;
+                    Ok(())
+                })
+            }
+        ),
+        cmd!(
             "mask.adjust",
             "Set Mask Adjustments",
             [],

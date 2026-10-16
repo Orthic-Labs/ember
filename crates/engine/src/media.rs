@@ -1026,7 +1026,7 @@ fn develop_image(
     // LUT profiles have no GPU stage: they render on the CPU
     let fallback = if gpu
         && !lightcraft_pipeline::lut::is_lut_profile(&s.profile.id)
-        && !s.masks.iter().any(|m| m.visible && m.refine > 0.0)
+        && !s.masks.iter().any(|m| m.visible && (m.refine > 0.0 || m.feather > 0.0))
         && req.proof.is_none()
     {
         match lightcraft_gpu::try_render(src, info, s, req, stages) {
