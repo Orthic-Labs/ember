@@ -102,6 +102,7 @@ pub fn spec() -> MenuSpec {
                     ("view.navigator", "Navigator", None),
                     ("view.enterFullScreen", "Enter Full Screen", Some("Cmd+Shift+F")),
                     ("view.infoOverlay", "Cycle Info Overlay", Some("Cmd+I")),
+                    ("view.viewOptions", "View Options…", None),
                 ],
             ),
             group(
