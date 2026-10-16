@@ -34,6 +34,62 @@ pub fn apply_slider_out(
     }
 }
 
+/// A lens database entry as the picker shows it: its name, with the maker in front when the name leaves it out.
+fn lens_label(make: &str, model: &str) -> String {
+    if make.is_empty() || model.to_lowercase().starts_with(&make.to_lowercase()) { model.to_string() } else { format!("{make} {model}") }
+}
+
+/// The manual lens profile picker (issue #218), shown when a lens database is configured: "Auto" (the match from the
+/// file's EXIF, the default) or one lens of the database, narrowed by typing. Picking runs `develop.lensProfile`.
+fn lens_picker(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &DevelopSettings) {
+    let choices = lightcraft_engine::lens_profiles::choices();
+    if choices.is_empty() {
+        return;
+    }
+    let auto = crate::i18n::tr("Auto (from the file)");
+    let picked = d.lens_override.as_ref();
+    let selected = picked.map_or_else(|| auto.to_string(), |p| lens_label(&p.make, &p.model));
+    ui.add_space(4.0);
+    ui.label(egui::RichText::new(crate::i18n::tr("Lens Profile")).size(11.0).color(Tokens::get(ui.ctx()).text_dim));
+    let filter_id = egui::Id::new("lens-profile-filter");
+    // Some(None) = back to Auto, Some(Some(..)) = this lens
+    let mut chosen: Option<Option<(String, String)>> = None;
+    egui::ComboBox::from_id_salt("lens-profile").width(ui.available_width()).selected_text(selected).show_ui(ui, |ui| {
+        let mut filter: String = ui.data_mut(|data| data.get_temp(filter_id)).unwrap_or_default();
+        crate::text_field::TextField::singleline("field:lensProfileFilter", &mut filter)
+            .hint(crate::i18n::tr("Filter"))
+            .width(f32::INFINITY)
+            .show(ui);
+        ui.data_mut(|data| data.insert_temp(filter_id, filter.clone()));
+        if ui.selectable_label(picked.is_none(), auto).clicked() {
+            chosen = Some(None);
+            ui.close();
+        }
+        let needle = filter.trim().to_lowercase();
+        let shown: Vec<&(String, String)> =
+            choices.iter().filter(|(make, model)| needle.is_empty() || lens_label(make, model).to_lowercase().contains(&needle)).collect();
+        let row = ui.spacing().interact_size.y;
+        egui::ScrollArea::vertical().max_height(280.0).show_rows(ui, row, shown.len(), |ui, range| {
+            for (make, model) in shown.iter().skip(range.start).take(range.len()).map(|c| (&c.0, &c.1)) {
+                let current = picked.is_some_and(|p| p.make == *make && p.model == *model);
+                if ui.selectable_label(current, lens_label(make, model)).clicked() {
+                    chosen = Some(Some((make.clone(), model.clone())));
+                    ui.close();
+                }
+            }
+        });
+    });
+    match chosen {
+        Some(Some((make, model))) => {
+            let _ = app.run("develop.lensProfile", json!({"make": make, "model": model}));
+        }
+        Some(None) => {
+            let _ = app.run("develop.lensProfile", json!({}));
+        }
+        None => {}
+    }
+}
+
 pub(crate) fn control(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &DevelopSettings, id: &str, enabled: bool) {
     let Some(spec) = controls::find(id) else { return };
     let v = controls::get(d, id).unwrap_or(spec.default);
@@ -370,6 +426,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
                         .color(Tokens::get(ui.ctx()).text_dim),
                 );
             }
+            lens_picker(app, ui, d);
         });
         if d.optics.lens_profile {
             for c in ["optics.profileDistortion", "optics.profileVignetting"] {

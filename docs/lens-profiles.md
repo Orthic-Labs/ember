@@ -37,6 +37,19 @@ Normalisation follows lensfun's documentation: distortion and TCA radii are 1 at
 calibration frame (its `cropfactor` and `aspect-ratio`), vignetting radii 1 at its corner; the optical centre is
 the image centre (lensfun's `<center>` offsets are not read).
 
+## Manual lens profile
+
+Matching is automatic by default. With a database configured, **Optics > Lens Profile** (next to Enable Lens
+Corrections) lists its lenses (type to filter) and **Auto (from the file)**. Picking a lens overrides the automatic
+match for the photo, turns lens corrections on and applies that lens's profile at the photo's focal length, aperture
+and focus distance, whatever lens the EXIF names; **Auto** goes back to the automatic match. It is one undo step.
+
+The pick is stored in the develop settings (`lens_override`: the lens maker and name as the database lists them; not
+written when unset, so existing XMP, presets and catalogs read unchanged) and its correction in the photo's lens data,
+so the preview, GPU path, export and DNG export treat it like any other profile. Reload from Disk keeps a picked
+profile. Command: `develop.lensProfile {make?, model?, ids?}` (no `model` = Auto); `develop.lensProfiles` lists the
+choices and the active photo's pick.
+
 ## Focus distance
 
 Vignetting is calibrated per focus distance in the lensfun format, so a close-up needs the near calibration. The
@@ -55,5 +68,5 @@ unknown (infinity). A malformed maker note gives no distance and never an error.
 
 - Only raws: rendered images (JPEG, HEIF, TIFF) are often already corrected in camera.
 - The focus distance is read from the maker note of Canon (`ShotInfo`) and Olympus / OM System (`FocusInfo`) raws, else from the Exif `SubjectDistance` tag when the camera writes a real value (see [Focus distance](#focus-distance)). Other makers' distances are encrypted or undocumented to a confident level (Nikon `LensData`, Sony, Fujifilm, Pentax, Panasonic): without a distance, vignetting uses the farthest calibrated one. The Canon and Olympus layouts follow public tag documentation and are covered by synthetic maker notes, not yet by real files.
-- No manual make / model picker yet; matching is automatic. [#218](https://github.com/Orthic-Labs/ember/issues/218)
+- The manual picker needs the lens database too, and only applies to raw files on disk (it reads the file's focal length, aperture and focus distance). Reset Edits goes back to the file's own lens data until the next Reload from Disk resolves the automatic match again; pick Auto first to return to it directly.
 - Not yet validated against real photos and another renderer; the tests use synthetic profiles and grids. [#219](https://github.com/Orthic-Labs/ember/issues/219)

@@ -302,6 +302,10 @@ fn fill_missing_meta(id: lightcraft_catalog::PhotoId, ph: &lightcraft_catalog::P
 /// what import gave it, the lens correction is turned on as import would; an edited photo keeps
 /// its settings.
 pub(crate) fn lens_ops(id: lightcraft_catalog::PhotoId, ph: &lightcraft_catalog::Photo, info: &crate::media::ProbeInfo) -> Vec<Op> {
+    // a lens profile picked by hand stays until the user goes back to the automatic match (`develop.lensProfile`)
+    if ph.develop.lens_override.is_some() && ph.embedded_lens.is_some() {
+        return Vec::new();
+    }
     if info.embedded_lens == ph.embedded_lens {
         return Vec::new();
     }

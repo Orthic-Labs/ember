@@ -13,6 +13,7 @@ pub mod cull;
 pub mod curves;
 pub(crate) mod denoise;
 mod develop;
+mod lens;
 mod edit;
 mod export;
 pub(crate) mod face_detect;
@@ -138,6 +139,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(edit::specs());
         v.extend(library::specs());
         v.extend(develop::specs());
+        v.extend(lens::specs());
         v.extend(color::specs());
         v.extend(curves::specs());
         v.extend(masks::specs());

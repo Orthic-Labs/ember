@@ -166,6 +166,23 @@ impl LensDb {
         self.cameras.iter().find(|c| tokens(&c.model) == md && maker_matches(&tokens(&c.maker), &mk))
     }
 
+    /// The profile of `maker` that goes by `model` (any of its names), compared without regard to case: how a profile
+    /// chosen by hand is found again. An empty `maker` matches any maker.
+    pub fn find_exact(&self, maker: &str, model: &str) -> Option<&Profile> {
+        self.lenses.iter().find(|l| {
+            (maker.trim().is_empty() || l.maker.trim().eq_ignore_ascii_case(maker.trim()))
+                && l.models.iter().any(|m| m.trim().eq_ignore_ascii_case(model.trim()))
+        })
+    }
+
+    /// Every profile as (maker, first name), sorted and without repeats: the choices of a manual picker.
+    pub fn choices(&self) -> Vec<(&str, &str)> {
+        let mut out: Vec<(&str, &str)> = self.lenses.iter().filter_map(|l| Some((l.maker.as_str(), l.models.first()?.as_str()))).collect();
+        out.sort_by_cached_key(|(maker, model)| (maker.to_lowercase(), model.to_lowercase()));
+        out.dedup();
+        out
+    }
+
     /// The best profile for an EXIF lens model (and lens make, when the file has one), preferring lenses for the
     /// camera's mount. `None` when no name is a convincing match.
     pub fn find_lens(&self, lens_make: Option<&str>, lens_model: &str, camera: Option<&Camera>) -> Option<&Profile> {

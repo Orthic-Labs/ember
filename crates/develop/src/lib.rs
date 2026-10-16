@@ -150,6 +150,27 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// The manual lens profile is absent from settings that don't use it (their JSON and hash stay as they were),
+    /// settings written before it existed read back without it, and a picked one round-trips.
+    #[test]
+    fn lens_override_is_backward_compatible() {
+        let s = DevelopSettings::default();
+        assert!(s.lens_override.is_none());
+        assert!(s.to_json().get("lens_override").is_none(), "unset: not written");
+        let mut old = s.to_json();
+        if let Some(o) = old.as_object_mut() {
+            o.remove("lens_override");
+        }
+        assert_eq!(DevelopSettings::from_json(&old).unwrap(), s);
+        let mut picked = s.clone();
+        picked.lens_override = Some(LensOverride { make: "Sigma".into(), model: "24-70mm F2.8 DG DN | Art 019".into() });
+        assert_ne!(picked.hash64(), s.hash64());
+        assert_eq!(DevelopSettings::from_json(&picked.to_json()).unwrap(), picked);
+        // a partial naming only the make still reads (the model defaults to empty)
+        let partial = DevelopSettings::default().merged(&json!({"lens_override": {"make": "Sigma"}})).unwrap();
+        assert_eq!(partial.lens_override, Some(LensOverride { make: "Sigma".into(), model: String::new() }));
+    }
+
     #[test]
     fn serde_roundtrip_default_and_edited() {
         let mut s = DevelopSettings::default();

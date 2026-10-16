@@ -115,6 +115,24 @@ fn finds_lenses_by_exif_model_with_or_without_the_maker() {
 }
 
 #[test]
+fn finds_a_profile_by_maker_and_name_and_lists_the_choices() {
+    let db = db();
+    let l = db.find_exact("testcam", "TESTCAM 50MM F/1.8").unwrap();
+    assert_eq!(l.models[0], "Testcam 50mm f/1.8");
+    // any of a lens's names finds it; an empty maker matches any
+    assert_eq!(db.find_exact("Testcam", "Testcam 24-70mm f/2.8 Zoom").unwrap().models[0], "Testcam 24-70mm f/2.8 & Co");
+    assert!(db.find_exact("", "Fishco 8mm f/3.5 Fisheye").is_some());
+    assert!(db.find_exact("Otherco", "Testcam 50mm f/1.8").is_none(), "the maker must agree");
+    assert!(db.find_exact("Testcam", "50mm").is_none(), "the whole name, not a part");
+    assert!(db.find_exact("Testcam", "").is_none());
+    assert_eq!(
+        db.choices(),
+        [("Fishco", "Fishco 8mm f/3.5 Fisheye"), ("Testcam", "Testcam 24-70mm f/2.8 & Co"), ("Testcam", "Testcam 50mm f/1.8")]
+    );
+    assert!(LensDb::default().choices().is_empty());
+}
+
+#[test]
 fn distortion_matches_the_model_within_half_a_pixel_on_a_grid() {
     let db = db();
     let lens = &db.lenses[0];

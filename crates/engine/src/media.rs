@@ -911,7 +911,12 @@ impl RenderJob {
             Ok(source) => {
                 // the plain picture, or (Denoise amount above 0 and a denoised picture cached) the mix the amount asks for
                 let src = &source.image_for(self.settings.denoise_amount());
-                let info = source.info_or(self.info);
+                // a lens profile picked by hand is the catalog's lens data, not what the decode resolved on its own
+                let picked_lens = self.settings.lens_override.is_some().then_some(self.info.lens);
+                let mut info = source.info_or(self.info);
+                if let Some(lens) = picked_lens {
+                    info.lens = lens;
+                }
                 // Thumbnails (many small jobs side by side) stay on the CPU; views and exports use
                 // the GPU when there is one.
                 let gpu = self.cache.is_none();
@@ -1569,7 +1574,12 @@ impl crate::Session {
     /// Prefer decoder facts to header-only metadata for pixel-statistics commands.
     pub fn source_info(&self, id: PhotoId) -> SourceInfo {
         let header = self.catalog.photo(id).map(|p| source_info(p)).unwrap_or_default();
-        self.media.source_facts(id, header)
+        let picked_lens = self.catalog.photo(id).filter(|p| p.develop.lens_override.is_some()).map(|p| p.embedded_lens);
+        let mut info = self.media.source_facts(id, header);
+        if let Some(lens) = picked_lens {
+            info.lens = lens;
+        }
+        info
     }
 
     /// The source proxy for pixel-statistics commands (auto tone/WB), loading synchronously.

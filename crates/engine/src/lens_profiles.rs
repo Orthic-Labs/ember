@@ -8,8 +8,8 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use lightcraft_develop::EmbeddedLens;
-use lightcraft_lensdb::{LensDb, Shot};
+use lightcraft_develop::{EmbeddedLens, LensOverride};
+use lightcraft_lensdb::{Camera, LensDb, Profile, Shot};
 
 /// The environment variable naming the lens database directory.
 pub const ENV: &str = "LIGHTCRAFT_LENSFUN_DIR";
@@ -38,9 +38,23 @@ pub fn database() -> Option<&'static LensDb> {
 /// The database profile for a photo with metadata `m`, for its `w × h` (unoriented, default-cropped) image,
 /// re-expressed after `orientation`. `None` without a database, lens name, focal length or matching profile.
 pub fn lookup(db: &LensDb, m: &lightcraft_meta::Metadata, w: f64, h: f64, orientation: lightcraft_geom::Orientation) -> Option<EmbeddedLens> {
-    let focal = m.focal_length.filter(|f| f.is_finite() && *f > 0.0)?;
     let camera = db.find_camera(m.make.as_deref().unwrap_or_default(), m.model.as_deref().unwrap_or_default());
+    let focal = m.focal_length.filter(|f| f.is_finite() && *f > 0.0)?;
     let lens = db.find_lens(m.lens_make.as_deref(), m.lens_model.as_deref()?, camera)?;
+    correction(lens, camera, m, focal, w, h, orientation)
+}
+
+/// The profile a lens picked by hand ([`LensOverride`]) gives the photo with metadata `m`: the same correction as
+/// [`lookup`], from that lens instead of the one the EXIF names. `None` when the database has no such lens, the
+/// photo has no focal length, or the profile has no usable correction at it.
+pub fn lookup_override(db: &LensDb, pick: &LensOverride, m: &lightcraft_meta::Metadata, w: f64, h: f64, orientation: lightcraft_geom::Orientation) -> Option<EmbeddedLens> {
+    let lens = db.find_exact(&pick.make, &pick.model)?;
+    let camera = db.find_camera(m.make.as_deref().unwrap_or_default(), m.model.as_deref().unwrap_or_default());
+    let focal = m.focal_length.filter(|f| f.is_finite() && *f > 0.0)?;
+    correction(lens, camera, m, focal, w, h, orientation)
+}
+
+fn correction(lens: &Profile, camera: Option<&Camera>, m: &lightcraft_meta::Metadata, focal: f64, w: f64, h: f64, orientation: lightcraft_geom::Orientation) -> Option<EmbeddedLens> {
     let crop = frame_crop_factor(camera.map(|c| c.crop_factor), focal, m.focal_length_35mm);
     let shot = Shot { focal, aperture: m.f_number, distance: m.focus_distance.filter(|d| d.is_finite() && *d > 0.0), crop_factor: crop, width: w, height: h };
     let corr = lens.correction(&shot)?;
@@ -60,14 +74,41 @@ fn frame_crop_factor(camera: Option<f64>, focal: f64, focal_35mm: Option<f64>) -
     }
 }
 
+/// The unoriented, default-cropped frame of `raw`, in pixels.
+fn frame_of(raw: &lightcraft_raw::RawInfo) -> (f64, f64) {
+    let c = raw.crop.clipped(raw.active_area.width, raw.active_area.height);
+    let (w, h) = if c.width == 0 || c.height == 0 { (raw.active_area.width, raw.active_area.height) } else { (c.width, c.height) };
+    (w as f64, h as f64)
+}
+
 /// [`crate::files::embedded_lens`], else the database profile ([`lookup`]) for a raw with metadata `meta`.
 pub fn for_raw(raw: &lightcraft_raw::RawInfo, meta: impl FnOnce() -> lightcraft_meta::Metadata) -> Option<EmbeddedLens> {
     crate::files::embedded_lens(raw).or_else(|| {
         let db = database()?;
-        let c = raw.crop.clipped(raw.active_area.width, raw.active_area.height);
-        let (w, h) = if c.width == 0 || c.height == 0 { (raw.active_area.width, raw.active_area.height) } else { (c.width, c.height) };
-        lookup(db, &meta(), w as f64, h as f64, raw.orientation)
+        let (w, h) = frame_of(raw);
+        lookup(db, &meta(), w, h, raw.orientation)
     })
+}
+
+/// The lens data of the raw file `bytes`: the automatic result ([`for_raw`]), or with `pick` the picked database
+/// profile in place of the file's own and the automatic match. `None` for a file that is not a raw, or has no
+/// usable lens data.
+pub fn for_bytes(bytes: &[u8], pick: Option<&LensOverride>) -> Option<EmbeddedLens> {
+    let raw = lightcraft_raw::probe_info(bytes).ok()?;
+    match pick {
+        None => for_raw(&raw, || lightcraft_meta::extract(bytes)),
+        Some(pick) => {
+            let (w, h) = frame_of(&raw);
+            lookup_override(database()?, pick, &lightcraft_meta::extract(bytes), w, h, raw.orientation)
+        }
+    }
+}
+
+/// Every lens in the configured database as (maker, name), sorted: the manual picker's choices. Empty without a
+/// database.
+pub fn choices() -> &'static [(String, String)] {
+    static CHOICES: OnceLock<Vec<(String, String)>> = OnceLock::new();
+    CHOICES.get_or_init(|| database().map(|db| db.choices().into_iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()).unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -107,6 +148,43 @@ mod tests {
         assert!(lookup(&db, &lightcraft_meta::Metadata { focal_length: None, ..meta() }, 6000.0, 4000.0, Orientation::Normal).is_none());
         let other = lightcraft_meta::Metadata { lens_model: Some("70-200mm F4".into()), ..meta() };
         assert!(lookup(&db, &other, 6000.0, 4000.0, Orientation::Normal).is_none());
+    }
+
+    /// A lens picked by hand replaces the automatic match: the picked profile's correction, from its own calibration,
+    /// whatever lens the EXIF names; an unknown pick, or none at the photo's focal length, gives nothing.
+    #[test]
+    fn a_picked_lens_overrides_the_exif_match() {
+        let db = LensDb::parse(
+            r#"<lensdatabase>
+              <camera><maker>Testcam</maker><model>TC-1</model><mount>T</mount><cropfactor>1.5</cropfactor></camera>
+              <lens><maker>Testcam</maker><model>Testcam 18-55mm f/3.5-5.6</model><mount>T</mount><cropfactor>1.5</cropfactor>
+                <calibration><distortion model="poly3" focal="18" k1="-0.03" /></calibration></lens>
+              <lens><maker>Othercam</maker><model>Othercam 18-35mm f/4</model><mount>T</mount><cropfactor>1.5</cropfactor>
+                <calibration><distortion model="poly3" focal="18" k1="0.05" /></calibration></lens>
+              <lens><maker>Telecam</maker><model>Telecam 70-200mm f/4</model><mount>T</mount><cropfactor>1.5</cropfactor>
+                <calibration><distortion model="poly3" focal="70" k1="0.01" /><distortion model="poly3" focal="200" k1="0.02" /></calibration></lens>
+              </lensdatabase>"#,
+        )
+        .unwrap();
+        let pick = |make: &str, model: &str| LensOverride { make: make.into(), model: model.into() };
+        let auto = lookup(&db, &meta(), 6000.0, 4000.0, Orientation::Normal).unwrap();
+        let other = lookup_override(&db, &pick("Othercam", "Othercam 18-35mm f/4"), &meta(), 6000.0, 4000.0, Orientation::Normal).unwrap();
+        assert_ne!(auto, other, "the picked lens, not the EXIF one");
+        // picking the lens the EXIF names is the automatic result; case and an empty maker don't matter
+        assert_eq!(lookup_override(&db, &pick("testcam", "TESTCAM 18-55MM F/3.5-5.6"), &meta(), 6000.0, 4000.0, Orientation::Normal), Some(auto));
+        assert_eq!(lookup_override(&db, &pick("", "Othercam 18-35mm f/4"), &meta(), 6000.0, 4000.0, Orientation::Normal), Some(other));
+        // it applies even where the EXIF names no lens at all
+        let unnamed = lightcraft_meta::Metadata { lens_model: None, ..meta() };
+        assert!(lookup(&db, &unnamed, 6000.0, 4000.0, Orientation::Normal).is_none());
+        assert_eq!(lookup_override(&db, &pick("Othercam", "Othercam 18-35mm f/4"), &unnamed, 6000.0, 4000.0, Orientation::Normal), Some(other));
+        // an unknown lens, no focal length, a degenerate frame: nothing
+        assert!(lookup_override(&db, &pick("Othercam", "No such lens"), &meta(), 6000.0, 4000.0, Orientation::Normal).is_none());
+        assert!(lookup_override(&db, &pick("", ""), &meta(), 6000.0, 4000.0, Orientation::Normal).is_none());
+        let no_focal = lightcraft_meta::Metadata { focal_length: None, ..meta() };
+        assert!(lookup_override(&db, &pick("Othercam", "Othercam 18-35mm f/4"), &no_focal, 6000.0, 4000.0, Orientation::Normal).is_none());
+        assert!(lookup_override(&db, &pick("Othercam", "Othercam 18-35mm f/4"), &meta(), 0.0, 0.0, Orientation::Normal).is_none());
+        // the automatic lookup stays the default: a photo with no pick is unchanged by the override code
+        assert!(lookup(&db, &meta(), 6000.0, 4000.0, Orientation::Normal).is_some());
     }
 
     /// The focus distance read from the maker note picks the calibrated vignetting distance nearest it (in 1/d);

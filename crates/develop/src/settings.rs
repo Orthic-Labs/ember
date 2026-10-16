@@ -135,6 +135,10 @@ pub struct DevelopSettings {
     pub grain: Grain,
     pub detail: Detail,
     pub optics: Optics,
+    /// A lens profile the user picked by hand (maker and name of a lens database entry) instead of the automatic
+    /// match from the file's EXIF. Not written while unset, so older settings keep their JSON and `hash64`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lens_override: Option<LensOverride>,
     pub geometry: Geometry,
     pub crop: Crop,
     pub orientation: Orientation,
@@ -170,6 +174,7 @@ impl Default for DevelopSettings {
             grain: Grain::default(),
             detail: Detail::default(),
             optics: Optics::default(),
+            lens_override: None,
             geometry: Geometry::default(),
             crop: Crop::default(),
             orientation: Orientation::Normal,
@@ -692,6 +697,16 @@ impl Default for Optics {
             ca_blue: 0.0,
         }
     }
+}
+
+/// A lens database profile chosen by hand ("manual make / model picker"): the lens maker and one of its names as the
+/// database lists them. Resolved against the lens database when it is picked (the photo's lens data then holds the
+/// profile's correction); it overrides the automatic match until it is cleared.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LensOverride {
+    pub make: String,
+    pub model: String,
 }
 
 /// Lens corrections embedded in the file, converted to the oriented, default-cropped image: a DNG's `OpcodeList3`
