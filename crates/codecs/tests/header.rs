@@ -102,6 +102,11 @@ fn fixtures(w: usize, h: usize) -> Vec<(String, Vec<u8>)> {
     let mut bmp = Vec::new();
     image::codecs::bmp::BmpEncoder::new(&mut bmp).encode(&rgb, w as u32, h as u32, image::ExtendedColorType::Rgb8).unwrap();
     out.push(("bmp".into(), bmp));
+    // AVIF (rav1d decode): the container header must agree with the decode, and cut files are refused
+    #[cfg(feature = "avif")]
+    if w >= 8 && h >= 8 {
+        out.push(("avif".into(), encode_avif(&e, 80, 10, &EncodeMeta::default()).unwrap()));
+    }
     out
 }
 

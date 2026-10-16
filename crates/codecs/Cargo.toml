@@ -32,6 +32,8 @@ jxl-oxide = { workspace = true, optional = true }
 ravif = { workspace = true, optional = true }
 rav1e = { workspace = true, optional = true }
 avif-serialize = { workspace = true, optional = true }
+# AVIF decode: rav1d behind the isolated `unsafe` helper crate (a stub on wasm32 anyway)
+lightcraft-av1dec = { workspace = true, optional = true }
 # spawns threads of its own (std::thread), which wasm32 has not got
 jixel = { workspace = true, optional = true }
 
@@ -44,8 +46,9 @@ jxl = ["dep:jxl-oxide", "dep:jixel"]
 # distributors choose it at build time (HEVC patents are a distributor's call, same policy as
 # PhotoCraft); `cargo xtask ci` clippies and tests it (`--features heif`), releases don't ship it yet.
 heif = ["dep:lightcraft-heif"]
-## AVIF encoding via ravif/rav1e (pure Rust, BSD). Native targets only; a no-op on wasm32.
-avif = ["dep:ravif", "dep:rav1e", "dep:avif-serialize"]
+## AVIF encoding via ravif/rav1e (pure Rust, BSD) and decoding via rav1d (lightcraft-av1dec, BSD-2-Clause).
+## Native targets only; a no-op on wasm32.
+avif = ["dep:ravif", "dep:rav1e", "dep:avif-serialize", "dep:lightcraft-av1dec"]
 
 [dev-dependencies]
 # JPEG XL tests read encoded samples without our colour conversion

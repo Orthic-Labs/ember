@@ -612,9 +612,85 @@ fn avif_encode_native() {
     if cfg!(feature = "avif") {
         let b = r.unwrap();
         assert_eq!(sniff(&b), Some(Format::Avif));
-        assert!(matches!(decode(&b, DecodeOptions::default()), Err(Error::Unsupported(Format::Avif, _))));
+        assert!(Format::Avif.can_decode());
+        let d = decode(&b, DecodeOptions::default()).unwrap();
+        assert_eq!((d.width, d.height, d.orientation, d.has_alpha), (64, 48, 1, true));
     } else {
         assert!(r.is_err());
+        assert!(!Format::Avif.can_decode());
+    }
+}
+
+#[cfg(feature = "avif")]
+fn opaque_smooth(w: usize, h: usize) -> Rgba8 {
+    let src = smooth(w, h);
+    Rgba8::from_fn(w, h, |x, y| {
+        let p = src.get(x, y);
+        [p[0], p[1], p[2], 255]
+    })
+}
+
+/// Encode with the exporter's encoder, decode with rav1d: the picture comes back close (mean error
+/// bound via PSNR), and the header reader agrees with the decode.
+#[cfg(feature = "avif")]
+#[test]
+fn avif_round_trip_is_close_and_the_header_agrees() {
+    let img = opaque_smooth(64, 48);
+    let b = encode_avif(&EncodeImage::rgba8(&img), 90, 10, &EncodeMeta::default()).unwrap();
+    let d = decode(&b, DecodeOptions::default()).unwrap();
+    assert_eq!((d.width, d.height, d.has_alpha, d.orientation), (64, 48, false, 1));
+    assert!(matches!(d.bit_depth, 8 | 10 | 12), "{}", d.bit_depth);
+    let p = psnr8(&img, &d.to_srgb8());
+    assert!(p > 35.0, "psnr {p}");
+    let h = read_header(&b).unwrap();
+    assert_eq!((h.format, h.width, h.height, h.orientation), (Format::Avif, 64, 48, 1));
+    assert_eq!((d.source_width, d.source_height), (64, 48));
+    // a smaller decode, and the thumbnail path
+    let small = decode(&b, DecodeOptions::fit(32, 32)).unwrap();
+    assert_eq!((small.width, small.height), (32, 24));
+    let t = decode_thumbnail(&b, 32).unwrap();
+    assert!(t.image.width <= 32 && t.image.height <= 32 && t.image.width.max(t.image.height) >= 24);
+}
+
+#[cfg(feature = "avif")]
+#[test]
+fn avif_ten_bit_and_alpha_round_trip() {
+    // 16-bit samples are written as 10-bit AV1
+    let px: Vec<u16> = (0..32 * 24 * 3).map(|i| ((i / 3) % 32 * 2000) as u16).collect();
+    let b = encode_avif(&EncodeImage::new(32, 24, 3, Samples::U16(&px)), 90, 10, &EncodeMeta::default()).unwrap();
+    let d = decode(&b, DecodeOptions::default()).unwrap();
+    assert_eq!((d.width, d.height, d.bit_depth), (32, 24, 10));
+    let left = d.to_srgb8().get(1, 12)[0];
+    let right = d.to_srgb8().get(30, 12)[0];
+    assert!(right > left + 100, "{left} {right}");
+    // an alpha ramp over a flat colour
+    let alpha = |x: usize| (x * 255 / 63) as u8;
+    let img = Rgba8::from_fn(64, 8, |x, _| [200, 100, 50, alpha(x)]);
+    let b = encode_avif(&EncodeImage::rgba8(&img), 95, 10, &EncodeMeta::default()).unwrap();
+    let d = decode(&b, DecodeOptions::default()).unwrap();
+    assert!(d.has_alpha);
+    let a = d.alpha.as_ref().unwrap();
+    let err = (0..64).map(|x| (a.get(x, 4) - f32::from(alpha(x)) / 255.0).abs()).sum::<f32>() / 64.0;
+    assert!(err < 0.03, "mean alpha error {err}");
+}
+
+/// Hostile files: truncation and corruption are errors or harmless, never a panic.
+#[cfg(feature = "avif")]
+#[test]
+fn avif_damaged_files_do_not_panic() {
+    let img = opaque_smooth(32, 24);
+    let b = encode_avif(&EncodeImage::rgba8(&img), 80, 10, &EncodeMeta::default()).unwrap();
+    assert!(decode(&b[..b.len() / 2], DecodeOptions::default()).is_err());
+    assert!(read_header(&b[..b.len() - 1]).is_err(), "image data cut short");
+    for n in (0..b.len().min(300)).step_by(7) {
+        let _ = read_header(&b[..n]);
+        let _ = decode(&b[..n], DecodeOptions::default());
+    }
+    for at in (0..b.len().min(400)).step_by(3) {
+        let mut g = b.clone();
+        g[at] ^= 0x5A;
+        let _ = read_header(&g);
+        let _ = decode(&g, DecodeOptions::default());
     }
 }
 

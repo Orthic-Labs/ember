@@ -3,7 +3,7 @@ name = "lightcraft-sysmem"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Ember sysmem (L0): returns freed allocator memory to the OS and reports physical memory on Windows. The workspace's only crate allowed `unsafe` (two FFI calls)."
+description = "Ember sysmem (L0): returns freed allocator memory to the OS and reports physical memory on Windows. With `lightcraft-av1dec`, one of the workspace's two crates allowed `unsafe` (FFI calls)."
 
 # Opts out of the workspace lints only to keep `unsafe_code = "deny"` overridable for the single FFI
 # modules below; every other crate root has `#![forbid(unsafe_code)]`. See AGENTS.md and craftrules

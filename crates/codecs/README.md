@@ -53,7 +53,7 @@ CRW, MRW, X3F) are detected so the engine can route them to `lightcraft-raw`; `d
 | GIF / BMP | yes (first GIF frame) | — | via `image` |
 | PSD / PSB | merged composite: 8/16/32-bit gray, RGB, CMYK, indexed, duotone (as gray); raw/RLE | — | ICC (1039), EXIF (1058), XMP (1060); ZIP-compressed composite, Lab and 1-bit unsupported |
 | JPEG XL | yes (jxl-oxide, feature `jxl`, default on) | yes (jixel, `encode_jxl`, feature `jxl`, native only): lossy VarDCT / lossless Modular, 8/16-bit, effort (fast / normal), progressive; HDR as 16-bit Rec. 2020 PQ | decode: enum colour → rendered straight to linear Rec.2020 (XYB via linear sRGB primaries); ICC → our ICC path; orientation applied by the decoder (reported as 1). Encode: lossy files declare an enum encoding (sRGB, Display P3, Rec. 2020 BT.709 curve, Rec. 2020 PQ), lossless ones embed the ICC profile; EXIF / XMP in `Exif` / `xml ` boxes |
-| AVIF | **no** | yes (ravif/rav1e, native only, feature `avif`) | 8/10-bit sRGB, EXIF; no ICC in the muxer. HDR: `encode_avif_hdr` writes 10-bit BT.2020 PQ (SDR white at 203 cd/m², CICP `nclx` + `clli`) or HLG (`hlg_signal`, SDR white at 0.75) |
+| AVIF | yes (rav1d via lightcraft-av1dec, native only, feature `avif`): 8/10/12-bit, 4:0:0/4:2:0/4:2:2/4:4:4, `nclx` matrix and range, ICC, irot/imir/clap, grids, alpha items, Exif/XMP; PQ/HLG read as sRGB | yes (ravif/rav1e, native only, feature `avif`) | 8/10-bit sRGB, EXIF; no ICC in the muxer. HDR: `encode_avif_hdr` writes 10-bit BT.2020 PQ (SDR white at 203 cd/m², CICP `nclx` + `clli`) or HLG (`hlg_signal`, SDR white at 0.75) |
 | HEIC/HEIF | yes with feature `heif` (lightcraft-heif: heic-rs + libheif-matching colour; 4:2:0/mono, 8–10-bit, grids, irot/imir/clap, ICC/nclx/VUI, EXIF/XMP, thumbnail item) | — | 4:2:2/4:4:4 (Canon/Sony HIF) unsupported |
 | Gain map JPEG (HDR) | gain map found and decoded (`gainmap::read_jpeg`): ISO 21496-1 metadata, else Adobe `hdrgm` XMP | yes (`gainmap::encode_jpeg`) | CIPA DC-007 MPF index (gain map typed `0x050000`), ISO 21496-1 APP2 on both images, `hdrgm` + Container XMP for Android/Chrome, Apple `HDRGainMap`/`HDRToneMap` XMP; gain maps are never used as thumbnails |
 
@@ -90,6 +90,7 @@ All pure Rust, verified with `cargo info` / `cargo tree`:
 | jxl-oxide | MIT OR Apache-2.0 | JPEG XL decode |
 | jixel | BSD-3-Clause OR Apache-2.0 | JPEG XL encode (native only) |
 | ravif (+ rav1e, avif-serialize) | BSD-3-Clause / BSD-2-Clause | AVIF encode (native only; heavy to compile) |
+| rav1d (via lightcraft-av1dec) | BSD-2-Clause | AVIF decode (native only; no asm) |
 
 Deliberately **not** used: anything AGPL from imazen (heic, zenjpeg, jxl-encoder, rav1d-safe),
 jpegxl-rs / imagequant (GPL / C), dav1d / libheif (C).
@@ -109,8 +110,11 @@ Run `cargo test --release -p lightcraft-codecs --test bench -- --ignored --nocap
 
 ## Gaps / limitations
 
-- **AVIF decode**: no permissively licensed, pure-Rust AV1 decoder exists today (dav1d is C;
-  rav1d-safe is AGPL). Files are sniffed and rejected with `Error::Unsupported`.
+- **AVIF decode** needs the `avif` feature on a native target (default on): rav1d (the BSD-2-Clause
+  Rust port of dav1d; rav1d-safe is AGPL and not used) runs behind `lightcraft-av1dec`, the one
+  `unsafe` crate besides sysmem. wasm32 builds and unsupported builds report `Error::Unsupported`.
+  Image sequences (`avis`) read their still image, overlays and non-AV1 items are refused, and
+  PQ / HLG transfer is not interpreted (read as sRGB).
 - **HEIC** needs the `heif` feature (off by default: HEVC patents are the distributor's call);
   without it, `Error::Unsupported` says the build has no HEIC support. 4:2:2 and 4:4:4 HEIF
   (Canon/Sony HIF) is refused: heic-rs 0.1.1 loses sync on those bitstreams.

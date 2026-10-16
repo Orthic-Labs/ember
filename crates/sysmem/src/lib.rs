@@ -12,7 +12,8 @@
 //! And it finds the ICC profile Windows assigns to the monitor showing the application's window
 //! ([`window_monitor_profile`]), so previews can be colour-managed there.
 //!
-//! This is Ember's only crate allowed `unsafe` (the FFI calls of `macos`, `windows` and
+//! Together with `lightcraft-av1dec` (the rav1d AVIF decoder) this is one of Ember's two crates allowed
+//! `unsafe` (the FFI calls of `macos`, `windows` and
 //! `windows_display`). Its API is safe, and on failure or on other platforms it simply releases or
 //! reports nothing.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]

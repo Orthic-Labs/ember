@@ -1134,6 +1134,47 @@ fn render_to_dng_adds_a_linear_dng_next_to_the_original() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Render to AVIF (#188): the edit is baked into an sRGB AVIF next to the original, which decodes
+/// back (rav1d), is added to the library and stacked on the original; a second render never
+/// overwrites the first; bad input is an error, not a panic.
+#[test]
+fn render_to_avif_adds_a_decodable_avif_next_to_the_original() {
+    let dir = temp_dir("renderavif");
+    let src = dir.join("beach.png");
+    write_png(&src, 9);
+    let mut s = Session::new().with_fs();
+    s.execute("library.import", &json!({"paths": [src.to_string_lossy()]})).unwrap();
+    let orig = s.active().unwrap();
+    s.execute("develop.set", &json!({"control": "light.exposure", "value": 1.0})).unwrap();
+    let r = s.execute("photo.renderToAvif", &json!({"quality": 80})).unwrap();
+    let path = r["path"].as_str().unwrap().to_string();
+    assert!(path.ends_with("beach-Rendered.avif"), "{path}");
+    let bytes = std::fs::read(&path).unwrap();
+    assert_eq!(lightcraft_codecs::sniff(&bytes), Some(lightcraft_codecs::Format::Avif));
+    let d = lightcraft_codecs::decode(&bytes, Default::default()).unwrap();
+    let ph = s.catalog.photo(orig).unwrap().clone();
+    assert_eq!((d.width, d.height), (ph.width as u32, ph.height as u32));
+    let new = lightcraft_catalog::PhotoId(r["id"].as_u64().unwrap());
+    assert_eq!(s.active(), Some(new));
+    let added = s.catalog.photo(new).unwrap();
+    assert!(added.format.eq_ignore_ascii_case("avif"), "{}", added.format);
+    assert_eq!((added.width, added.height), (ph.width, ph.height));
+    let st = s.catalog.stack_of(new).expect("stacked");
+    assert!(st.photos.contains(&orig));
+    assert!(src.exists(), "the original is untouched");
+    // a second render (8-bit this time) never overwrites the first
+    let r2 = s.execute("photo.renderToAvif", &json!({"ids": [orig.0], "bitDepth": 8})).unwrap();
+    assert!(r2["path"].as_str().unwrap() != path, "{r2}");
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    // bad input
+    assert!(s.execute("photo.renderToAvif", &json!({"quality": 0})).is_err());
+    assert!(s.execute("photo.renderToAvif", &json!({"quality": "high"})).is_err());
+    assert!(s.execute("photo.renderToAvif", &json!({"bitDepth": 12})).is_err());
+    assert!(s.execute("photo.renderToAvif", &json!({"ids": [99999]})).is_err());
+    assert!(s.execute("photo.renderToAvif", &json!({"ids": ["x"]})).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Issue #920: with several photos selected, each gets its own `-Edit` copy stacked on its
 /// original, the copies end up selected and are all reported; `ids` picks photos explicitly.
 #[test]

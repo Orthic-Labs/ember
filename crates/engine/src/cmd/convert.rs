@@ -146,6 +146,54 @@ fn render_to_dng(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"path": first["path"], "id": first["id"], "original": first["original"], "copies": copies}))
 }
 
+/// Render to AVIF: each selected photo is rendered with its edits baked in as an sRGB AVIF
+/// (`<name>-Rendered.avif`, never overwriting) next to the original, added to the library and
+/// stacked on top of the original, the way [`render_to_dng`] does. The original is untouched.
+/// `quality` is 1..100 (default 90), `bitDepth` 10 (default) or 8, `hdr` writes the PQ rendition of
+/// a photo edited in HDR.
+fn render_to_avif(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "photo.renderToAvif";
+    let mut ids = s.targets(p)?;
+    ids.dedup();
+    if ids.is_empty() {
+        return Err(bad(C, "no active photo"));
+    }
+    if ids.len() > MAX_EDIT_COPIES {
+        return Err(bad(C, format!("{} photos selected: render at most {MAX_EDIT_COPIES} at a time", ids.len())));
+    }
+    let quality = match p.get("quality") {
+        None | Some(Value::Null) => 90,
+        Some(v) => match v.as_u64() {
+            Some(q @ 1..=100) => q as u8,
+            _ => return Err(bad(C, format!("quality {v}: use 1 to 100"))),
+        },
+    };
+    let bit_depth = match p.get("bitDepth") {
+        None | Some(Value::Null) => 10,
+        Some(v) => match v.as_u64() {
+            Some(d @ (8 | 10)) => d as u8,
+            _ => return Err(bad(C, format!("bitDepth {v}: use 8 or 10"))),
+        },
+    };
+    let opts = crate::export::ExportOptions {
+        format: crate::export::ExportFormat::Avif,
+        quality,
+        bit_depth: Some(bit_depth),
+        hdr: bool_or(p, "hdr", false),
+        naming: "{name}-Rendered".into(),
+        conflict: crate::export::Conflict::Unique,
+        ..Default::default()
+    };
+    let mut copies = Vec::new();
+    for id in ids {
+        copies.push(render_copy(s, p, id, &opts, C)?);
+    }
+    let new: Vec<lightcraft_catalog::PhotoId> = copies.iter().filter_map(|c| c["id"].as_u64()).map(lightcraft_catalog::PhotoId).collect();
+    s.selection = crate::Selection { active: new.first().copied(), ids: new };
+    let first = copies.first().cloned().unwrap_or(Value::Null);
+    Ok(json!({"path": first["path"], "id": first["id"], "original": first["original"], "copies": copies}))
+}
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -156,6 +204,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?, colorSpace=prophoto|srgb|displayP3|adobeRgb|rec2020, hdr=false, dir? (demo photos)} — render each photo with its edits as a linear 16-bit float DNG next to the original, add it to the library and stack it on the original → {path, id, original, copies}",
             has_selection,
             render_to_dng
+        ),
+        cmd!(
+            "photo.renderToAvif",
+            "Render to AVIF",
+            ["Photo"],
+            None,
+            "{ids?, quality=90 (1..100), bitDepth=10|8, hdr=false, dir? (demo photos)} — render each photo with its edits as an sRGB AVIF next to the original, add it to the library and stack it on the original → {path, id, original, copies}",
+            has_selection,
+            render_to_avif
         ),
         cmd!(
             "photo.convertToDng",
