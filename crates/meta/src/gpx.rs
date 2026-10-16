@@ -109,7 +109,7 @@ pub fn parse_gpx(s: &str) -> Result<Tracklog, GpxError> {
         let ev = reader.read_event().map_err(|e| GpxError::Xml(e.to_string()))?;
         match ev {
             Event::Start(ref e) | Event::Empty(ref e) => {
-                let name = local(e.name().as_ref()).to_vec();
+                let name = local(e.name().0.as_bytes()).to_vec();
                 let parent = path.last().map(Vec::as_slice);
                 match name.as_slice() {
                     b"gpx" if path.is_empty() => seen_gpx = true,
@@ -122,8 +122,8 @@ pub fn parse_gpx(s: &str) -> Result<Tracklog, GpxError> {
                     b"trkpt" if parent == Some(b"trkseg") => {
                         let mut p = Pending::default();
                         for a in e.attributes().with_checks(false).flatten() {
-                            let v = String::from_utf8_lossy(&a.value);
-                            match local(a.key.as_ref()) {
+                            let v = &a.value;
+                            match local(a.key.0.as_bytes()) {
                                 b"lat" => p.lat = v.trim().parse().ok(),
                                 b"lon" => p.lon = v.trim().parse().ok(),
                                 _ => {}
@@ -143,8 +143,8 @@ pub fn parse_gpx(s: &str) -> Result<Tracklog, GpxError> {
                     finish_point(&mut log, pt.take(), segment)?;
                 }
             }
-            Event::Text(t) => text.push_str(&t.decode().map_err(|e| GpxError::Xml(e.to_string()))?),
-            Event::CData(t) => text.push_str(&String::from_utf8_lossy(&t)),
+            Event::Text(t) => text.push_str(&t),
+            Event::CData(t) => text.push_str(&t),
             Event::End(_) => {
                 let Some(name) = path.pop() else { continue };
                 let parent = path.last().map(Vec::as_slice);
