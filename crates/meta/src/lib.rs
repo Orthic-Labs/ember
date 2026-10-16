@@ -30,7 +30,7 @@ pub use iptc::parse_iptc;
 pub use lightcraft_geom::{Orientation, Rect};
 pub use tags::{TagRow, file_tag_rows, tag_rows};
 pub use xmp::{CRS_NS, LC_NS, XmpData, XmpError, XmpValue, parse_xmp, write_xmp, write_xmp_lc, write_xmp_lc_with_regions};
-pub use xmp_merge::{MergeRules, merge_xmp};
+pub use xmp_merge::{EmberRegions, MergeRules, merge_ember_regions, merge_xmp};
 
 use serde::{Deserialize, Serialize};
 
@@ -52,8 +52,8 @@ pub struct Flash {
 }
 
 /// A named region of interest on a photo (MWG Region Guidelines, `mwg-rs:Regions`): most often a face,
-/// drawn by Lightroom, digiKam, Picasa or similar tools. Read-only for now — Ember does not write
-/// regions yet (see `docs/xmp-interop.md`).
+/// drawn by Lightroom, digiKam, Picasa or similar tools. Ember writes its own named faces back (see
+/// `docs/xmp-interop.md`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Region {
     /// Normalized to the image's full, oriented frame (`Metadata::width`/`height`), y-down, 0..1 on

@@ -218,6 +218,23 @@ suggest names for the ones you have not:
   `face-embeddings-<model id>.bin`, one file per model, so switching models back and forth does not start over; they are
   not part of the catalog and not written to XMP.
 
+### Names in the sidecar
+
+A face you name is written to the photo's XMP sidecar as an MWG region (`mwg-rs:Regions`), so other applications read it
+too (details and limits in [xmp-interop.md](xmp-interop.md#face-regions-mwg)). When the sidecar already has regions from
+another application, Ember **merges** into them:
+
+- The other application's regions stay exactly as they are, byte for byte and in their order, with whatever extra
+  attributes and namespaces they carry.
+- Ember adds only its own regions to the same list, each marked `lc:EmberRegion="1"`. They are standard regions (type
+  `Face`, name, normalized area) that other applications read as usual; the mark is an Ember-only extra they ignore.
+- Renaming or removing a face in Ember changes only the regions that carry the mark. A face that came from another
+  application is not edited in the sidecar: a rename or removal of it stays in your library until the sidecar is read
+  again, which brings the other application's version back.
+- The box is stored the way the file is stored: for a photo with Exif orientation 3, 6 or 8 it is turned with
+  `mwg-rs:Rotation`, as Lightroom does, and reads back upright.
+- A sidecar with no regions gets a new list, as before.
+
 ### The background scan
 
 Turning recognition on starts a scan of the whole library, once, in the background:

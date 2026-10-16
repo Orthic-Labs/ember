@@ -87,16 +87,24 @@ Ember reads face, pet, focus and barcode regions in the Metadata Working Group's
 write them, from sidecars and from XMP embedded in the file. Named faces become people in the People view
 (LR-LIB-PEOPLE in [`parity-checklist.md`](parity-checklist.md)), and every region is drawn as a box in the loupe.
 
-- **Written only into a sidecar that has none.** A save writes the photo's regions as `mwg-rs:Regions` (all of them, so
-  they read back as they are) when the photo has a named face and the sidecar has no `mwg-rs:Regions`. A sidecar that has
-  one, from any application, keeps that block byte for byte, and later saves don't touch it: faces named, renamed or
-  removed in Ember then reach only the library. A photo without a named face writes no block. Boxes are written in the
+- **Written into the sidecar's own `mwg-rs:Regions`, merged.** A save writes the photo's regions as `mwg-rs:Regions`
+  (all of them, so they read back as they are) when the photo has a named face and the sidecar has no `mwg-rs:Regions`.
+  A sidecar that already has one, from any application, keeps it byte for byte, in its order, with its unknown attributes
+  and namespaces: Ember's regions are merged into the same `RegionList` bag as items of their own, marked with
+  `lc:EmberRegion="1"` (an attribute in Ember's own `lc:` namespace, which other applications ignore). A save adds,
+  updates and removes only the items that carry that mark, so naming, renaming or removing a face in Ember never edits
+  another application's region. A photo region on the same box as another application's region is not written again (the
+  other application's item stands for that face), so renaming or removing a face that came from another application
+  reaches only the library, and reading the sidecar back restores it. A block Ember can't place items in (no
+  `RegionList` bag, more than one `mwg-rs:Regions`, or one too deeply nested to read) is left as it is. A sidecar Ember
+  wrote before the mark existed has unmarked items, which count as another application's. A photo without a named face
+  writes no new block, and removes the items it wrote earlier. Boxes are written in the
   file's stored frame, the one other applications read them against: for Exif orientation 3, 6 or 8 each box is turned
-  with `mwg-rs:Rotation` as reference editor does, and `AppliedToDimensions` names the stored size. The orientation is
+  with `mwg-rs:Rotation` as reference editor does, and a new block's `AppliedToDimensions` names the stored size (items merged into an existing block use that block's own). The orientation is
   read from the file's metadata when the save runs. If the file can't be read (a demo photo, or a file that is missing
-  or unreadable), no block is written. A malformed Exif block reads as upright, as the preview path reads it. MWG can't
+  or unreadable), no block is written, and an existing one is left as it is. A malformed Exif block reads as upright, as the preview path reads it. MWG can't
   say "mirrored", so boxes on a photo whose file is mirrored (orientations 2, 4, 5, 7) are written unturned, and another
-  application may place them differently. Removing or resizing a box in the loupe changes the library only.
+  application may place them differently. Removing or resizing a box in the loupe reaches the sidecar on the next save when Ember wrote that box, and only the library otherwise.
 - **Areas**: `stArea:x`/`y` are the box's centre, `w`/`h` its size, normalized to the photo (`stArea:unit="pixel"`
   areas are divided by `mwg-rs:AppliedToDimensions`, and dropped without it). Boxes are clipped to the photo; one
   that misses it entirely, or has a non-finite, zero or negative size, is skipped (the rest of the list is kept).

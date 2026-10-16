@@ -567,6 +567,49 @@ fn saving_keeps_another_apps_regions_byte_for_byte() {
     let _ = std::fs::remove_dir_all(&lib);
 }
 
+/// A face named in Ember is merged into the `mwg-rs:Regions` another application wrote: that application's region stays
+/// byte for byte, renaming Ember's face changes only Ember's item.
+#[test]
+fn saving_merges_embers_faces_into_another_apps_regions() {
+    let src = temp_dir("regions-merge");
+    let lib = temp_dir("regions-merge-lib");
+    write_png(&src.join("portrait.png"), 9);
+    std::fs::write(src.join("portrait.xmp"), MWG_REGIONS).unwrap();
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    s.execute("library.import", &json!({"paths": [src.join("portrait.png").to_string_lossy()]})).unwrap();
+    let id = only(&s);
+    s.execute("library.select", &json!({"ids": [id.0]})).unwrap();
+    let mut meta = s.catalog.photo(id).unwrap().meta.clone();
+    assert_eq!(meta.regions.len(), 1, "the other application's face was read");
+    meta.regions.push(lightcraft_meta::Region {
+        rect: lightcraft_meta::Rect::new(0.05, 0.05, 0.15, 0.2),
+        kind: lightcraft_meta::RegionKind::Face,
+        name: Some("Ann".into()),
+        description: None,
+    });
+    s.commit("test", lightcraft_catalog::Op::SetMeta { id, meta: Box::new(meta) }).unwrap();
+    // the other application's region, exactly as it is in its sidecar
+    let item_start = MWG_REGIONS.find("       <rdf:li>").unwrap();
+    let item_end = MWG_REGIONS.find("</rdf:li>").unwrap() + "</rdf:li>".len();
+    let foreign_item = &MWG_REGIONS[item_start..item_end];
+    let names = || {
+        let packet = std::fs::read_to_string(src.join("portrait.xmp")).unwrap();
+        assert!(packet.contains(foreign_item), "the other application's region is untouched: {packet}");
+        let regions = lightcraft_meta::parse_xmp(&packet).unwrap().metadata.regions;
+        regions.into_iter().filter_map(|r| r.name).collect::<Vec<_>>()
+    };
+    s.execute("photo.saveMetadataToFile", &json!({})).unwrap();
+    assert_eq!(names(), ["Jane Doe", "Ann"]);
+    s.execute("faces.setName", &json!({"id": id.0, "index": 1, "name": "Anna"})).unwrap();
+    s.execute("photo.saveMetadataToFile", &json!({})).unwrap();
+    assert_eq!(names(), ["Jane Doe", "Anna"]);
+    let out = std::fs::read_to_string(src.join("portrait.xmp")).unwrap();
+    assert_eq!(out.matches("lc:EmberRegion=\"1\"").count(), 1, "{out}");
+    let _ = std::fs::remove_dir_all(&src);
+    let _ = std::fs::remove_dir_all(&lib);
+}
+
 /// A sidecar with no regions gains the photo's named faces, and reading it back gives the same boxes and names.
 #[test]
 fn a_sidecar_without_regions_gains_the_named_faces() {

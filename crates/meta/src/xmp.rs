@@ -43,6 +43,15 @@ const NAMESPACES: &[(&str, &str)] = &[
 /// The camera-raw-settings namespace URI (prefix `crs`), read for interchange only.
 pub const CRS_NS: &str = "http://ns.adobe.com/camera-raw-settings/1.0/";
 
+/// ` xmlns:<prefix>="<uri>"` for each of `prefixes` that is one of the namespaces this crate knows.
+pub(crate) fn ns_decls(prefixes: &[&str]) -> String {
+    let mut out = String::new();
+    for (p, u) in NAMESPACES.iter().filter(|(p, _)| prefixes.contains(p)) {
+        out.push_str(&format!(" xmlns:{p}=\"{u}\""));
+    }
+    out
+}
+
 /// XMP read failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum XmpError {
@@ -691,33 +700,32 @@ fn write_packet(meta: &Metadata, lc: &[(&str, &str)], with_regions: bool) -> Str
     x
 }
 
-/// The `mwg-rs:Regions` block for `meta.regions` (nothing for an empty list). Regions are stored upright. A photo with
-/// Exif orientation 6, 8 or 3 gets each box in the sensor's frame with `mwg-rs:Rotation`, the way Lightroom writes it:
-/// that is the exact inverse of what [`parse_one_region`] undoes. `AppliedToDimensions` names the upright size when known.
-fn regions_block(x: &mut String, meta: &Metadata) {
-    if meta.regions.is_empty() {
-        return;
-    }
+/// The attribute that marks a region item as written by Ember (`lc:EmberRegion="1"` on its `rdf:li`). Other applications
+/// ignore it. A save into a sidecar that has another application's regions changes only the items that carry it.
+pub(crate) const EMBER_REGION_MARK: &str = "lc:EmberRegion";
+
+/// One `rdf:li` element (no indentation before it, none after it) for each of `regions`, in the frame other applications
+/// read them in. Regions are stored upright. A photo with Exif orientation 6, 8 or 3 gets each box in the sensor's frame
+/// with `mwg-rs:Rotation`, the way Lightroom writes it: that is the exact inverse of what [`parse_one_region`] undoes.
+/// Every item carries [`EMBER_REGION_MARK`].
+pub(crate) fn region_items(regions: &[Region], orientation: Option<Orientation>) -> Vec<String> {
     let quarter = std::f64::consts::FRAC_PI_2;
     // Only the pure rotations turn the boxes; mirrored orientations are written as stored.
-    let turn = meta.orientation.map(Orientation::to_exif).filter(|v| matches!(v, 3 | 6 | 8)).unwrap_or(0);
-    x.push_str("   <mwg-rs:Regions rdf:parseType=\"Resource\">\n");
-    if let (Some(w), Some(h)) = (meta.width, meta.height) {
-        x.push_str(&format!("    <mwg-rs:AppliedToDimensions rdf:parseType=\"Resource\" stDim:w=\"{w}\" stDim:h=\"{h}\" stDim:unit=\"pixel\"/>\n"));
-    }
-    x.push_str("    <mwg-rs:RegionList>\n     <rdf:Bag>\n");
-    for region in &meta.regions {
+    let turn = orientation.map(Orientation::to_exif).filter(|v| matches!(v, 3 | 6 | 8)).unwrap_or(0);
+    let mut items = Vec::with_capacity(regions.len());
+    for region in regions {
         let r = region.rect;
         // the upright box, as centre and size
         let (cx, cy, w, h) = ((r.x0 + r.x1) / 2.0, (r.y0 + r.y1) / 2.0, r.x1 - r.x0, r.y1 - r.y0);
-        // the box in the frame the reader turns back into the upright one (6: −π/2, 8: +π/2, 3: π)
+        // the box in the frame the reader turns back into the upright one (6: -pi/2, 8: +pi/2, 3: pi)
         let (sx, sy, sw, sh, rotation) = match turn {
             6 => (cy, 1.0 - cx, h, w, Some(-quarter)),
             8 => (1.0 - cy, cx, h, w, Some(quarter)),
             3 => (1.0 - cx, 1.0 - cy, w, h, Some(std::f64::consts::PI)),
             _ => (cx, cy, w, h, None),
         };
-        x.push_str("     <rdf:li rdf:parseType=\"Resource\">\n");
+        let mut x = String::new();
+        x.push_str(&format!("<rdf:li rdf:parseType=\"Resource\" {EMBER_REGION_MARK}=\"1\">\n"));
         x.push_str(&format!(
             "      <mwg-rs:Area rdf:parseType=\"Resource\" stArea:x=\"{sx}\" stArea:y=\"{sy}\" stArea:w=\"{sw}\" stArea:h=\"{sh}\" stArea:unit=\"normalized\"/>\n"
         ));
@@ -739,7 +747,27 @@ fn regions_block(x: &mut String, meta: &Metadata) {
                 x.push_str(&format!("      <mwg-rs:{tag}>{}</mwg-rs:{tag}>\n", escape(text)));
             }
         }
-        x.push_str("     </rdf:li>\n");
+        x.push_str("     </rdf:li>");
+        items.push(x);
+    }
+    items
+}
+
+/// The `mwg-rs:Regions` block for `meta.regions` (nothing for an empty list), see [`region_items`]. `AppliedToDimensions`
+/// names the stored size when known.
+fn regions_block(x: &mut String, meta: &Metadata) {
+    if meta.regions.is_empty() {
+        return;
+    }
+    x.push_str("   <mwg-rs:Regions rdf:parseType=\"Resource\">\n");
+    if let (Some(w), Some(h)) = (meta.width, meta.height) {
+        x.push_str(&format!("    <mwg-rs:AppliedToDimensions rdf:parseType=\"Resource\" stDim:w=\"{w}\" stDim:h=\"{h}\" stDim:unit=\"pixel\"/>\n"));
+    }
+    x.push_str("    <mwg-rs:RegionList>\n     <rdf:Bag>\n");
+    for item in region_items(&meta.regions, meta.orientation) {
+        x.push_str("     ");
+        x.push_str(&item);
+        x.push('\n');
     }
     x.push_str("     </rdf:Bag>\n    </mwg-rs:RegionList>\n   </mwg-rs:Regions>\n");
 }

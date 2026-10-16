@@ -147,8 +147,8 @@ pub fn parse_sidecar(xmp: &str, target: crate::crs::Target) -> std::result::Resu
             .then(|| lightcraft_catalog::keywords::from_file(&m.keywords, &m.hierarchical_keywords)),
         // A sidecar that has `mwg-rs:Regions` at all (even an empty list) was written by an app that
         // knows about regions, so it's authoritative: its list, empty or not, replaces the catalog's.
-        // One without it (most writers; Ember writes its own only into a sidecar that has none, and keeps
-        // another app's `mwg-rs:Regions` byte for byte) says nothing about regions, and the
+        // One without it (most writers; Ember merges its own faces into another app's `mwg-rs:Regions` as marked
+        // items and keeps the app's items byte for byte) says nothing about regions, and the
         // photo's are kept.
         regions: d.values.contains_key("mwg-rs:Regions").then(|| m.regions.clone()),
         captured: m.capture_time.map(|d| d.to_iso()),
@@ -324,12 +324,22 @@ pub fn sidecar_packet_with(p: &Photo, cat: &lightcraft_catalog::Catalog, remove_
 }
 
 /// The packet a sidecar save writes: [`sidecar_packet`], and the photo's regions too when it has a named face
-/// (see [`has_named_face`]) and its file's stored frame can be read (see [`stored_frame`]).
-fn sidecar_save_packet(p: &Photo, cat: &lightcraft_catalog::Catalog) -> String {
+/// (see [`has_named_face`]) and its file's stored frame can be read (see [`stored_frame`]). With it, what the save does
+/// to a sidecar that already has `mwg-rs:Regions`: Ember's own region items, merged in (see [`sidecar_contents`]); `None`
+/// leaves that block as it is.
+fn sidecar_save_packet(p: &Photo, cat: &lightcraft_catalog::Catalog) -> (String, Option<lightcraft_meta::EmberRegions>) {
     // Without the frame the boxes can't be turned into the file's own frame, so no block is written: a box another
     // application places wrongly is worse than none. The sidecar keeps whatever regions it already has.
-    let frame = if has_named_face(&p.meta.regions) { stored_frame(p) } else { None };
-    packet(p, cat, false, frame)
+    // (docs/xmp-interop.md, Face regions)
+    let named = has_named_face(&p.meta.regions);
+    let frame = if named { stored_frame(p) } else { None };
+    let ember = if named {
+        frame.map(|f| lightcraft_meta::EmberRegions { regions: p.meta.regions.clone(), orientation: Some(f.orientation) })
+    } else {
+        // no named face: Ember has no region items, so any it wrote earlier into another application's block go
+        Some(lightcraft_meta::EmberRegions::default())
+    };
+    (packet(p, cat, false, frame), ember)
 }
 
 /// Whether a photo has a named face: the trigger for writing its regions into a sidecar.
@@ -433,7 +443,7 @@ pub const OWNED: &[&str] = &[
 pub const OWNED_IF_STATED: &[&str] = &["exif:DateTimeOriginal", "photoshop:DateCreated", "exif:GPSLatitude", "exif:GPSLongitude"];
 
 /// [`OWNED_IF_STATED`] plus `mwg-rs:Regions`, used only for a sidecar that has none ([`sidecar_contents`]): there
-/// Ember's regions are added, and another application's regions are never replaced.
+/// Ember's regions are added as a new block. A block that is there is never replaced: Ember's items go into it.
 const OWNED_IF_STATED_OR_NEW_REGIONS: &[&str] =
     &["exif:DateTimeOriginal", "photoshop:DateCreated", "exif:GPSLatitude", "exif:GPSLongitude", "mwg-rs:Regions"];
 
@@ -482,7 +492,18 @@ fn legacy_stem_sidecar(original: &str) -> Option<PathBuf> {
 /// The new contents for the sidecar at `path`: `fresh` merged into the existing file, if any. When
 /// `path` does not exist yet, `seed` (a legacy sidecar) stands in for it; a seed that can't be read
 /// as XMP is left alone and `fresh` is written instead. Returns (contents, merged, backup).
-fn sidecar_contents(path: &Path, seed: Option<&Path>, fresh: String, stamp: &str) -> std::io::Result<(String, bool, Option<PathBuf>)> {
+///
+/// `regions` is what to do about `mwg-rs:Regions` in a sidecar that already has them, whoever wrote them: Ember's own
+/// region items (marked `lc:EmberRegion`) are added, updated and removed in that block, and every other item stays byte
+/// for byte as it was ([`lightcraft_meta::merge_ember_regions`]). `None` leaves the block as it is. A sidecar without
+/// `mwg-rs:Regions` gets the block from `fresh`.
+fn sidecar_contents(
+    path: &Path,
+    seed: Option<&Path>,
+    fresh: String,
+    regions: Option<&lightcraft_meta::EmberRegions>,
+    stamp: &str,
+) -> std::io::Result<(String, bool, Option<PathBuf>)> {
     let (bytes, seeded) = match std::fs::read(path) {
         Ok(b) => (b, false),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => match seed.map(std::fs::read) {
@@ -496,8 +517,8 @@ fn sidecar_contents(path: &Path, seed: Option<&Path>, fresh: String, stamp: &str
     if bytes.iter().all(u8::is_ascii_whitespace) {
         return Ok((fresh, false, None));
     }
-    // Regions are written only where the sidecar has none: one that has `mwg-rs:Regions` (ours or another
-    // application's) keeps them byte for byte.
+    // A sidecar that has `mwg-rs:Regions` keeps that block: the merge below leaves it alone, and Ember's own items are
+    // merged into it afterwards.
     let has_regions =
         std::str::from_utf8(&bytes).ok().and_then(|s| lightcraft_meta::parse_xmp(s).ok()).is_some_and(|d| d.values.contains_key("mwg-rs:Regions"));
     let owned_if_present = if has_regions { OWNED_IF_STATED } else { OWNED_IF_STATED_OR_NEW_REGIONS };
@@ -506,7 +527,18 @@ fn sidecar_contents(path: &Path, seed: Option<&Path>, fresh: String, stamp: &str
         .map_err(|e| e.to_string())
         .and_then(|old| lightcraft_meta::merge_xmp(old, &fresh, rules).map_err(|e| e.to_string()))
     {
-        Ok(merged) => Ok((merged, true, None)),
+        Ok(merged) => {
+            let merged = match regions.filter(|_| has_regions) {
+                // the packet read as XMP just now, so a failure here is a block too deep or odd to place items in:
+                // the sidecar keeps its regions as they are, and the rest of the save goes ahead
+                Some(ember) => lightcraft_meta::merge_ember_regions(&merged, ember).unwrap_or_else(|why| {
+                    log::warn!("{}: left its mwg-rs:Regions as they are ({why})", path.display());
+                    merged
+                }),
+                None => merged,
+            };
+            Ok((merged, true, None))
+        }
         Err(_) if seeded => Ok((fresh, false, None)),
         Err(why) => {
             let b = backup(path, stamp)?;
@@ -729,7 +761,8 @@ impl Session {
         let seed = (self.xmp.naming == SidecarNaming::Split && naming == SidecarNaming::Full && !path.is_file())
             .then(|| legacy_stem_sidecar(&orig))
             .flatten();
-        let (data, merged, backup) = sidecar_contents(&path, seed.as_deref(), sidecar_save_packet(p, &self.catalog), &(self.clock)()).map_err(err)?;
+        let (fresh, regions) = sidecar_save_packet(p, &self.catalog);
+        let (data, merged, backup) = sidecar_contents(&path, seed.as_deref(), fresh, regions.as_ref(), &(self.clock)()).map_err(err)?;
         write_atomic(&path, data.as_bytes()).map_err(err)?;
         self.note_sidecar_write(&path, data.as_bytes());
         Ok(SidecarSaved { path, merged, backup })
