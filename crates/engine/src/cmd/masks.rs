@@ -185,7 +185,8 @@ pub fn specs() -> Vec<CommandSpec> {
                 }
                 let next = s.active().and_then(|id| s.develop_of(id)).map(|d| d.next_mask_id()).unwrap_or(1);
                 // an AI selection is stamped with the photo's geometry now (Update AI Settings compares it after a crop)
-                let ai_geometry = if shape.is_ai() { s.active().and_then(|id| s.develop_of(id)).map(|d| lightcraft_develop::geometry_stamp(&d)) } else { None };
+                let ai_geometry =
+                    if shape.is_ai() { s.active().and_then(|id| s.develop_of(id)).map(|d| lightcraft_develop::geometry_stamp(&d)) } else { None };
                 let out = masks_edit(s, "mask.add", "Add Mask", |masks, active| {
                     masks.push(Mask {
                         id: next,
