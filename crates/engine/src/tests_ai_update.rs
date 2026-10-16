@@ -148,3 +148,15 @@ fn masks_saved_without_a_stamp_count_as_current_and_current_ones_write_none() {
     stale.ai_version = 0;
     assert!(serde_json::to_string(&stale).unwrap().contains("\"ai_version\":0"));
 }
+
+#[test]
+fn the_indicator_clears_when_the_stale_ai_masks_are_updated() {
+    let mut s = demo();
+    let id = s.visible_cloned()[0];
+    select(&mut s, &[id]);
+    assert_eq!(lightcraft_develop::ai_stale_in(&s.develop_of(id).unwrap_or_default()), 0);
+    set_masks(&mut s, id, vec![subject(0)]);
+    assert_eq!(lightcraft_develop::ai_stale_in(&s.develop_of(id).unwrap_or_default()), 1, "the badge shows");
+    s.execute("develop.updateAi", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(lightcraft_develop::ai_stale_in(&s.develop_of(id).unwrap_or_default()), 0, "the badge clears");
+}
