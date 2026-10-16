@@ -671,13 +671,12 @@ pub fn name_editor(
     let shown = egui::Area::new(egui::Id::new("face-name-editor")).order(egui::Order::Foreground).fixed_pos(at).constrain(true).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.set_min_width(230.0);
-            let r = ui.add(egui::TextEdit::singleline(&mut edit.text).hint_text("Name").desired_width(220.0));
-            register(ui.ctx(), "field:faceName", r.rect);
+            let field = crate::text_field::TextField::singleline("field:faceName", &mut edit.text).hint("Name").width(220.0).show(ui);
             if edit.fresh {
-                r.request_focus();
+                field.response.request_focus();
                 edit.fresh = false;
             }
-            if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            if field.ending == Some(crate::text_field::Ending::Return) {
                 outcome = Editor::Submit(edit.text.trim().to_string());
             }
             let typed = edit.text.trim().to_lowercase();
