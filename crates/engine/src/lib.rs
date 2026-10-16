@@ -62,6 +62,7 @@ pub mod originals;
 pub mod preset_import;
 pub mod preset_luminar;
 pub mod presets;
+pub mod print;
 pub mod proof;
 pub mod rename;
 pub mod segment;
@@ -277,6 +278,8 @@ pub struct Session {
     pub slideshow_templates: Vec<slideshow::Template>,
     /// The Classic Book in use (`book.set`, `book.setPage`, ...); not persisted.
     pub book: book::Model,
+    /// The Classic Print job in use (`print.set`, `print.applyTemplate`, ...); not persisted.
+    pub print: print::Model,
     /// Metadata presets (`metadata.*`), persisted in prefs.json.
     pub metadata_presets: Vec<cmd::metadata::MetadataPreset>,
     /// Saved filter-bar settings (`filter.*`), persisted in prefs.json.
@@ -400,6 +403,7 @@ impl Session {
             slideshow: slideshow::Model::default(),
             slideshow_templates: Vec::new(),
             book: book::Model::default(),
+            print: print::Model::default(),
             metadata_presets: Vec::new(),
             filter_presets: Vec::new(),
             curve_presets: Vec::new(),

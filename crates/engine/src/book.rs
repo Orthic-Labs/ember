@@ -365,7 +365,7 @@ fn rgba(c: [u8; 3]) -> [u8; 4] {
 }
 
 /// A line of text `width` × `height` pixels on `base`, `size_px` tall, aligned as `align`.
-fn text_line(width: usize, height: usize, base: [u8; 3], text: &str, size_px: f64, align: &str, color: [u8; 3]) -> Rgba8 {
+pub(crate) fn text_line(width: usize, height: usize, base: [u8; 3], text: &str, size_px: f64, align: &str, color: [u8; 3]) -> Rgba8 {
     let mut strip = Rgba8::filled(width.max(1), height.max(1), rgba(base));
     if text.trim().is_empty() {
         return strip;
@@ -382,12 +382,12 @@ fn text_line(width: usize, height: usize, base: [u8; 3], text: &str, size_px: f6
     strip
 }
 
-fn font_px(size_pt: f64, dpi: f64) -> f64 {
+pub(crate) fn font_px(size_pt: f64, dpi: f64) -> f64 {
     size_pt / 72.0 * dpi
 }
 
 /// The height of a text line at `size_pt`, kept within `limit` pixels.
-fn line_height(size_pt: f64, dpi: f64, limit: usize) -> usize {
+pub(crate) fn line_height(size_pt: f64, dpi: f64, limit: usize) -> usize {
     ((font_px(size_pt, dpi) * LINE).round() as usize).clamp(1, limit.max(1))
 }
 

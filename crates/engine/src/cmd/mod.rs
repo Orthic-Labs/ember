@@ -37,6 +37,7 @@ mod photo_ai;
 mod prefs;
 mod preset_files;
 pub mod previews;
+mod print;
 mod query;
 mod slideshow;
 mod sync;
@@ -177,6 +178,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(activity::specs());
         v.extend(slideshow::specs());
         v.extend(book::specs());
+        v.extend(print::specs());
         v.extend(calibrate::specs());
         v
     })
