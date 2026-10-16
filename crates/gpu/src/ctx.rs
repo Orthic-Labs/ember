@@ -304,7 +304,7 @@ fn new_instance(backends: wgpu::Backends) -> wgpu::Instance {
 
 /// The adapters of `instance` that can render (software ones left out), in the order wgpu lists them.
 fn usable_adapters(instance: &wgpu::Instance, backends: wgpu::Backends) -> Vec<wgpu::Adapter> {
-    instance.enumerate_adapters(backends).into_iter().filter(|a| a.get_info().device_type != wgpu::DeviceType::Cpu).collect()
+    pollster::block_on(instance.enumerate_adapters(backends)).into_iter().filter(|a| a.get_info().device_type != wgpu::DeviceType::Cpu).collect()
 }
 
 /// The names of the usable adapters for `backends` (see [`crate::adapters`]).
