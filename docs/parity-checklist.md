@@ -789,7 +789,7 @@ From `08-lightroom-classic-extras.md` (Classic-only features) and part 2 of `06-
 | LRC-BOOK-GUIDES | Book guides | P2 | ⬜ | | [#122](https://github.com/Orthic-Labs/ember/issues/122) |
 | LRC-BOOK-CELL | Book cell padding | P2 | ⬜ | | [#123](https://github.com/Orthic-Labs/ember/issues/123) |
 | LRC-BOOK-TEXT | Book photo/page text | P2 | ⬜ | | [#124](https://github.com/Orthic-Labs/ember/issues/124) |
-| LRC-BOOK-TYPE | Book typography | P2 | ⬜ | | [#125](https://github.com/Orthic-Labs/ember/issues/125) |
+| LRC-BOOK-TYPE | Book typography | P2 | ✅ | `cmd:book.set`, `cmd:book.setPage`, `crates/engine/src/book.rs` (`wrap`, `fitted_line`, `text_block`, `setting`), `crates/engine/src/export.rs` (`watermark_text_coverage`) | photo and page text wrap inside their cell over several lines, with leading (`typography.leading`, 1–3 font sizes), alignment, size and colour; Inter with the CJK fallback faces from CRAFT_FONTS; a photo's caption takes at most half its cell and page text stays in the bottom margin, lines past those are not drawn; tests `wrapped_text_breaks_within_the_width_and_keeps_its_words`, `the_same_text_at_two_dpis_breaks_alike_and_scales`, `a_line_is_aligned_in_its_cell_and_centred_down_it` in `crates/engine/src/book.rs` [#125](https://github.com/Orthic-Labs/ember/issues/125) |
 | LRC-BOOK-BG | Book backgrounds | P2 | ⬜ | | [#126](https://github.com/Orthic-Labs/ember/issues/126) |
 | LRC-BOOK-VIEWS | Book views | P2 | ⬜ | | [#127](https://github.com/Orthic-Labs/ember/issues/127) |
 | LRC-BOOK-EXPORT | Book export (PDF/JPEG) | P2 | ⬜ | | [#128](https://github.com/Orthic-Labs/ember/issues/128) |

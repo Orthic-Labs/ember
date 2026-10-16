@@ -5,7 +5,7 @@
 //! preferences (`prefs.json`), so it reopens with the library.
 use crate::Session;
 use crate::contact_sheet::{Pdf, blit};
-use crate::export::{Anchor, Watermark, draw_watermark, encode_image};
+use crate::export::{Anchor, Watermark, draw_watermark, encode_image, watermark_fonts, watermark_text_coverage};
 use crate::slideshow::{self, Fields};
 use lightcraft_catalog::PhotoId;
 use lightcraft_pipeline::{OutputDepth, OutputSpace};
@@ -27,8 +27,8 @@ const MAX_PDF_BYTES: usize = 256 * 1024 * 1024;
 pub const DEFAULT_DPI: f64 = 150.0;
 /// The bundled face: the only one a book's text may use.
 pub const FONT: &str = "Inter";
-/// A text line is this many font sizes tall.
-const LINE: f64 = 1.6;
+/// The default line spacing: a text line is this many font sizes tall.
+const DEFAULT_LEADING: f64 = 1.6;
 /// The cover title is this many times the body text size.
 const COVER_SCALE: f64 = 3.0;
 
@@ -83,7 +83,7 @@ pub struct Cover {
     pub title: String,
 }
 
-/// The face, size, alignment and colour of all book text.
+/// The face, size, alignment, colour and leading of all book text.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Typography {
@@ -94,11 +94,13 @@ pub struct Typography {
     /// `left`, `center` or `right`.
     pub align: String,
     pub color: [u8; 3],
+    /// Line spacing: the distance between lines, in font sizes (1–3). Text wraps inside its cell.
+    pub leading: f64,
 }
 
 impl Default for Typography {
     fn default() -> Self {
-        Self { font: FONT.into(), size_pt: 11.0, align: "left".into(), color: [32, 32, 32] }
+        Self { font: FONT.into(), size_pt: 11.0, align: "left".into(), color: [32, 32, 32], leading: DEFAULT_LEADING }
     }
 }
 
@@ -227,6 +229,7 @@ impl Model {
         check(s.cover.title.chars().count() <= MAX_TEXT, "text must be at most 500 characters")?;
         check(t.font == FONT, "typography.font must be \"Inter\", the bundled face")?;
         check((4.0..=72.0).contains(&t.size_pt), "typography.sizePt must be 4–72")?;
+        check((1.0..=3.0).contains(&t.leading), "typography.leading must be 1–3")?;
         check(matches!(t.align.as_str(), "left" | "center" | "right"), "typography.align must be left, center or right")?;
         check(x.photo.chars().count() <= MAX_TEXT, "text must be at most 500 characters")?;
         check((0.0..=10.0).contains(&g.bleed_mm), "guides.bleedMm must be 0–10")?;
@@ -387,9 +390,149 @@ pub(crate) fn font_px(size_pt: f64, dpi: f64) -> f64 {
     size_pt / 72.0 * dpi
 }
 
+/// The pitch of a text line at `size_pt` with `leading` font sizes per line, in pixels at `dpi`.
+pub(crate) fn line_pitch(size_pt: f64, leading: f64, dpi: f64) -> usize {
+    (font_px(size_pt, dpi) * leading).round().max(1.0) as usize
+}
+
+/// How a block of text is set: its size in pixels, its line pitch in pixels, its alignment and colour.
+pub(crate) struct Setting<'a> {
+    pub size_px: f64,
+    pub pitch: usize,
+    pub align: &'a str,
+    pub color: [u8; 3],
+}
+
+/// The book's body text as set at `dpi`.
+pub(crate) fn setting(t: &Typography, dpi: f64) -> Setting<'_> {
+    Setting { size_px: font_px(t.size_pt, dpi), pitch: line_pitch(t.size_pt, t.leading, dpi), align: &t.align, color: t.color }
+}
+
+/// A line of text `width` × `height` pixels on `base`, aligned as `s` says and centred down the
+/// strip. Unlike [`text_line`], the glyphs keep the size they are set at in a strip of any shape.
+pub(crate) fn fitted_line(width: usize, height: usize, base: [u8; 3], text: &str, s: &Setting<'_>) -> Rgba8 {
+    let mut strip = Rgba8::filled(width.max(1), height.max(1), rgba(base));
+    draw_fitted(&mut strip, text, s);
+    strip
+}
+
+/// Draws `text` as one line into `strip` with the watermark's shaping and face fallback. The line is
+/// laid out on a canvas padded by the font size: the watermark sizes text by the short edge of the
+/// canvas it is given, so a strip shorter than twice the text would shrink the glyphs.
+fn draw_fitted(strip: &mut Rgba8, text: &str, s: &Setting<'_>) {
+    let (w, h) = (strip.width, strip.height);
+    if text.trim().is_empty() || w == 0 || h == 0 || !(s.size_px > 0.0) {
+        return;
+    }
+    let pad = s.size_px.ceil().max(1.0) as usize;
+    let vh = h + 2 * pad;
+    let vw = w.max(vh) + 2 * pad;
+    // the canvas x that lands on the strip's x = 0
+    let (anchor, shift) = match s.align {
+        "center" => (Anchor::Center, (vw - w) / 2),
+        "right" => (Anchor::Right, vw - pad - w),
+        _ => (Anchor::Left, pad),
+    };
+    let wm = Watermark {
+        text: text.to_string(),
+        size: (s.size_px / vh as f64) as f32,
+        opacity: 1.0,
+        anchor,
+        inset_x: pad as f32 / vh as f32,
+        inset_y: 0.0,
+        color: s.color,
+        shadow: false,
+        ..Default::default()
+    };
+    watermark_text_coverage(vw, vh, &wm, |x, y, k, col| {
+        let (Some(sx), Some(sy)) = (x.checked_sub(shift), y.checked_sub(pad)) else { return };
+        if sx >= w || sy >= h {
+            return;
+        }
+        if let Some(p) = strip.data.get_mut(sy * w + sx) {
+            for c in 0..3 {
+                p[c] = (p[c] as f32 + (col[c] as f32 - p[c] as f32) * k).round() as u8;
+            }
+        }
+    });
+}
+
+/// Whether a line may break before or after `c`: CJK ideographs, kana and fullwidth forms.
+fn is_cjk(c: char) -> bool {
+    matches!(c as u32, 0x3000..=0x30FF | 0x3400..=0x9FFF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF | 0x20000..=0x2FFFF)
+}
+
+/// The advance of `text` at `size_px` with the watermark's face fallback. Kerning is left out, so a
+/// line measured here is never wider than the same line drawn.
+fn advance_px(fonts: &[ab_glyph::FontRef<'static>], text: &str, size_px: f32) -> f32 {
+    use ab_glyph::{Font, PxScale, ScaleFont};
+    let scale = PxScale::from(size_px.max(6.0));
+    let Some(latin) = fonts.first() else { return 0.0 };
+    text.chars()
+        .map(|c| {
+            let face = fonts.iter().position(|f| f.glyph_id(c).0 != 0).unwrap_or(0);
+            let sf = fonts.get(face).unwrap_or(latin).as_scaled(scale);
+            sf.h_advance(sf.glyph_id(c))
+        })
+        .sum()
+}
+
+/// Breaks `text` into lines no wider than `max_px` at `size_px`. Lines break at spaces and between
+/// CJK characters; a word wider than a line breaks between its characters. Each `\n` ends a line.
+pub(crate) fn wrap(text: &str, max_px: f64, size_px: f64) -> Vec<String> {
+    let fonts = watermark_fonts(crate::fonts::CRAFT_FONTS);
+    let (max, px) = (max_px as f32, size_px as f32);
+    text.split('\n').flat_map(|para| wrap_paragraph(&fonts, para, max, px)).collect()
+}
+
+fn wrap_paragraph(fonts: &[ab_glyph::FontRef<'static>], para: &str, max: f32, px: f32) -> Vec<String> {
+    let chars: Vec<char> = para.chars().collect();
+    let span = |a: usize, b: usize| -> String { chars.get(a..b).unwrap_or_default().iter().collect() };
+    let mut lines = Vec::new();
+    let (mut start, mut i) = (0usize, 0usize);
+    // the last place a line may break before char `i`
+    let mut brk: Option<usize> = None;
+    while i < chars.len() {
+        let here = chars.get(i).copied().unwrap_or(' ');
+        let before = i.checked_sub(1).and_then(|p| chars.get(p)).copied().unwrap_or(' ');
+        if i > start && (before == ' ' || is_cjk(before) || is_cjk(here)) {
+            brk = Some(i);
+        }
+        if i > start && advance_px(fonts, span(start, i + 1).trim_end(), px) > max {
+            let at = brk.filter(|b| *b > start).unwrap_or(i);
+            lines.push(span(start, at).trim_end().to_string());
+            start = at;
+            while chars.get(start) == Some(&' ') {
+                start += 1;
+            }
+            i = start;
+            brk = None;
+            continue;
+        }
+        i += 1;
+    }
+    lines.push(span(start, chars.len()).trim_end().to_string());
+    lines
+}
+
+/// The text wrapped to `width` pixels and set as `s`: a block on `base` at most `max_h` pixels tall.
+/// Lines past the bottom of `max_h` are not drawn; the block is as tall as the lines it draws.
+pub(crate) fn text_block(width: usize, max_h: usize, base: [u8; 3], text: &str, s: &Setting<'_>) -> Result<Rgba8, String> {
+    let (width, pitch) = (width.max(1), s.pitch.max(1));
+    let rows = max_h / pitch;
+    let lines = wrap(text, width as f64, s.size_px);
+    let drawn = lines.len().min(rows);
+    let mut img = Rgba8::filled(width, drawn * pitch, rgba(base));
+    for (k, line) in lines.iter().take(drawn).enumerate() {
+        let strip = fitted_line(width, pitch, base, line, s);
+        blit(&mut img, &strip, 0, k * pitch)?;
+    }
+    Ok(img)
+}
+
 /// The height of a text line at `size_pt`, kept within `limit` pixels.
 pub(crate) fn line_height(size_pt: f64, dpi: f64, limit: usize) -> usize {
-    ((font_px(size_pt, dpi) * LINE).round() as usize).clamp(1, limit.max(1))
+    ((font_px(size_pt, dpi) * DEFAULT_LEADING).round() as usize).clamp(1, limit.max(1))
 }
 
 /// One page rendered at `dpi`: background, cells with their photos and photo text, page text and
@@ -411,9 +554,14 @@ pub fn render_page(session: &mut Session, model: &Model, index: usize, dpi: f64)
     let band_x = (w - band_w) / 2;
     if index == 0 && s.cover.enabled && !s.cover.title.trim().is_empty() {
         let size = t.size_pt * COVER_SCALE;
-        let lh = line_height(size, dpi, margin_px.max(1));
-        let y = margin_px.saturating_sub(lh) / 2;
-        let strip = text_line(band_w, lh, base, &s.cover.title, font_px(size, dpi), "center", t.color);
+        let cover = Setting {
+            size_px: font_px(size, dpi),
+            pitch: line_pitch(size, t.leading, dpi).min(margin_px.max(1)),
+            align: "center",
+            color: t.color,
+        };
+        let y = margin_px.saturating_sub(cover.pitch) / 2;
+        let strip = fitted_line(band_w, cover.pitch, base, &s.cover.title, &cover);
         blit(&mut img, &strip, band_x, y)?;
     }
     let layout = layout_named(&page.template)?;
@@ -422,7 +570,15 @@ pub fn render_page(session: &mut Session, model: &Model, index: usize, dpi: f64)
         let Some(Some(id)) = page.photos.get(i) else { continue };
         let id = PhotoId(*id);
         let rect = cell_rect(s, cell, dpi);
-        let strip_h = if photo_text { line_height(t.size_pt, dpi, rect.h) } else { 0 };
+        // the photo text wraps inside the cell, in at most half of it
+        let caption = if photo_text {
+            let fields = session.catalog.photo(id).map(|p| Fields::of(p)).ok_or("no such photo")?;
+            let text = slideshow::expand(&model.text.photo, &fields);
+            Some(text_block(rect.w, rect.h / 2, base, &text, &setting(t, dpi))?)
+        } else {
+            None
+        };
+        let strip_h = caption.as_ref().map_or(0, |c| c.height);
         let (pw, ph) = (rect.w, rect.h - strip_h);
         if pw > 0 && ph > 0 {
             let job = session.export_job(id, pw, ph, OutputSpace::Srgb, OutputDepth::U8)?;
@@ -431,10 +587,7 @@ pub fn render_page(session: &mut Session, model: &Model, index: usize, dpi: f64)
             let y = rect.y + ph.saturating_sub(photo.height) / 2;
             blit(&mut img, &photo, x, y)?;
         }
-        if strip_h > 0 {
-            let fields = session.catalog.photo(id).map(|p| Fields::of(p)).ok_or("no such photo")?;
-            let text = slideshow::expand(&model.text.photo, &fields);
-            let strip = text_line(rect.w, strip_h, base, &text, font_px(t.size_pt, dpi), &t.align, t.color);
+        if let Some(strip) = caption {
             blit(&mut img, &strip, rect.x, rect.y + rect.h - strip_h)?;
         }
     }
@@ -444,10 +597,11 @@ pub fn render_page(session: &mut Session, model: &Model, index: usize, dpi: f64)
             None => Fields::default(),
         };
         let text = slideshow::expand(&page.text, &fields);
-        let lh = line_height(t.size_pt, dpi, margin_px.max(1));
-        let y = h.saturating_sub(margin_px) + margin_px.saturating_sub(lh) / 2;
-        let strip = text_line(band_w, lh, base, &text, font_px(t.size_pt, dpi), &t.align, t.color);
-        blit(&mut img, &strip, band_x, y.min(h.saturating_sub(lh)))?;
+        // the page text wraps across the bottom margin; lines past the margin are not drawn
+        let block = text_block(band_w, margin_px, base, &text, &setting(t, dpi))?;
+        let bh = block.height;
+        let y = h.saturating_sub(margin_px) + margin_px.saturating_sub(bh) / 2;
+        blit(&mut img, &block, band_x, y.min(h.saturating_sub(bh)))?;
     }
     Ok(img)
 }
@@ -605,5 +759,106 @@ mod tests {
         assert!(export_pdf(&mut s, &Model::default(), 72.0).is_err());
         assert!(render_page(&mut s, &m, 9, 72.0).is_err());
         assert!(page_size(&m.settings, 10.0).is_err());
+    }
+
+    /// The box (min x, min y, max x, max y) of the pixels that differ from `base`.
+    fn ink_bounds(img: &Rgba8, base: [u8; 3]) -> Option<(usize, usize, usize, usize)> {
+        let mut found: Option<(usize, usize, usize, usize)> = None;
+        for y in 0..img.height {
+            for x in 0..img.width {
+                let p = img.data[y * img.width + x];
+                if [p[0], p[1], p[2]] == base {
+                    continue;
+                }
+                found = Some(match found {
+                    None => (x, y, x, y),
+                    Some((x0, y0, x1, y1)) => (x0.min(x), y0.min(y), x1.max(x), y1.max(y)),
+                });
+            }
+        }
+        found
+    }
+
+    /// The width in pixels of `text` set as `s` in a cell `width` pixels wide.
+    fn ink_width(width: usize, s: &Setting<'_>, text: &str) -> i64 {
+        let base = [255, 255, 255];
+        let strip = fitted_line(width, s.pitch, base, text, s);
+        ink_bounds(&strip, base).map_or(0, |(x0, _, x1, _)| (x1 - x0) as i64)
+    }
+
+    #[test]
+    fn wrapped_text_breaks_within_the_width_and_keeps_its_words() {
+        let text = "Alpine lake at dawn, with mist over the water and the pines behind";
+        let (size, max) = (font_px(11.0, 150.0), 300.0);
+        let lines = wrap(text, max, size);
+        assert!(lines.len() >= 2, "{lines:?}");
+        let fonts = watermark_fonts(crate::fonts::CRAFT_FONTS);
+        for line in &lines {
+            assert!(advance_px(&fonts, line, size as f32) <= max as f32, "{line}");
+        }
+        assert_eq!(lines.join(" "), text);
+        // a word wider than a line breaks between its characters; a \n ends a line
+        let long = wrap("Supercalifragilistic\nend", 40.0, size);
+        assert!(long.len() >= 3, "{long:?}");
+        assert_eq!(long.last().map(String::as_str), Some("end"));
+        assert_eq!(long[..long.len() - 1].concat(), "Supercalifragilistic");
+        // CJK text breaks between its characters
+        let cjk = wrap("漢字かな交じり文", 40.0, size);
+        assert!(cjk.len() >= 2, "{cjk:?}");
+        assert_eq!(cjk.concat(), "漢字かな交じり文");
+        // a block holds only the lines that fit its height
+        let s = setting(&Typography::default(), 150.0);
+        let block = text_block(300, 100, [255; 3], &"word ".repeat(60), &s).unwrap();
+        assert!(block.height > 0 && block.height <= 100, "{}", block.height);
+        assert_eq!(block.height % s.pitch, 0);
+    }
+
+    #[test]
+    fn the_same_text_at_two_dpis_breaks_alike_and_scales() {
+        let text = "Alpine lake at dawn, with mist over the water and the pines behind";
+        let t = Typography::default();
+        let (lo, hi) = (setting(&t, 150.0), setting(&t, 300.0));
+        // a 60 mm wide cell: the same millimetres at each DPI
+        let (w_lo, w_hi) = (px(60.0, 150.0).round() as usize, px(60.0, 300.0).round() as usize);
+        let lines = wrap(text, w_lo as f64, lo.size_px);
+        assert!(lines.len() >= 2);
+        assert_eq!(lines, wrap(text, w_hi as f64, hi.size_px), "the breaks differ between 150 and 300 dpi");
+        // the line pitch doubles with the DPI (within a pixel of rounding), and so do the glyphs
+        assert!((hi.pitch as i64 - 2 * lo.pitch as i64).abs() <= 1, "{} {}", lo.pitch, hi.pitch);
+        let (a, b) = (ink_width(w_lo, &lo, "Alpine lake"), ink_width(w_hi, &hi, "Alpine lake"));
+        assert!(a > 50, "{a}");
+        assert!((b - 2 * a).abs() <= 3, "{a} {b}");
+        // the block is the lines times the pitch at each DPI
+        let (bl, bh) = (text_block(w_lo, 100_000, [255; 3], text, &lo).unwrap(), text_block(w_hi, 100_000, [255; 3], text, &hi).unwrap());
+        assert_eq!(bl.height, lines.len() * lo.pitch);
+        assert_eq!(bh.height, lines.len() * hi.pitch);
+    }
+
+    #[test]
+    fn a_line_is_aligned_in_its_cell_and_centred_down_it() {
+        let base = [255, 255, 255];
+        let set = |align: &'static str| Setting { size_px: 30.0, pitch: 60, align, color: [0, 0, 0] };
+        let ink = |align: &'static str| ink_bounds(&fitted_line(400, 60, base, "Hi", &set(align)), base).unwrap_or((0, 0, 0, 0));
+        let (l, c, r) = (ink("left"), ink("center"), ink("right"));
+        assert!(l.0 < 10, "left {l:?}");
+        assert!(r.2 > 390, "right {r:?}");
+        assert!(((c.0 + c.2) as i64 / 2 - 200).abs() <= 3, "centre {c:?}");
+        assert!(((l.1 + l.3) as i64 / 2 - 30).abs() <= 3, "down the strip {l:?}");
+        // the glyphs keep their size in a strip shorter than the text (the watermark alone would halve them)
+        let tall = fitted_line(400, 20, base, "Hi", &set("left"));
+        let (x0, y0, x1, y1) = ink_bounds(&tall, base).unwrap_or((0, 0, 0, 0));
+        assert!(y1 - y0 + 1 >= 20, "{y0} {y1}");
+        assert!(x1 > x0);
+    }
+
+    #[test]
+    fn leading_is_the_line_spacing_in_font_sizes() {
+        for bad in [0.5, 3.5] {
+            assert!(merged(&Model::default(), &json!({"typography": {"leading": bad}})).is_err(), "{bad}");
+        }
+        let m = merged(&Model::default(), &json!({"typography": {"leading": 2.0}})).unwrap();
+        assert_eq!(m.typography.leading, 2.0);
+        assert_eq!(line_pitch(11.0, 2.0, 72.0), 22);
+        assert!(line_pitch(11.0, 1.0, 150.0) < line_pitch(11.0, 2.0, 150.0));
     }
 }

@@ -194,7 +194,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Book Settings",
             [],
             None,
-            "{settings?: {widthMm, heightMm, marginMm, cellPaddingMm, paperColor, cover: {enabled, title}}, typography?: {font, sizePt, align, color}, text?: {photo}, guides?: {bleedMm, safeMm, show}} — each section holds only the settings to change → {model}",
+            "{settings?: {widthMm, heightMm, marginMm, cellPaddingMm, paperColor, cover: {enabled, title}}, typography?: {font, sizePt, align, color, leading (1–3)}, text?: {photo}, guides?: {bleedMm, safeMm, show}} — each section holds only the settings to change → {model}",
             always,
             set
         ),

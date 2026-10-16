@@ -344,7 +344,7 @@ static WATERMARK_FONT: &[u8] = include_bytes!("../../../assets/fonts/Inter-SemiB
 /// serif look; then any other CJK face — a watermark has no UI language, so every CJK script is
 /// offered). Without craft-fonts that is Inter alone, and CJK characters draw as Inter's
 /// missing-glyph box.
-fn watermark_fonts(craft: &'static [crate::fonts::CraftFont]) -> Vec<ab_glyph::FontRef<'static>> {
+pub(crate) fn watermark_fonts(craft: &'static [crate::fonts::CraftFont]) -> Vec<ab_glyph::FontRef<'static>> {
     let mut cjk: Vec<_> = crate::fonts::cjk(craft).collect();
     cjk.sort_by_key(|f| !f.is_mincho());
     std::iter::once(WATERMARK_FONT)
@@ -432,6 +432,13 @@ pub fn draw_watermark_deep(img: &mut DeepImage, wm: &Watermark) {
             }
         }),
     }
+}
+
+/// The watermark's layout for text placed in a sub-rectangle (the Classic Book's cells): the same
+/// shaping, face fallback and coverage as [`draw_watermark`], on a `width × height` canvas that the
+/// caller maps into its own pixels. `blend(x, y, coverage, colour)` is called for each covered pixel.
+pub(crate) fn watermark_text_coverage(width: usize, height: usize, wm: &Watermark, blend: impl FnMut(usize, usize, f32, [u8; 3])) {
+    watermark_coverage(width, height, wm, crate::fonts::CRAFT_FONTS, 1.0, blend);
 }
 
 /// Lay out `wm` on a `width × height` image and call `blend(x, y, coverage × opacity, colour)` for
