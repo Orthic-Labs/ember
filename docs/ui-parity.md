@@ -55,10 +55,9 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 
 | Action | Ours | reference editor desktop | Why |
 |---|---|---|---|
-| Pick flag | P | Z | Z = toggle zoom (Classic convention); P is the Classic pick key |
-| Photos panel (left) | ⌘⇧L | P | P = pick |
+| Pick flag | Z (grids) | Z | Z is Toggle Zoom in Detail; P picks only with the Classic keymap |
 | Expand/collapse edit sections | ⌘⌥1–5 | ⌘1–6 | ⌘0 = Zoom to Fit, ⌘1 = Zoom 100 %; Geometry lives in the Crop panel |
-| Histogram | ⌘⇧H | ⌘0 | ⌘0 = Zoom to Fit |
+| Histogram | ⌘0 | ⌘0 | Zoom to Fit has no default key (View menu); Classic keeps ⌘0 = Zoom to Fit |
 | Square Grid | ⇧G | (none; ⇧G = Guided Upright) | Guided Upright is a button in the Crop panel |
 | Export dialog | ⌘⇧E (+ ⇧E) | ⇧E | ⌘⇧E is "Edit in Photoshop" there; no external-editor command yet |
 | Crop overlay cycle | ⇧O | O | O = mask overlay; ⇧O (mask colour / overlay orientation) unused otherwise |

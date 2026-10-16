@@ -8,7 +8,7 @@ Select photos in Photo Grid or Square Grid, then use:
 | `1`–`5` | Set the star rating |
 | `[` / `]` | Decrease / increase each selected photo's rating by one, within 0–5 |
 | `6`, `7`, `8`, `9` | Set a red, yellow, green or blue label |
-| `P` | Flag as a pick |
+| `Z` | Flag as a pick (Z zooms in Detail). `P` opens the Photos panel; with the Classic keymap `P` picks |
 | `X` | Flag as rejected |
 | `U` | Clear the flag |
 | `Shift` + `0`–`9`, `P`, `X` or `U` | Apply the action and select the next photo |

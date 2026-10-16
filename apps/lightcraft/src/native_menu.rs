@@ -509,7 +509,7 @@ mod tests {
         for (_, v) in menu_bar(&app) {
             all(&v, &mut installed);
         }
-        for sc in ["E", "C", "Shift+P", "Cmd+Shift+H", "F2"] {
+        for sc in ["E", "C", "Shift+P", "Cmd+0", "F2"] {
             assert!(installed.iter().any(|s| s == sc), "{sc} is in the menu bar");
         }
         let owned = owned_by_menu(installed.iter().map(String::as_str), false);
@@ -517,7 +517,7 @@ mod tests {
             assert!(installed.iter().any(|s| s == sc), "{sc} is displayed in the menu");
             assert!(!owned.contains(sc), "{sc} must be left to egui");
         }
-        for sc in ["Cmd+Shift+H", "F2"] {
+        for sc in ["Cmd+0", "F2"] {
             assert!(owned.contains(sc), "{sc} is run by the menu bar");
         }
         // while typing, the menu bar gives up F2 too (the text field has it)

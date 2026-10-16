@@ -437,7 +437,7 @@ fn expanded(app: &LightcraftApp, name: &str) -> Option<Vec<MenuNode>> {
             })
             .collect(),
         "Set Flag" => [
-            ("pick", "Pick", "P", lightcraft_catalog::Flag::Pick),
+            ("pick", "Pick", "Z", lightcraft_catalog::Flag::Pick),
             ("reject", "Reject", "X", lightcraft_catalog::Flag::Reject),
             ("none", "Unflagged", "U", lightcraft_catalog::Flag::None),
         ]

@@ -822,7 +822,7 @@ pub fn specs() -> Vec<CommandSpec> {
             advance_if(s, p);
             Ok(v)
         }),
-        cmd!("photo.pick", "Flag as Pick", ["Photo", "Set Flag"], Some("P"), "{ids?}", has_selection, |s, p| {
+        cmd!("photo.pick", "Flag as Pick", ["Photo", "Set Flag"], Some("Z"), "{ids?}", has_selection, |s, p| {
             for_targets(s, p, "Flag as Pick", |id| Some(Op::SetFlag { id, flag: Flag::Pick }))
         }),
         cmd!("photo.reject", "Flag as Reject", ["Photo", "Set Flag"], Some("X"), "{ids?}", has_selection, |s, p| {

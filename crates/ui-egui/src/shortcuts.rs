@@ -95,6 +95,9 @@ pub const CLASSIC_KEYS: &[(&str, &str)] = &[
     ("Shift+W", "tool.pointColor"),
     // Q: Spot Removal, the Remove panel (the primary keymap has it on H)
     ("Q", "panel.remove"),
+    // P: Pick (the primary P is the Photos panel); ⌘0: Zoom to Fit (the primary ⌘0 is the Histogram)
+    ("P", "photo.pick"),
+    ("Cmd+0", "view.zoomFit"),
     // ⌘⌥1–7 switch modules: Library, Develop, Map, Slideshow, Print. Book (⌘⌥4) and Web (⌘⌥7) have no module yet.
     ("Cmd+Alt+1", "view.photoGrid"),
     ("Cmd+Alt+2", "view.detail"),
@@ -775,7 +778,7 @@ mod tests {
                 assert_eq!(h.app.session.catalog.photo(PhotoId(1)).unwrap().label, Some(label));
                 assert_eq!(h.app.session.catalog.photo(PhotoId(2)).unwrap().label, Some(label));
             }
-            for (k, flag) in [("P", Flag::Pick), ("X", Flag::Reject), ("U", Flag::None)] {
+            for (k, flag) in [("Z", Flag::Pick), ("X", Flag::Reject), ("U", Flag::None)] {
                 key(&mut h, k, false);
                 assert_eq!(h.app.session.catalog.photo(PhotoId(1)).unwrap().flag, flag);
                 assert_eq!(h.app.session.catalog.photo(PhotoId(2)).unwrap().flag, flag);
@@ -1192,6 +1195,22 @@ mod tests {
     }
 
     #[test]
+    fn default_keymap_p_opens_the_photos_panel_and_cmd0_shows_the_histogram() {
+        use lightcraft_catalog::{Flag, PhotoId};
+        let mut h = library();
+        h.app.ui.left_panel = false;
+        key(&mut h, "P", false);
+        assert!(h.app.ui.left_panel, "P opens the Photos panel");
+        assert_eq!(h.app.session.catalog.photo(PhotoId(1)).unwrap().flag, Flag::None, "P no longer picks by default");
+        key(&mut h, "P", false);
+        assert!(!h.app.ui.left_panel, "P closes the Photos panel again");
+        let histogram = h.app.ui.histogram;
+        let r = h.request("ui.key", json!({"key": "0", "cmd": true}), std::time::Duration::from_secs(20));
+        assert_eq!(r["ok"], true, "{r}");
+        assert_eq!(h.app.ui.histogram, !histogram, "Cmd+0 shows the Histogram");
+    }
+
+    #[test]
     fn shift_pick_preserves_presets_outside_the_library_grids() {
         let mut h = library();
         h.app.ui.view = crate::state::ViewMode::SquareGrid;
@@ -1220,7 +1239,7 @@ mod tests {
     #[test]
     fn plain_culling_keys_auto_advance_once() {
         use lightcraft_catalog::PhotoId;
-        for k in ["0", "5", "6", "9", "P", "X", "U"] {
+        for k in ["0", "5", "6", "9", "Z", "X", "U"] {
             let mut h = library();
             h.app.ui.auto_advance = true;
             key(&mut h, k, false);
@@ -1286,7 +1305,7 @@ mod tests {
         let mut h = library();
         let r = h.request("ui.clickWidget", json!({"id": "field:search"}), std::time::Duration::from_secs(20));
         assert_eq!(r["ok"], true, "{r}");
-        for k in ["5", "6", "P", "X", "U"] {
+        for k in ["5", "6", "Z", "X", "U"] {
             key(&mut h, k, false);
             key(&mut h, k, true);
         }
@@ -1406,6 +1425,27 @@ mod tests {
     fn contextual_partners_are_not_conflicts() {
         let keymap = Keymap::new();
         assert!(conflicts(&keymap, "photo.reject", "X").is_empty());
+    }
+
+    /// The default keymap (no saved changes): each key runs one command, and the keys this change moved are where it says.
+    #[test]
+    fn default_keymap_gives_each_key_one_command() {
+        use egui::{Key, Modifiers};
+        use super::{CONTEXTUAL, Keymap, bindable, binding, parse, shortcut_of};
+        let keymap = Keymap::new();
+        let mut seen: Vec<(Modifiers, Key, &'static str)> = Vec::new();
+        for b in bindable() {
+            let Some((m, k)) = binding(&keymap, b.id, b.default).and_then(parse) else { continue };
+            for &(m2, k2, other) in &seen {
+                let contextual = CONTEXTUAL.iter().any(|(x, y)| (*x == b.id && *y == other) || (*y == b.id && *x == other));
+                assert!((m, k) != (m2, k2) || contextual, "{} and {other} both run on {m:?} {k:?} by default", b.id);
+            }
+            seen.push((m, k, b.id));
+        }
+        assert_eq!(shortcut_of(&keymap, "view.leftPanel"), Some("P"));
+        assert_eq!(shortcut_of(&keymap, "view.histogram"), Some("Cmd+0"));
+        assert_eq!(shortcut_of(&keymap, "view.zoomFit"), None, "Zoom to Fit has no default key (View menu)");
+        assert_eq!(shortcut_of(&keymap, "photo.pick"), None, "Z picks in the grids; photo.pick has no key of its own");
     }
 
     /// No key fires two different actions (a UI command may shadow the engine command it wraps).
