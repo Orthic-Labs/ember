@@ -2221,7 +2221,6 @@
   "Tile address": "圖磚位址",
   "Use the default tile address": "使用預設圖磚位址",
   "{z}, {x} and {y} stand for a tile's zoom, column and row. The default is OpenStreetMap's standard layer; the usage policy of any other server you enter applies to it.": "{z}、{x} 和 {y} 分別代表圖磚的縮放層級、欄與列。預設是 OpenStreetMap 的標準圖層；你輸入的其他伺服器適用其自身的使用政策。",
-  "Classic Slideshow Module": "經典幻燈片模組",
   "Play": "播放",
   "Export PDF…": "匯出 PDF…",
   "Apply template": "套用範本",
@@ -2274,5 +2273,7 @@
   "Edit Saved Location…": "編輯已儲存的位置…",
   "Delete Saved Location": "刪除已儲存的位置",
   "Radius (metres)": "半徑（公尺）",
-  "The radius must be a number of metres": "半徑必須是以公尺為單位的數字"
+  "The radius must be a number of metres": "半徑必須是以公尺為單位的數字",
+  "Slideshow Module": "投影片模組",
+  "Play Slideshow Module": "播放投影片模組"
 }

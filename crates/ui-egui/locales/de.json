@@ -2222,7 +2222,6 @@
   "Tile address": "Kachel-Adresse",
   "Use the default tile address": "Standard-Kachel-Adresse verwenden",
   "{z}, {x} and {y} stand for a tile's zoom, column and row. The default is OpenStreetMap's standard layer; the usage policy of any other server you enter applies to it.": "{z}, {x} und {y} stehen für Zoomstufe, Spalte und Zeile einer Kachel. Standard ist die Standardebene von OpenStreetMap; für jeden anderen Server, den du einträgst, gelten dessen Nutzungsbedingungen.",
-  "Classic Slideshow Module": "Klassische Diashow-Ansicht",
   "Play": "Abspielen",
   "Export PDF…": "PDF exportieren…",
   "Apply template": "Vorlage anwenden",
@@ -2275,5 +2274,7 @@
   "Edit Saved Location…": "Gespeicherten Ort bearbeiten…",
   "Delete Saved Location": "Gespeicherten Ort löschen",
   "Radius (metres)": "Radius (Meter)",
-  "The radius must be a number of metres": "Der Radius muss eine Zahl in Metern sein"
+  "The radius must be a number of metres": "Der Radius muss eine Zahl in Metern sein",
+  "Slideshow Module": "Diashow-Modul",
+  "Play Slideshow Module": "Diashow-Modul abspielen"
 }

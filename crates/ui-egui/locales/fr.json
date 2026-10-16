@@ -2221,7 +2221,6 @@
   "Tile address": "Adresse des tuiles",
   "Use the default tile address": "Utiliser l'adresse des tuiles par défaut",
   "{z}, {x} and {y} stand for a tile's zoom, column and row. The default is OpenStreetMap's standard layer; the usage policy of any other server you enter applies to it.": "{z}, {x} et {y} représentent le zoom, la colonne et la ligne d'une tuile. L'adresse par défaut est la couche standard d'OpenStreetMap ; la politique d'utilisation de tout autre serveur saisi s'y applique.",
-  "Classic Slideshow Module": "Module Diaporama classique",
   "Play": "Lire",
   "Export PDF…": "Exporter en PDF…",
   "Apply template": "Appliquer le modèle",
@@ -2274,5 +2273,7 @@
   "Edit Saved Location…": "Modifier le lieu enregistré…",
   "Delete Saved Location": "Supprimer le lieu enregistré",
   "Radius (metres)": "Rayon (mètres)",
-  "The radius must be a number of metres": "Le rayon doit être un nombre de mètres"
+  "The radius must be a number of metres": "Le rayon doit être un nombre de mètres",
+  "Slideshow Module": "Module Diaporama",
+  "Play Slideshow Module": "Lire le module Diaporama"
 }

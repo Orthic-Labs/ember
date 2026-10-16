@@ -81,8 +81,8 @@ pub const FEATURES: &[Feature] = &[
     },
     Feature {
         key: "slideshowModule",
-        label: "Classic Slideshow module",
-        note: "View ▸ Classic Slideshow: templates, timeline and export. View ▸ Slideshow (full screen) is not affected.",
+        label: "Slideshow module",
+        note: "View ▸ Slideshow Module: templates, timeline and export. View ▸ Slideshow (full screen) is not affected.",
         default_on: false,
         commands: &[],
         prefixes: &["slideshow."],

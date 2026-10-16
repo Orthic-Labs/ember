@@ -2222,7 +2222,6 @@
   "Tile address": "타일 주소",
   "Use the default tile address": "기본 타일 주소 사용",
   "{z}, {x} and {y} stand for a tile's zoom, column and row. The default is OpenStreetMap's standard layer; the usage policy of any other server you enter applies to it.": "{z}, {x}, {y}는 타일의 확대 수준, 열, 행을 나타냅니다. 기본값은 OpenStreetMap의 표준 레이어이며, 다른 서버를 입력하면 해당 서버의 이용 정책이 적용됩니다.",
-  "Classic Slideshow Module": "클래식 슬라이드쇼 모듈",
   "Play": "재생",
   "Export PDF…": "PDF 내보내기…",
   "Apply template": "템플릿 적용",
@@ -2275,5 +2274,7 @@
   "Edit Saved Location…": "저장된 위치 편집…",
   "Delete Saved Location": "저장된 위치 삭제",
   "Radius (metres)": "반경(미터)",
-  "The radius must be a number of metres": "반경은 미터 단위의 숫자여야 합니다"
+  "The radius must be a number of metres": "반경은 미터 단위의 숫자여야 합니다",
+  "Slideshow Module": "슬라이드쇼 모듈",
+  "Play Slideshow Module": "슬라이드쇼 모듈 재생"
 }

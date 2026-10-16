@@ -2224,7 +2224,6 @@
   "Tile address": "タイルのアドレス",
   "Use the default tile address": "既定のタイルアドレスを使う",
   "{z}, {x} and {y} stand for a tile's zoom, column and row. The default is OpenStreetMap's standard layer; the usage policy of any other server you enter applies to it.": "{z}、{x}、{y} はタイルのズーム、列、行を表します。既定はOpenStreetMapの標準レイヤーです。ほかのサーバーを指定した場合は、そのサーバーの利用ポリシーが適用されます。",
-  "Classic Slideshow Module": "クラシック・スライドショーモジュール",
   "Play": "再生",
   "Export PDF…": "PDF を書き出す…",
   "Apply template": "テンプレートを適用",
@@ -2277,5 +2276,7 @@
   "Edit Saved Location…": "保存した場所を編集…",
   "Delete Saved Location": "保存した場所を削除",
   "Radius (metres)": "半径（メートル）",
-  "The radius must be a number of metres": "半径はメートルで入力してください"
+  "The radius must be a number of metres": "半径はメートルで入力してください",
+  "Slideshow Module": "スライドショーモジュール",
+  "Play Slideshow Module": "スライドショーモジュールを再生"
 }

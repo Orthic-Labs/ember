@@ -2222,7 +2222,6 @@
   "Tile address": "Địa chỉ ô",
   "Use the default tile address": "Dùng địa chỉ ô mặc định",
   "{z}, {x} and {y} stand for a tile's zoom, column and row. The default is OpenStreetMap's standard layer; the usage policy of any other server you enter applies to it.": "{z}, {x} và {y} là mức thu phóng, cột và hàng của một ô. Mặc định là lớp chuẩn của OpenStreetMap; chính sách sử dụng của bất kỳ máy chủ nào khác bạn nhập sẽ áp dụng cho máy chủ đó.",
-  "Classic Slideshow Module": "Mô-đun trình chiếu cổ điển",
   "Play": "Phát",
   "Export PDF…": "Xuất PDF…",
   "Apply template": "Áp dụng mẫu",
@@ -2275,5 +2274,7 @@
   "Edit Saved Location…": "Sửa vị trí đã lưu…",
   "Delete Saved Location": "Xóa vị trí đã lưu",
   "Radius (metres)": "Bán kính (mét)",
-  "The radius must be a number of metres": "Bán kính phải là một số tính bằng mét"
+  "The radius must be a number of metres": "Bán kính phải là một số tính bằng mét",
+  "Slideshow Module": "Mô-đun trình chiếu",
+  "Play Slideshow Module": "Phát mô-đun trình chiếu"
 }

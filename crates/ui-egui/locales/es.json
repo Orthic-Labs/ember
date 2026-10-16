@@ -2221,7 +2221,6 @@
   "Tile address": "Dirección de teselas",
   "Use the default tile address": "Usar la dirección de teselas predeterminada",
   "{z}, {x} and {y} stand for a tile's zoom, column and row. The default is OpenStreetMap's standard layer; the usage policy of any other server you enter applies to it.": "{z}, {x} y {y} representan el zoom, la columna y la fila de una tesela. La predeterminada es la capa estándar de OpenStreetMap; a cualquier otro servidor que introduzcas se aplica su política de uso.",
-  "Classic Slideshow Module": "Módulo de presentación clásico",
   "Play": "Reproducir",
   "Export PDF…": "Exportar PDF…",
   "Apply template": "Aplicar plantilla",
@@ -2274,5 +2273,7 @@
   "Edit Saved Location…": "Editar ubicación guardada…",
   "Delete Saved Location": "Eliminar ubicación guardada",
   "Radius (metres)": "Radio (metros)",
-  "The radius must be a number of metres": "El radio debe ser un número de metros"
+  "The radius must be a number of metres": "El radio debe ser un número de metros",
+  "Slideshow Module": "Módulo de presentación",
+  "Play Slideshow Module": "Reproducir módulo de presentación"
 }

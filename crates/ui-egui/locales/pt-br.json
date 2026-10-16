@@ -2221,7 +2221,6 @@
   "Tile address": "Endereço dos blocos",
   "Use the default tile address": "Usar o endereço de blocos padrão",
   "{z}, {x} and {y} stand for a tile's zoom, column and row. The default is OpenStreetMap's standard layer; the usage policy of any other server you enter applies to it.": "{z}, {x} e {y} representam o zoom, a coluna e a linha de um bloco. O padrão é a camada padrão do OpenStreetMap; a política de uso de qualquer outro servidor que você informar se aplica a ele.",
-  "Classic Slideshow Module": "Módulo Apresentação clássico",
   "Play": "Reproduzir",
   "Export PDF…": "Exportar PDF…",
   "Apply template": "Aplicar modelo",
@@ -2274,5 +2273,7 @@
   "Edit Saved Location…": "Editar local salvo…",
   "Delete Saved Location": "Excluir local salvo",
   "Radius (metres)": "Raio (metros)",
-  "The radius must be a number of metres": "O raio deve ser um número de metros"
+  "The radius must be a number of metres": "O raio deve ser um número de metros",
+  "Slideshow Module": "Módulo de apresentação",
+  "Play Slideshow Module": "Reproduzir módulo de apresentação"
 }

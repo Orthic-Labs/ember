@@ -2222,7 +2222,6 @@
   "Tile address": "Alamat ubin",
   "Use the default tile address": "Gunakan alamat ubin default",
   "{z}, {x} and {y} stand for a tile's zoom, column and row. The default is OpenStreetMap's standard layer; the usage policy of any other server you enter applies to it.": "{z}, {x}, dan {y} mewakili zoom, kolom, dan baris sebuah ubin. Default adalah lapisan standar OpenStreetMap; kebijakan penggunaan server lain yang Anda masukkan berlaku untuk server tersebut.",
-  "Classic Slideshow Module": "Modul Slideshow Klasik",
   "Play": "Putar",
   "Export PDF…": "Ekspor PDF…",
   "Apply template": "Terapkan templat",
@@ -2275,5 +2274,7 @@
   "Edit Saved Location…": "Edit lokasi tersimpan…",
   "Delete Saved Location": "Hapus lokasi tersimpan",
   "Radius (metres)": "Radius (meter)",
-  "The radius must be a number of metres": "Radius harus berupa angka dalam meter"
+  "The radius must be a number of metres": "Radius harus berupa angka dalam meter",
+  "Slideshow Module": "Modul Slideshow",
+  "Play Slideshow Module": "Putar Modul Slideshow"
 }

@@ -2222,7 +2222,6 @@
   "Tile address": "Адреса тайлів",
   "Use the default tile address": "Використати типову адресу тайлів",
   "{z}, {x} and {y} stand for a tile's zoom, column and row. The default is OpenStreetMap's standard layer; the usage policy of any other server you enter applies to it.": "{z}, {x} і {y} позначають масштаб, стовпець і рядок тайла. Типово використовується стандартний шар OpenStreetMap; до будь-якого іншого вказаного сервера застосовуються його правила використання.",
-  "Classic Slideshow Module": "Класичний модуль слайд-шоу",
   "Play": "Відтворити",
   "Export PDF…": "Експорт у PDF…",
   "Apply template": "Застосувати шаблон",
@@ -2275,5 +2274,7 @@
   "Edit Saved Location…": "Змінити збережене місце…",
   "Delete Saved Location": "Видалити збережене місце",
   "Radius (metres)": "Радіус (метри)",
-  "The radius must be a number of metres": "Радіус має бути числом у метрах"
+  "The radius must be a number of metres": "Радіус має бути числом у метрах",
+  "Slideshow Module": "Модуль слайд-шоу",
+  "Play Slideshow Module": "Відтворити модуль слайд-шоу"
 }

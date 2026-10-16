@@ -2223,7 +2223,6 @@
   "Tile address": "瓦片地址",
   "Use the default tile address": "使用默认瓦片地址",
   "{z}, {x} and {y} stand for a tile's zoom, column and row. The default is OpenStreetMap's standard layer; the usage policy of any other server you enter applies to it.": "{z}、{x} 和 {y} 分别代表瓦片的缩放级别、列和行。默认是 OpenStreetMap 的标准图层；你输入的其他服务器适用其自身的使用政策。",
-  "Classic Slideshow Module": "经典幻灯片模块",
   "Play": "播放",
   "Export PDF…": "导出 PDF…",
   "Apply template": "应用模板",
@@ -2276,5 +2275,7 @@
   "Edit Saved Location…": "编辑已保存的位置…",
   "Delete Saved Location": "删除已保存的位置",
   "Radius (metres)": "半径（米）",
-  "The radius must be a number of metres": "半径必须是以米为单位的数字"
+  "The radius must be a number of metres": "半径必须是以米为单位的数字",
+  "Slideshow Module": "幻灯片模块",
+  "Play Slideshow Module": "播放幻灯片模块"
 }
