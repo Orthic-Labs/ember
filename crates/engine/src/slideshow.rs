@@ -545,7 +545,7 @@ fn place_photo(session: &mut Session, model: &Model, id: PhotoId, img: &mut Rgba
 }
 
 /// Scale `img` to cover `w` × `h` (nearest sample), centred, cropping the overflow.
-fn cover(img: &Rgba8, w: usize, h: usize) -> Rgba8 {
+pub(crate) fn cover(img: &Rgba8, w: usize, h: usize) -> Rgba8 {
     let mut out = Rgba8::filled(w, h, [0, 0, 0, 255]);
     if img.width == 0 || img.height == 0 {
         return out;

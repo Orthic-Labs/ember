@@ -18,6 +18,7 @@ pub mod activity;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod apple_photos;
 pub mod availability;
+pub mod book;
 pub mod branding;
 pub(crate) mod camera_preview;
 pub mod camera_profiles;
@@ -273,6 +274,8 @@ pub struct Session {
     pub slideshow: slideshow::Model,
     /// The user's Classic Slideshow templates (`slideshow.saveTemplate`), persisted in prefs.json.
     pub slideshow_templates: Vec<slideshow::Template>,
+    /// The Classic Book in use (`book.set`, `book.setPage`, ...); not persisted.
+    pub book: book::Model,
     /// Metadata presets (`metadata.*`), persisted in prefs.json.
     pub metadata_presets: Vec<cmd::metadata::MetadataPreset>,
     /// Saved filter-bar settings (`filter.*`), persisted in prefs.json.
@@ -395,6 +398,7 @@ impl Session {
             export_presets: Vec::new(),
             slideshow: slideshow::Model::default(),
             slideshow_templates: Vec::new(),
+            book: book::Model::default(),
             metadata_presets: Vec::new(),
             filter_presets: Vec::new(),
             curve_presets: Vec::new(),

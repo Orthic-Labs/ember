@@ -6,6 +6,7 @@
 
 mod activity;
 mod before;
+mod book;
 pub(crate) mod browse;
 mod color;
 pub(crate) mod convert;
@@ -172,6 +173,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(face_recognize::specs());
         v.extend(activity::specs());
         v.extend(slideshow::specs());
+        v.extend(book::specs());
         v
     })
 }
