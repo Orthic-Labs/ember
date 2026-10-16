@@ -19,7 +19,7 @@ use lightcraft_raster::{Plane, Rgb32f};
 use serde::{Deserialize, Serialize};
 
 use super::fit::{auto_targets, encode, fit_guarded, tone_map};
-use super::{AutoTone, SceneKey, auto_tone_of, key_target, percentile, scene_population};
+use super::{AutoHints, AutoTone, SceneKey, auto_tone_of, key_target, percentile, scene_population_with};
 use crate::SourceInfo;
 use crate::geometry::Frame;
 use crate::output::{OutputDepth, OutputSpace};
@@ -278,7 +278,12 @@ fn region_median(linear: &Rgb32f, alpha: &Plane) -> Option<f32> {
 
 /// Region-aware Auto for `src` under `s`'s white balance (tone values ignored).
 pub fn region_auto(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) -> RegionAuto {
-    let Some(mut pop) = scene_population(src, info, s) else { return RegionAuto::global_only(AutoTone::default()) };
+    region_auto_with(src, info, s, &AutoHints::default())
+}
+
+/// [`region_auto`] with optional [`AutoHints`] for the global scene measurement.
+pub fn region_auto_with(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings, hints: &AutoHints) -> RegionAuto {
+    let Some(mut pop) = scene_population_with(src, info, s, hints) else { return RegionAuto::global_only(AutoTone::default()) };
     let Some(r) = regions(src, info, s) else { return RegionAuto::global_only(auto_tone_of(&pop, info)) };
     let (subject_ev, subject_share) = population(&r.ev, &r.subject);
     let (background_ev, background_share) = population(&r.ev, &r.background);

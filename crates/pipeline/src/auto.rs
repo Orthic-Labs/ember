@@ -239,7 +239,12 @@ pub fn scene_population_with(src: &Rgb32f, info: &SourceInfo, s: &DevelopSetting
 
 /// Compute auto tone values for `src` under the current white balance (ignores current tone values).
 pub fn auto_tone(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) -> AutoTone {
-    scene_population(src, info, s).map(|pop| auto_tone_of(&pop, info)).unwrap_or_default()
+    auto_tone_with(src, info, s, &AutoHints::default())
+}
+
+/// [`auto_tone`] with optional [`AutoHints`] (detected faces, the decoder's clipped share).
+pub fn auto_tone_with(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings, hints: &AutoHints) -> AutoTone {
+    scene_population_with(src, info, s, hints).map(|pop| auto_tone_of(&pop, info)).unwrap_or_default()
 }
 
 /// How far under middle grey (EV) Auto keeps an ordinary scene's key median. The offset fades out

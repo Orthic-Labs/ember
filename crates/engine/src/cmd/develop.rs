@@ -411,16 +411,19 @@ pub fn specs() -> Vec<CommandSpec> {
             "{regions?: bool (default true: the subject, background and sky get their own masks, \"Auto: …\", replaced on the next run), dryRun?: bool}",
             has_active,
             |s, p| {
-                use lightcraft_pipeline::auto::regions::{RegionAuto, is_auto_mask, region_auto};
+                use lightcraft_pipeline::auto::regions::{RegionAuto, is_auto_mask, region_auto_with};
                 let c = "develop.auto";
                 let id = active(s, c)?;
                 let src = s.source_now(id, SourceLevel::Thumb).map_err(|e| bad(c, e))?;
                 let info = s.source_info(id);
                 let d = s.develop_of(id).unwrap_or_default();
+                // cached face regions (a Detect Faces run, or the file's own) meter the key; none = as before
+                let faces = s.catalog.photo(id).map(|ph| super::face_detect::auto_face_boxes(&ph.meta.regions)).unwrap_or_default();
+                let hints = lightcraft_pipeline::auto::AutoHints { faces: &faces, clipped_share: None };
                 let r = if bool_or(p, "regions", true) {
-                    region_auto(&src, &info, &d)
+                    region_auto_with(&src, &info, &d, &hints)
                 } else {
-                    RegionAuto::global_only(lightcraft_pipeline::auto::auto_tone(&src, &info, &d))
+                    RegionAuto::global_only(lightcraft_pipeline::auto::auto_tone_with(&src, &info, &d, &hints))
                 };
                 if !bool_or(p, "dryRun", false) {
                     let a = r.global;

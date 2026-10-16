@@ -107,6 +107,17 @@ fn overlaps_existing(f: &Face, regions: &[Region]) -> bool {
     })
 }
 
+/// A photo's face regions (detected, from XMP, drawn or named) as the plain boxes Auto meters on. The pipeline takes
+/// boxes, not a detector, so it never depends on the face models; with no face regions (no model run, none in the
+/// file) this is empty and Auto behaves as before. Unusable rectangles are left for Auto's own filter.
+pub(crate) fn auto_face_boxes(regions: &[Region]) -> Vec<lightcraft_pipeline::auto::FaceBox> {
+    regions
+        .iter()
+        .filter(|r| r.kind == RegionKind::Face)
+        .map(|r| lightcraft_pipeline::auto::FaceBox { x0: r.rect.x0 as f32, y0: r.rect.y0 as f32, x1: r.rect.x1 as f32, y1: r.rect.y1 as f32 })
+        .collect()
+}
+
 pub(crate) fn is_detected(r: &Region) -> bool {
     r.description.as_deref().is_some_and(|d| d.starts_with(MARK))
 }
@@ -206,5 +217,15 @@ mod tests {
         assert!(!overlaps_existing(&face(0.59, 0.49, 0.80, 0.80), &existing));
         assert!(!overlaps_existing(&face(0.0, 0.0, 0.0, 0.0), &existing), "an empty box overlaps nothing");
         assert!(!overlaps_existing(&face(0.4, 0.2, 0.6, 0.5), &[]));
+    }
+
+    #[test]
+    fn only_face_regions_become_auto_boxes() {
+        let mut pet = region(0.1, 0.1, 0.3, 0.3);
+        pet.kind = RegionKind::Pet;
+        let boxes = auto_face_boxes(&[region(0.4, 0.2, 0.6, 0.5), pet]);
+        assert_eq!(boxes.len(), 1);
+        assert_eq!((boxes[0].x0, boxes[0].y0, boxes[0].x1, boxes[0].y1), (0.4, 0.2, 0.6, 0.5));
+        assert!(auto_face_boxes(&[]).is_empty());
     }
 }

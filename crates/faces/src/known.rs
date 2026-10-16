@@ -214,6 +214,27 @@ mod tests {
         }
     }
 
+    /// Every download is pinned to an immutable revision (a 40-hex commit in the address, never a branch or tag)
+    /// with a nonzero size and a lowercase 64-hex SHA-256, over https.
+    #[test]
+    fn every_pinned_download_has_a_revision_a_size_and_a_sha256() {
+        let mut pinned = 0;
+        for (id, url, _) in SOURCES {
+            let d = download(id).unwrap_or_else(|| panic!("{id} has no download"));
+            pinned += 1;
+            assert!(d.sha256.len() == 64 && d.sha256.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')), "{id}: sha256 {}", d.sha256);
+            assert!(d.size_bytes > 0, "{id}: size");
+            assert!(url.starts_with("https://"), "{id}: https");
+            let has_sha = url.split('/').any(|seg| seg.len() == 40 && seg.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')));
+            assert!(has_sha, "{id}: the address names a 40-hex commit");
+            assert!(!url.contains("/main/") && !url.contains("/master/") && !url.contains("/HEAD/"), "{id}: not a branch");
+        }
+        assert_eq!(pinned, SOURCES.len());
+        let yunet = download(YUNET_ID).expect("yunet");
+        assert_eq!((yunet.size_bytes, yunet.sha256.as_str()), (232_589, YUNET_SHA256));
+        assert!(yunet.url.contains("/25f423d0e04c31a17254620e58febd7386da523b/"));
+    }
+
     #[test]
     fn unresolved_models_say_so() {
         assert_eq!(sface().licence.commercial, Commercial::Unknown);

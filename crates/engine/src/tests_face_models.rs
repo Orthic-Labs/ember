@@ -627,3 +627,37 @@ fn recognition_cannot_be_turned_on_without_a_chosen_model() {
     assert!(s.execute("faces.enable", &json!({"enabled": true})).is_err());
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Cached face regions reach Auto as plain boxes: `develop.auto` meters exactly what the pipeline's hinted
+/// entry point gives for those boxes, and a photo with no face regions gets the unhinted result.
+#[test]
+fn develop_auto_receives_the_photos_face_regions_as_hints() {
+    use crate::media::SourceLevel;
+    use lightcraft_catalog::Op;
+    use lightcraft_meta::{Region, RegionKind};
+    use lightcraft_pipeline::auto::{AutoHints, FaceBox, auto_tone_with};
+
+    let mut s = Session::with_demo();
+    let id = s.active().unwrap();
+    let src = s.source_now(id, SourceLevel::Thumb).unwrap();
+    let info = s.source_info(id);
+    let d = s.develop_of(id).unwrap_or_default();
+    let exposure = |s: &mut Session| s.execute("develop.auto", &json!({"dryRun": true, "regions": false})).unwrap()["exposure"].as_f64().unwrap();
+
+    // no face regions: the unhinted result
+    let plain = auto_tone_with(&src, &info, &d, &AutoHints::default());
+    assert_eq!(exposure(&mut s), plain.exposure);
+
+    // a large face region on the left half, as `faces.detect` or an XMP file would leave it
+    let mut meta = s.catalog.photo(id).unwrap().meta.clone();
+    meta.regions = vec![Region {
+        rect: lightcraft_geom::Rect { x0: 0.0, y0: 0.0, x1: 0.5, y1: 1.0 },
+        kind: RegionKind::Face,
+        name: None,
+        description: Some("Detected by YuNet 2023mar".into()),
+    }];
+    s.commit("setup", Op::SetMeta { id, meta: Box::new(meta) }).unwrap();
+    let faces = [FaceBox { x0: 0.0, y0: 0.0, x1: 0.5, y1: 1.0 }];
+    let hinted = auto_tone_with(&src, &info, &d, &AutoHints { faces: &faces, clipped_share: None });
+    assert_eq!(exposure(&mut s), hinted.exposure, "develop.auto passes the photo's face regions to Auto");
+}

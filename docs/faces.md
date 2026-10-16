@@ -112,7 +112,7 @@ server share it.
 
 | Model | Licence of the weights | Trained on | Notes |
 | --- | --- | --- | --- |
-| YuNet 2023mar (detector) | MIT | WIDER FACE | 232 KB |
+| YuNet 2023mar (detector) | MIT (copyright Shiqi Yu) | WIDER FACE | 232,589 bytes, SHA-256 `8f2383e4…2552fa4`, opencv_zoo commit `25f423d0e04c` |
 | AuraFace v1 | Apache-2.0 | "a commercial dataset", undisclosed | 261 MB; the best measured on sculpted busts |
 | SFace 2021dec | labelled Apache-2.0 | undocumented (the upstream repository mentions CASIA-WebFace, VGGFace2, MS1MV2) | 39 MB; two questions about commercial use are unanswered upstream |
 
