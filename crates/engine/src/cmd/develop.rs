@@ -451,6 +451,25 @@ pub fn specs() -> Vec<CommandSpec> {
                 Ok(serde_json::to_value(&r).unwrap_or_default())
             }
         ),
+        // Thin wrappers (Classic ⌘U / ⇧⌘U): the same runs as Auto Settings and White Balance ▸ Auto.
+        cmd!(
+            "develop.autoTone",
+            "Auto Tone",
+            ["Photo"],
+            Some("Cmd+U"),
+            "{regions?: bool, dryRun?: bool} — runs Auto Settings (develop.auto)",
+            has_active,
+            |s, p| s.execute("develop.auto", p)
+        ),
+        cmd!(
+            "develop.autoWhiteBalance",
+            "Auto White Balance",
+            ["Photo"],
+            Some("Cmd+Shift+U"),
+            "{} — sets White Balance to Auto (develop.wb mode auto)",
+            has_active,
+            |s, _| s.execute("develop.wb", &json!({"mode": "auto"}))
+        ),
         cmd!("develop.autoNoise", "Auto Noise Reduction", ["Photo"], None, "{dryRun?: bool}", has_active, |s, p| {
             // Reads the original at native resolution: a proxy has already averaged the noise away.
             let c = "develop.autoNoise";

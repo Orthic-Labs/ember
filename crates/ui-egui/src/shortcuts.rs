@@ -84,8 +84,11 @@ pub const CLASSIC_KEYS: &[(&str, &str)] = &[
     ("R", "panel.crop"),
     ("K", "tool.brush"),
     ("M", "tool.linear"),
-    // flag cycle (Classic's backtick)
+    // flag cycle (Classic's backtick); ⇧M radial gradient, ⇧J clipping warnings, ⇧Q spot visualize
     ("`", "photo.cycleFlag"),
+    ("Shift+M", "tool.radial"),
+    ("Shift+J", "view.clipping"),
+    ("Shift+Q", "view.visualizeSpots"),
 ];
 
 /// Commands other than `id` whose shortcut is the key `sc` (contextual partners excepted).
@@ -378,7 +381,7 @@ pub fn handle(app: &mut LightcraftApp, ctx: &egui::Context) {
         CLASSIC_KEYS
             .iter()
             .filter_map(|(sc, id)| parse(sc).map(|(m, k)| (m, k, *sc, *id)))
-            .filter(|(_, k, _, _)| !taken.contains(&(Modifiers::NONE, *k)))
+            .filter(|(m, k, _, _)| !taken.contains(&(*m, *k)))
             .collect()
     } else {
         Vec::new()
@@ -405,6 +408,8 @@ pub fn handle(app: &mut LightcraftApp, ctx: &egui::Context) {
             if let Some((m, k)) = parse(sc).filter(|_| !native(sc))
                 && !(k == Key::Escape && popup_open)
                 && !taken.contains(&(m, k))
+                // a key the Classic layer gives another meaning (⇧M: radial gradient) is not the alias's
+                && !classic.iter().any(|(cm, ck, _, _)| (*cm, *ck) == (m, k))
                 && matches(i, m, k)
             {
                 aliased.push((id, serde_json::from_str(params).unwrap_or_default()));
@@ -867,6 +872,59 @@ mod tests {
         let flag = h.app.session.catalog.photo(PhotoId(1)).unwrap().flag;
         key(&mut h, "Backtick", false);
         assert_ne!(h.app.session.catalog.photo(PhotoId(1)).unwrap().flag, flag);
+    }
+
+    #[test]
+    fn classic_shift_keys_take_radial_clipping_and_spots() {
+        use crate::state::{RightPanel, ViewMode};
+        let mut h = library();
+        h.app.run("app.classicKeymap", json!({"on": true})).unwrap();
+        h.app.ui.right = RightPanel::None;
+        h.app.ui.view = ViewMode::PhotoGrid;
+
+        // ⇧M: the radial gradient tool, not the Shift+M alias (version.create) while Classic is on
+        let tool = h.app.ui.tool.clone();
+        key(&mut h, "M", true);
+        assert_ne!(h.app.ui.tool, tool);
+
+        // ⇧J: clipping warnings; ⇧Q: spot visualize (outside the Remove tool it opens that tool)
+        let clipping = h.app.ui.show_clipping;
+        key(&mut h, "J", true);
+        assert_ne!(h.app.ui.show_clipping, clipping);
+        key(&mut h, "Q", true);
+        assert_eq!(h.app.ui.right, RightPanel::Remove);
+        let spots = h.app.ui.visualize_spots;
+        key(&mut h, "Q", true);
+        assert_ne!(h.app.ui.visualize_spots, spots);
+    }
+
+    #[test]
+    fn classic_keys_leave_the_primary_keys_when_the_layer_is_off() {
+        use crate::state::RightPanel;
+        use lightcraft_catalog::PhotoId;
+        let mut h = library();
+        assert!(!h.app.ui.settings.classic_keymap);
+        h.app.ui.right = RightPanel::None;
+        let flag = h.app.session.catalog.photo(PhotoId(1)).unwrap().flag;
+        key(&mut h, "Backtick", false);
+        assert_eq!(h.app.session.catalog.photo(PhotoId(1)).unwrap().flag, flag);
+        let clipping = h.app.ui.show_clipping;
+        key(&mut h, "J", true);
+        assert_eq!(h.app.ui.show_clipping, clipping, "Shift+J has no primary meaning");
+    }
+
+    #[test]
+    fn new_declared_shortcuts_are_the_issue_keys() {
+        use super::{find_bindable, parse};
+        let sc = |id: &str| find_bindable(id).and_then(|b| b.default);
+        assert_eq!(sc("develop.autoTone"), Some("Cmd+U"));
+        assert_eq!(sc("develop.autoWhiteBalance"), Some("Cmd+Shift+U"));
+        assert_eq!(sc("photo.copyMetadata"), Some("Cmd+Alt+Shift+C"));
+        assert_eq!(sc("photo.pasteMetadata"), Some("Cmd+Alt+Shift+V"));
+        assert_eq!(sc("panel.keywordsFocus"), Some("Cmd+K"));
+        for sc in ["Cmd+U", "Cmd+Shift+U", "Cmd+Alt+Shift+C", "Cmd+Alt+Shift+V", "Cmd+K", "`"] {
+            assert!(parse(sc).is_some(), "{sc} parses");
+        }
     }
 
     #[test]
