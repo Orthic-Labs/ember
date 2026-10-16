@@ -155,7 +155,7 @@ pub fn write_dng(raw: &RawImage, opts: &DngWriteOptions) -> Result<Vec<u8>> {
     if matches!(opts.compression, DngCompression::JxlLossy { .. }) {
         // JPEG XL tiles need a reader that knows DNG 1.7
         ifd.set(t::DNG_VERSION, Value::Byte(vec![1, 7, 1, 0]));
-        ifd.set(t::DNG_BACKWARD_VERSION, Value::Byte(vec![1, 7, 1, 0]));
+        ifd.set(t::DNG_BACKWARD_VERSION, Value::Byte(vec![1, 7, 0, 0]));
     } else {
         ifd.set(t::DNG_VERSION, Value::Byte(vec![1, 4, 0, 0]));
         ifd.set(t::DNG_BACKWARD_VERSION, Value::Byte(vec![1, 3, 0, 0]));
