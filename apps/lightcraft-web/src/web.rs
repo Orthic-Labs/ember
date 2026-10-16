@@ -357,7 +357,7 @@ async fn tidy_storage(b: &Backend, files: &Files, active: &str) {
         }
     };
     let (kept, doomed): (Vec<String>, Vec<String>) = match &pointer {
-        Some(prev) => (vec![prev.clone()], crate::backup::abandoned_libraries(&dirs, active, Some(prev))),
+        Some(prev) => (vec![prev.clone()], crate::backup::abandoned_libraries(&dirs, active, Some(prev.as_str()))),
         None => (dirs.iter().filter(|d| valid_library_dir(d) && d.as_str() != active).cloned().collect(), Vec::new()),
     };
     let mut refs = std::collections::HashSet::new();
