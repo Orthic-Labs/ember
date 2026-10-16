@@ -63,6 +63,9 @@ struct App {
 
 impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Linux: the monitor the window is on picks the colord profile (read about once a second)
+        #[cfg(target_os = "linux")]
+        screen_profile::track_window_monitor(_frame);
         #[cfg(target_os = "macos")]
         if let Some(m) = self.menu.as_mut()
             && m.update(&mut self.app, ctx)
@@ -596,7 +599,7 @@ fn services(cc: &eframe::CreationContext<'_>, log_file: Option<&std::path::Path>
                 .unwrap_or_default()
         })),
         // macOS and Windows don't colour-manage the window: previews follow the profile of the
-        // screen it is on (#787, #84); Linux asks colord for the primary output's profile
+        // screen it is on (#787, #84); Linux asks colord for the profile of the monitor it is on
         #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
         screen_profile: Some(Box::new(screen_profile::icc)),
         #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]

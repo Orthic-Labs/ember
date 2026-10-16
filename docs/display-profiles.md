@@ -6,7 +6,8 @@ displays. Without one, previews are sRGB, which a wide-gamut panel shows oversat
 **The system's monitor profile is used while none is chosen** (Settings ▸ Display ▸ **Use Screen Profile**):
 macOS reads the window's screen profile (System Settings ▸ Displays); Windows reads the profile assigned to the monitor
 the window is on (`GetICMProfileW`, the Color management settings; `lightcraft_sysmem::window_monitor_profile`); Linux asks
-colord over D-Bus for the default profile of the primary display output. A missing, unreadable or invalid profile is sRGB.
+colord over D-Bus for the default profile of the device driving the monitor the window is on (the primary output's profile
+while that monitor or its device is unknown). A missing, unreadable or invalid profile is sRGB.
 
 **On macOS** the reason is this. macOS doesn't
 colour-manage Ember's window (wgpu leaves its Metal layer without a colour space, which Core Animation shows
@@ -45,6 +46,22 @@ profile (none chosen) reports `path: null, screen: true`. Hosts supply it as `Se
 - **Soft proofing:** the blue "display" gamut warning shows what the monitor can't show, from its profile.
 - Conversions are relative colorimetric: the display's white is the image's white.
 
+## Linux: the window's monitor
+
+The app layer (`App::logic`, about twice a second) reads the window's monitor from winit (`Window::current_monitor`:
+output name and position) and hands it to `screen_profile` (`track_window_monitor`). The profile lookup then:
+
+1. Maps the monitor name to colord output names: the name as given, plus the other spelling of `HDMI-A-n` / `HDMI-n` and
+   `DVI-D-n` / `DVI-n` (X11 reports RandR names, Wayland compositors kernel connector names).
+2. Calls `FindDeviceByProperty("XRANDR_name", name)` on `org.freedesktop.ColorManager`, else scans the display devices
+   for a matching `XRANDR_name`, and reads the device's default (first) profile file. A device with no profile is sRGB.
+3. Falls back to the primary output's profile (the previous behaviour) when the monitor or its device is unknown or a
+   D-Bus call fails, and to sRGB without colord or a readable profile.
+
+The lookup is redone as soon as the monitor changes, else every few seconds; the app reads it once a second, so moving
+the window to another monitor switches the previews' profile within about a second. The colord calls sit behind a
+`Colord` trait, so the name mapping, the device choice and the fallbacks are unit tested without a bus.
+
 ## Cost
 
 Measured on a 2-core cloud VM, 2560 × 1707 preview: the tone-curve tables take about 5 ms (single-threaded); converting the sampled
@@ -53,8 +70,9 @@ LUT-based profile's correction about 65 ms. Drafts during slider drags skip the 
 
 ## Not yet
 
-- Linux follows the primary output only: colord can't say which output the window is on, so a window on a secondary
-  monitor still gets the primary's profile (X11 `_ICC_PROFILE` and per-output matching are not read).
-  [#186](https://github.com/Orthic-Labs/ember/issues/186)
 - The Windows and Linux lookups are untested on real multi-monitor hardware here (no build was run); verify by moving
-  the window between monitors with different profiles.
+  the window between monitors with different profiles. On Linux that also checks the monitor-name matching below
+  against real X11 and Wayland sessions.
+- Linux matches by output name only: a monitor colord has no `XRANDR_name` device for (a compositor that doesn't
+  register one) gets the primary output's profile; X11 `_ICC_PROFILE` is not read.
+  [#186](https://github.com/Orthic-Labs/ember/issues/186)
