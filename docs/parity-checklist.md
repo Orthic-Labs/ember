@@ -20,7 +20,7 @@ humans pick work from **[Top gaps](#top-gaps)**; whoever lands a feature updates
 |---|---:|---:|---:|---:|---:|---:|
 | A. Import (IMP) | 12 | 3 | 1 | 1 | 4/6 (67%) | 5/5 (100%) |
 | B. Library management (LIB) | 22 | 2 | 1 | 2 | 9/9 (100%) | 9/9 (100%) |
-| C. Views & navigation (VIEW) | 15 | 1 | 1 | 0 | 8/9 (89%) | 4/4 (100%) |
+| C. Views & navigation (VIEW) | 15 | 2 | 0 | 0 | 8/9 (89%) | 4/4 (100%) |
 | D. Search & filter (FILT) | 11 | 1 | 1 | 0 | 4/4 (100%) | 4/4 (100%) |
 | E. Metadata (META) | 5 | 1 | 0 | 0 | 2/2 (100%) | 2/2 (100%) |
 | F. Edit panel — global adjustments (EDIT) | 43 | 3 | 2 | 1 | 28/28 (100%) | 13/14 (93%) |
@@ -45,9 +45,9 @@ humans pick work from **[Top gaps](#top-gaps)**; whoever lands a feature updates
 | Y. Menus | 84 | 0 | 4 | 8 | 47/47 (100%) | 23/23 (100%) |
 | Z. Keyboard shortcuts (desktop) | 76 | 3 | 3 | 1 | 49/52 (94%) | 23/24 (96%) |
 | reference catalog editor extras | 34 | 16 | 35 | 8 | — | 24/26 (92%) |
-| **Total** | 408 | 50 | 72 | 35 | 192/200 (96%) | 146/157 (93%) |
+| **Total** | 408 | 51 | 71 | 35 | 192/200 (96%) | 146/157 (93%) |
 
-Weighted completion (✅ = 1, 🟡 = ½, 🚫 left out): **81.7%** of 530 in-scope rows — P0 98.0% of 200 · P1 95.5% of 157 · P2 50.0% of 172.
+Weighted completion (✅ = 1, 🟡 = ½, 🚫 left out): **81.8%** of 530 in-scope rows — P0 98.0% of 200 · P1 95.5% of 157 · P2 50.3% of 172.
 <!-- /parity:summary -->
 
 ## Top gaps and shortcut notes
@@ -193,7 +193,7 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 | LR-VIEW-SECONDWINDOW | Second display window [Classic] | P2 | ✅ | `cmd:view.secondWindow`, `crates/ui-egui/src/panels/second.rs` | Window ▸ Second Window (⌘F11): the active photo fitted in its own native window with its own render (a floating panel where there are no native windows); loupe view only (no grid / compare / survey there) |
 | LR-VIEW-CLIPPING | Clipping indicators | P0 | ✅ | `cmd:view.clipping` | |
 | LR-VIEW-HISTOGRAM | Histogram | P0 | ✅ | `cmd:view.histogram`, `crates/ui-egui/src/panels/edit.rs`, `crates/pipeline/src/lib.rs` (`hdr_histogram`) | HDR edits: SDR on the left half, the HDR range (0 to 5 stops above SDR white, a fixed scale) on the right with the headroom limit marked; colour bar (white, or Visualize HDR range's colours when that is on) and SDR / HDR labels; no drag-to-adjust on the histogram |
-| LR-VIEW-HDR-DISPLAY | HDR display output | P2 | ⬜ | `cmd:view.hdrDisplay`, `apps/lightcraft/src/hdr_display.rs` (`choose`, `preferred_hdr_format`), `apps/lightcraft/src/screen_profile.rs` (`hdr_headroom`), `crates/ui-egui/src/hdr_view.rs` (`decide`) | View ▸ HDR Display (off by default) and the SDR/HDR decision (toggle, surface format, OS headroom, `LIGHTCRAFT_HDR_DISPLAY=0`) are unit-tested and logged at start; macOS reads the screen's EDR headroom from NSScreen about once a second; with the toggle off, no HDR surface or no headroom every preview is the SDR rendition, unchanged. Still always SDR on screen: eframe 0.36 (egui-wgpu `preferred_framebuffer_format`) takes the first `Rgba8Unorm`/`Bgra8Unorm` the surface offers and has no hook for a surface format or colour space, so no `Rgba16Float` surface is configured and no float preview is drawn; Windows has no safe DXGI HDR query (needs `unsafe`, allowed only in `crates/sysmem`) [#46](https://github.com/Orthic-Labs/ember/issues/46) |
+| LR-VIEW-HDR-DISPLAY | HDR display output | P2 | 🟡 | `cmd:view.hdrDisplay`, `apps/lightcraft/src/hdr_display.rs` (`choose`, `preferred_hdr_format`), `apps/lightcraft/src/screen_profile.rs` (`hdr_headroom`), `crates/ui-egui/src/hdr_view.rs` (`decide`) | View ▸ HDR Display (off by default) and the SDR/HDR decision (toggle, surface format, OS headroom, `LIGHTCRAFT_HDR_DISPLAY=0`) are unit-tested and logged at start; macOS reads the screen's EDR headroom from NSScreen about once a second; with the toggle off, no HDR surface or no headroom every preview is the SDR rendition, unchanged. Still always SDR on screen: eframe 0.36 (egui-wgpu `preferred_framebuffer_format`) takes the first `Rgba8Unorm`/`Bgra8Unorm` the surface offers and has no hook for a surface format or colour space, so no `Rgba16Float` surface is configured and no float preview is drawn; Windows has no safe DXGI HDR query (needs `unsafe`, allowed only in `crates/sysmem`) [#46](https://github.com/Orthic-Labs/ember/issues/46) |
 
 ## D. Search & filter (FILT)
 
@@ -843,6 +843,7 @@ Latin stays upright. Advanced Japanese composition remains open. Regression cove
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | LR-VIEW-HDR-DISPLAY ⬜→🟡 (#46): the toggle, the tested SDR/HDR decision and the macOS EDR headroom query exist; the screen is still SDR until egui-wgpu lets the app pick the surface format, and Windows needs a safe headroom query |
 | 2026-10-17 | minor | LRC-PRINT-GUIDES (#141) and LRC-PRINT-TEMPLATES (#145) close: guides are drawn over the print preview only; user print templates are saved, renamed, deleted and applied, kept in prefs.json. LRC-PRINT-JOB (#144): the job resolution is the export default, the sRGB profile is embedded in PDFs, export progress and cancel show in the activity stack; OS printer output stays open |
 | 2026-10-17 | minor | LRC-SS-TEMPLATES, LRC-SS-OPTIONS, LRC-SS-LAYOUT, LRC-SS-OVERLAYS, LRC-SS-BACKDROP, LRC-SS-TITLES, LRC-SS-MUSIC, LRC-SS-PLAYBACK, LRC-SS-EXPORT (#129-#137): the Classic Slideshow module, its engine settings, templates, composition, playback and PDF/JPEG export; statuses ✅ on the engine and commands with tests, the module view not yet exercised in the running app; summary refreshed by `cargo xtask parity --write`
 | 2026-10-17 | minor | LRC-LIB-PEOPLE (#109): a look-alike group expands in place into every face, each with the "Not this person" × for its suggestion; status ✅ (last open gap closed) |
