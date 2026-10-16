@@ -104,7 +104,8 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
 
   A new library starts with the procedural demo photos. URL options: `?store=idb` forces
   IndexedDB, `?store=memory` keeps nothing, `?reset` deletes the stored library first (after a
-  confirmation: it deletes every imported photo too).
+  confirmation: it deletes every imported photo too), `?safe` opens the library without decoding
+  any photo (see *Keeping the library safe*).
 - **Keeping the library safe** (experimental: the library lives only in this browser):
   - The app asks for persistent storage (`navigator.storage.persist()`); when the browser doesn't
     grant it, a notice says the library may be evicted under storage pressure.
@@ -116,6 +117,13 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
     only then switches to it (`active-library` names the folder in use) and reloads: the previous
     library stays in storage. Both are web-only (`file.backupLibrary`, `file.restoreLibrary`; the
     desktop library is a folder).
+  - **`?safe` start** (add it to the address): the library opens with the renderer paused (no
+    thumbnail, loupe render, embedded-preview stand-in or prefetch starts, and no render workers
+    start), storage is not tidied, and a notice says so. This is the way out of a photo whose
+    decoder panics: on wasm32 a panic aborts the module and can't be caught, so the page shows
+    the error (with a hint to use `?safe`) and the stored library stays intact; in the safe start
+    the photo can be removed, or the library backed up, without decoding anything. Thumbnails
+    stay blank there; reload without `?safe` to see photos again.
   - A failed save (quota exceeded, storage cleared) is not silent: the catalog then refuses new
     writes, so commands report `saved in memory but not written`, the top bar shows the unsaved
     warning (as on the desktop, see `docs/control-protocol.md`), and saving is retried every
@@ -187,9 +195,9 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
   it. The automation API is durable before it returns: `command()` (see *Automation*) resolves only
   once its writes reached storage, and rejects, saying the change is not saved, if storage refused
   them. A kill check for the user path is still to do (issue #193 stays open for it). [#193](https://github.com/Orthic-Labs/ember/issues/193)
-- **Data-safety gaps still open** (issue #107): a panic in a decoder still ends the page (and a
-  photo that panics while its thumbnail renders can do so again after a reload; there is no
-  `?safe` start that skips rendering yet); removing photos doesn't delete their stored originals
+- **Data-safety gaps still open** (issue #107): a panic in a decoder still ends the page, since a
+  wasm32 panic aborts and can't be caught (a photo that panics while its thumbnail renders can do
+  so again after a reload: use the `?safe` start above); removing photos doesn't delete their stored originals
   (`originals/<hash>`; they are kept, and included in backups); restored-over libraries stay in
   storage until the site's data is cleared. [#194](https://github.com/Orthic-Labs/ember/issues/194)
 - **Control channel / MCP.** These are desktop-only, because they need a TCP socket.

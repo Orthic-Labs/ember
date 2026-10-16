@@ -197,6 +197,9 @@ pub struct Renderer {
     /// Keep a CPU copy of every texture so the UI can be rasterized headlessly (set when the app
     /// is driven by the control channel).
     pub keep_pixels: bool,
+    /// Start no render, stand-in or prefetch (the browser build's `?safe` start: open the library
+    /// without decoding any photo, to get away from one that crashes the page).
+    pub paused: bool,
     /// Per-view intermediate results (loupe and "before"), so slider drags redo only what changed.
     stages: HashMap<Slot, Arc<StageCache>>,
     /// Slot → key of the last quick job requested for it (each is tried once).
@@ -272,6 +275,7 @@ impl Renderer {
             last_main_ms: 0.0,
             completed: 0,
             keep_pixels: false,
+            paused: false,
             stages: HashMap::new(),
             quick_tried: HashMap::new(),
             failed: HashMap::new(),
@@ -424,6 +428,9 @@ impl Renderer {
 
     /// Request a render for `slot` (no-op if already current or pending at the same priority).
     pub fn request(&mut self, slot: Slot, job: RenderJob, priority: u32) {
+        if self.paused {
+            return;
+        }
         let mut job = self.job_for(slot, job);
         if !self.request_needed(slot, job.key, priority) {
             return;
@@ -464,6 +471,9 @@ impl Renderer {
 
     /// Request a stand-in for `slot` (once per job key).
     pub fn request_quick(&mut self, slot: Slot, mut job: QuickJob, priority: u32) {
+        if self.paused {
+            return;
+        }
         if self.quick_tried.get(&slot) == Some(&job.key) {
             return;
         }
@@ -489,6 +499,9 @@ impl Renderer {
     /// Prepare a photo in the background (a [`Slot::Prefetch`] job runs once per key; a newer one
     /// replaces it while queued). Memory stays bounded by the engine's source caches.
     pub fn prefetch(&mut self, slot: Slot, mut job: RenderJob, priority: u32) {
+        if self.paused {
+            return;
+        }
         if self.prefetched.get(&slot) == Some(&job.key) {
             return;
         }

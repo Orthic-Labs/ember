@@ -74,6 +74,9 @@ struct Options {
     store: String,
     workers: Option<usize>,
     reset: bool,
+    /// `?safe`: open the library without rendering anything (no thumbnails, no previews, no
+    /// workers) to get out of a photo that crashes the page.
+    safe: bool,
 }
 
 impl Options {
@@ -94,6 +97,7 @@ impl Options {
             store: get("store").filter(|s| s == "idb" || s == "memory").unwrap_or_else(|| "opfs".into()),
             workers: get("workers").and_then(|v| v.parse().ok()),
             reset: get("reset").is_some(),
+            safe: get("safe").is_some(),
         }
     }
 }
@@ -484,10 +488,22 @@ impl WebApp {
         }
         app.ui = app.ui.sanitized();
         app.library_problem = problem;
-        let n = opts.workers.unwrap_or_else(|| {
-            let cores = window().map_or(1, |w| w.navigator().hardware_concurrency() as usize);
-            cores.saturating_sub(1).clamp(1, 4)
-        });
+        if opts.safe {
+            // no photo is decoded: no thumbnails, previews or workers, and no storage tidy-up
+            app.renderer.paused = true;
+            notice(
+                "Safe start: photos are not rendered (thumbnails stay blank) and nothing is deleted from storage. \
+                 Remove the photo that crashes Ember, or back up the library, then reload without ?safe.",
+            );
+        }
+        let n = if opts.safe {
+            0
+        } else {
+            opts.workers.unwrap_or_else(|| {
+                let cores = window().map_or(1, |w| w.navigator().hardware_concurrency() as usize);
+                cores.saturating_sub(1).clamp(1, 4)
+            })
+        };
         let cache = app.session.media.rendered.clone();
         let workers = (n > 0).then(|| {
             Workers::start(

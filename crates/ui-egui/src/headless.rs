@@ -4327,6 +4327,29 @@ mod tests {
         assert!(!h.app.renderer.is_pending(Slot::Main));
     }
 
+    /// The browser build's `?safe` start pauses the renderer: no thumbnail, loupe render, stand-in
+    /// or prefetch starts, whatever the view asks for.
+    #[test]
+    fn a_paused_renderer_decodes_nothing() {
+        let mut h = demo([1000.0, 700.0]);
+        let t = Duration::from_secs(10);
+        h.request("ui.set", json!({"view": "photoGrid"}), t);
+        h.settle(SETTLE);
+        h.app.renderer.paused = true;
+        let done = h.app.renderer.completed;
+        h.request("engine.execute", json!({"command": "develop.set", "params": {"control": "light.exposure", "value": 0.7}}), t);
+        h.request("ui.set", json!({"view": "detail", "right": "none"}), t);
+        for _ in 0..30 {
+            h.step();
+        }
+        h.request("ui.set", json!({"view": "photoGrid"}), t);
+        for _ in 0..30 {
+            h.step();
+        }
+        assert_eq!(h.app.renderer.in_flight(), 0, "nothing was started");
+        assert_eq!(h.app.renderer.completed, done, "nothing was rendered");
+    }
+
     /// A render that fails while the loupe shows a stand-in (the embedded JPEG, a thumbnail) left
     /// the stand-in up as if it were the photo: the loupe says the photo can't be opened, with the
     /// error on hover, and keeps saying so while a library change retries it.

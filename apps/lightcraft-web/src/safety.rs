@@ -84,7 +84,8 @@ pub fn install_panic_hook() {
         log::error!("Ember panicked{at}: {msg}");
         show_blocking(&format!(
             "Ember stopped after an internal error:\n{msg}\n\nThe library saved in this browser is kept. Reload the page to continue.\n\
-             If it happens again right away, a photo may be the cause: reload with ?workers=0 or report the error."
+             If it happens again right away, a photo may be the cause: reload with ?safe added to the address (opens the library \
+             without rendering any photo, so you can remove it) or ?workers=0, and report the error."
         ));
     }));
 }
