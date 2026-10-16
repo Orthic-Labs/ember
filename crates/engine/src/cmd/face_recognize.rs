@@ -126,6 +126,34 @@ fn merge_people(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"from": from, "into": into, "named": moved, "photos": photos}))
 }
 
+/// `faces.rejectName {id, index, name, rejected?: true}`: the face `index` of photo `id` is not `name`. Suggestions and
+/// "more like them" leave that pair out from then on, so the next best name can win; the face and its own name are not
+/// changed. `rejected: false` takes the mark off again. One undoable step, catalog-only, like naming.
+fn reject_name(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "faces.rejectName";
+    let id = lightcraft_catalog::PhotoId(p.get("id").and_then(Value::as_u64).ok_or_else(|| bad(C, "missing `id`"))?);
+    let index = p.get("index").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok()).ok_or_else(|| bad(C, "missing or invalid `index`"))?;
+    let name = p.get("name").and_then(Value::as_str).map(str::trim).filter(|n| !n.is_empty()).ok_or_else(|| bad(C, "missing `name`"))?;
+    if name.chars().count() > 200 || name.chars().any(char::is_control) {
+        return Err(bad(C, "a name is at most 200 characters, without control characters"));
+    }
+    let rejected = p.get("rejected").and_then(Value::as_bool).unwrap_or(true);
+    let photo = s.catalog.photo(id).ok_or_else(|| bad(C, "no such photo"))?;
+    let rect = photo
+        .meta
+        .regions
+        .get(index)
+        .filter(|r| r.kind == lightcraft_meta::RegionKind::Face)
+        .map(|r| r.rect)
+        .ok_or_else(|| bad(C, "no such face"))?;
+    s.commit(
+        if rejected { "Not This Person" } else { "Clear Not This Person" },
+        Op::SetFaceRejection { photo: id, rect, person: name.to_string(), rejected },
+    )?;
+    s.skip_auto_write = true;
+    Ok(json!({"id": id.0, "index": index, "name": name, "rejected": rejected}))
+}
+
 /// Most faces `faces.unnamed` lists.
 const MAX_UNNAMED: usize = 3000;
 
@@ -658,7 +686,8 @@ mod imp {
                 match r.name.as_deref() {
                     Some(n) if n.trim().to_lowercase() == key => gallery.push(e.clone()),
                     Some(_) => {}
-                    None => candidates.push((ph.id.0, index, r.rect, e.clone())),
+                    None if !s.catalog.is_face_rejected(ph.id, &r.rect, key) => candidates.push((ph.id.0, index, r.rect, e.clone())),
+                    None => {}
                 }
             }
         }
@@ -756,8 +785,9 @@ mod imp {
         let threshold = embedder.manifest().thresholds.match_cosine.unwrap_or(DEFAULT_THRESHOLD);
         let mut suggestions = std::collections::HashMap::new();
         if !refs.is_empty() {
-            for ((photo, index, _), e) in ordered.iter().take(limit) {
-                if let Some(x) = matching::suggest(&matching::rank(e, &refs), threshold, DEFAULT_MARGIN) {
+            for ((photo, index, rect), e) in ordered.iter().take(limit) {
+                let ranked: Vec<_> = matching::rank(e, &refs).into_iter().filter(|c| !s.catalog.is_face_rejected(PhotoId(*photo), rect, &c.name)).collect();
+                if let Some(x) = matching::suggest(&ranked, threshold, DEFAULT_MARGIN) {
                     suggestions.insert((*photo, *index), (x.name, x.score));
                 }
             }
@@ -827,7 +857,8 @@ mod imp {
                     faces.push(json!({"index": index, "pending": true}));
                     continue;
                 };
-                let ranked = matching::rank(q, &refs);
+                // a pair the user said is not this person is left out, so the next best name can win
+                let ranked: Vec<_> = matching::rank(q, &refs).into_iter().filter(|c| !s.catalog.is_face_rejected(*id, &r.rect, &c.name)).collect();
                 let suggestion = matching::suggest(&ranked, threshold, margin);
                 faces.push(json!({
                     "index": index,
@@ -1080,6 +1111,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{from, into} → {named, photos} — every face named `from` (case-insensitively) is named `into`, so one person becomes the other; one undoable step; the sidecars are not touched",
             super::always,
             merge_people
+        ),
+        cmd!(
+            "faces.rejectName",
+            "Not This Person",
+            [],
+            None,
+            "{id, index, name, rejected?: true} — the face is not `name`: suggestions and \"more like them\" skip that pair from now on (stored in the catalog, persists); rejected: false clears it; one undoable step; the sidecar is not touched",
+            super::always,
+            reject_name
         ),
         cmd!(
             "faces.setName",

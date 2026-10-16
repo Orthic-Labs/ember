@@ -212,8 +212,9 @@ fn op_variants_are_versioned() {
             Op::SetFolderRecord { .. } => 6,
             Op::SetAsShotWb { .. } => 7,
             Op::SetHistoryCursor { .. } => 8,
+            Op::SetFaceRejection { .. } => 9,
         }
     }
-    let newest = since(&Op::SetHistoryCursor { id: PhotoId(1), cursor: None });
+    let newest = since(&Op::SetFaceRejection { photo: PhotoId(1), rect: Default::default(), person: String::new(), rejected: true });
     assert_eq!(newest, VERSION, "the newest op's version must be the current format version");
 }

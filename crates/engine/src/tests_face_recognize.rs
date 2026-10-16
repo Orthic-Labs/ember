@@ -571,3 +571,32 @@ fn merging_two_people_names_all_their_faces_as_one_undoable_step() {
     assert!(s.execute("faces.mergePeople", &json!({"from": "Ann", "into": "  "})).is_err());
     let _ = std::fs::remove_dir_all(&d);
 }
+
+#[test]
+fn not_this_person_is_remembered_for_that_face_and_undoable() {
+    let d = temp("reject-name");
+    let (mut s, _) = setup(&d, 64);
+    let (a, b) = two_photos(&s);
+    set_regions(&mut s, a, vec![region(0.1, None), region(0.5, Some("Bob"))]);
+    let face = region(0.1, None).rect;
+    let r = s.execute("faces.rejectName", &json!({"id": a.0, "index": 0, "name": " Ann "})).unwrap();
+    assert_eq!(r["rejected"], json!(true), "{r}");
+    assert!(s.catalog.is_face_rejected(a, &face, "ann"), "however the name is typed later");
+    assert!(!s.catalog.is_face_rejected(a, &face, "Bob"), "another person is not rejected");
+    assert!(!s.catalog.is_face_rejected(b, &face, "Ann"), "the same box on another photo is not rejected");
+    // the face keeps its own name state: it is still unnamed, and Bob's face is untouched
+    assert_eq!(s.catalog.photo(a).unwrap().meta.regions[0].name, None);
+    // clearing the mark is one more undo step
+    s.execute("faces.rejectName", &json!({"id": a.0, "index": 0, "name": "Ann", "rejected": false})).unwrap();
+    assert!(!s.catalog.is_face_rejected(a, &face, "Ann"));
+    s.undo_step().unwrap();
+    assert!(s.catalog.is_face_rejected(a, &face, "Ann"), "undo brings the mark back");
+    s.undo_step().unwrap();
+    assert!(!s.catalog.is_face_rejected(a, &face, "Ann"), "undo of the rejection itself removes it");
+    // refused: a region that is not a face (or missing), a missing name, and an unknown photo
+    assert!(s.execute("faces.rejectName", &json!({"id": a.0, "index": 9, "name": "Ann"})).is_err());
+    assert!(s.execute("faces.rejectName", &json!({"id": a.0, "index": 0})).is_err());
+    assert!(s.execute("faces.rejectName", &json!({"id": a.0, "index": 0, "name": "  "})).is_err());
+    assert!(s.execute("faces.rejectName", &json!({"id": 999_999, "index": 0, "name": "Ann"})).is_err());
+    let _ = std::fs::remove_dir_all(&d);
+}

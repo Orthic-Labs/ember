@@ -250,10 +250,34 @@ pub enum Op {
         folder: String,
         record: Option<FolderRecord>,
     },
+    /// Record (or clear) that the person `person` is not the face at `rect` on `photo`: suggestions skip the pair (see
+    /// [`FaceRejection`]). Undo restores whether it was there. Format version 9.
+    SetFaceRejection {
+        photo: PhotoId,
+        rect: lightcraft_meta::Rect,
+        person: String,
+        rejected: bool,
+    },
     /// Several ops as one step (undo applies the inverses in reverse).
     Batch {
         ops: Vec<Op>,
     },
+}
+
+/// A face the user said is not a given person (`faces.rejectName`). `rect` is the face's box quantized to 1/10000 (see
+/// [`face_rejection_key`]) and `person` the name in lower case, so the pair matches however the name is typed. Suggestions
+/// and "more like them" leave such a pair out; the face itself stays as it is.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FaceRejection {
+    pub photo: PhotoId,
+    pub rect: [i32; 4],
+    pub person: String,
+}
+
+/// A face box as the integer key a [`FaceRejection`] is stored under (the same quantization the face index uses).
+pub fn face_rejection_key(r: &lightcraft_meta::Rect) -> [i32; 4] {
+    let q = |v: f64| if v.is_finite() { (v.clamp(-1e3, 1e3) * 10_000.0).round() as i32 } else { 0 };
+    [q(r.x0), q(r.y0), q(r.x1), q(r.y1)]
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -278,6 +302,9 @@ pub struct Catalog {
     /// What the library keeps about its folders (folder identity → record), see [`folders`].
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     folder_records: BTreeMap<String, FolderRecord>,
+    /// Faces the user said are not a given person (see [`FaceRejection`]). Format version 9.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    face_rejections: Vec<FaceRejection>,
     /// Increments on every applied op.
     #[serde(skip)]
     pub revision: u64,
@@ -286,6 +313,12 @@ pub struct Catalog {
 impl Catalog {
     pub fn new() -> Catalog {
         Catalog { next_photo: 1, next_album: 1, next_stack: 1, ..Default::default() }
+    }
+
+    /// Whether the user said `person` (any case) is not the face at `rect` on `photo`.
+    pub fn is_face_rejected(&self, photo: PhotoId, rect: &lightcraft_meta::Rect, person: &str) -> bool {
+        let entry = FaceRejection { photo, rect: face_rejection_key(rect), person: person.trim().to_lowercase() };
+        self.face_rejections.contains(&entry)
     }
 
     // ---- ids
@@ -769,6 +802,19 @@ impl Catalog {
                 };
                 Op::SetFolderRecord { folder: key, record: old }
             }
+            Op::SetFaceRejection { photo, rect, person, rejected } => {
+                if !self.photos.contains_key(&photo) {
+                    return Err(CatalogError::NoPhoto(photo));
+                }
+                let entry = FaceRejection { photo, rect: face_rejection_key(&rect), person: person.trim().to_lowercase() };
+                let was = self.face_rejections.contains(&entry);
+                if rejected && !was {
+                    self.face_rejections.push(entry);
+                } else if !rejected && was {
+                    self.face_rejections.retain(|r| *r != entry);
+                }
+                Op::SetFaceRejection { photo, rect, person, rejected: was }
+            }
             Op::Batch { ops } => {
                 let mut inverses = Vec::with_capacity(ops.len());
                 for op in ops {
@@ -956,6 +1002,8 @@ mod tests;
 mod tests_album_order;
 #[cfg(test)]
 mod tests_background;
+#[cfg(test)]
+mod tests_face_rejections;
 #[cfg(test)]
 mod tests_folder_records;
 #[cfg(test)]
