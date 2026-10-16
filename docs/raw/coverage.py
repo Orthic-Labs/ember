@@ -37,7 +37,7 @@ RAF_OLD = re.compile(r"^(FinePix (E|F|S\d|S\d{3,4}|IS)|IS Pro|S5Pro|S3Pro|S2Pro)
 
 # Probability that an unverified body of a format decodes correctly, used for the use-weighted share only.
 CONFIDENCE = {"DNG": 0.95, "CR2": 0.95, "CR3": 0.6, "NEF": 0.9, "NRW": 0.9, "ARW": 0.9, "SR2": 0.8, "RAF": 0.95,
-              "RW2": 0.95, "RWL": 0.95, "RAW": 0.95, "PEF": 0.9, "ORF": 0.8, "SRW": 0.8}
+              "RW2": 0.95, "RWL": 0.95, "RAW": 0.95, "PEF": 0.9, "ORF": 0.8, "SRW": 0.8, "GPR": 0.9}
 
 
 def read_tsv(name):
@@ -82,6 +82,8 @@ def classify(maker, camera, ext_field):
             if SRW_COMPRESSED.search(camera):
                 return "preview", "SRW", "compressed SRW is not decoded"
             return "unverified", "SRW", "uncompressed / packed SRW"
+        if e == "GPR":
+            return "unverified", "GPR", "GPR decoder (VC-5 in a DNG: RGGB 14-bit, GBRG 12-bit)"
     e = es[0] if es else ""
     if e in ("CRW", "3FR", "FFF", "IIQ", "MOS", "ERF", "KDC", "MRW", "X3F", "RAW", "ORI"):
         return "preview", e, f"{e} is opened from its embedded JPEG only"

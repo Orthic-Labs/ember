@@ -2441,7 +2441,7 @@ mod tests {
     }
 
     /// A GoPro GPR (DNG with VC-5 coded data, no preview anywhere) still imports, described from its
-    /// headers; loading it says what is wrong instead of naming a bare TIFF compression number.
+    /// headers; a strip that is not a VC-5 stream says what is wrong instead of naming a bare TIFF compression number.
     #[test]
     fn gopro_vc5_dng_imports_and_fails_to_load_with_a_clear_reason() {
         use lightcraft_tiff::{IfdBuilder, ImageData, TiffWriter, Value, tags as t};
@@ -2461,7 +2461,7 @@ mod tests {
         let p = probe_bytes("GOPR0001.GPR", &f).unwrap();
         assert_eq!((p.kind, p.preview_only, p.width, p.height), (MediaKind::Raw, None, 32, 16));
         let e = load_bytes(&f, 16).unwrap_err();
-        assert!(e.contains("GoPro VC-5") && e.contains("not decoded yet"), "{e}");
+        assert!(e.contains("GoPro VC-5") && e.contains("VC-5 marker"), "{e}");
     }
 
     /// Any failure of a recognised raw (not only an unsupported variant) can fall back to its preview;

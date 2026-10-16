@@ -3,10 +3,11 @@
 
 use crate::gaintable::GainTableMap;
 use crate::profile::{HsvTable, ProfileLook, ToneCurve};
-use crate::tiffraw::{Packing, read_image_in};
+use crate::tiffraw::{Packing, check_image, read_image_in};
 use crate::{BlackLevel, Cfa, ColorData, Mat3, Mode, RawData, RawError, RawFormat, RawImage, Rect, Result, opcodes};
 use lightcraft_color::Xy;
 use lightcraft_geom::Orientation;
+use lightcraft_tiff::image::{ImageInfo, chunk_bytes};
 use lightcraft_tiff::tags::{self as t, photometric};
 use lightcraft_tiff::{ByteOrder, Ifd, Tiff};
 
@@ -194,6 +195,29 @@ pub(crate) fn is_plain_cfa_tiff(tiff: &Tiff, bytes: &[u8]) -> bool {
     }
 }
 
+/// The mosaic of a GoPro GPR: the raw IFD's single strip (or tile) is one VC-5 stream. GoPro's own reader chooses the output
+/// layout from `CFAPattern` (RGGB, else GBRG); only those two orders are read here.
+fn read_vc5(bytes: &[u8], raw: &Ifd, info: &ImageInfo) -> Result<Vec<u16>> {
+    if info.samples_per_pixel != 1 || info.photometric != photometric::CFA || info.sample_format == 3 {
+        return Err(RawError::Unsupported("VC-5 data that is not a one-sample CFA image".into()));
+    }
+    check_image(bytes, info)?;
+    let chunks = info.chunks(bytes.len() as u64);
+    let [chunk] = chunks.as_slice() else {
+        return Err(RawError::Unsupported(format!("VC-5 data in {} strips or tiles (a GPR has one)", chunks.len())));
+    };
+    if (chunk.x, chunk.y) != (0, 0) || chunk.width < info.width || chunk.height < info.height {
+        return Err(RawError::Corrupt("the VC-5 stream does not cover the image".into()));
+    }
+    let src = chunk_bytes(bytes, chunk).ok_or_else(|| RawError::Corrupt("the VC-5 stream lies outside the file".into()))?;
+    let mosaic = match raw.bytes(t::CFA_PATTERN_EP) {
+        Some([0, 1, 1, 2]) => crate::vc5::Mosaic::Rggb,
+        Some([1, 2, 0, 1]) => crate::vc5::Mosaic::Gbrg,
+        _ => return Err(RawError::Unsupported("VC-5 data in a CFA order other than RGGB and GBRG".into())),
+    };
+    crate::vc5::decode(src, info.width as usize, info.height as usize, mosaic)
+}
+
 /// [`decode`] for the TIFF-based raws that follow the DNG layout without being DNGs (`format` says
 /// which). They differ in one respect: when the raw IFD states no `CFAPattern`, the layout is RGGB
 /// anchored at the sensor origin.
@@ -201,22 +225,20 @@ pub(crate) fn decode_as(bytes: &[u8], mode: Mode, format: RawFormat) -> Result<R
     let tiff = Tiff::parse(bytes)?;
     let ifd0 = &tiff.ifds[0];
     let raw = raw_ifd(&tiff).ok_or_else(|| RawError::Corrupt("DNG without a raw image IFD".into()))?;
-    // GoPro's GPR: a DNG whose raw data is VC-5 coded, which is not decoded (yet). Named here, before
-    // the generic "TIFF compression 9" of the chunk decoder. Header mode still describes the file
-    // (a GPR has no embedded preview, and a library keeps the photo with this reason shown, as it
-    // does for any file whose pixels fail to decode, rather than refusing to import it).
-    if mode == Mode::Full
-        && let Some(c) = raw.u16(t::COMPRESSION).filter(|&c| c == t::compression::VC5)
-    {
-        return Err(RawError::Unsupported(format!("DNG compression {c} (GoPro VC-5) is not decoded yet")));
-    }
     let info = raw.image()?;
     let (w, h, cpp) = (info.width as usize, info.height as usize, info.samples_per_pixel as usize);
     // one sample (CFA or monochrome), RGB or four colours; two are neither and can't be developed (issue #1511)
     if !matches!(cpp, 1 | 3 | 4) {
         return Err(RawError::Unsupported(format!("{cpp} samples per pixel")));
     }
-    let mut data = read_image_in(mode, bytes, &info, tiff.order, Packing::Msb)?;
+    // GoPro's GPR: a DNG whose raw data is one VC-5 stream (compression 9), which [`crate::vc5`] decodes. Header mode
+    // only checks the IFD, as for every other coding (a GPR has no embedded preview, so a library keeps a photo whose
+    // stream fails to decode with the reason shown, rather than refusing to import it).
+    let mut data = if mode == Mode::Full && info.compression == t::compression::VC5 {
+        RawData::U16(read_vc5(bytes, raw, &info)?)
+    } else {
+        read_image_in(mode, bytes, &info, tiff.order, Packing::Msb)?
+    };
     let bits = info.bits() as u32;
 
     // DNG 1.7 interleaved storage: the raster is a permutation of the mosaic, so undo it before

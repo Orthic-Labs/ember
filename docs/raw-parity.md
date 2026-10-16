@@ -1,6 +1,6 @@
 # RAW parity: cameras, formats, demosaic, colour and lens profiles
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-17 · **Change:** minor (raw-domain denoise wired through the loaders, one decode per settled strength, #201; upstream absorb 2026-10-14: Hasselblad Lunar verified and Leaf MOS recognised, 236 verified and 232 preview; Nikon D4 and D90 image areas; Nikon in-file distortion)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-17 · **Change:** minor (GoPro GPR (VC-5) decoded, #170; raw-domain denoise wired through the loaders, one decode per settled strength, #201; upstream absorb 2026-10-14: Hasselblad Lunar verified and Leaf MOS recognised, 236 verified and 232 preview; Nikon D4 and D90 image areas; Nikon in-file distortion)
 
 Raw processing is the deepest single dimension of reference editor parity: a photographer whose camera
 does not decode, or decodes with the wrong colour, cannot switch. This document measures it model by
@@ -15,10 +15,10 @@ ranked in [gaps.md](gaps.md). Details per format: [cr3.md](cr3.md),
 |---|---:|---|
 | reference publisher-listed camera models | **1,446** | measured: [raw/adobe-cameras.tsv](raw/adobe-cameras.tsv) |
 | Decoded from sensor data and **verified** on a real file | **236** (16%) | measured: [raw/evidence.tsv](raw/evidence.tsv) |
-| Decoder path should handle it, **unverified** | **942** (65%) | measured from the format rules (632 of them DNG, mostly phones) |
+| Decoder path should handle it, **unverified** | **951** (66%) | measured from the format rules (632 of them DNG, mostly phones) |
 | **Preview-only** (embedded JPEG) | **232** (16%) | measured |
-| **Unsupported** (not imported, refused or decodes wrongly) | **36** (2%) | measured |
-| Models added since 2017 (Camera Raw 10+): verified / unverified / preview / unsupported | 82 / 640 / 24 / 8 of 754 | measured |
+| **Unsupported** (not imported, refused or decodes wrongly) | **27** (2%) | measured |
+| Models added since 2017 (Camera Raw 10+): verified / unverified / preview / unsupported | 82 / 648 / 24 / 0 of 754 | measured |
 | **Share of photographers whose camera fully works** (decodes from sensor data), use-weighted | **~85%** | estimated: measured classes × written usage weights × per-format confidence |
 | …of which on a body we have verified | **~42%** | estimated, same weights |
 | Camera colour: reference publisher profiles vs ours | 1,500 reference publisher Standard profiles, 481 models with Camera Matching profiles vs **4 bundled profiles** + per-file fits + 52 spectral matrices | measured (bundle listing, reference publisher list, `assets/camera-profiles`) |
@@ -80,8 +80,8 @@ committed table is stale.
 | Casio | 26 | 0 | 26 | 0 | 0 | — (DNG) |
 | DJI | 21 | 0 | 21 | 0 | 0 | — (DNG) |
 | OM Digital Solutions | 7 | 0 | 0 | 7 | 0 | **compressed ORF** |
-| Kodak, Konica Minolta, Epson, Sigma, GoPro, Contax, others | 56 | 0 | 14 | 27 | 15 | DCR, GPR not imported; KDC, MRW, ERF, X3F preview |
-| **All** | **1,446** | **236 (16%)** | **942 (65%)** | **232 (16%)** | **36 (2%)** | |
+| Kodak, Konica Minolta, Epson, Sigma, GoPro, Contax, others | 56 | 0 | 23 | 27 | 6 | DCR not imported; KDC, MRW, ERF, X3F preview |
+| **All** | **1,446** | **236 (16%)** | **951 (66%)** | **232 (16%)** | **27 (2%)** | |
 
 ## By use (estimated)
 
@@ -97,7 +97,7 @@ committed table is stale.
 | Pentax / Ricoh | 1.5% | 94% | 14% | |
 | Leica | 1% | 95% | 5% | |
 | DJI | 1% | 95% | 0% | |
-| Medium format and others | 0.5% | 23% | 1% | IIQ, 3FR, X3F |
+| Medium format and others | 0.5% | 28% | 1% | IIQ, 3FR, X3F |
 | **Weighted** | 100% | **85%** | **42%** | |
 
 About 5 in 6 raw photographers' cameras decode, but only about 2 in 5 use a body we have actually
@@ -141,12 +141,12 @@ checked, and Canon, the largest bucket, is the weakest of the big four.
 | DNG | JPEG XL (DNG 1.7, lossless and lossy) | ✅ | synthetic bit-exact; real lossless and lossy files |
 | DNG | Apple ProRAW (incl. semantic mattes) | ✅ | iPhone 12 Pro corpus; ProfileGainTableMap read but off (ΔE00 19 against reference editor with it on) |
 | DNG | phone DNGs (Pixel, Galaxy, Xiaomi…) | 🟡 | Pixel 2 XL is the only real file. Synthetic tests cover the opcode lists a phone writes (per-Bayer-phase `GainMap`, `FixVignetteRadial`, `WarpRectilinear`/`2`, `MapTable`/`MapPolynomial`, per-row/column deltas and scales), hostile-list rejection (counts, sizes, non-finite floats, fuzzed bytes), `DefaultBlackRender` read and written back, LinearRaw and JPEG XL. `WarpFisheye` and `TrimBounds` in `OpcodeList3` are applied per DNG 1.6.0.0 chapter 7 (pp. 92-94, 97): the fisheye maps through `f = (θ·(k0 + k1θ² + k2θ⁴ + k3θ⁶))/r` with `θ = arctan r` and bilinear resampling, with the spec's increasing-function restriction checked when parsing; `TrimBounds` crops (bottom, right exclusive) and the default crop moves with it. Open: both are still ignored in `OpcodeList1`/`2` (a mosaic trim would also shift the CFA phase and black pattern); the resampling is bilinear where the spec recommends a cubic spline; no real file carries either opcode; `DefaultBlackRender` is carried, not rendered; no Pixel 6+, Galaxy or Xiaomi file to compare; white-level pile-up fix #548 [#169](https://github.com/Orthic-Labs/ember/issues/169) |
-| DNG | GoPro GPR (VC-5) | ⬜ | refused [#170](https://github.com/Orthic-Labs/ember/issues/170) |
+| DNG | GoPro GPR (VC-5) | 🟡 | decoded: one VC-5 stream per file, RGGB 14-bit and GBRG 12-bit, ported from GoPro's reference decoder (Apache-2.0 OR MIT, `crates/raw/src/vc5.rs`); synthetic and hostile-input tests, five public GoPro samples pinned in `crates/raw/tests/gpr_corpus.rs` (not CC0, so not in the corpus download), CI verification pending [#170](https://github.com/Orthic-Labs/ember/issues/170) |
 | 3FR / FFF | DNG-like layouts | 🟡 | decoded when uncompressed or LJ92 [#171](https://github.com/Orthic-Labs/ember/issues/171) |
 | 3FR / FFF | Hasselblad compression | ⬜ | preview [#172](https://github.com/Orthic-Labs/ember/issues/172) |
 | IIQ, MOS, MRW, ERF, KDC, X3F | all | ⬜ | preview; an uncompressed MOS, whose IFD0 is the mosaic itself with no Make tag, is recognised by Leaf's data block `0x8606` (upstream #1275) [#173](https://github.com/Orthic-Labs/ember/issues/173) |
 | IIQ, MOS, MRW, ERF, KDC, X3F | all | ⬜ | preview [#174](https://github.com/Orthic-Labs/ember/issues/174) |
-| DCR, MEF, MFW, DXO, GPR, TIFF raws | all | ⬜ | not imported [#175](https://github.com/Orthic-Labs/ember/issues/175) |
+| DCR, MEF, MFW, DXO, TIFF raws | all | ⬜ | not imported [#175](https://github.com/Orthic-Labs/ember/issues/175) |
 
 ### Compressed ORF: a clean-room starting point
 
@@ -253,7 +253,7 @@ works, from [raw/usage-weights.tsv](raw/usage-weights.tsv).
 | 7 | Sony A100 and DSC-F828 regression (#702) | +0.1 | 1–2 | ~0.07 | samples on raw.pixls.us |
 | 8 | Canon CRW (2000–2004 bodies) | +1.2 by the uniform tail weight, far less by real use | 6–12 | ≤ 0.1 | samples |
 | 9 | Nikon HE / HE★ NEF (Z 8, Z 9, Z 6III, Z f, Z50II, Z5II set to HE) | +1.1 | 20–40 | ~0.04 | a pure-Rust JPEG XS decoder |
-| 10 | Compressed SRW, Hasselblad 3FR, IIQ, X3F, MRW, KDC, ERF, DCR, MEF, GPR | +0.6 together | 45–85 | ~0.01 | samples; low use |
+| 10 | Compressed SRW, Hasselblad 3FR, IIQ, X3F, MRW, KDC, ERF, DCR, MEF | +0.6 together | 45–85 | ~0.01 | samples; low use |
 
 Beyond decoding:
 
@@ -268,6 +268,7 @@ Beyond decoding:
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | GoPro GPR decoded (#170): a DNG whose raw data is one VC-5 stream (SMPTE ST 2073, compression 9), in pure safe Rust ported from GoPro's reference decoder (Apache-2.0 OR MIT; NOTICE), RGGB 14-bit and GBRG 12-bit; the nine GoPro models move from unsupported to unverified (951 unverified, 27 unsupported, none of the 754 models added since 2017 unsupported); the algorithm was checked in a Python model on the five public GoPro samples (HERO5, 6, 7, 9 and Fusion) and the model's mosaic hashes are pinned in `crates/raw/tests/gpr_corpus.rs`, CI verification pending |
 | 2026-10-14 | minor | Nikon D600 and D610 image area (6016 × 4016 at 8, 6) measured on 4 CC0 NEFs of each, and the D90's area and white level applied to the D5000 (same sensor and filler, 2 CC0 NEFs): the filler and noise columns on the right no longer develop as a band, and for these bodies the white level is measured inside the image area, issue upstream #1627 |
 | 2026-10-13 | minor | Lens profiles: Nikon in-file distortion (NikonNEFInfo `0xc7d5`) for the Z 6II, Z 8 and Z f, validated on 83 frames from three lenses and the CC0 Z f sample (`docs/nikon-lens-corrections.md`); lens score unchanged |
 | 2026-10-13 | minor | Nikon D90 image area (4288 × 2848 at 10, 10) and white level (3830) measured on 10 of 550 NEFs from one body: its 42 filler columns no longer develop as a pink band |

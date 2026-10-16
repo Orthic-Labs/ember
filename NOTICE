@@ -26,6 +26,14 @@ Foundation project licensed under the Apache License 2.0, and from the CIE 1931 
 functions it ships (CIE, CC-BY-4.0). The matrices were fitted by the LightCraft contributors
 (2026) with tools/spectral_camera_table.py. See assets/ATTRIBUTION.md.
 
+crates/raw/src/vc5.rs (lightcraft-raw) ports the VC-5 (SMPTE ST 2073) decoder of GoPro's GPR reference
+implementation (https://github.com/gopro/gpr, source/lib/vc5_decoder and source/lib/vc5_common,
+including codebook 17 from table17.inc), Copyright 2018 GoPro Inc., licensed under the Apache License,
+Version 2.0 or the MIT License, at your option (LICENSE-APACHE and LICENSE-MIT in that repository).
+The port was modified by the Ember contributors (2026): translated from C to safe Rust, with every size,
+offset and index read from a file checked; the file says so. GoPro's sample GPR files are not part of
+Ember.
+
 crates/inpaint (lightcraft-inpaint) ports the inpainting (PatchMatch completion) and Poisson membrane
 fill code of PhotoCraft (https://github.com/storytold/photocraft, crates/algo/src/inpaint.rs and
 poisson.rs), Copyright the PhotoCraft contributors, licensed under the MIT License or the Apache

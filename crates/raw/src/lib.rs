@@ -15,7 +15,7 @@
 //!   look tables and tone curve, and [`gaintable`] its gain table map (Apple ProRAW's local tone mapping).
 //!
 //! Formats: DNG (uncompressed, lossless JPEG, lossy JPEG (Smart Previews), Deflate incl. floating point, JPEG XL (DNG 1.7,
-//! `jxl` feature, on by default), tiled/stripped, CFA and LinearRaw),
+//! `jxl` feature, on by default), tiled/stripped, CFA and LinearRaw, VC-5 in GoPro GPR),
 //! Canon CR2 / CR3 (lossless CRX Bayer and version 0x100/0x200 C-RAW), Nikon NEF/NRW (uncompressed, Huffman lossless / lossy compressed), Sony ARW (uncompressed, ARW2, lossless), Fujifilm RAF (uncompressed Bayer
 //! and X-Trans, lossless and lossy compressed), Panasonic RW2 / Leica RWL / Panasonic RAW (every raw format: compressed 4 and 6, the prefix-coded strips of 8,
 //! packed 2/5/7, the 16-bit words of the oldest bodies), Pentax PEF (uncompressed, Huffman), Olympus ORF (uncompressed: 16-bit words, 12-bit XZ-2 words, 12-bit 16-byte blocks of the E-300/E-330/E-500).
@@ -50,6 +50,7 @@ pub mod sparse;
 pub mod spectral;
 mod tiffraw;
 mod unpack;
+mod vc5;
 mod vendor;
 
 pub use demosaic::{Method, demosaic};
@@ -1180,11 +1181,11 @@ mod tests {
         assert_eq!(probe(&g), None);
     }
 
-    /// A GoPro GPR (a DNG with VC-5 coded raw data, Compression 9) is refused by the full decode with
-    /// a reason that names the format, whatever its tile bytes hold; the header probe still
-    /// describes it (so it imports).
+    /// A GoPro GPR (a DNG with VC-5 coded raw data, Compression 9) whose strip is not a VC-5 stream fails the full
+    /// decode with a reason that names the format; the header probe still describes it (so it imports). Real streams
+    /// decode in `vc5.rs`.
     #[test]
-    fn gopro_vc5_dng_is_unsupported_with_a_clear_reason() {
+    fn gopro_vc5_dng_without_a_vc5_stream_is_corrupt_with_a_clear_reason() {
         let mut ifd = IfdBuilder::new();
         ifd.set(t::NEW_SUBFILE_TYPE, Value::Long(vec![0]));
         ifd.set(t::IMAGE_WIDTH, Value::Long(vec![32]));
@@ -1199,9 +1200,8 @@ mod tests {
         ifd.set_image(ImageData::Tiles { tile_width: 32, tile_height: 16, tiles: vec![vec![0x5au8; 400]] });
         let bytes = write(&[ifd]);
         assert_eq!(probe(&bytes), Some(RawFormat::Dng));
-        let want = "DNG compression 9 (GoPro VC-5) is not decoded yet";
-        let Err(RawError::Unsupported(why)) = decode(&bytes) else { panic!("expected Unsupported from decode") };
-        assert_eq!(why, want);
+        let Err(RawError::Corrupt(why)) = decode(&bytes) else { panic!("expected Corrupt from decode") };
+        assert!(why.contains("GoPro VC-5") && why.contains("VC-5 marker"), "{why}");
         let info = probe_info(&bytes).expect("header probe describes the file");
         assert_eq!((info.width, info.height), (32, 16));
     }
