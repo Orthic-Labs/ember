@@ -1952,6 +1952,9 @@ pub enum DngCompression {
     /// Deflate (zip) tiles with prediction.
     Deflate,
     Uncompressed,
+    /// Lossy JPEG XL tiles (DNG 1.7; quality from [`ExportOptions::quality`]). Render to DNG only: a
+    /// raw (CFA) DNG export refuses it. Highlights above white are clipped.
+    Lossy,
 }
 
 /// The destination of a batch: a folder (with `ExportOptions::subfolder` and the conflict policy
@@ -2016,9 +2019,6 @@ impl AfterExport {
 
     /// Like [`AfterExport::run`], without waiting: Photos works on a worker thread and the
     /// outcome is the running job (`{job, running: true, requested, album}`; its result comes
-    /// Lossy JPEG XL tiles (DNG 1.7; quality from [`ExportOptions::quality`]). Render to DNG only: a
-    /// raw (CFA) DNG export refuses it. Highlights above white are clipped.
-    Lossy,
     /// from `export.photosImports`, and the desktop app announces it). For a caller on the UI
     /// thread, which must not wait minutes for Photos.
     pub fn start(self, files: &[serde_json::Value]) -> Option<serde_json::Value> {
