@@ -1392,6 +1392,26 @@ mod tests {
         }
     }
 
+    /// 100k photos: the layout is one pass over the list, and a viewport finds its cells by binary
+    /// search over the rows, touching a few dozen cells however far down it is (issue #189).
+    #[test]
+    fn a_viewport_in_a_100k_layout_finds_only_its_own_rows() {
+        let n = 100_000;
+        let aspects: Vec<f32> = (0..n).map(|i| [1.5f32, 0.66, 1.0, 1.78][i % 4]).collect();
+        let groups: Vec<(usize, usize)> = (0..n / 40).map(|g| (g * 40, 40)).collect();
+        for square in [false, true] {
+            let l = layout(&aspects, &groups, 1200.0, 160.0, square, 0.0);
+            assert_eq!(l.cells.len(), n);
+            assert_eq!(l.rows.last().map(|r| r.end), Some(n));
+            for frac in [0.0f32, 0.37, 0.99] {
+                let top = (l.height - 800.0) * frac;
+                let rows = rows_between(&l.rows, top - 800.0, top + 1600.0);
+                let cells: usize = rows.iter().map(|r| r.end - r.start).sum();
+                assert!(cells > 0 && cells < 400, "square {square} at {frac}: {cells} cells of {n}");
+            }
+        }
+    }
+
     #[test]
     fn library_context_menu_labels_have_french_translations() {
         let saved = crate::i18n::language();

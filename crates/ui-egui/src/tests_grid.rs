@@ -37,6 +37,24 @@ fn library() -> Session {
     s
 }
 
+/// `n` photos in one batch (missing files), 40 per capture day, no stacks: the 100k-photo library of
+/// issue #189.
+fn big_library(n: u64) -> Session {
+    let mut s = Session::new();
+    let ops = (0..n)
+        .map(|i| {
+            let (w, h) = if i % 5 == 4 { (4000, 6000) } else { (6000, 4000) };
+            let path = format!("/lightcraft-grid-test/IMG_{i:06}.jpg");
+            let mut p = Photo::new(PhotoId(i + 1), Source::File { path }, &format!("IMG_{i:06}.jpg"), "JPEG", w, h, "2026-01-01T00:00:00");
+            let day = i / 40;
+            p.captured = Some(format!("{:04}-{:02}-{:02}T{:02}:00:00", 1900 + day / 336, 1 + day / 28 % 12, 1 + day % 28, 8 + i % 40 / 4));
+            Op::AddPhoto { photo: Box::new(p) }
+        })
+        .collect();
+    s.commit("Add", Op::Batch { ops }).unwrap();
+    s
+}
+
 fn grid(view: ViewMode) -> Headless {
     let app = LightcraftApp::new(library(), Services { png: None, ..Default::default() });
     let mut h = Headless::new(app, [1200.0, 800.0], 1.0);
@@ -89,6 +107,40 @@ fn unchanged_grid_frames_reuse_the_view_and_visit_only_nearby_rows() {
         let far = h.app.session.visible()[2500];
         select(&mut h, far);
         assert_cheap_frames(&mut h);
+    }
+}
+
+/// On 100k photos an unchanged frame still builds nothing and visits only the rows near the
+/// screen, at the top, far down and at the very end (issue #189). The list, runs and layout are
+/// built once for the view (`view_builds`, `layout_builds`), never per frame.
+#[test]
+fn a_100k_photo_grid_visits_only_the_visible_rows() {
+    const BIG: u64 = 100_000;
+    for view in [ViewMode::PhotoGrid, ViewMode::SquareGrid] {
+        let app = LightcraftApp::new(big_library(BIG), Services { png: None, ..Default::default() });
+        let mut h = Headless::new(app, [1200.0, 800.0], 1.0);
+        h.app.ui.view = view;
+        h.app.ui.thumb_size = 160.0;
+        h.settle(SETTLE);
+        assert_eq!(h.app.session.visible().len() as u64, BIG);
+        assert_eq!(h.app.caches.grid_stats.view_builds, 1, "{view:?}");
+        assert_eq!(h.app.caches.grid_stats.layout_builds, 1, "{view:?}");
+        let (g0, _) = h.app.session.visible_shared();
+        for at in [0usize, 60_000, 99_999] {
+            let id = h.app.session.visible()[at];
+            select(&mut h, id);
+            let before = h.app.caches.grid_stats.clone();
+            let frames = 10;
+            for _ in 0..frames {
+                h.step();
+            }
+            let s = &h.app.caches.grid_stats;
+            assert_eq!(s.view_builds, before.view_builds, "{view:?} at {at}: date runs rebuilt on an unchanged frame");
+            assert_eq!(s.layout_builds, before.layout_builds, "{view:?} at {at}: layout rebuilt on an unchanged frame");
+            let per_frame = (s.cells_visited - before.cells_visited) / frames;
+            assert!(per_frame > 0 && per_frame < 300, "{view:?} at {at}: visited {per_frame} of {BIG} cells per frame");
+            assert_eq!(h.app.session.visible_shared().0, g0, "{view:?}: the id list is recomputed only when the query changes");
+        }
     }
 }
 
