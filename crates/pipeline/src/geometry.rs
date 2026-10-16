@@ -37,6 +37,8 @@ pub struct Frame {
     /// The whole frame's Subject decision, so a window selects what the whole frame does (derived
     /// data: equal for every frame, absent from the cache keys). Set by [`crate::plan`].
     pub subject: Option<Arc<crate::masks::SubjectProxy>>,
+    /// The whole frame's Sky / Landscape decision, likewise (see [`crate::masks::SceneProxy`]).
+    pub scene: Option<Arc<crate::masks::SceneProxy>>,
 }
 
 /// Where a windowed [`Frame`]'s pixels sit in the full output: its offset and the full output's
@@ -81,6 +83,7 @@ impl Frame {
             warp: (!warp.is_identity()).then_some(warp),
             view: None,
             subject: None,
+            scene: None,
         };
         if apply_crop && s.geometry.constrain_crop {
             f.constrain_to_image();

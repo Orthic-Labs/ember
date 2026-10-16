@@ -216,6 +216,10 @@ fn a_mask_overlay_window_matches_the_whole_render() {
         ("radial", MaskShape::Radial { center: Point::new(0.5, 0.5), rx: 0.2, ry: 0.15, angle: 20.0, feather: 50.0, invert: false }, 0.0),
         ("linear refined", MaskShape::Linear { start: Point::new(0.45, 0.5), end: Point::new(0.55, 0.5) }, 100.0),
         ("sky", MaskShape::Sky, 0.0),
+        // decided once on the whole frame (`SceneProxy`), like the subject
+        ("landscape vegetation", MaskShape::Landscape { class: "vegetation".into() }, 0.0),
+        ("landscape water", MaskShape::Landscape { class: "water".into() }, 0.0),
+        ("landscape ground", MaskShape::Landscape { class: "ground".into() }, 0.0),
         // decided once on the whole frame (`SubjectProxy`), so the window selects what the whole render does;
         // what differs is the edge refinement reading its neighbours (a few px, far inside `HALO`)
         ("subject", MaskShape::Subject, 0.0),
@@ -266,6 +270,59 @@ fn a_window_selects_the_same_subject_as_the_whole_frame() {
         let w = render(&src, &SourceInfo::default(), &s, &RenderRequest { overlay, window: Some(win), ..RenderRequest::fit(W, H) }).image;
         let (max, mean) = compare(&f, &w, win);
         assert!(max <= 3 && mean <= 0.25, "window at {x},{y}: max {max} (≤ 3), mean {mean:.3} (≤ 0.25)");
+    }
+}
+
+// Given a Sky or a Landscape class mask, windows at the corners and in the middle select the same
+// region as the whole render, not the one their own pixels would give: the decision (connectivity to
+// the top edge, horizon, classes) comes from the whole-frame `SceneProxy`. The scene has a sky band, a
+// textured green band and a smooth blue lake under a textured shore, each reaching every window.
+// Tolerance as for the Subject: both sides sample the same proxy plane.
+#[test]
+fn a_window_selects_the_same_sky_and_landscape_class_as_the_whole_frame() {
+    use crate::{MaskView, Overlay};
+    use lightcraft_develop::{LocalAdjustments, Mask, MaskComponent, MaskOp, MaskShape};
+    let noise = |x: usize, y: usize| {
+        let n = (x as u32).wrapping_mul(73856093) ^ (y as u32).wrapping_mul(19349663);
+        ((n ^ (n >> 13)).wrapping_mul(0x5bd1e995) >> 8) as f32 / 16_777_216.0
+    };
+    let src = Rgb32f::from_fn(480, 320, |x, y| match y {
+        0..70 => [0.4, 0.6, 1.2],
+        70..120 => {
+            let n = noise(x, y);
+            [0.05 + 0.1 * n, 0.2 + 0.4 * n, 0.04 + 0.05 * n]
+        }
+        120..170 => {
+            let v = 0.05 + 0.5 * noise(x, y);
+            [v * 1.1, v, v * 0.9]
+        }
+        170..250 => [0.32, 0.48, 0.96],
+        _ => {
+            let v = 0.05 + 0.5 * noise(x, y);
+            [v * 1.1, v, v * 0.9]
+        }
+    });
+    let overlay = Overlay::Mask { id: 3, view: MaskView::WhiteOnBlack, color: [255, 0, 0], opacity: 100 };
+    for (name, shape) in [
+        ("sky", MaskShape::Sky),
+        ("vegetation", MaskShape::Landscape { class: "vegetation".into() }),
+        ("water", MaskShape::Landscape { class: "water".into() }),
+        ("ground", MaskShape::Landscape { class: "ground".into() }),
+    ] {
+        let mut s = DevelopSettings::default();
+        s.masks.push(Mask {
+            id: 3,
+            components: vec![MaskComponent { name: None, op: MaskOp::Add, invert: false, shape }],
+            adjust: LocalAdjustments { exposure: 1.0, ..Default::default() },
+            ..Default::default()
+        });
+        let f = render(&src, &SourceInfo::default(), &s, &RenderRequest { overlay, ..RenderRequest::fit(W, H) }).image;
+        for (x, y) in [(0, 0), (W - 400, 0), (0, H - 300), (W - 400, H - 300), (300, 180)] {
+            let win = PixelWindow { x, y, w: 400, h: 300 };
+            let w = render(&src, &SourceInfo::default(), &s, &RenderRequest { overlay, window: Some(win), ..RenderRequest::fit(W, H) }).image;
+            let (max, mean) = compare(&f, &w, win);
+            assert!(max <= 3 && mean <= 0.25, "{name} window at {x},{y}: max {max} (≤ 3), mean {mean:.3} (≤ 0.25)");
+        }
     }
 }
 

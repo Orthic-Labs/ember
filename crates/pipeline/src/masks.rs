@@ -13,7 +13,11 @@ use lightcraft_raster::{Image, Plane, Rgb32f};
 use crate::for_rows;
 use crate::geometry::Frame;
 
+mod landscape;
+mod sky;
 mod subject;
+pub use sky::SceneProxy;
+pub(crate) use sky::{scene_proxy, uses_scene};
 pub use subject::SubjectProxy;
 pub(crate) use subject::{subject_proxy, uses_subject};
 
@@ -74,6 +78,7 @@ impl Mattes {
         };
         match shape {
             MaskShape::Sky => self.of(&[Sky]),
+            MaskShape::Landscape { class } if landscape::Class::parse(class) == Some(landscape::Class::Sky) => self.of(&[Sky]),
             MaskShape::Subject => person(),
             MaskShape::People { parts, .. } => {
                 let wanted: Vec<MatteKind> = parts
@@ -233,19 +238,9 @@ pub fn shape_alpha(shape: &MaskShape, frame: &Frame, w: usize, h: usize, img: &R
             }
         }
         MaskShape::Sky => {
-            // Classical sky heuristic until the segmenter lands (M12): bright, smooth, blue-ish or
-            // unsaturated, and connected to the top of the frame.
-            let m = frame.out_to_norm(w, h);
-            for (i, v) in out.data.iter_mut().enumerate() {
-                let (x, y) = (i % w, i / w);
-                let n = m.apply(Point::new(x as f64 + 0.5, y as f64 + 0.5));
-                let c = img.data[i].map(|v| v * gain);
-                let l = log_l.data[i] + ev;
-                let blue = (c[2] - c[0]).max(0.0) / (c[2] + 1e-4);
-                let top = 1.0 - smooth(0.25, 0.7, n.y as f32);
-                *v = top * smooth(-3.5, -1.0, l) * (0.4 + 0.6 * smooth(0.0, 0.3, blue).max(smooth(0.0, 1.5, l)));
-            }
-            smooth_plane(&mut out, 0.01 * frame_px(frame, w));
+            // Classical whole-frame sky decision (see `sky`): bright, smooth, blue-ish or neutral
+            // regions connected to the top edge, above the horizon. A DNG sky matte replaces it above.
+            out = sky::scene_alpha(frame, w, h, img, log_l, landscape::Class::Sky);
         }
         MaskShape::Object { seg, detail, edge, .. } | MaskShape::Prompt { seg, detail, edge, .. } if seg.is_some() || !detail.is_empty() => {
             // Edge: below 0 a steeper transition (up to 8× the logits), above 0 feathered (up to
@@ -270,7 +265,14 @@ pub fn shape_alpha(shape: &MaskShape, frame: &Frame, w: usize, h: usize, img: &R
             s.data.iter_mut().for_each(|v| *v = 1.0 - *v);
             out = s;
         }
-        MaskShape::DepthRange { .. } | MaskShape::Landscape { .. } => {}
+        MaskShape::Landscape { class } => {
+            // Hue / texture / position classes on the Sky proxy (see `landscape`); a class that is not
+            // credible from those (mountains, architecture, ...) selects nothing.
+            if let Some(c) = landscape::Class::parse(class) {
+                out = sky::scene_alpha(frame, w, h, img, log_l, c);
+            }
+        }
+        MaskShape::DepthRange { .. } => {}
     }
     out
 }
@@ -1131,5 +1133,162 @@ mod tests {
         assert!(hair.get(190, 50) > 0.99 && hair.get(10, 50) < 0.01);
         let lips = MaskShape::People { person: 0, parts: vec!["Lips".into()] };
         assert_eq!(eval(&lips), shape_alpha(&lips, &f, w, h, &img, &l, 0.0, None));
+    }
+
+    // ---- Sky connectivity and Landscape classes (synthetic scenes, 256 × 160 so the work plane is the picture) ----
+
+    /// Deterministic per-pixel noise 0..1.
+    fn noise(x: usize, y: usize) -> f32 {
+        let n = (x as u32).wrapping_mul(73856093) ^ (y as u32).wrapping_mul(19349663);
+        ((n ^ (n >> 13)).wrapping_mul(0x5bd1e995) >> 8) as f32 / 16_777_216.0
+    }
+
+    /// Strongly textured grey-brown ground (about 3 EV of per-pixel luminance noise, far over the texture limit).
+    fn rough(x: usize, y: usize) -> [f32; 3] {
+        let v = 0.05 + 0.5 * noise(x, y);
+        [v * 1.1, v, v * 0.9]
+    }
+
+    /// Smooth blue sky whose luminance falls by 0.3 over `rows`, from `y0`.
+    fn blue(y: usize, y0: usize, rows: usize) -> [f32; 3] {
+        let s = 1.0 - 0.3 * (y - y0) as f32 / rows as f32;
+        [0.4 * s, 0.6 * s, 1.2 * s]
+    }
+
+    fn scene_of(shape: &MaskShape, img: &Rgb32f) -> Plane {
+        let l = img.map(crate::local::log_lum);
+        shape_alpha(shape, &frame(img.width, img.height), img.width, img.height, img, &l, 0.0, None)
+    }
+
+    fn class(name: &str) -> MaskShape {
+        MaskShape::Landscape { class: name.into() }
+    }
+
+    /// Sky over rows 0..30, a textured band (rows 30..50), a smooth blue patch not connected to the
+    /// top (rows 50..90, well above the horizon cut, so only connectivity can exclude it), textured
+    /// ground below.
+    fn lake_scene() -> Rgb32f {
+        Rgb32f::from_fn(256, 160, |x, y| match y {
+            0..30 => blue(y, 0, 30),
+            30..50 => rough(x, y),
+            50..90 => [0.32, 0.48, 0.96],
+            _ => rough(x, y),
+        })
+    }
+
+    #[test]
+    fn sky_is_high_at_the_top_and_low_on_textured_ground() {
+        // blue gradient over the top half, textured ground below
+        let img = Rgb32f::from_fn(256, 160, |x, y| if y < 80 { blue(y, 0, 80) } else { rough(x, y) });
+        let a = scene_of(&MaskShape::Sky, &img);
+        for (x, y) in [(10, 5), (128, 10), (245, 20), (128, 40)] {
+            assert!(a.get(x, y) > 0.9, "sky at {x},{y}: {}", a.get(x, y));
+        }
+        for (x, y) in [(10, 150), (128, 120), (245, 100), (128, 155)] {
+            assert!(a.get(x, y) < 0.05, "ground at {x},{y}: {}", a.get(x, y));
+        }
+        assert!(a.data.iter().all(|v| v.is_finite() && (0.0..=1.0).contains(v)));
+    }
+
+    #[test]
+    fn a_blue_patch_below_the_horizon_is_not_sky_but_water() {
+        let img = lake_scene();
+        let sky = scene_of(&MaskShape::Sky, &img);
+        assert!(sky.get(128, 10) > 0.9, "sky {}", sky.get(128, 10));
+        assert!(sky.get(128, 70) < 0.1, "a smooth blue patch not connected to the top is no sky: {}", sky.get(128, 70));
+        let water = scene_of(&class("water"), &img);
+        assert!(water.get(128, 70) > 0.8, "water {}", water.get(128, 70));
+        assert!(water.get(128, 10) < 0.1 && water.get(128, 140) < 0.1, "{} {}", water.get(128, 10), water.get(128, 140));
+    }
+
+    /// A green textured band under the sky is vegetation (not sky, not ground); the ground below is ground.
+    #[test]
+    fn a_green_textured_band_is_vegetation() {
+        let img = Rgb32f::from_fn(256, 160, |x, y| match y {
+            0..40 => blue(y, 0, 40),
+            40..100 => {
+                let n = noise(x, y);
+                [0.05 + 0.1 * n, 0.2 + 0.4 * n, 0.04 + 0.05 * n]
+            }
+            _ => rough(x, y),
+        });
+        let veg = scene_of(&class("Vegetation"), &img);
+        assert!(veg.get(128, 70) > 0.8, "vegetation {}", veg.get(128, 70));
+        assert!(veg.get(128, 20) < 0.1 && veg.get(128, 140) < 0.1, "{} {}", veg.get(128, 20), veg.get(128, 140));
+        assert!(scene_of(&MaskShape::Sky, &img).get(128, 70) < 0.1, "foliage is not sky");
+        let ground = scene_of(&class("ground"), &img);
+        assert!(ground.get(128, 140) > 0.7 && ground.get(128, 70) < 0.2 && ground.get(128, 20) < 0.1);
+        let sky = scene_of(&class("sky"), &img);
+        assert!(sky.get(128, 10) > 0.9 && sky.get(128, 140) < 0.05);
+    }
+
+    #[test]
+    fn landscape_classes_without_a_credible_decision_select_nothing() {
+        let img = lake_scene();
+        for name in ["mountains", "architecture", "buildings", "artificial ground", "", "nonsense"] {
+            assert!(scene_of(&class(name), &img).data.iter().all(|v| *v == 0.0), "{name}");
+        }
+        // names are case-insensitive and read - / _ as a space
+        assert_eq!(scene_of(&class("Natural_Ground"), &img), scene_of(&class("natural ground"), &img));
+        assert_eq!(scene_of(&class("SKY"), &img), scene_of(&MaskShape::Sky, &img));
+    }
+
+    #[test]
+    fn landscape_sky_follows_the_sky_matte() {
+        let (w, h) = (200, 100);
+        let img = Rgb32f::filled(w, h, [0.5, 0.7, 1.4]);
+        let l = img.map(crate::local::log_lum);
+        let mut mattes = Mattes::default();
+        mattes.push(MatteKind::Sky, left_matte(w, h, 0.5));
+        let a = shape_alpha(&class("sky"), &frame(w, h), w, h, &img, &l, 0.0, Some(&mattes));
+        assert!(a.get(150, 5) < 0.01 && a.get(25, 90) > 0.99);
+    }
+
+    #[test]
+    fn sky_and_landscape_are_finite_on_degenerate_input() {
+        for (w, h) in [(1, 1), (3, 3), (7, 40), (40, 7), (64, 48)] {
+            for img in [Rgb32f::filled(w, h, [0.0; 3]), Rgb32f::filled(w, h, [1.0e6; 3]), Rgb32f::filled(w, h, [0.5, 0.7, 1.4])] {
+                for shape in [MaskShape::Sky, class("water"), class("vegetation"), class("ground")] {
+                    let a = scene_of(&shape, &img);
+                    assert_eq!((a.width, a.height), (w, h));
+                    assert!(a.data.iter().all(|v| v.is_finite() && (0.0..=1.0).contains(v)), "{w}x{h}");
+                }
+            }
+        }
+    }
+
+    /// A sunset: a smooth orange to pink-red gradient over the top half, dark textured ground below.
+    #[test]
+    fn a_warm_sunset_gradient_is_sky() {
+        let img = Rgb32f::from_fn(256, 160, |x, y| {
+            if y < 80 {
+                let t = y as f32 / 80.0;
+                [0.9, 0.5 - 0.1 * t, 0.25 + 0.25 * t]
+            } else {
+                let v = 0.02 + 0.1 * noise(x, y);
+                [v * 1.2, v, v * 0.8]
+            }
+        });
+        let a = scene_of(&MaskShape::Sky, &img);
+        for (x, y) in [(10, 5), (128, 10), (245, 20), (128, 40), (30, 60)] {
+            assert!(a.get(x, y) > 0.8, "warm sky at {x},{y}: {}", a.get(x, y));
+        }
+        for (x, y) in [(10, 150), (128, 120), (245, 100)] {
+            assert!(a.get(x, y) < 0.05, "ground at {x},{y}: {}", a.get(x, y));
+        }
+    }
+
+    /// A smooth warm-beige wall of mid luminance filling the frame and touching the top is no sky.
+    #[test]
+    fn a_warm_beige_wall_touching_the_top_is_not_sky() {
+        let img = Rgb32f::filled(256, 160, [0.3, 0.25, 0.18]);
+        let a = scene_of(&MaskShape::Sky, &img);
+        for (x, y) in [(128, 3), (10, 20), (245, 40), (128, 100), (30, 150)] {
+            assert!(a.get(x, y) < 0.1, "wall at {x},{y}: {}", a.get(x, y));
+        }
+        // a wall with the same colour but textured, under a blue sky, stays out too
+        let img = Rgb32f::from_fn(256, 160, |x, y| if y < 40 { blue(y, 0, 40) } else { [0.3, 0.25, 0.18].map(|c| c * (0.6 + 0.8 * noise(x, y))) });
+        let a = scene_of(&MaskShape::Sky, &img);
+        assert!(a.get(128, 10) > 0.9 && a.get(128, 100) < 0.05, "{} {}", a.get(128, 10), a.get(128, 100));
     }
 }

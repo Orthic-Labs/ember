@@ -27,12 +27,12 @@ use crate::for_rows;
 use crate::geometry::Frame;
 
 /// Long edge of the working plane (smaller frames are used as they are).
-const WORK_LONG: usize = 256;
+pub(super) const WORK_LONG: usize = 256;
 /// Below this a work plane is too small to segment.
-const MIN_SIDE: usize = 8;
+pub(super) const MIN_SIDE: usize = 8;
 /// Feature scales: log2-luminance EV and OkLab a/b that count as one unit of difference.
-const L_SCALE: f32 = 1.5;
-const AB_SCALE: f32 = 0.1;
+pub(super) const L_SCALE: f32 = 1.5;
+pub(super) const AB_SCALE: f32 = 0.1;
 /// Weight of the centre-surround term against the border-colour distance.
 const CS_WEIGHT: f32 = 0.6;
 /// The centre prior multiplies saliency by 1 at the frame centre, down to this far out.
@@ -71,7 +71,7 @@ fn fallback(frame: &Frame, w: usize, h: usize) -> Plane {
 }
 
 /// The work plane size: the long edge at most [`WORK_LONG`], aspect kept.
-fn work_size(w: usize, h: usize) -> (usize, usize) {
+pub(super) fn work_size(w: usize, h: usize) -> (usize, usize) {
     let long = w.max(h);
     if long <= WORK_LONG {
         return (w, h);
@@ -82,7 +82,7 @@ fn work_size(w: usize, h: usize) -> (usize, usize) {
 
 /// Area-average `img` (linear RGB) and `log_l` onto `dw × dh` and convert to scaled features
 /// `[L, a, b]`. `None` when the inputs disagree in size.
-fn features(img: &Rgb32f, log_l: &Plane, w: usize, h: usize, dw: usize, dh: usize) -> Option<[Plane; 3]> {
+pub(super) fn features(img: &Rgb32f, log_l: &Plane, w: usize, h: usize, dw: usize, dh: usize) -> Option<[Plane; 3]> {
     if img.data.len() != w * h || log_l.data.len() != w * h || img.width != w || log_l.width != w {
         return None;
     }
@@ -178,16 +178,16 @@ fn otsu(s: &[f32], smax: f32) -> f32 {
     (best_i + 1) as f32 / BINS as f32 * smax
 }
 
-struct Comp {
-    mass: f32,
-    size: usize,
-    border: bool,
+pub(super) struct Comp {
+    pub(super) mass: f32,
+    pub(super) size: usize,
+    pub(super) border: bool,
 }
 
 /// 4-connected components of `sel` by an iterative flood fill (O(n), no recursion): per-pixel
 /// labels (0 = none; label `k` is `comps[k - 1]`) and each component's `weight` mass (missing
 /// weights count 0), size and whether it touches the frame edge.
-fn components(sel: &[bool], weight: &[f32], w: usize, h: usize) -> (Vec<u32>, Vec<Comp>) {
+pub(super) fn components(sel: &[bool], weight: &[f32], w: usize, h: usize) -> (Vec<u32>, Vec<Comp>) {
     let n = w * h;
     let mut labels = vec![0u32; n];
     let mut comps: Vec<Comp> = Vec::new();
@@ -360,7 +360,7 @@ fn decide(f: &[Plane; 3], dw: usize, dh: usize, m: &Affine) -> Option<Plane> {
 /// 4. Upsample the work-size `region` onto the output pixels, snap it to the photo's edges and
 /// smooth it. `off` and `full`: the output's offset in, and the size of, the whole output the
 /// region covers (a window of a larger output, or `(0, 0)` and `(w, h)`).
-fn refine(region: &Plane, frame: &Frame, w: usize, h: usize, log_l: &Plane, off: (f64, f64), full: (f64, f64)) -> Plane {
+pub(super) fn refine(region: &Plane, frame: &Frame, w: usize, h: usize, log_l: &Plane, off: (f64, f64), full: (f64, f64)) -> Plane {
     let (dw, dh) = (region.width, region.height);
     let mut up = Plane::new(w, h);
     let (kx, ky) = (dw as f64 / full.0.max(1.0), dh as f64 / full.1.max(1.0));
