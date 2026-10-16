@@ -85,6 +85,26 @@ fn survey_fits_the_selection_and_drops_the_photos_removed_from_it() {
     assert_eq!(shown, vec![vis[0], vis[2]]);
 }
 
+/// Dragging a survey tile moves it to the drop index for the session; the photos it passes keep their order.
+#[test]
+fn survey_drag_moves_a_tile_to_its_new_index() {
+    use crate::panels::compare::{moved, reorder_survey, survey_photos};
+    let mut h = demo();
+    let vis: Vec<u64> = h.app.session.visible_cloned().iter().map(|p| p.0).collect();
+    assert_eq!(moved(&[1, 2, 3], 0, 2), vec![2, 3, 1]);
+    assert_eq!(moved(&[1, 2, 3], 2, 0), vec![3, 1, 2]);
+    h.request("engine.execute", json!({"command": "library.select", "params": {"ids": [vis[0], vis[1], vis[2]], "active": vis[0]}}), T);
+    let r = h.request("engine.execute", json!({"command": "view.survey"}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    reorder_survey(&mut h.app, 0, 2);
+    let shown: Vec<u64> = survey_photos(&mut h.app).iter().map(|p| p.0).collect();
+    assert_eq!(shown, vec![vis[1], vis[2], vis[0]], "the first tile dropped on the third slot");
+    // a photo selected later joins at the end, after the dragged order
+    h.request("engine.execute", json!({"command": "library.select", "params": {"ids": [vis[3]], "mode": "toggle"}}), T);
+    let shown: Vec<u64> = survey_photos(&mut h.app).iter().map(|p| p.0).collect();
+    assert_eq!(shown, vec![vis[1], vis[2], vis[0], vis[3]]);
+}
+
 /// A filmstrip click in Compare puts the photo into the active side: the candidate after
 /// entering Compare, the select after clicking the select's pane; a photo already on the other
 /// side swaps the two. `compare.set` does the same for agents, with an explicit `side`.

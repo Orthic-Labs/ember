@@ -8,13 +8,13 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use egui::{Align2, Color32, Rect, Sense, Stroke, StrokeKind, pos2, vec2};
-use lightcraft_catalog::{Catalog, ColorLabel, DateRun, Flag, GroupBy, PhotoId, SortKey, StackId};
+use lightcraft_catalog::{Catalog, ColorLabel, DateRun, Flag, GroupBy, Photo, PhotoId, SortKey, StackId};
 use serde_json::json;
 
 use crate::LightcraftApp;
 use crate::icons::{Icon, paint};
 use crate::render::Slot;
-use crate::state::ViewMode;
+use crate::state::{GridStyle, ViewMode};
 use crate::theme::Tokens;
 use crate::widgets::register;
 
@@ -69,8 +69,8 @@ type RunsKey = (u64, Option<SortKey>, GroupBy);
 #[derive(Default)]
 pub struct GridCache {
     runs: Option<(RunsKey, Arc<Vec<DateRun>>)>,
-    /// Layout by (runs key, width, thumbnail size, square).
-    layout: Option<((RunsKey, u32, u32, bool), Arc<GridLayout>)>,
+    /// Layout by (runs key, width, thumbnail size, square, caption height).
+    layout: Option<((RunsKey, u32, u32, bool, u32), Arc<GridLayout>)>,
     /// Stack index by generation.
     stacks: Option<(u64, Arc<StackIndex>)>,
     /// How many of the photos are browsed (Local) ones, by generation.
@@ -200,6 +200,8 @@ fn show_inner(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     let ppp = ui.ctx().pixels_per_point();
     let square = app.ui.view == ViewMode::SquareGrid;
     let target = app.ui.thumb_size;
+    // Expanded cells keep a caption under each photo
+    let caption = if app.ui.grid_style == GridStyle::Expanded { CAPTION_H } else { 0.0 };
     let avail_w = ui.available_width() - 8.0;
     let by = resolve_group(app.session.sort.group, target);
     let group_key = match app.session.source {
@@ -212,14 +214,14 @@ fn show_inner(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     let runs = app.caches.grid.runs(stats, &app.session.catalog, &ids, runs_key);
     // the layout only changes with the photos (and their shapes), the grouping, the width and
     // the thumbnail size
-    let lay_key = (runs_key, avail_w.to_bits(), target.to_bits(), square);
+    let lay_key = (runs_key, avail_w.to_bits(), target.to_bits(), square, caption.to_bits());
     let lay = match &app.caches.grid.layout {
         Some((k, l)) if *k == lay_key => l.clone(),
         _ => {
             stats.layout_builds += 1;
             let aspects = if square { vec![1.0; ids.len()] } else { aspects(&app.session.catalog, &ids) };
             let spans: Vec<(usize, usize)> = runs.iter().map(|r| (r.start, r.count)).collect();
-            let l = Arc::new(layout(&aspects, &spans, avail_w, target, square));
+            let l = Arc::new(layout(&aspects, &spans, avail_w, target, square, caption));
             app.caches.grid.layout = Some((lay_key, l.clone()));
             l
         }
@@ -321,6 +323,9 @@ pub(crate) fn follow_changed(
 /// Height of a date header row (points).
 pub const HEADER_H: f32 = 40.0;
 
+/// The caption under each photo in Expanded cells (points).
+pub const CAPTION_H: f32 = 44.0;
+
 /// Cell rectangles (one per photo, in order), date-header rectangles (one per group, top to
 /// bottom), the rows of cells (top to bottom, for finding the visible ones by binary search) and
 /// the total height of the grid content.
@@ -386,8 +391,8 @@ pub fn resolve_group(by: GroupBy, thumb_size: f32) -> GroupBy {
 /// `groups` (`(start, count)` runs; empty = one group without a header), `avail_w` wide, rows
 /// about `target` high (square cells about `target` wide). Every group starts on a new row
 /// below its header. Justified rows fill the width exactly except a group's last row, which keeps
-/// the target height.
-pub fn layout(aspects: &[f32], groups: &[(usize, usize)], avail_w: f32, target: f32, square: bool) -> GridLayout {
+/// the target height. `caption` adds that much height under every photo (its cell rect includes it).
+pub fn layout(aspects: &[f32], groups: &[(usize, usize)], avail_w: f32, target: f32, square: bool, caption: f32) -> GridLayout {
     let n = aspects.len();
     let whole = [(0, n)];
     let (groups, headed) = if groups.is_empty() { (&whole[..], false) } else { (groups, true) };
@@ -409,15 +414,15 @@ pub fn layout(aspects: &[f32], groups: &[(usize, usize)], avail_w: f32, target: 
             for i in start..end {
                 let k = (i - start) as f32;
                 let (c, r) = (k % cols, (k / cols).floor());
-                out.cells[i] = Rect::from_min_size(pos2(4.0 + c * (cw + gap), y + r * (cw + gap)), vec2(cw, cw));
+                out.cells[i] = Rect::from_min_size(pos2(4.0 + c * (cw + gap), y + r * (cw + gap + caption)), vec2(cw, cw + caption));
             }
             let per_row = (cols as usize).max(1);
             for (r, row_start) in (start..end).step_by(per_row).enumerate() {
-                let top = y + r as f32 * (cw + gap);
-                out.rows.push(GridRow { top, bottom: top + cw, start: row_start, end: (row_start + per_row).min(end) });
+                let top = y + r as f32 * (cw + gap + caption);
+                out.rows.push(GridRow { top, bottom: top + cw + caption, start: row_start, end: (row_start + per_row).min(end) });
             }
             let rows = ((end - start) as f32 / cols).ceil();
-            y += rows * (cw + gap);
+            y += rows * (cw + gap + caption);
         } else {
             // justified rows: accumulate aspect ratios until the row is full
             let mut i = start;
@@ -437,11 +442,11 @@ pub fn layout(aspects: &[f32], groups: &[(usize, usize)], avail_w: f32, target: 
                 let mut x = 4.0;
                 for k in i..j {
                     let w = aspects[k].max(0.05) * h;
-                    out.cells[k] = Rect::from_min_size(pos2(x, y), vec2(w, h));
+                    out.cells[k] = Rect::from_min_size(pos2(x, y), vec2(w, h + caption));
                     x += w + gap;
                 }
-                out.rows.push(GridRow { top: y, bottom: y + h, start: i, end: j });
-                y += h + gap;
+                out.rows.push(GridRow { top: y, bottom: y + h + caption, start: i, end: j });
+                y += h + caption + gap;
                 i = j;
             }
         }
@@ -555,6 +560,29 @@ pub(crate) fn skips_the_real_render(embedded_is_final: bool, from_embedded: bool
 /// Rendered thumbnails replacing embedded previews: after everything on screen.
 pub const BACKGROUND_THUMB_PRIORITY: u32 = 3;
 
+/// The three lines of an Expanded cell's caption: the file name; the capture time and the size
+/// (`6000 × 4000`); then the rating (stars), the flag, the colour label (`label`: its name) and
+/// whether the photo is edited, joined with " · ".
+pub fn expanded_info_lines(photo: &Photo, label: Option<&str>) -> [String; 3] {
+    let when: String = photo.captured.as_deref().map(crate::i18n::display_time).unwrap_or_else(|| crate::i18n::tr("No date").into());
+    let mut marks: Vec<String> = Vec::new();
+    if photo.rating > 0 {
+        marks.push("★".repeat(photo.rating as usize));
+    }
+    match photo.flag {
+        Flag::Pick => marks.push(crate::i18n::tr("Picked").into()),
+        Flag::Reject => marks.push(crate::i18n::tr("Rejected").into()),
+        Flag::None => {}
+    }
+    if let Some(name) = label {
+        marks.push(name.to_string());
+    }
+    if photo.is_edited() {
+        marks.push(crate::i18n::tr("Edited").into());
+    }
+    [photo.file_name.clone(), format!("{when} · {} × {}", photo.width, photo.height), marks.join(" · ")]
+}
+
 fn cell(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId, r: Rect, square: bool, onscreen: bool, ppp: f32) {
     let t = Tokens::get(ui.ctx());
     let Some(photo) = app.session.catalog.photo(id).cloned() else { return };
@@ -578,12 +606,20 @@ fn cell(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId, r: Rect, square
     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, &spoken));
     let active = state == lightcraft_engine::SelectionState::Active;
     let p = ui.painter();
+    // the cell's style: Compact keeps today's badges and captions, Expanded puts its info under the
+    // photo, Thumbnails shows the photo alone
+    let style = app.ui.grid_style;
+    let expanded = style == GridStyle::Expanded;
+    let caption = if expanded { CAPTION_H } else { 0.0 };
+    let body = Rect::from_min_max(r.min, pos2(r.right(), r.bottom() - caption));
     let img_rect = if square {
         let base = if selected { t.cell_selected } else { t.cell };
-        p.rect_filled(r, 0.0, crate::theme::label_background(base, photo.label, selected));
-        Rect::from_min_max(r.min + vec2(10.0, 24.0), r.max - vec2(10.0, 10.0))
+        let tint = if style == GridStyle::Compact { photo.label } else { None };
+        p.rect_filled(r, 0.0, crate::theme::label_background(base, tint, selected));
+        let top = if style == GridStyle::Compact { 24.0 } else { 10.0 };
+        Rect::from_min_max(body.min + vec2(10.0, top), body.max - vec2(10.0, 10.0))
     } else {
-        r
+        body
     };
     // thumbnail
     let size = thumb_px(img_rect.width().max(img_rect.height()), ppp);
@@ -617,7 +653,7 @@ fn cell(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId, r: Rect, square
         p.circle_filled(pos2(img_rect.left() + 9.0, img_rect.top() + 9.0), 4.5, t.star);
     }
     // labels and badges
-    if square && app.ui.show_filenames {
+    if square && app.ui.show_filenames && style == GridStyle::Compact {
         let m = &photo.meta;
         let name = match app.ui.grid_info.as_str() {
             "exposure" => {
@@ -644,13 +680,14 @@ fn cell(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId, r: Rect, square
         p.rect_filled(br, 2.0, Color32::from_gray(26));
         p.galley(br.min + vec2(4.0, 1.5), g, t.text_label);
     }
-    let show_badges = match app.ui.settings.grid_badges {
+    let badges = match app.ui.settings.grid_badges {
         crate::state::GridBadges::Auto => resp.hovered() || selected || photo.rating > 0 || photo.flag != Flag::None || photo.label.is_some(),
         crate::state::GridBadges::Always => true,
         crate::state::GridBadges::Never => false,
     };
+    let show_badges = style == GridStyle::Compact && badges;
     let badge_bar = Rect::from_min_max(pos2(img_rect.left(), img_rect.bottom() - 24.0), img_rect.right_bottom());
-    if !square && photo.label.is_some() {
+    if style == GridStyle::Compact && !square && photo.label.is_some() {
         // Justified photos fill the whole cell, so the label shows as a translucent tinted footer
         // over the photo's bottom edge (opaque, it would hide 24 px of every labelled photo).
         p.rect_filled(badge_bar, 0.0, crate::theme::label_background(t.cell, photo.label, selected).gamma_multiply(0.7));
@@ -711,6 +748,16 @@ fn cell(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId, r: Rect, square
     }
     if photo.flag == Flag::Reject {
         p.rect_filled(img_rect, 0.0, Color32::from_black_alpha(110));
+    }
+    if expanded {
+        // Expanded: the file name, the capture time and size, then the marks, under the photo
+        let label = photo.label.map(|l| crate::i18n::color_label(&app.session.catalog, l));
+        let cap = Rect::from_min_max(pos2(r.left(), r.bottom() - CAPTION_H), r.right_bottom());
+        let cp = p.with_clip_rect(cap);
+        for (k, line) in expanded_info_lines(&photo, label.as_deref()).iter().enumerate() {
+            let (font, color) = if k == 0 { (t.font(11.0), t.text) } else { (t.font(10.0), t.text_dim) };
+            cp.text(pos2(cap.left() + 4.0, cap.top() + 5.0 + k as f32 * 15.0), Align2::LEFT_TOP, line, font, color);
+        }
     }
     // interaction
     if let Some(k) = app.ui.keyword_painter.clone() {
@@ -1205,6 +1252,59 @@ mod tests {
     use super::*;
 
     #[test]
+    fn grid_style_cycles_compact_expanded_thumbnails() {
+        let mut s = GridStyle::Compact;
+        let mut seen = Vec::new();
+        for _ in 0..4 {
+            seen.push(s);
+            s = s.next();
+        }
+        assert_eq!(seen, vec![GridStyle::Compact, GridStyle::Expanded, GridStyle::Thumbnails, GridStyle::Compact]);
+    }
+
+    #[test]
+    fn grid_style_defaults_to_today_and_persists() {
+        let old: crate::state::UiState = serde_json::from_str("{}").unwrap();
+        assert_eq!(old.grid_style, GridStyle::Compact, "settings saved before the field load as today's look");
+        let mut ui = crate::state::UiState::default();
+        ui.grid_style = GridStyle::Thumbnails;
+        let saved = serde_json::to_string(&ui).unwrap();
+        assert!(saved.contains("\"gridStyle\":\"thumbnails\""), "{saved}");
+        let back: crate::state::UiState = serde_json::from_str(&saved).unwrap();
+        assert_eq!(back.grid_style, GridStyle::Thumbnails);
+        assert!(back.survey_order.is_empty(), "the survey order is never saved");
+    }
+
+    #[test]
+    fn expanded_cells_show_the_file_capture_size_and_marks() {
+        let source = lightcraft_catalog::Source::File { path: "/grid-style/IMG_0007.jpg".into() };
+        let mut photo = Photo::new(PhotoId(7), source, "IMG_0007.jpg", "JPEG", 6000, 4000, "2026-10-08");
+        photo.captured = Some("2026-10-08T14:03:00".into());
+        photo.rating = 4;
+        photo.flag = Flag::Pick;
+        let lines = expanded_info_lines(&photo, Some("Red"));
+        assert_eq!(lines[0], "IMG_0007.jpg");
+        assert_eq!(lines[1], format!("{} · 6000 × 4000", crate::i18n::display_time("2026-10-08T14:03:00")));
+        assert_eq!(lines[2], format!("★★★★ · {} · Red", crate::i18n::tr("Picked")));
+        photo.captured = None;
+        photo.rating = 0;
+        photo.flag = Flag::None;
+        let bare = expanded_info_lines(&photo, None);
+        assert_eq!(bare[1], format!("{} · 6000 × 4000", crate::i18n::tr("No date")));
+        assert_eq!(bare[2], "", "no rating, flag, label or edit: an empty third line");
+    }
+
+    #[test]
+    fn expanded_cells_reserve_a_caption_under_each_photo() {
+        let plain = layout(&[1.5, 1.5, 1.5], &[], 800.0, 150.0, false, 0.0);
+        let tall = layout(&[1.5, 1.5, 1.5], &[], 800.0, 150.0, false, CAPTION_H);
+        assert!((tall.cells[0].height() - plain.cells[0].height() - CAPTION_H).abs() < 0.01);
+        assert!(tall.height > plain.height);
+        let square = layout(&[1.0; 4], &[], 400.0, 100.0, true, CAPTION_H);
+        assert!((square.cells[0].height() - square.cells[0].width() - CAPTION_H).abs() < 0.01);
+    }
+
+    #[test]
     fn the_same_photo_in_another_source_scrolls_into_view() {
         let id = PhotoId(3);
         let all = lightcraft_engine::LibrarySource::All;
@@ -1216,7 +1316,7 @@ mod tests {
     #[test]
     fn ungrouped_justified_rows_fill_the_width() {
         let aspects = [1.5f32, 1.5, 0.66, 1.0, 1.5, 1.5, 1.5];
-        let l = layout(&aspects, &[], 600.0, 150.0, false);
+        let l = layout(&aspects, &[], 600.0, 150.0, false, 0.0);
         assert!(l.headers.is_empty());
         assert_eq!(l.cells.len(), aspects.len());
         // full rows end at the right edge; rows are at most the target height
@@ -1232,7 +1332,7 @@ mod tests {
     #[test]
     fn groups_start_new_rows_below_their_headers() {
         let aspects = [1.5f32; 7];
-        let l = layout(&aspects, &[(0, 2), (2, 5)], 1000.0, 200.0, false);
+        let l = layout(&aspects, &[(0, 2), (2, 5)], 1000.0, 200.0, false, 0.0);
         assert_eq!(l.headers.len(), 2);
         assert_eq!(l.headers[0].top(), 4.0);
         assert_eq!(l.headers[0].height(), HEADER_H);
@@ -1266,7 +1366,7 @@ mod tests {
         let aspects: Vec<f32> = (0..500).map(|i| [1.5f32, 0.66, 1.0, 1.78][i % 4]).collect();
         let groups = [(0, 7), (7, 200), (207, 1), (208, 292)];
         for square in [false, true] {
-            let l = layout(&aspects, &groups, 900.0, 140.0, square);
+            let l = layout(&aspects, &groups, 900.0, 140.0, square, 0.0);
             let mut next = 0;
             for (k, row) in l.rows.iter().enumerate() {
                 assert_eq!(row.start, next, "rows are contiguous");
@@ -1304,7 +1404,7 @@ mod tests {
 
     #[test]
     fn square_grid_groups_and_auto_levels() {
-        let l = layout(&[1.0; 5], &[(0, 3), (3, 2)], 400.0, 100.0, true);
+        let l = layout(&[1.0; 5], &[(0, 3), (3, 2)], 400.0, 100.0, true, 0.0);
         // 4 columns: group 1 fills 3 cells of a row, group 2 starts a new row
         assert_eq!(l.cells[0].top(), l.cells[2].top());
         assert_eq!(l.cells[3].left(), 4.0);

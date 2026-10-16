@@ -318,7 +318,8 @@ fn matches(i: &egui::InputState, m: Modifiers, k: Key) -> bool {
 
 /// Context meanings of default keys. Brackets rate in grids (Detail keeps resizing the brush), and
 /// `\` toggles the filter bar in grids (Show Original elsewhere). Z picks in grids (Detail zooms), and H
-/// hides the mask pins in the Masking panel (elsewhere it removes the panel). Remapped brush keys retain
+/// hides the mask pins in the Masking panel (elsewhere it removes the panel). J cycles the grid cell style
+/// in the grids (Develop keeps J for clipping). Remapped brush keys retain
 /// their brush action, and a saved assignment of either key to another command takes precedence over this default.
 fn grid_bracket_command(keymap: &Keymap, grid: bool, masking: bool, id: &'static str, shortcut: (Modifiers, Key)) -> Option<&'static str> {
     let command = match (grid, masking, id, shortcut) {
@@ -326,6 +327,7 @@ fn grid_bracket_command(keymap: &Keymap, grid: bool, masking: bool, id: &'static
         (true, _, "brush.larger", (m, Key::CloseBracket)) if m == Modifiers::NONE => "photo.increaseRating",
         (true, _, "view.showOriginal", (m, Key::Backslash)) if m == Modifiers::NONE => "view.filterBar",
         (true, _, "view.zoomToggle", (m, Key::Z)) if m == Modifiers::NONE => "photo.pick",
+        (true, _, "view.clipping", (m, Key::J)) if m == Modifiers::NONE => "view.gridStyle",
         (_, true, "panel.remove", (m, Key::H)) if m == Modifiers::NONE => "view.maskPins",
         _ => return Some(id),
     };
@@ -1022,6 +1024,36 @@ mod tests {
         assert!(collapsed(&h), "S collapses the active photo's stack in the grid");
         key(&mut h, "S", false);
         assert!(!collapsed(&h), "S expands it again");
+    }
+
+    #[test]
+    fn j_cycles_the_grid_cell_style_in_the_grids_and_clips_in_develop() {
+        use crate::state::GridStyle;
+        let mut h = library();
+        assert_eq!(h.app.ui.grid_style, GridStyle::Compact, "today's look is the default");
+        key(&mut h, "J", false);
+        assert_eq!(h.app.ui.grid_style, GridStyle::Expanded);
+        key(&mut h, "J", false);
+        assert_eq!(h.app.ui.grid_style, GridStyle::Thumbnails);
+        key(&mut h, "J", false);
+        assert_eq!(h.app.ui.grid_style, GridStyle::Compact, "the cycle wraps");
+        assert!(!h.app.ui.show_clipping, "J in the grids does not clip");
+        h.app.ui.view = crate::state::ViewMode::Detail;
+        key(&mut h, "J", false);
+        assert!(h.app.ui.show_clipping, "J in Develop toggles clipping");
+        assert_eq!(h.app.ui.grid_style, GridStyle::Compact, "Develop leaves the grid style alone");
+    }
+
+    #[test]
+    fn view_grid_style_takes_a_style_name_or_cycles() {
+        use crate::state::GridStyle;
+        let mut h = library();
+        assert!(h.app.run("view.gridStyle", json!({"style": "bogus"})).is_err());
+        assert_eq!(h.app.ui.grid_style, GridStyle::Compact, "an unknown name changes nothing");
+        assert!(h.app.run("view.gridStyle", json!({"style": "thumbnails"})).is_ok());
+        assert_eq!(h.app.ui.grid_style, GridStyle::Thumbnails);
+        assert!(h.app.run("view.gridStyle", json!({})).is_ok());
+        assert_eq!(h.app.ui.grid_style, GridStyle::Compact, "without a name it cycles: Thumbnails goes to Compact");
     }
 
     #[test]

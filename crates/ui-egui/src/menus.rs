@@ -171,6 +171,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("view.gridInfo", "Grid Info", None, ""),
     ("view.thumbLarger", "Larger Thumbnails", Some("="), "View"),
     ("view.thumbSmaller", "Smaller Thumbnails", Some("-"), "View"),
+    // {style?: compact | expanded | thumbnails}: the grid cell style (cycles when omitted; J in the grids)
+    ("view.gridStyle", "Grid Cell Style", None, ""),
     // {mode?: auto | light | dark}: Appearance Mode (cycles Auto, Light, Dark when omitted; the
     // top bar's appearance button). View ▸ Appearance lists the modes.
     ("view.appearance", "Next Appearance Mode", None, ""),
@@ -431,6 +433,18 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             let step = if id == "view.thumbLarger" { 20.0 } else { -20.0 };
             app.ui.thumb_size = (app.ui.thumb_size + step).clamp(90.0, 480.0);
             Ok(json!({"thumbSize": app.ui.thumb_size}))
+        }
+        "view.gridStyle" => {
+            // {style?: compact | expanded | thumbnails} (cycles when omitted; J in the grids)
+            let next = match p.get("style").and_then(Value::as_str) {
+                Some(name) => match crate::state::GridStyle::parse(name) {
+                    Some(style) => style,
+                    None => return Some(Err(format!("view.gridStyle: unknown `{name}` (compact|expanded|thumbnails)"))),
+                },
+                None => app.ui.grid_style.next(),
+            };
+            app.ui.grid_style = next;
+            Ok(json!({"style": next.name()}))
         }
         "tool.keywordPainter" => {
             // {keyword?}: paint that keyword onto photos in the grid by clicking them; no keyword stops

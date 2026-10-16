@@ -143,8 +143,29 @@ pub fn survey_photos(app: &mut LightcraftApp) -> Vec<PhotoId> {
     if v.is_empty() {
         v.extend(app.session.active());
     }
+    // the order the tiles were dragged into (session only); photos not in it come after the rest
+    let order = &app.ui.survey_order;
+    v.sort_by_key(|x| order.iter().position(|o| o == x).unwrap_or(usize::MAX));
     v.truncate(SURVEY_MAX);
     v
+}
+
+/// `items` with the one at `from` moved to index `to` (clamped to the end).
+pub fn moved<T: Clone>(items: &[T], from: usize, to: usize) -> Vec<T> {
+    let mut out = items.to_vec();
+    if from < out.len() {
+        let item = out.remove(from);
+        out.insert(to.min(out.len()), item);
+    }
+    out
+}
+
+/// Drag-to-reorder in the survey: the tile at `from` moves to index `to`. The order lasts for the session.
+pub fn reorder_survey(app: &mut LightcraftApp, from: usize, to: usize) {
+    let photos = survey_photos(app);
+    if from < photos.len() {
+        app.ui.survey_order = moved(&photos, from, to);
+    }
 }
 
 /// Move the active photo `d` steps within the survey.
@@ -532,10 +553,14 @@ pub fn show_survey(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     let cols = survey_columns(photos.len(), area);
     let rows = photos.len().div_ceil(cols);
     let (cw, ch) = (area.width() / cols as f32, area.height() / rows as f32);
+    let cells: Vec<Rect> = (0..photos.len())
+        .map(|i| {
+            let (c, r) = (i % cols, i / cols);
+            Rect::from_min_size(pos2(area.left() + c as f32 * cw, area.top() + r as f32 * ch), vec2(cw, ch)).shrink(6.0)
+        })
+        .collect();
     for (i, id) in photos.iter().enumerate() {
-        let (c, r) = (i % cols, i / cols);
-        let cell = Rect::from_min_size(pos2(area.left() + c as f32 * cw, area.top() + r as f32 * ch), vec2(cw, ch)).shrink(6.0);
-        let (img, resp) = photo_tile(app, ui, *id, Slot::Compare(i as u8), cell, "", Zoom::Fit);
+        let (img, resp) = photo_tile(app, ui, *id, Slot::Compare(i as u8), cells[i], "", Zoom::Fit);
         if app.session.selection.active == Some(*id) {
             app.image_rect = Some(img);
         }
@@ -555,6 +580,13 @@ pub fn show_survey(app: &mut LightcraftApp, ui: &mut egui::Ui) {
             if xresp.clicked() {
                 let _ = app.run("library.select", json!({"ids": [id.0], "mode": "toggle"}));
             }
+        }
+        // drag a tile onto another to reorder the survey
+        if resp.drag_stopped()
+            && let Some(pointer) = ui.input(|i| i.pointer.interact_pos())
+            && let Some(to) = cells.iter().position(|c| c.contains(pointer))
+        {
+            reorder_survey(app, i, to);
         }
         resp.context_menu(|ui| super::grid::context_menu(app, ui, *id));
     }

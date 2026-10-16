@@ -113,6 +113,50 @@ pub enum GridBadges {
     Never,
 }
 
+/// How grid cells show their information (J in the grids cycles them).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GridStyle {
+    /// Thumbnails with badges on hover, on the selection and on rated or flagged photos (today's look).
+    #[default]
+    Compact,
+    /// Each cell gets a caption under the photo: file name, capture time and size, then rating,
+    /// flag, colour label and edit state.
+    Expanded,
+    /// Photos only: no badges, captions or label footers.
+    Thumbnails,
+}
+
+impl GridStyle {
+    /// The next style in J's cycle: Compact, Expanded, Thumbnails, then Compact again.
+    pub fn next(self) -> Self {
+        match self {
+            GridStyle::Compact => GridStyle::Expanded,
+            GridStyle::Expanded => GridStyle::Thumbnails,
+            GridStyle::Thumbnails => GridStyle::Compact,
+        }
+    }
+
+    /// The name `view.gridStyle {style}` takes.
+    pub fn name(self) -> &'static str {
+        match self {
+            GridStyle::Compact => "compact",
+            GridStyle::Expanded => "expanded",
+            GridStyle::Thumbnails => "thumbnails",
+        }
+    }
+
+    /// The style a `view.gridStyle` name stands for.
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "compact" => Some(GridStyle::Compact),
+            "expanded" => Some(GridStyle::Expanded),
+            "thumbnails" => Some(GridStyle::Thumbnails),
+            _ => None,
+        }
+    }
+}
+
 /// The loupe's info overlay (Cmd+I cycles Off → Info 1 → Info 2; I in the full-screen preview). Its
 /// lines are set in View Options (`crate::info_overlay::ViewOptions`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -570,6 +614,12 @@ pub struct UiState {
     pub zoom_anim: bool,
     pub before_after: BeforeAfter,
     pub thumb_size: f32,
+    /// How grid cells show their information (J cycles Compact, Expanded and Thumbnails only).
+    pub grid_style: GridStyle,
+    /// The survey's photo order after drag-to-reorder. Session only, never saved; photos not listed
+    /// keep the view order after the listed ones.
+    #[serde(skip)]
+    pub survey_order: Vec<lightcraft_catalog::PhotoId>,
     /// Open Edit sections by id.
     pub open_sections: Vec<String>,
     /// Open flyouts (curve, mixer, grading…).
@@ -1135,6 +1185,8 @@ impl Default for UiState {
             zoom_anim: false,
             before_after: BeforeAfter::Off,
             thumb_size: 220.0,
+            grid_style: GridStyle::Compact,
+            survey_order: Vec::new(),
             open_sections: vec!["light".into()],
             open_flyouts: vec![],
             single_panel: false,
