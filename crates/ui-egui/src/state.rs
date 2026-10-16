@@ -720,6 +720,9 @@ pub struct UiState {
     pub unnamed_anchor: Option<usize>,
     #[serde(skip)]
     pub unnamed_focus: bool,
+    /// The look-alike groups shown expanded into their faces, keyed by each group's first face (photo, region).
+    #[serde(skip)]
+    pub expanded_groups: std::collections::HashSet<(u64, usize)>,
     /// Local sidebar locations hidden with “Remove from Local” (folders on disk are untouched).
     pub hidden_locations: Vec<String>,
     /// Copies opened in an external editor this session (reloaded when the window is focused
@@ -1247,6 +1250,7 @@ impl Default for UiState {
             unnamed_name: String::new(),
             unnamed_anchor: None,
             unnamed_focus: false,
+            expanded_groups: Default::default(),
             hidden_locations: Vec::new(),
             dragging_control: None,
             external_edits: Vec::new(),

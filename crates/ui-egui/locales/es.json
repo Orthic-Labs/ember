@@ -2184,6 +2184,7 @@
   "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Ahorro de energía prefiere la GPU integrada, si la hay. Un cambio se aplica la próxima vez que se inicie la GPU.",
   "Look-alike groups": "Grupos de rostros parecidos",
   "Name this person": "Nombrar a esta persona",
+  "Show all faces": "Mostrar todas las caras",
   "GPU adapter": "Adaptador de GPU",
   "Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts.": "Elige la GPU por nombre si este equipo tiene varias. Un cambio se aplica la próxima vez que se inicie la GPU.",
   "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.": "Esta carpeta no está disponible (¿unidad desconectada?). Las miniaturas se guardan en la biblioteca hasta que vuelva o elijas otra carpeta.",

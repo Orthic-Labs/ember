@@ -42,6 +42,11 @@ pub fn tile_edge(thumb: f32) -> f32 {
     between(thumb, 56.0, 180.0)
 }
 
+/// The height of a look-alike group shown expanded: its head row, then its faces in rows of `cols`.
+fn group_expanded_h(faces: usize, cols: usize, edge: f32) -> f32 {
+    super::unnamed::EXPANDED_HEAD_H + faces.div_ceil(cols.max(1)) as f32 * (edge + GAP)
+}
+
 /// How many `edge`-wide cells (with the gap between them) fit across `width`.
 pub(super) fn columns(width: f32, edge: f32) -> usize {
     (((width - PAD * 2.0 + GAP) / (edge + GAP)).floor() as usize).max(1)
@@ -110,8 +115,10 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         let named_h = if people.is_empty() { 40.0 } else { PAD + rows as f32 * row_h };
         let (tile_cols, tile_row) = (columns(width, tile), tile + GAP);
         let tile_rows = unnamed.faces.len().div_ceil(tile_cols);
-        let group_row = tile + GROUP_LABEL_H + GAP;
-        let groups_h = if unnamed.clusters.is_empty() { 0.0 } else { GROUPS_H + unnamed.clusters.len().div_ceil(tile_cols) as f32 * group_row };
+        // a stacked group is one cell; an expanded one shows all its faces in a full-width block
+        let sizes: Vec<(usize, bool)> = unnamed.clusters.iter().map(|c| (c.faces.len(), super::unnamed::is_expanded(app, c))).collect();
+        let (group_at, groups_grid_h) = super::unnamed::group_grid(&sizes, tile_cols, tile, GAP, GROUP_LABEL_H);
+        let groups_h = if unnamed.clusters.is_empty() { 0.0 } else { GROUPS_H + groups_grid_h };
         let section_top = named_h + 6.0;
         let grid_top = section_top + SECTION_H + groups_h;
         let (area, _) = ui.allocate_exact_size(vec2(width, grid_top + tile_rows as f32 * tile_row + PAD), Sense::hover());
@@ -149,18 +156,22 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
             let title = crate::i18n::tr("Look-alike groups");
             ui.painter().text(pos2(area.left() + PAD, heading + 14.0), Align2::LEFT_CENTER, title, t.semibold(13.0), t.text);
             let groups_top = heading + GROUPS_H;
-            for (i, group) in unnamed.clusters.iter().enumerate() {
-                let min = pos2(area.left() + PAD + (i % tile_cols) as f32 * (tile + GAP), groups_top + (i / tile_cols) as f32 * group_row);
-                super::unnamed::cluster_card(app, ui, group, Rect::from_min_size(min, vec2(tile, tile + GROUP_LABEL_H)), tile, ppp);
+            for (group, &(col, top)) in unnamed.clusters.iter().zip(&group_at) {
+                let min = pos2(area.left() + PAD + col as f32 * (tile + GAP), groups_top + top);
+                let h =
+                    if super::unnamed::is_expanded(app, group) { group_expanded_h(group.faces.len(), tile_cols, tile) } else { tile + GROUP_LABEL_H };
+                super::unnamed::cluster_card(app, ui, group, Rect::from_min_size(min, vec2(tile, h)), tile, ppp, tile_cols);
             }
         }
         for row in visible(grid_top, tile_rows, tile_row) {
             for col in 0..tile_cols {
                 let i = row * tile_cols + col;
-                let Some(face) = unnamed.faces.get(i) else { break };
+                if i >= unnamed.faces.len() {
+                    break;
+                }
                 shown += 1;
                 let min = area.min + vec2(PAD + col as f32 * (tile + GAP), grid_top + row as f32 * tile_row);
-                super::unnamed::tile(app, ui, &unnamed, i, Rect::from_min_size(min, vec2(tile, tile)), face, ppp);
+                super::unnamed::tile(app, ui, &unnamed.faces, i, Rect::from_min_size(min, vec2(tile, tile)), ppp, "unnamed");
             }
         }
         // the picture cache keeps all of them (a fixed budget would evict and re-request the same few every frame)

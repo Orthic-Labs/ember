@@ -2184,6 +2184,7 @@
   "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "節能會優先使用內建顯示卡（如果有）。變更將在下次啟動 GPU 時生效。",
   "Look-alike groups": "相似臉孔分組",
   "Name this person": "為此人命名",
+  "Show all faces": "顯示所有臉孔",
   "GPU adapter": "GPU 介面卡",
   "Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts.": "如果這台機器有多張 GPU，依名稱選擇。變更會在下次啟動 GPU 時生效。",
   "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.": "此資料夾無法使用（磁碟機是否已中斷連接？）。在它恢復或你選擇其他資料夾之前，縮圖會快取在資料庫中。",

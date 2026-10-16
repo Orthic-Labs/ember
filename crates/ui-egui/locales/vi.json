@@ -2185,6 +2185,7 @@
   "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Tiết kiệm điện ưu tiên GPU tích hợp nếu có. Thay đổi có hiệu lực lần GPU khởi động tiếp theo.",
   "Look-alike groups": "Nhóm khuôn mặt giống nhau",
   "Name this person": "Đặt tên cho người này",
+  "Show all faces": "Hiện tất cả khuôn mặt",
   "GPU adapter": "Bộ điều hợp GPU",
   "Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts.": "Chọn GPU theo tên khi máy này có nhiều hơn một GPU. Thay đổi có hiệu lực lần GPU khởi động tiếp theo.",
   "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.": "Thư mục này không khả dụng (ổ đĩa đã ngắt kết nối?). Ảnh thu nhỏ được lưu đệm trong thư viện cho đến khi thư mục trở lại hoặc bạn chọn thư mục khác.",

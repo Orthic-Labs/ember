@@ -2185,6 +2185,7 @@
   "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Экономия энергии предпочитает встроенный GPU, если он есть. Изменение действует при следующем запуске GPU.",
   "Look-alike groups": "Группы похожих лиц",
   "Name this person": "Назвать этого человека",
+  "Show all faces": "Показать все лица",
   "GPU adapter": "Адаптер GPU",
   "Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts.": "Выберите GPU по имени, если в этой системе их несколько. Изменение вступит в силу при следующем запуске GPU.",
   "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.": "Эта папка недоступна (диск отключён?). Миниатюры кэшируются в библиотеке, пока папка не вернётся или вы не выберете другую.",

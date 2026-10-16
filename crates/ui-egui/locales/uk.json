@@ -2185,6 +2185,7 @@
   "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Економія енергії надає перевагу вбудованому GPU, якщо він є. Зміна набуде чинності під час наступного запуску GPU.",
   "Look-alike groups": "Групи схожих облич",
   "Name this person": "Назвати цю особу",
+  "Show all faces": "Показати всі обличчя",
   "GPU adapter": "Адаптер GPU",
   "Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts.": "Оберіть GPU за назвою, якщо в цій системі їх кілька. Зміна набуде чинності при наступному запуску GPU.",
   "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.": "Цю папку недоступно (диск відключено?). Мініатюри кешуються в бібліотеці, доки папка не повернеться або ви не оберете іншу.",

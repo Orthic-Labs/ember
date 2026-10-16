@@ -101,16 +101,21 @@ pub fn faces(app: &mut LightcraftApp, now: f64) -> Arc<Unnamed> {
     // what was selected and has since been named (or removed) is no longer selected
     let present: std::collections::HashSet<(u64, usize)> = list.faces.iter().map(|f| (f.photo, f.index)).collect();
     app.ui.unnamed_selected.retain(|k| present.contains(k));
+    // an expanded group whose first face is gone (named, or no longer a group) is collapsed again
+    if !list.clusters.is_empty() {
+        let firsts: std::collections::HashSet<(u64, usize)> = list.clusters.iter().filter_map(group_key).collect();
+        app.ui.expanded_groups.retain(|k| firsts.contains(k));
+    }
     app.caches.unnamed = Some((rev, indexed, now, list.clone()));
     list
 }
 
-/// A click on face number `i` of `list`: select it (or deselect it), or with Shift every face from the last one clicked.
-fn click(app: &mut LightcraftApp, list: &Unnamed, i: usize, shift: bool) {
-    let Some(f) = list.faces.get(i) else { return };
+/// A click on face number `i` of `faces`: select it (or deselect it), or with Shift every face from the last one clicked.
+fn click(app: &mut LightcraftApp, faces: &[UnnamedFace], i: usize, shift: bool) {
+    let Some(f) = faces.get(i) else { return };
     match app.ui.unnamed_anchor.filter(|_| shift) {
         Some(a) => {
-            for f in list.faces.get(a.min(i)..=a.max(i)).unwrap_or_default() {
+            for f in faces.get(a.min(i)..=a.max(i)).unwrap_or_default() {
                 app.ui.unnamed_selected.insert((f.photo, f.index));
             }
         }
@@ -133,13 +138,74 @@ pub fn reject_request(f: &UnnamedFace) -> Option<Value> {
     Some(json!({"id": f.photo, "index": f.index, "name": who}))
 }
 
+/// The key of a look-alike group in `UiState::expanded_groups`: its first face (photo, region).
+pub fn group_key(c: &Cluster) -> Option<(u64, usize)> {
+    c.faces.first().map(|f| (f.photo, f.index))
+}
+
+/// Flip a look-alike group between stacked and expanded in `expanded`; returns whether it is expanded now.
+pub fn toggle_expanded(expanded: &mut std::collections::HashSet<(u64, usize)>, key: (u64, usize)) -> bool {
+    if expanded.remove(&key) {
+        false
+    } else {
+        expanded.insert(key);
+        true
+    }
+}
+
+/// Whether `c` is shown expanded into its faces.
+pub fn is_expanded(app: &LightcraftApp, c: &Cluster) -> bool {
+    group_key(c).is_some_and(|k| app.ui.expanded_groups.contains(&k))
+}
+
+/// The head row of an expanded group: its name button, Collapse, and the count, above its faces.
+pub const EXPANDED_HEAD_H: f32 = 30.0;
+
+/// Where each look-alike group goes in the groups' grid, `cols` wide. Each entry is (faces, expanded). A stacked group
+/// takes one cell of `tile` width and `tile + label_h` height; an expanded group starts a new row and takes the full width,
+/// its faces in rows of `cols`. Returns each group's (column, top offset) and the height of the whole grid.
+pub fn group_grid(groups: &[(usize, bool)], cols: usize, tile: f32, gap: f32, label_h: f32) -> (Vec<(usize, f32)>, f32) {
+    let cols = cols.max(1);
+    let stacked_h = tile + label_h + gap;
+    let (mut at, mut col, mut y) = (Vec::with_capacity(groups.len()), 0usize, 0f32);
+    for &(faces, expanded) in groups {
+        if expanded {
+            if col != 0 {
+                y += stacked_h;
+                col = 0;
+            }
+            at.push((0, y));
+            y += EXPANDED_HEAD_H + faces.div_ceil(cols) as f32 * (tile + gap);
+        } else {
+            at.push((col, y));
+            col += 1;
+            if col == cols {
+                col = 0;
+                y += stacked_h;
+            }
+        }
+    }
+    if col != 0 {
+        y += stacked_h;
+    }
+    (at, y)
+}
+
+/// Flip a group between stacked and expanded (the count on its picture, or Collapse).
+fn toggle_group(app: &mut LightcraftApp, cluster: &Cluster) {
+    if let Some(k) = group_key(cluster) {
+        toggle_expanded(&mut app.ui.expanded_groups, k);
+    }
+}
+
 /// A small × in the top right of `picture`, drawn only on a face that has a suggested name: a click marks the face "not
-/// this person" for that name, so the suggestion moves on and a look-alike group no longer holds it.
-fn reject_mark(app: &mut LightcraftApp, ui: &mut egui::Ui, picture: Rect, f: &UnnamedFace) {
+/// this person" for that name, so the suggestion moves on and a look-alike group no longer holds it. `ns` names the
+/// widget (the grid's tiles and an expanded group's faces each have their own), so no two share an id.
+fn reject_mark(app: &mut LightcraftApp, ui: &mut egui::Ui, picture: Rect, f: &UnnamedFace, ns: &str) {
     let (Some(request), Some(who)) = (reject_request(f), f.suggestion.as_ref()) else { return };
     let r = Rect::from_min_size(pos2(picture.right() - 22.0, picture.top() + 4.0), vec2(18.0, 18.0));
-    let resp = ui.interact(r, egui::Id::new(("unnamed-reject", f.photo, f.index)), Sense::click());
-    register(ui.ctx(), format!("unnamed-reject:{}:{}", f.photo, f.index), r);
+    let resp = ui.interact(r, egui::Id::new(("reject", ns, f.photo, f.index)), Sense::click());
+    register(ui.ctx(), format!("{ns}-reject:{}:{}", f.photo, f.index), r);
     let hot = resp.hovered();
     let p = ui.painter();
     p.rect_filled(r, 4.0, Color32::from_black_alpha(if hot { 210 } else { 160 }));
@@ -289,8 +355,12 @@ fn select_group(app: &mut LightcraftApp, cluster: &Cluster) {
 }
 
 /// One look-alike group in the People view, in a cell `edge` wide: its top face with the next ones stacked behind it, how
-/// many faces it has, and a button that selects them all for naming.
-pub fn cluster_card(app: &mut LightcraftApp, ui: &mut egui::Ui, cluster: &Cluster, r: Rect, edge: f32, ppp: f32) {
+/// many faces it has, and a button that selects them all for naming. A click on the count shows every face instead (an
+/// expanded group, drawn by `cluster_expanded`); `cols` is how many face cells fit across the view.
+pub fn cluster_card(app: &mut LightcraftApp, ui: &mut egui::Ui, cluster: &Cluster, r: Rect, edge: f32, ppp: f32, cols: usize) {
+    if is_expanded(app, cluster) {
+        return cluster_expanded(app, ui, cluster, r, edge, ppp, cols);
+    }
     let t = Tokens::get(ui.ctx());
     let Some(top) = cluster.faces.first() else { return };
     let picture = Rect::from_min_size(r.min, vec2(edge, edge));
@@ -314,8 +384,15 @@ pub fn cluster_card(app: &mut LightcraftApp, ui: &mut egui::Ui, cluster: &Cluste
     p.galley(pill.min + vec2(5.0, 3.0), g, Color32::WHITE);
     let label = crate::i18n::tr_format!("{n} faces", n = cluster.faces.len());
     p.text(pos2(picture.left() + 2.0, picture.bottom() + 18.0), Align2::LEFT_CENTER, label, t.font(12.0), t.text_dim);
+    // the count opens the group: every face in a row
+    let count = ui.interact(pill, egui::Id::new(("group-count", top.photo, top.index)), Sense::click());
+    register(ui.ctx(), format!("unnamed:groupCount:{}:{}", top.photo, top.index), pill);
+    if count.on_hover_text(crate::i18n::tr("Show all faces")).clicked() {
+        toggle_group(app, cluster);
+        return;
+    }
     // the group's top face is the one picture on the card, so the × for "not this person" is on it
-    reject_mark(app, ui, picture, top);
+    reject_mark(app, ui, picture, top, "unnamed-group");
     let b = ui.put(
         Rect::from_min_size(pos2(picture.left(), picture.bottom() + 26.0), vec2(edge.min(160.0), 24.0)),
         egui::Button::new(crate::i18n::tr("Name this person")),
@@ -326,18 +403,46 @@ pub fn cluster_card(app: &mut LightcraftApp, ui: &mut egui::Ui, cluster: &Cluste
     }
 }
 
-/// One face tile, number `i` of `list`.
-pub fn tile(app: &mut LightcraftApp, ui: &mut egui::Ui, list: &Unnamed, i: usize, r: Rect, f: &UnnamedFace, ppp: f32) {
+/// A look-alike group shown expanded in a block `r` wide: a head row (Name this person, Collapse, the count), then every
+/// face in rows of `cols`, each a tile like the Unnamed faces (click to select, a suggested name's × and accept).
+fn cluster_expanded(app: &mut LightcraftApp, ui: &mut egui::Ui, cluster: &Cluster, r: Rect, edge: f32, ppp: f32, cols: usize) {
+    let t = Tokens::get(ui.ctx());
+    let Some(key) = group_key(cluster) else { return };
+    let name_w = edge.min(160.0);
+    let b = ui.put(Rect::from_min_size(pos2(r.left(), r.top() + 2.0), vec2(name_w, 24.0)), egui::Button::new(crate::i18n::tr("Name this person")));
+    register(ui.ctx(), format!("unnamed:group:{}:{}", key.0, key.1), b.rect);
+    if b.clicked() {
+        select_group(app, cluster);
+    }
+    let c =
+        ui.put(Rect::from_min_size(pos2(r.left() + name_w + 8.0, r.top() + 2.0), vec2(96.0, 24.0)), egui::Button::new(crate::i18n::tr("Collapse")));
+    register(ui.ctx(), format!("unnamed:groupCollapse:{}:{}", key.0, key.1), c.rect);
+    if c.clicked() {
+        return toggle_group(app, cluster);
+    }
+    let n = crate::i18n::tr_format!("{n} faces", n = cluster.faces.len());
+    ui.painter().text(pos2(r.left() + name_w + 112.0, r.top() + EXPANDED_HEAD_H / 2.0), Align2::LEFT_CENTER, n, t.font(12.0), t.text_dim);
+    let step = edge + super::people::TILE_GAP;
+    for (j, face) in cluster.faces.iter().enumerate() {
+        let min = r.min + vec2((j % cols) as f32 * step, EXPANDED_HEAD_H + (j / cols) as f32 * step);
+        tile(app, ui, &cluster.faces, j, Rect::from_min_size(min, vec2(edge, edge)), ppp, "unnamed-group");
+    }
+}
+
+/// One face tile, number `i` of `faces` (the Unnamed faces, or one look-alike group's). `ns` names its widgets: "unnamed"
+/// for the grid, so a face shown in both places still has one id in each.
+pub fn tile(app: &mut LightcraftApp, ui: &mut egui::Ui, faces: &[UnnamedFace], i: usize, r: Rect, ppp: f32, ns: &str) {
+    let Some(f) = faces.get(i) else { return };
     let t = Tokens::get(ui.ctx());
     let key = (f.photo, f.index);
     let selected = app.ui.unnamed_selected.contains(&key);
-    let resp = ui.interact(r, egui::Id::new(("unnamed-face", f.photo, f.index)), Sense::click());
-    register(ui.ctx(), format!("unnamed-face:{}:{}", f.photo, f.index), r);
+    let resp = ui.interact(r, egui::Id::new(("face", ns, f.photo, f.index)), Sense::click());
+    register(ui.ctx(), format!("{ns}-face:{}:{}", f.photo, f.index), r);
     // a suggested name along the bottom: a click accepts it for this face (added after the tile, so it wins there)
     let strip = Rect::from_min_max(pos2(r.left(), r.bottom() - 20.0), r.right_bottom());
-    let accept = f.suggestion.as_ref().map(|_| ui.interact(strip, egui::Id::new(("unnamed-accept", f.photo, f.index)), Sense::click()));
+    let accept = f.suggestion.as_ref().map(|_| ui.interact(strip, egui::Id::new(("accept", ns, f.photo, f.index)), Sense::click()));
     if let Some(a) = &accept {
-        register(ui.ctx(), format!("unnamed-accept:{}:{}", f.photo, f.index), a.rect);
+        register(ui.ctx(), format!("{ns}-accept:{}:{}", f.photo, f.index), a.rect);
     }
     let hovered = resp.hovered() || accept.as_ref().is_some_and(|a| a.hovered());
     let p = ui.painter();
@@ -363,7 +468,7 @@ pub fn tile(app: &mut LightcraftApp, ui: &mut egui::Ui, list: &Unnamed, i: usize
         let label = super::people::fit(p, name, t.font(11.5), r.width() - 18.0);
         p.text(pos2(r.left() + 5.0, strip.center().y), Align2::LEFT_CENTER, format!("{label}?"), t.font(11.5), Color32::from_gray(225));
     }
-    reject_mark(app, ui, r, f);
+    reject_mark(app, ui, r, f, ns);
     if let (Some(a), Some(who)) = (&accept, &f.suggestion)
         && a.clone().on_hover_text(format!("Name this face {who}")).clicked()
     {
@@ -372,7 +477,7 @@ pub fn tile(app: &mut LightcraftApp, ui: &mut egui::Ui, list: &Unnamed, i: usize
     }
     if resp.clicked() {
         let shift = ui.input(|i| i.modifiers.shift);
-        click(app, list, i, shift);
+        click(app, faces, i, shift);
     }
 }
 
@@ -427,5 +532,58 @@ mod tests {
         };
         assert_eq!(reject_request(&face(Some("Jane Doe"))), Some(json!({"id": 7, "index": 2, "name": "Jane Doe"})));
         assert_eq!(reject_request(&face(None)), None, "no suggestion, so nothing to reject");
+    }
+
+    #[test]
+    fn expanding_and_collapsing_a_group_flips_only_that_group() {
+        let (a, b) = ((3u64, 0usize), (9u64, 4usize));
+        let mut expanded = std::collections::HashSet::new();
+        assert!(toggle_expanded(&mut expanded, a), "stacked, so the first click expands it");
+        assert!(!toggle_expanded(&mut expanded, a), "expanded, so the next click collapses it");
+        assert!(expanded.is_empty());
+        toggle_expanded(&mut expanded, a);
+        toggle_expanded(&mut expanded, b);
+        assert_eq!(expanded.len(), 2, "each group keeps its own state");
+        toggle_expanded(&mut expanded, a);
+        assert_eq!(expanded.iter().copied().collect::<Vec<_>>(), vec![b], "collapsing a leaves b expanded");
+    }
+
+    #[test]
+    fn a_group_is_keyed_by_its_first_face() {
+        let face = |photo: u64, index: usize| UnnamedFace {
+            photo,
+            index,
+            view: lightcraft_geom::Rect { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 },
+            suggestion: None,
+        };
+        let group = Cluster { faces: vec![face(5, 1), face(6, 2)] };
+        assert_eq!(group_key(&group), Some((5, 1)));
+        assert_eq!(group_key(&Cluster::default()), None);
+    }
+
+    #[test]
+    fn a_request_is_built_for_a_face_that_is_not_the_top_one() {
+        let face = |photo: u64, index: usize, suggestion: Option<&str>| UnnamedFace {
+            photo,
+            index,
+            view: lightcraft_geom::Rect { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 },
+            suggestion: suggestion.map(str::to_string),
+        };
+        // the group's top face has no suggestion; its second face does, and that one is the request's
+        let group = Cluster { faces: vec![face(1, 0, None), face(9, 3, Some("Jane Doe")), face(4, 2, Some("Jane Doe"))] };
+        assert_eq!(reject_request(&group.faces[1]), Some(json!({"id": 9, "index": 3, "name": "Jane Doe"})));
+        assert_eq!(reject_request(&group.faces[0]), None);
+    }
+
+    #[test]
+    fn stacked_groups_share_rows_and_an_expanded_group_takes_a_full_row() {
+        // three stacked groups in two columns: two on the first row, one on the second
+        let (at, h) = group_grid(&[(2, false), (3, false), (2, false)], 2, 100.0, 14.0, 52.0);
+        assert_eq!(at, vec![(0, 0.0), (1, 0.0), (0, 166.0)]);
+        assert_eq!(h, 332.0);
+        // an expanded group between them starts a row of its own, and the stacked one after it goes below it
+        let (at, _) = group_grid(&[(2, false), (5, true), (2, false)], 2, 100.0, 14.0, 52.0);
+        assert_eq!(at, vec![(0, 0.0), (0, 166.0), (0, 166.0 + 30.0 + 3.0 * 114.0)]);
+        assert_eq!(group_grid(&[], 2, 100.0, 14.0, 52.0), (Vec::new(), 0.0));
     }
 }

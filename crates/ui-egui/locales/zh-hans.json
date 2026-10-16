@@ -2186,6 +2186,7 @@
   "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "节能会优先使用集成显卡（如果有）。更改将在下次启动 GPU 时生效。",
   "Look-alike groups": "相似面孔分组",
   "Name this person": "为此人命名",
+  "Show all faces": "显示所有人脸",
   "GPU adapter": "GPU 适配器",
   "Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts.": "如果这台机器有多块 GPU，按名称选择。更改将在下次启动 GPU 时生效。",
   "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.": "此文件夹不可用（驱动器是否已断开？）。在它恢复或你选择其他文件夹之前，缩略图会缓存在资源库中。",
