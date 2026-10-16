@@ -180,7 +180,10 @@ pub fn auto_tone_of(pop: &ScenePopulation, info: &SourceInfo) -> AutoTone {
 
     let colour_headroom = ((0.16 - chroma_p90) / 0.16).clamp(0.0, 1.0);
     let vibrance = (14.0 * colour_headroom).round();
-    let saturation = (3.0 - 8.0 * (1.0 - colour_headroom)).round();
+    // Contrast raises rendered chroma: on a scene without colour headroom, take back what the
+    // fitted contrast adds (v5's darker key fits more contrast; #28).
+    let contrast_chroma = 0.1 * shape.contrast.max(0.0) as f32;
+    let saturation = (3.0 - (8.0 + contrast_chroma) * (1.0 - colour_headroom)).round();
     AutoTone {
         exposure,
         contrast: shape.contrast,
