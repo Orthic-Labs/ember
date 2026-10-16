@@ -2,7 +2,7 @@
 //! `<canvas id="lightcraft_canvas">`, wires the file picker and drag-and-drop, and turns exports
 //! into downloads.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -24,6 +24,8 @@ use crate::wire::ThumbIndex;
 use crate::workers::{THUMB_INDEX, Workers};
 
 const ACCEPT: &str = ".jpg,.jpeg,.png,.tif,.tiff,.webp,.dng,.cr2,.nef,.arw,.psd,.jxl,.gif,.bmp";
+/// Preset files the browser picker offers (the desktop's set, without `.cube` LUT profiles).
+const PRESET_ACCEPT: &str = ".lcpreset,.xmp,.lrtemplate,.zip,.dng,.lmp,.mplumpack";
 
 /// After a failed save, wait this long before trying again (ms).
 const SAVE_RETRY_MS: f64 = 2000.0;
@@ -139,6 +141,42 @@ fn open_picker(originals: Originals, backend: Option<Backend>, ctx: egui::Contex
     input.click();
 }
 
+/// Show the browser's open dialog for preset files; they are read into [`PRESET_FILES`] and
+/// imported on the next frame.
+fn open_preset_picker(ctx: egui::Context) {
+    let Some(doc) = window().and_then(|w| w.document()) else { return };
+    let Ok(input) = doc.create_element("input").map(|e| e.unchecked_into::<web_sys::HtmlInputElement>()) else { return };
+    input.set_type("file");
+    input.set_multiple(true);
+    input.set_accept(PRESET_ACCEPT);
+    let inp = input.clone();
+    let on_change = Closure::<dyn FnMut()>::new(move || {
+        if let Some(files) = inp.files() {
+            for i in 0..files.length() {
+                if let Some(f) = files.get(i) {
+                    wasm_bindgen_futures::spawn_local(read_preset_file(f, ctx.clone()));
+                }
+            }
+        }
+    });
+    input.set_onchange(Some(on_change.as_ref().unchecked_ref()));
+    on_change.forget();
+    input.click();
+}
+
+/// Read a picked preset file's bytes into [`PRESET_FILES`].
+async fn read_preset_file(file: web_sys::File, ctx: egui::Context) {
+    let name = file.name();
+    match wasm_bindgen_futures::JsFuture::from(file.array_buffer()).await {
+        Ok(buf) => {
+            let bytes = js_sys::Uint8Array::new(&buf).to_vec();
+            PRESET_FILES.with(|q| q.borrow_mut().push((name, bytes)));
+            ctx.request_repaint();
+        }
+        Err(e) => notice(format!("{name} could not be read: {e:?}")),
+    }
+}
+
 /// Offer `bytes` as a download named after `path`.
 fn download(path: &str, bytes: &[u8]) -> Result<(), String> {
     let e = |e: JsValue| format!("download failed: {e:?}");
@@ -166,6 +204,7 @@ fn download(path: &str, bytes: &[u8]) -> Result<(), String> {
 
 fn services(originals: Originals, backend: Option<Backend>, files: Files, frozen: Rc<Cell<bool>>, ctx: egui::Context) -> Services {
     let (backup_backend, backup_files) = (backend.clone(), files);
+    let presets_ctx = ctx.clone();
     let restore_backend = backend.clone();
     Services {
         picker: None,
@@ -208,8 +247,11 @@ fn services(originals: Originals, backend: Option<Backend>, files: Files, frozen
             Vec::new() // files arrive asynchronously and are imported on a later frame
         })),
         pick_denoise_model: None,
-        // Preset files: browser pickers are asynchronous; not wired on the web yet.
-        pick_preset_files: None,
+        // browser pickers answer later: the picked files are imported on a later frame
+        pick_preset_files: Some(Box::new(move || {
+            open_preset_picker(presets_ctx.clone());
+            Vec::new()
+        })),
         pick_tracklog: None,
         pick_lightroom_catalog: None,
         // Face models need a folder to live in; the web has none.
@@ -575,6 +617,8 @@ thread_local! {
     /// Commands from JavaScript ([`command`]), run on the next frame.
     static INBOX: std::cell::RefCell<Vec<(String, String, Reply)>> = const { std::cell::RefCell::new(Vec::new()) };
     static CTX: std::cell::RefCell<Option<egui::Context>> = const { std::cell::RefCell::new(None) };
+    /// Preset files read from the browser's picker, imported on the next frame.
+    static PRESET_FILES: RefCell<Vec<(String, Vec<u8>)>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Run a command by id from JavaScript (automation, tests): `await command("library.info", "{}")`
@@ -607,6 +651,33 @@ impl WebApp {
         })
     }
 
+    /// Preset files picked in the browser (File ▸ Import Profiles & Presets…): added to the library,
+    /// with a notice saying what was imported and which files could not be read.
+    fn import_preset_files(&mut self) {
+        let picked = PRESET_FILES.with(|q| std::mem::take(&mut *q.borrow_mut()));
+        if picked.is_empty() {
+            return;
+        }
+        let (mut added, mut skipped, mut unreadable) = (0usize, 0usize, Vec::new());
+        for (name, bytes) in picked {
+            match self.app.session.import_preset_bytes(&name, &bytes, None) {
+                Ok(r) => {
+                    added += r.imported;
+                    skipped += r.skipped;
+                }
+                Err(e) => unreadable.push(format!("{name} ({e})")),
+            }
+        }
+        let mut msg = format!("Imported {added} preset{}", if added == 1 { "" } else { "s" });
+        if skipped > 0 {
+            msg.push_str(&format!(", {skipped} already here"));
+        }
+        if !unreadable.is_empty() {
+            msg.push_str(&format!(", not readable: {}", unreadable.join(", ")));
+        }
+        notice(msg);
+    }
+
     fn run_inbox(&mut self) {
         let inbox = INBOX.with(|q| std::mem::take(&mut *q.borrow_mut()));
         for (id, params, (resolve, reject)) in inbox {
@@ -627,6 +698,7 @@ impl eframe::App for WebApp {
             self.app.ui.toast = Some((text, now + NOTICE_SECS, None));
         }
         self.run_inbox();
+        self.import_preset_files();
         self.import_dropped(ctx);
         self.load_originals(ctx);
         if let Some(w) = &self.workers {

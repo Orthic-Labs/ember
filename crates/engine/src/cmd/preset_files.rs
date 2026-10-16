@@ -69,6 +69,10 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     if chosen.is_empty() {
         return Err(bad("preset.export", "no presets to export (create one first, or pass ids/group)"));
     }
+    // no file system (the browser): the caller saves the text, e.g. as a download
+    if p.get("content").and_then(Value::as_bool).unwrap_or(false) {
+        return Ok(json!({"path": path.display().to_string(), "count": chosen.len(), "content": to_lcpreset(&chosen)}));
+    }
     if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).map_err(|e| crate::EngineError::Other(format!("{}: {e}", dir.display())))?;
     }

@@ -1821,8 +1821,11 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         }
         "file.exportPresets" => {
             let group = p.get("group").and_then(Value::as_str).map(str::to_string);
+            // a host with no save dialog (the web) hands the file to the browser as a download
+            let browser_download = p.get("path").is_none() && app.services.save_preset_file.is_none() && app.services.write.is_some();
             let path = match p.get("path").and_then(Value::as_str) {
                 Some(x) => Some(x.to_string()),
+                None if browser_download => Some(format!("{}.lcpreset", group.as_deref().unwrap_or("Ember Presets"))),
                 None => {
                     let name = format!("{}.lcpreset", group.as_deref().unwrap_or("Ember Presets"));
                     let req = PickRequest::save(crate::i18n::tr("Export Presets"), crate::i18n::tr("Ember Preset"), &["lcpreset"], name.clone());
@@ -1841,7 +1844,20 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             if let Some(ids) = p.get("ids") {
                 params["ids"] = ids.clone();
             }
+            if browser_download {
+                params["content"] = json!(true);
+            }
             let r = app.session.execute("preset.export", &params).map_err(|e| e.to_string());
+            let r = match r {
+                Ok(mut v) if browser_download => {
+                    let text = v.as_object_mut().and_then(|o| o.remove("content")).and_then(|c| c.as_str().map(str::to_string)).unwrap_or_default();
+                    match app.services.write.as_mut() {
+                        Some(write) => write(path.as_str(), text.as_bytes()).map(|()| v),
+                        None => Err("no file writer on this platform".to_string()),
+                    }
+                }
+                other => other,
+            };
             if let Ok(v) = &r {
                 app.toast(&ctx, crate::i18n::tr_format!("Exported {} preset{}", v["count"], if v["count"] == 1 { "" } else { "s" }));
             }

@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::Session;
+use crate::preset_import::read_presets;
 
 /// File extension of Ember preset files.
 pub const LCPRESET_EXT: &str = "lcpreset";
@@ -206,6 +207,37 @@ impl Session {
         }
         added
     }
+
+    /// Import one preset file from its bytes, for hosts with no file system to read a path from
+    /// (the browser's file pickers). Reads and records the presets as `preset.import` does for a
+    /// file; `group`, when given, replaces each preset's group.
+    pub fn import_preset_bytes(&mut self, name: &str, bytes: &[u8], group: Option<&str>) -> Result<PresetBytesImport, String> {
+        let list = read_presets(name, bytes, None)?;
+        let mut out = PresetBytesImport::default();
+        let mut presets = Vec::with_capacity(list.len());
+        for mut it in list {
+            if let Some(g) = group {
+                it.preset.group = g.to_string();
+            }
+            out.unmapped.extend(it.unmapped);
+            presets.push(it.preset);
+        }
+        let total = presets.len();
+        out.imported = self.add_presets(presets).len();
+        out.skipped = total.saturating_sub(out.imported);
+        Ok(out)
+    }
+}
+
+/// What [`Session::import_preset_bytes`] did with one file.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct PresetBytesImport {
+    /// Presets added.
+    pub imported: usize,
+    /// Presets not added: identical ones were already here.
+    pub skipped: usize,
+    /// Settings with no counterpart in Ember, as the reader names them.
+    pub unmapped: Vec<String>,
 }
 
 fn p(group: &str, id: &str, name: &str, settings: serde_json::Value) -> Preset {
@@ -660,6 +692,31 @@ mod tests {
         let r = s.execute("preset.import", &json!({"paths": [file.to_string_lossy()]})).unwrap();
         assert_eq!((r["skipped"].as_u64(), s.presets.len()), (Some(2), n));
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn preset_bytes_round_trip_without_a_file_system() {
+        let mut s = Session::with_demo();
+        s.execute("preset.create", &json!({"name": "Bright", "group": "Travel"})).unwrap();
+        // the export hands back the file's text instead of writing it (the browser downloads it)
+        let r = s.execute("preset.export", &json!({"path": "Travel.lcpreset", "content": true, "group": "Travel"})).unwrap();
+        assert_eq!(r["count"], 1);
+        let text = r["content"].as_str().unwrap_or_default().to_string();
+        assert!(text.contains("Bright"), "{text}");
+        let mut t = Session::new();
+        let got = t.import_preset_bytes("Travel.lcpreset", text.as_bytes(), None).unwrap();
+        assert_eq!((got.imported, got.skipped), (1, 0));
+        assert!(t.presets.iter().any(|p| p.name == "Bright" && p.group == "Travel" && !p.builtin));
+        // the same file again: identical presets are skipped, nothing duplicated
+        let n = t.presets.len();
+        let again = t.import_preset_bytes("Travel.lcpreset", text.as_bytes(), None).unwrap();
+        assert_eq!((again.imported, again.skipped, t.presets.len()), (0, 1, n));
+        // a group given by the caller replaces the file's
+        let moved = t.import_preset_bytes("Travel.lcpreset", text.as_bytes(), Some("Road")).unwrap();
+        assert_eq!(moved.imported, 1);
+        assert!(t.presets.iter().any(|p| p.name == "Bright" && p.group == "Road"));
+        // bytes that are no preset are an error, not a panic
+        assert!(t.import_preset_bytes("Broken.lcpreset", b"not a preset", None).is_err());
     }
 
     #[test]

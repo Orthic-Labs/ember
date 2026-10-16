@@ -148,6 +148,13 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
 - **Export downloads the file.** *Export…* (<kbd>⌘⇧E</kbd>) runs the same `app.export` path as
   the desktop app (`lightcraft_engine::export`: JPEG/PNG/TIFF/WebP, sizing, naming). The host's
   `write` service hands each file to the browser as a download instead of writing it to disk.
+- **Preset files.** *File ▸ Import Profiles & Presets…* opens the browser's file picker for
+  `.lcpreset`, `.xmp`, `.lrtemplate`, `.zip`, `.dng`, Luminar `.lmp` / `.mplumpack`; the bytes are
+  read and imported by the same reader as the desktop (`Session::import_preset_bytes`), and a
+  notice reports what was added, what was already there and what could not be read. *Export
+  Presets…* (or the Presets panel's export) hands the `.lcpreset` to the browser as a download
+  (`preset.export` with `content`). `.cube` LUT profiles and point-curve presets aren't wired to
+  the browser picker yet.
 - **Automation.** `await lightcraft.command("library.info", "{}")` runs any engine or UI command
   by id on the next frame and resolves to the JSON result (`web.stats` reports storage, workers
   and the render queue). This is how the headless-Chrome checks drive the page.
@@ -165,7 +172,6 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
   (`originals/<hash>`; they are kept, and included in backups); restored-over libraries stay in
   storage until the site's data is cleared; backups larger than 4 GB need zip64, which isn't
   written yet.
-- **Preset files** (import/export `.json`) aren't wired to browser pickers yet.
 - **Control channel / MCP.** These are desktop-only, because they need a TCP socket.
 - **AVIF export** is untested in the browser; it's the one encoder that may not be wasm-safe.
 - **JPEG XL export** is native only: the encoder (`jixel`) starts threads of its own, which wasm32 has not got; the
