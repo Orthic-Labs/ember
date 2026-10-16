@@ -2242,5 +2242,10 @@
   "Previous slide": "이전 슬라이드",
   "Next slide": "다음 슬라이드",
   "Slide": "슬라이드",
-  "Select photos to show.": "보여 줄 사진을 선택하세요."
+  "Select photos to show.": "보여 줄 사진을 선택하세요.",
+  "Set Location": "위치 설정",
+  "Only photos without a position": "위치가 없는 사진만",
+  "Drag photos onto the map to give them a GPS position.": "사진을 지도로 끌어다 놓으면 GPS 위치가 지정됩니다.",
+  "photo placed on the map": "장의 사진을 지도에 배치했습니다",
+  "photos placed on the map": "장의 사진을 지도에 배치했습니다"
 }

@@ -2242,5 +2242,10 @@
   "Previous slide": "Попередній слайд",
   "Next slide": "Наступний слайд",
   "Slide": "Слайд",
-  "Select photos to show.": "Виберіть фото для показу."
+  "Select photos to show.": "Виберіть фото для показу.",
+  "Set Location": "Задати місцезнаходження",
+  "Only photos without a position": "Лише фото без позиції",
+  "Drag photos onto the map to give them a GPS position.": "Перетягніть фото на карту, щоб задати їм GPS-позицію.",
+  "photo placed on the map": "фото розміщено на карті",
+  "photos placed on the map": "фото розміщено на карті"
 }

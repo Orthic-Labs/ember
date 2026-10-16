@@ -1,14 +1,15 @@
-//! The Map module's commands (#83, #114): `map.markers`, the photos with a GPS position grouped into the markers
-//! the map draws at a zoom. The view itself (tiles, pan, zoom) is the frontend's; the geometry is [`crate::map`].
+//! The Map module's commands (#83, #114, #115): `map.markers`, the photos with a GPS position grouped into the markers
+//! the map draws at a zoom, and `photo.setLocation`, which a photo dropped on the map uses. The view itself (tiles,
+//! pan, zoom) is the frontend's; the geometry is [`crate::map`].
 //!
 //! Sources: own design.
 
 use std::collections::HashSet;
 
-use lightcraft_catalog::PhotoId;
+use lightcraft_catalog::{Op, PhotoId};
 use serde_json::{Value, json};
 
-use super::{CommandSpec, always, bad, bool_or, cmd, f64_or};
+use super::{CommandSpec, always, bad, bool_or, cmd, f64_or, f64_req};
 use crate::map::{CLUSTER_CELL_PX, MAX_ZOOM, cluster, is_position};
 use crate::{Result, Session};
 
@@ -53,14 +54,55 @@ fn markers(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"photos": points.len(), "markers": markers}))
 }
 
+/// `photo.setLocation`: `{lat, lon, ids?}` sets the GPS position of the photos (the selection when no `ids`), or
+/// `{clear: true, ids?}` removes it. One undo step for all of them. Place names are left as they are (Fill Location
+/// reads them again from the new position).
+fn set_location(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "photo.setLocation";
+    let position = if bool_or(p, "clear", false) {
+        None
+    } else {
+        let (lat, lon) = (f64_req(p, "lat", C)?, f64_req(p, "lon", C)?);
+        if !is_position(lat, lon) {
+            return Err(bad(C, format!("{lat}, {lon} is not a GPS position (latitude -90 to 90, longitude -180 to 180)")));
+        }
+        // seven decimals are a centimetre, as in the track log tagger
+        Some(((lat * 1e7).round() / 1e7, (lon * 1e7).round() / 1e7))
+    };
+    let mut seen = HashSet::new();
+    let ids: Vec<PhotoId> = s.targets(p)?.into_iter().filter(|id| seen.insert(*id)).collect();
+    if ids.is_empty() {
+        return Err(bad(C, "no photos: select some or give `ids`"));
+    }
+    if let Some(missing) = ids.iter().find(|id| s.catalog.photo(**id).is_none()) {
+        return Err(bad(C, format!("no photo {}", missing.0)));
+    }
+    let mut ops = Vec::new();
+    for id in &ids {
+        let Some(photo) = s.catalog.photo(*id) else { continue };
+        if photo.meta.gps != position {
+            let mut meta = photo.meta.clone();
+            meta.gps = position;
+            ops.push(Op::SetMeta { id: *id, meta: Box::new(meta) });
+        }
+    }
+    let changed = ops.len();
+    if changed > 0 {
+        s.commit(if position.is_some() { "Set Location" } else { "Remove Location" }, Op::Batch { ops })?;
+    }
+    Ok(json!({"changed": changed, "photos": ids.len(), "lat": position.map(|g| g.0), "lon": position.map(|g| g.1)}))
+}
+
 pub fn specs() -> Vec<CommandSpec> {
-    vec![cmd!(query "map.markers", "Map Markers", [], None, "{zoom?: 0 to 19 (3), cellPx?: pixels within which photos share a marker (56), selected?: bool (only the selected photos)} → {photos, markers: [{lat, lon, count, ids}]} — the shown photos that have a GPS position, grouped into the markers the Map draws at that zoom (ids: the first 200)", always, markers)]
+    vec![
+        cmd!("photo.setLocation", "Set Location", [], None, "{lat, lon, ids?} or {clear: true, ids?} → {changed, photos, lat, lon} — sets the GPS position of the photos (the selection when no `ids`), or removes it with `clear`; one undo step for all of them. Place names are left as they are. A photo dropped on the Map uses it", always, set_location),
+        cmd!(query "map.markers", "Map Markers", [], None, "{zoom?: 0 to 19 (3), cellPx?: pixels within which photos share a marker (56), selected?: bool (only the selected photos)} → {photos, markers: [{lat, lon, count, ids}]} — the shown photos that have a GPS position, grouped into the markers the Map draws at that zoom (ids: the first 200)", always, markers),
+    ]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lightcraft_catalog::Op;
 
     fn put(s: &mut Session, id: PhotoId, gps: Option<(f64, f64)>) {
         let mut meta = s.catalog.photo(id).unwrap().meta.clone();
@@ -93,6 +135,83 @@ mod tests {
         assert_eq!(counts(&mut s, json!({"zoom": 8, "selected": true})), vec![1, 1]);
         let first = s.execute("map.markers", &json!({"zoom": 8, "selected": true})).unwrap();
         assert!(first["markers"][0]["ids"].as_array().unwrap().len() == 1);
+    }
+
+    fn gps(s: &Session, id: PhotoId) -> Option<(f64, f64)> {
+        s.catalog.photo(id).unwrap().meta.gps
+    }
+
+    #[test]
+    fn a_location_is_set_on_every_photo_in_one_undo_step() {
+        let mut s = Session::with_demo();
+        let ids = s.visible_cloned();
+        let (a, b, c) = (ids[0], ids[1], ids[2]);
+        put(&mut s, c, Some((1.0, 2.0)));
+        let undo_before = s.undo.len();
+        let r = s.execute("photo.setLocation", &json!({"ids": [a.0, b.0, a.0], "lat": 48.856_614_999, "lon": 2.352_222_2})).unwrap();
+        assert_eq!((r["changed"].as_u64(), r["photos"].as_u64()), (Some(2), Some(2)), "a repeated id counts once");
+        assert_eq!(gps(&s, a), Some((48.856_615, 2.352_222_2)), "rounded to seven decimals");
+        assert_eq!(gps(&s, a), gps(&s, b));
+        assert_eq!(gps(&s, c), Some((1.0, 2.0)), "a photo that was not named is left alone");
+        assert_eq!(s.undo.len(), undo_before + 1, "one history entry for both photos");
+        // the map sees them at once
+        assert_eq!(s.execute("map.markers", &json!({"zoom": 10})).unwrap()["photos"], 3);
+        // one undo takes both back, one redo puts both back
+        s.undo_step().unwrap();
+        assert_eq!((gps(&s, a), gps(&s, b), gps(&s, c)), (None, None, Some((1.0, 2.0))));
+        s.redo_step().unwrap();
+        assert_eq!(gps(&s, a), Some((48.856_615, 2.352_222_2)));
+        assert_eq!(gps(&s, b), gps(&s, a));
+    }
+
+    #[test]
+    fn the_selection_is_the_default_and_clear_removes_the_position_with_undo() {
+        let mut s = Session::with_demo();
+        let ids = s.visible_cloned();
+        s.execute("library.select", &json!({"ids": [ids[3].0]})).unwrap();
+        s.execute("photo.setLocation", &json!({"lat": -33.8688, "lon": 151.2093})).unwrap();
+        assert_eq!(gps(&s, ids[3]), Some((-33.8688, 151.2093)));
+        assert_eq!(gps(&s, ids[0]), None);
+        let r = s.execute("photo.setLocation", &json!({"clear": true})).unwrap();
+        assert_eq!((r["changed"].as_u64(), r["lat"].is_null()), (Some(1), true));
+        assert_eq!(gps(&s, ids[3]), None);
+        s.undo_step().unwrap();
+        assert_eq!(gps(&s, ids[3]), Some((-33.8688, 151.2093)), "undo brings the position back");
+    }
+
+    #[test]
+    fn setting_the_position_a_photo_already_has_changes_nothing_and_adds_no_history() {
+        let mut s = Session::with_demo();
+        let id = s.visible_cloned()[0];
+        put(&mut s, id, Some((10.0, 20.0)));
+        let undo_before = s.undo.len();
+        let r = s.execute("photo.setLocation", &json!({"ids": [id.0], "lat": 10.0, "lon": 20.0})).unwrap();
+        assert_eq!(r["changed"], 0);
+        assert_eq!(s.undo.len(), undo_before);
+    }
+
+    #[test]
+    fn a_position_that_is_not_on_earth_or_photos_that_do_not_exist_are_refused_and_nothing_changes() {
+        let mut s = Session::with_demo();
+        let ids = s.visible_cloned();
+        let undo_before = s.undo.len();
+        for bad in [
+            json!({"ids": [ids[0].0], "lat": 91.0, "lon": 0.0}),
+            json!({"ids": [ids[0].0], "lat": 0.0, "lon": -181.0}),
+            json!({"ids": [ids[0].0], "lat": 5.0}),
+            json!({"ids": [ids[0].0], "lat": "north", "lon": 5.0}),
+            json!({"ids": "x", "lat": 5.0, "lon": 5.0}),
+            json!({"ids": [], "lat": 5.0, "lon": 5.0}),
+            json!({"ids": [ids[0].0, 987_654], "lat": 5.0, "lon": 5.0}),
+        ] {
+            assert!(s.execute("photo.setLocation", &bad).is_err(), "{bad} must be refused");
+        }
+        // nothing selected, nothing named
+        s.selection.ids.clear();
+        s.selection.active = None;
+        assert!(s.execute("photo.setLocation", &json!({"lat": 5.0, "lon": 5.0})).is_err());
+        assert_eq!(s.undo.len(), undo_before);
+        assert_eq!(gps(&s, ids[0]), None);
     }
 
     #[test]

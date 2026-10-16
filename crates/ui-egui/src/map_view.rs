@@ -1,6 +1,8 @@
 //! The Classic Map view (`map.view`): the photos that have a GPS position as markers on a Web Mercator map you
 //! pan (drag) and zoom (wheel, pinch, + / −, double-click), with the saved locations drawn as circles. Markers
-//! merge into one numbered cluster at low zoom; a click selects the photos of a marker.
+//! merge into one numbered cluster at low zoom; a click selects the photos of a marker. A strip of thumbnails
+//! under the map is where photos are dragged from onto the map to give them a GPS position (`photo.setLocation`,
+//! one undo step).
 //!
 //! The map is offline by default: a plain latitude / longitude grid, and no network request of any kind. Tiles
 //! come only when the user turned **Online map** on in Settings (`map.online`); they are fetched by
@@ -32,6 +34,10 @@ const MAX_TEXTURES: usize = 192;
 const GRID_MIN_PX: f64 = 80.0;
 /// The position list is rebuilt this often even when nothing seems to have changed.
 const POINTS_REFRESH: Duration = Duration::from_secs(1);
+/// The strip under the map: its height, the header line's, and a thumbnail's width (points).
+const STRIP_H: f32 = 118.0;
+const STRIP_HEAD: f32 = 22.0;
+const STRIP_CELL: f32 = 92.0;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod tiles {
@@ -111,6 +117,11 @@ pub struct Run {
     textures: Textures,
     /// The tile address the textures belong to.
     textures_for: String,
+    /// The photos the strip lists (the shown ones, or only those without a position).
+    strip: Vec<PhotoId>,
+    only_untagged: bool,
+    /// The photos being dragged from the strip, until the pointer is let go.
+    drag: Option<Vec<PhotoId>>,
 }
 
 impl Run {
@@ -179,8 +190,8 @@ pub fn marker_at(view: &View, clusters: &[Cluster], pointer: (f64, f64), radius:
 
 /// Rebuild the list of photos with a position when the library, the filter or an edit changed it.
 fn refresh_points(app: &mut LightcraftApp, run: &mut Run) {
-    let (shown, _) = app.session.visible_shared();
-    let key = (shown, app.session.undo.len(), app.session.redo.len());
+    let (generation, _) = app.session.visible_shared();
+    let key = (generation, app.session.undo.len(), app.session.redo.len());
     if run.points_key == Some(key) && run.points_at.is_some_and(|t| t.elapsed() < POINTS_REFRESH) {
         return;
     }
@@ -191,6 +202,12 @@ fn refresh_points(app: &mut LightcraftApp, run: &mut Run) {
     }
     run.points_key = Some(key);
     run.points_at = Some(web_time::Instant::now());
+    let shown = app.session.visible_cloned();
+    run.strip = if run.only_untagged {
+        shown.into_iter().filter(|id| app.session.catalog.photo(*id).is_some_and(|p| p.meta.gps.is_none())).collect()
+    } else {
+        shown
+    };
 }
 
 /// Markers for the current zoom (in quarter levels, so a wheel turn doesn't regroup every frame).
@@ -241,7 +258,10 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.label(egui::RichText::new(format!("{n} {what}")).color(t.text_dim));
     });
     ui.add_space(4.0);
-    let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
+    let total = ui.available_size();
+    let (rect, response) = ui.allocate_exact_size(vec2(total.x, (total.y - STRIP_H - 6.0).max(0.0)), Sense::click_and_drag());
+    ui.add_space(6.0);
+    let (strip_rect, _) = ui.allocate_exact_size(vec2(total.x, STRIP_H), Sense::hover());
     if rect.width() < 8.0 || rect.height() < 8.0 {
         app.ui.classic_map = (!close).then_some(run);
         return;
@@ -299,8 +319,144 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         };
         let _ = response.on_hover_text_at_pointer(text);
     }
+    strip(app, ctx, ui, &t, &mut run, strip_rect);
+    drag(app, ctx, &mut run, rect, &t);
     if !close {
         app.ui.classic_map = Some(run);
+    }
+}
+
+/// The photos under the map: thumbnails to drag onto it. One that already has a position wears a pin.
+fn strip(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui, t: &Tokens, run: &mut Run, rect: Rect) {
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, 0.0, t.canvas);
+    let tr = crate::i18n::tr;
+    let head = Rect::from_min_size(rect.min, vec2(rect.width(), STRIP_HEAD));
+    let mut head_ui = ui.new_child(egui::UiBuilder::new().max_rect(head).layout(egui::Layout::left_to_right(egui::Align::Center)));
+    let r = head_ui.checkbox(&mut run.only_untagged, tr("Only photos without a position"));
+    register(ctx, "check:mapOnlyUntagged", r.rect);
+    if r.changed() {
+        run.points_at = None;
+    }
+    head_ui.label(egui::RichText::new(tr("Drag photos onto the map to give them a GPS position.")).size(11.0).color(t.text_dim));
+    let body = Rect::from_min_max(pos2(rect.left(), rect.top() + STRIP_HEAD), rect.max);
+    let ids = std::mem::take(&mut run.strip);
+    if ids.is_empty() {
+        painter.text(body.center(), Align2::CENTER_CENTER, tr("No photos"), t.font(12.5), t.text_dim);
+        run.strip = ids;
+        return;
+    }
+    let size = (256.0 * ctx.pixels_per_point().min(2.0) / 2.0) as usize * 2;
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(body));
+    child.style_mut().always_scroll_the_only_direction = true;
+    egui::ScrollArea::horizontal().id_salt("map-film").auto_shrink([false, false]).show_viewport(&mut child, |ui, vp| {
+        let (area, _) = ui.allocate_exact_size(vec2(ids.len() as f32 * STRIP_CELL, (body.height() - 14.0).max(0.0)), Sense::hover());
+        for (i, id) in ids.iter().enumerate() {
+            let left = i as f32 * STRIP_CELL;
+            if left + STRIP_CELL < vp.left() - STRIP_CELL || left > vp.right() + STRIP_CELL {
+                continue;
+            }
+            let cell = Rect::from_min_size(pos2(area.left() + left, area.top()), vec2(STRIP_CELL, area.height()));
+            let resp = ui.interact(cell, egui::Id::new(("map-film", id.0)), Sense::click_and_drag());
+            register(ui.ctx(), format!("mapfilm:{}", id.0), cell);
+            let selected = app.session.selection.state_of(*id) != lightcraft_engine::SelectionState::NotSelected;
+            let base = if selected {
+                t.cell_selected
+            } else if resp.hovered() {
+                t.cell_selected.gamma_multiply(0.6)
+            } else {
+                t.canvas
+            };
+            ui.painter().rect_filled(cell, 0.0, base);
+            crate::panels::grid::request_thumb(app, *id, size, 8);
+            let room = cell.shrink(6.0);
+            if let Some(tex) = app.renderer.thumb(*id) {
+                let [tw, th] = tex.size;
+                let fit = (room.width() / tw.max(1) as f32).min(room.height() / th.max(1) as f32);
+                let image = Rect::from_center_size(room.center(), vec2(tw as f32 * fit, th as f32 * fit));
+                ui.painter().image(tex.tex.id(), image, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+            }
+            if app.session.catalog.photo(*id).is_some_and(|p| p.meta.gps.is_some()) {
+                let pin = pos2(cell.right() - 10.0, cell.top() + 10.0);
+                ui.painter().circle_filled(pin, 5.0, t.accent);
+                ui.painter().circle_stroke(pin, 5.0, Stroke::new(1.5, Color32::WHITE));
+            }
+            if resp.drag_started() {
+                run.drag = Some(drag_ids(app, *id));
+            }
+            if resp.clicked() {
+                let m = ui.input(|i| i.modifiers);
+                let mode = if m.command {
+                    "toggle"
+                } else if m.shift {
+                    "range"
+                } else {
+                    "replace"
+                };
+                if let Err(e) = app.run("library.select", json!({"ids": [id.0], "mode": mode})) {
+                    app.toast_error(ui.ctx(), e);
+                }
+            }
+        }
+    });
+    run.strip = ids;
+}
+
+/// The photos a drag from the strip carries: the whole selection when the photo is part of it, else the photo alone.
+pub fn drag_ids(app: &LightcraftApp, id: PhotoId) -> Vec<PhotoId> {
+    let selected = app.session.selected();
+    if selected.contains(&id) { selected } else { vec![id] }
+}
+
+/// Give `ids` the position under `pos` on the map shown in `rect` (`photo.setLocation`: one undo step). `None` when
+/// `pos` is not on the map.
+pub fn drop_on_map(app: &mut LightcraftApp, view: &View, rect: Rect, ids: &[PhotoId], pos: Pos2) -> Option<Result<Value, String>> {
+    if ids.is_empty() || !rect.contains(pos) {
+        return None;
+    }
+    let (lat, lon) = view.locate(f64::from(pos.x - rect.center().x), f64::from(pos.y - rect.center().y));
+    let ids: Vec<u64> = ids.iter().map(|id| id.0).collect();
+    Some(app.run("photo.setLocation", json!({"ids": ids, "lat": lat, "lon": lon})))
+}
+
+/// While photos are dragged from the strip a badge with their number follows the pointer and, over the map, a ring
+/// with the position they would get; let go over the map and they are placed there.
+fn drag(app: &mut LightcraftApp, ctx: &egui::Context, run: &mut Run, map_rect: Rect, t: &Tokens) {
+    let Some(ids) = run.drag.clone() else { return };
+    let (down, pointer) = ctx.input(|i| (i.pointer.any_down(), i.pointer.latest_pos()));
+    if down {
+        ctx.request_repaint();
+        ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
+        if let Some(p) = pointer {
+            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("map-drag")));
+            if map_rect.contains(p) {
+                let (lat, lon) = run.view.locate(f64::from(p.x - map_rect.center().x), f64::from(p.y - map_rect.center().y));
+                painter.circle_stroke(p, 14.0, Stroke::new(2.0, t.accent));
+                painter.circle_filled(p, 3.0, t.accent);
+                let place = painter.layout_no_wrap(format!("{lat:.5}, {lon:.5}"), t.font(11.5), Color32::WHITE);
+                let pill = Rect::from_min_size(p + vec2(20.0, -30.0), place.size() + vec2(12.0, 6.0));
+                painter.rect_filled(pill, 4.0, Color32::from_black_alpha(190));
+                painter.galley(pill.min + vec2(6.0, 3.0), place, Color32::WHITE);
+            }
+            let count = painter.layout_no_wrap(ids.len().to_string(), t.semibold(11.0), Color32::WHITE);
+            let badge = Rect::from_center_size(p + vec2(12.0, 14.0), vec2(count.size().x + 14.0, 18.0));
+            painter.rect_filled(badge, 9.0, t.accent);
+            painter.galley(badge.center() - count.size() / 2.0, count, Color32::WHITE);
+        }
+        return;
+    }
+    run.drag = None;
+    let Some(p) = pointer else { return };
+    match drop_on_map(app, &run.view, map_rect, &ids, p) {
+        Some(Ok(done)) => {
+            let n = done["changed"].as_u64().unwrap_or(0);
+            if n > 0 {
+                let what = crate::i18n::tr(if n == 1 { "photo placed on the map" } else { "photos placed on the map" });
+                app.toast(ctx, format!("{n} {what}"));
+            }
+        }
+        Some(Err(e)) => app.toast_error(ctx, e),
+        None => {}
     }
 }
 
@@ -394,6 +550,10 @@ fn paint(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui, t: &To
             let colour = if chosen { Color32::BLACK } else { Color32::WHITE };
             painter.text(at, Align2::CENTER_CENTER, cluster.ids.len().to_string(), t.semibold(10.5), colour);
         }
+    }
+
+    if run.drag.is_some() {
+        painter.rect_stroke(rect, 0.0, Stroke::new(3.0, t.accent), StrokeKind::Inside);
     }
 
     // notices
@@ -653,6 +813,74 @@ mod tests {
         assert_eq!(marker_at(&view, &clusters, (dx + 3.0, dy - 2.0), HIT_R), Some(1));
         assert_eq!(marker_at(&view, &clusters, (dx / 2.0, dy / 2.0 + 60.0), HIT_R), None);
         assert_eq!(marker_at(&view, &[], (0.0, 0.0), HIT_R), None);
+    }
+
+    #[test]
+    fn a_photo_dropped_on_the_map_gets_the_position_under_the_pointer_in_one_undo_step() {
+        let mut a = app();
+        let ids = a.session.visible_cloned();
+        let view = View::new(10.0, 20.0, 8.0);
+        let rect = Rect::from_min_size(pos2(100.0, 50.0), vec2(800.0, 600.0));
+        let pos = pos2(100.0 + 400.0 + 120.0, 50.0 + 300.0 - 40.0);
+        let (lat, lon) = view.locate(120.0, -40.0);
+        let undo_before = a.session.undo.len();
+        let r = drop_on_map(&mut a, &view, rect, &[ids[0], ids[1]], pos).expect("on the map").unwrap();
+        assert_eq!(r["changed"], 2);
+        for id in [ids[0], ids[1]] {
+            let (la, lo) = a.session.catalog.photo(id).unwrap().meta.gps.expect("has a position");
+            assert!((la - lat).abs() < 1e-6 && (lo - lon).abs() < 1e-6, "{la},{lo} is not {lat},{lon}");
+        }
+        assert_eq!(a.session.undo.len(), undo_before + 1, "both photos are one history entry");
+        a.session.undo_step().unwrap();
+        assert!(ids[..2].iter().all(|id| a.session.catalog.photo(*id).unwrap().meta.gps.is_none()), "one undo takes both back");
+        // the centre of the map is the centre of the view
+        drop_on_map(&mut a, &view, rect, &[ids[2]], rect.center()).expect("on the map").unwrap();
+        let (la, lo) = a.session.catalog.photo(ids[2]).unwrap().meta.gps.unwrap();
+        assert!((la - 10.0).abs() < 1e-6 && (lo - 20.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_drop_off_the_map_or_of_nothing_changes_nothing() {
+        let mut a = app();
+        let ids = a.session.visible_cloned();
+        let view = View::new(10.0, 20.0, 8.0);
+        let rect = Rect::from_min_size(pos2(100.0, 50.0), vec2(800.0, 600.0));
+        let undo_before = a.session.undo.len();
+        assert!(drop_on_map(&mut a, &view, rect, &[ids[0]], pos2(50.0, 300.0)).is_none(), "left of the map is the strip's side, not the map");
+        assert!(drop_on_map(&mut a, &view, rect, &[ids[0]], pos2(500.0, 700.0)).is_none(), "below the map");
+        assert!(drop_on_map(&mut a, &view, rect, &[], rect.center()).is_none(), "nothing dragged");
+        assert_eq!(a.session.undo.len(), undo_before);
+        assert!(a.session.catalog.photo(ids[0]).unwrap().meta.gps.is_none());
+        // a photo that is not in the library is refused with the engine's reason
+        let err = drop_on_map(&mut a, &view, rect, &[PhotoId(987_654)], rect.center()).expect("on the map").unwrap_err();
+        assert!(err.contains("987654"), "{err}");
+    }
+
+    #[test]
+    fn dragging_a_selected_photo_carries_the_selection_and_any_other_photo_goes_alone() {
+        let mut a = app();
+        let ids = a.session.visible_cloned();
+        a.run("library.select", json!({"ids": [ids[0].0, ids[1].0]})).unwrap();
+        assert_eq!(drag_ids(&a, ids[1]), vec![ids[0], ids[1]]);
+        assert_eq!(drag_ids(&a, ids[3]), vec![ids[3]]);
+    }
+
+    #[test]
+    fn the_strip_can_list_only_the_photos_without_a_position() {
+        use lightcraft_catalog::Op;
+        let mut a = app();
+        let ids = a.session.visible_cloned();
+        let mut meta = a.session.catalog.photo(ids[0]).unwrap().meta.clone();
+        meta.gps = Some((1.0, 2.0));
+        a.session.commit("test", Op::SetMeta { id: ids[0], meta: Box::new(meta) }).unwrap();
+        let mut run = Run::default();
+        refresh_points(&mut a, &mut run);
+        assert_eq!(run.strip, ids, "every shown photo is on the strip");
+        run.only_untagged = true;
+        run.points_at = None;
+        refresh_points(&mut a, &mut run);
+        assert_eq!(run.strip.len(), ids.len() - 1);
+        assert!(!run.strip.contains(&ids[0]));
     }
 
     #[test]
