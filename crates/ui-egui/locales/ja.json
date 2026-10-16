@@ -2253,5 +2253,10 @@
   "Previous slide": "前のスライド",
   "Next slide": "次のスライド",
   "Slide": "スライド",
-  "Select photos to show.": "表示する写真を選択してください。"
+  "Select photos to show.": "表示する写真を選択してください。",
+  "Set Location": "位置を設定",
+  "Only photos without a position": "位置情報のない写真のみ",
+  "Drag photos onto the map to give them a GPS position.": "写真を地図にドラッグすると、GPS位置情報が設定されます。",
+  "photo placed on the map": "枚の写真を地図に配置しました",
+  "photos placed on the map": "枚の写真を地図に配置しました"
 }

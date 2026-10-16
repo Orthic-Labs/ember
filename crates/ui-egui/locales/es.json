@@ -2250,5 +2250,10 @@
   "Previous slide": "Diapositiva anterior",
   "Next slide": "Diapositiva siguiente",
   "Slide": "Diapositiva",
-  "Select photos to show.": "Selecciona fotos para mostrar."
+  "Select photos to show.": "Selecciona fotos para mostrar.",
+  "Set Location": "Definir ubicación",
+  "Only photos without a position": "Solo fotos sin posición",
+  "Drag photos onto the map to give them a GPS position.": "Arrastra fotos al mapa para darles una posición GPS.",
+  "photo placed on the map": "foto colocada en el mapa",
+  "photos placed on the map": "fotos colocadas en el mapa"
 }

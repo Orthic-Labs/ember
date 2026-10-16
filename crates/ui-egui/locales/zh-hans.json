@@ -2252,5 +2252,10 @@
   "Previous slide": "上一张",
   "Next slide": "下一张",
   "Slide": "幻灯片",
-  "Select photos to show.": "请选择要放映的照片。"
+  "Select photos to show.": "请选择要放映的照片。",
+  "Set Location": "设置位置",
+  "Only photos without a position": "仅显示无位置的照片",
+  "Drag photos onto the map to give them a GPS position.": "将照片拖到地图上，即可为其设置 GPS 位置。",
+  "photo placed on the map": "张照片已放到地图上",
+  "photos placed on the map": "张照片已放到地图上"
 }
