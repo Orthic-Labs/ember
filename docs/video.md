@@ -1,9 +1,9 @@
 # Video
 
-*Last updated: 2026-10-17 (foundation: probe and poster frame; trim; clip and frame export; issues #73, #74, #76, #77).*
+*Last updated: 2026-10-17 (foundation: probe and poster frame; trim; clip and frame export; silent playback; issues #73, #74, #76, #77).*
 
-Ember catalogues videos, shows a poster frame for each in the grid, the loupe and exports, and lets you choose which frame that is.
-Playback comes next (silent first, #73); this page records what exists and how it is built.
+Ember catalogues videos, shows a poster frame for each in the grid, the loupe and exports, lets you choose which frame that is, and
+plays a clip silently in the loupe. Audio comes next (#73); this page records what exists and how it is built.
 
 ## How it works
 
@@ -15,6 +15,7 @@ runner), behind the `lightcraft-video` crate (layer L1):
 | --- | --- |
 | `probe(path) -> VideoInfo` | duration, size, display rotation, codec, frame rate and creation time of the first video stream (`ffprobe` JSON) |
 | `frame_at(path, t, max_size) -> Rgba8` | one upright frame at `t` seconds, at most `max_size` along its long edge (never enlarged, never above 4096) |
+| `stream_frames(path, start_t, max_size, fps_cap) -> FrameStream` | the clip's frames from `start_t` as raw RGBA at its own rate (at most `fps_cap`), in real time, on a bounded queue; dropping the stream kills the child |
 | `available()` | whether the sidecar is found and verified here |
 
 A binary runs only after `rightkit-ffmpeg` has matched its content SHA-256 to the approved catalog row for this platform and
@@ -63,6 +64,35 @@ the sidecar; tests that need a real clip skip without it.
   so no existing settings hash changes; once set, the thumbnail cache key changes and the decoded sources are dropped.
 - Frames larger than a thumbnail show as "Reading Video Frame" in the activity stack, with a stop button that kills the child process.
 
+## Silent playback
+
+Space (or the play button) plays a video in the loupe; the poster frame shows until then. There is no audio yet.
+
+- **Stream.** `lightcraft_video::stream_frames(path, start_t, max_size, fps_cap)` (`stream_frames_sized` when the size and rate are known from
+  the probe, one process fewer) runs `ffmpeg -re -ss <start> -i <file> -an -vf fps=<n>,scale=<w>:<h> -pix_fmt rgba -f rawvideo pipe:1` through
+  `rightkit-ffmpeg`'s `spawn_streaming` (an owned child; stdout and stderr piped, stdin null; the same `file`-only protocol whitelist). `-re`
+  paces the child at the clip's own speed, so a frame arrives when it is due.
+- **Queue and back-pressure.** A worker thread reads exact `width x height x 4` byte chunks into a queue of 3 frames. It never waits for the
+  UI: a frame that finds the queue full is dropped and counted (`FrameStream::dropped`), and a frame's time is its index over the frame
+  rate, so a drop does not shift the frames after it. A partial last frame (a child that died mid-frame) is discarded; the last 4 KiB of the
+  child's error output turns a failure into a message.
+- **Cancellation.** Dropping the `FrameStream`, `FrameStream::stop` or the cancel flag ends it: the child and its whole process tree are
+  killed (on a helper thread, so pausing never waits), its pipes close, and the worker ends. No deadline applies to a stream.
+- **Frames.** At most 1280 px along the long edge (never enlarged) and 30 frames per second, upright (rotation applied), as the decoder gives
+  them: not colour managed, and without the photo's edits.
+- **Engine.** `video.play {id?}`, `video.pause`, `video.togglePlay {id?}`, `video.seek {id?, t}` and `video.stop` drive one player per session;
+  the query `video.state` reports `{photo, state, position, duration, streaming, dropped, error, unavailable}`. A running stream holds a
+  "Playing Video" row in the activity stack, with a stop button. The UI calls `Session::video_tick_now` once per frame, which shows the frame
+  whose time has come; the clock starts when the first frame arrives, so the child's start-up time does not make frames late. Pause keeps the
+  frame it stopped on; a seek while paused fetches the frame there and stops; a seek while playing restarts the stream there; the end of the
+  clip leaves it ended on its last frame (play again starts over). A stream that fails leaves the clip paused with the reason; without the
+  sidecar the message is "Video support isn't installed".
+- **Trim.** Playback starts at the clip's in point (when the clip is before it, at its end, or after its out point) and stops at its out point.
+  Scrubbing is not held to it, so new points can be found outside.
+- **Loupe.** A video has a transport bar at the bottom of the loupe (above the Trim row): play or pause, the time and the duration, and a
+  scrubber that seeks when it is released. A clip that leaves the loupe (another photo, another view) is stopped, so no child process decodes
+  for a picture nobody sees.
+
 ## Trim
 
 `video.setTrim {id?, in?, out?}` stores the in and out points (seconds) of the part of a clip that exports keep, in the photo's develop
@@ -74,7 +104,9 @@ settings (`trim_in`, `trim_out`); `video.clearTrim {id?}` keeps the whole clip a
 - Each call is one undo step (a History entry, "Set Trim" or "Clear Trim"). The fields are absent from the JSON while unset, so no
   existing settings hash changes; a trim is a choice of range, not an edit of the picture (`is_unedited` ignores it).
 - The loupe shows a Trim row at the bottom of a video that has a duration: the points, **Set In** and **Set Out** (at the frame on
-  screen, which is the poster frame until the player exists) and **Clear Trim**. The player's scrubber gets draggable handles with it.
+  screen: where the player is once the clip is loaded in it, else the poster frame) and **Clear Trim**. Playback is held to the trim
+  (it starts at the in point and stops at the out point; scrubbing is free, so new points can be found outside it); draggable handles on
+  the player's scrubber are not there yet.
 
 ## Export
 
@@ -113,7 +145,6 @@ decision in `CLAUDE.md` ("Pure Rust ... except the verified LGPL ffmpeg sidecar"
 
 ## Not yet
 
-Silent playback (play/pause, seek, a player in the loupe) with trim handles on its scrubber and playback held to the trimmed range, audio,
-a grid badge and duration label, a poster chooser in the UI, the Export dialog's Video entry, an export build of the sidecar with an H.264
+Audio, draggable trim handles on the player's scrubber, a grid badge and duration label, a poster chooser in the UI, the Export dialog's Video entry, an export build of the sidecar with an H.264
 encoder (so a re-encode works; until then only stream copy does) and the bundling of the sidecar into the installers (release tooling),
 and Linux.

@@ -1,5 +1,5 @@
-//! Video through the verified LGPL ffmpeg sidecar (L1): a safe API to probe a clip ([`probe`]) and to cut one frame out of it
-//! ([`frame_at`]), the poster frame of a video in the library.
+//! Video through the verified LGPL ffmpeg sidecar (L1): a safe API to probe a clip ([`probe`]), to cut one frame out of it
+//! ([`frame_at`], the poster frame of a video in the library) and to stream its frames for silent playback ([`stream_frames`]).
 //!
 //! Ember decodes no video itself. It runs the `ffmpeg` and `ffprobe` binaries that release bundles ship beside the application,
 //! through `rightkit-ffmpeg` (RightKit's owner of the approved-binary catalog and of the process runner): a binary runs only
@@ -24,8 +24,10 @@ use lightcraft_raster::Rgba8;
 use serde_json::Value;
 
 mod sidecar;
+mod stream;
 mod trim;
 
+pub use stream::{FALLBACK_FPS, Frame, FrameStream, Kill, MAX_FPS, Poll, QUEUE_FRAMES, StreamSpec, playback_fps};
 pub use trim::{MIN_TRIM_SECS, Trim, check_trim, kept_range};
 
 pub mod clip;
@@ -168,6 +170,35 @@ pub fn frame_at_sized(path: &Path, t: f64, shown: (u32, u32), max_size: usize, l
         None => return Err(VideoError::NoFrame),
     };
     Rgba8::from_bytes(w as usize, h as usize, &bytes).ok_or_else(|| VideoError::Failed("the frame is not the size asked for".into()))
+}
+
+/// Play `path` from `start_t` seconds: its frames, upright, no larger than `max_size` along the long edge (never enlarged), at the
+/// clip's own frame rate or `fps_cap` when that is lower, paced in real time on a bounded queue ([`FrameStream`]). The clip is
+/// probed first for its size and rate; a caller that has them uses [`stream_frames_sized`] and saves a process. Dropping the
+/// stream kills the child. No audio.
+pub fn stream_frames(path: &Path, start_t: f64, max_size: usize, fps_cap: Option<f64>) -> Result<FrameStream, VideoError> {
+    let limits = Limits::default();
+    let info = probe_with(path, &limits)?;
+    stream_frames_sized(path, start_t, info.display_size(), info.frame_rate, max_size, fps_cap, &limits)
+}
+
+/// [`stream_frames`] for a caller that knows the clip's displayed size and frame rate (a probe's [`VideoInfo`]). A wrong size
+/// gives a stretched picture, a wrong rate gives frames timed wrongly, never an error. `limits.timeout` does not apply (a clip
+/// plays as long as it is long); `limits.cancel` stops the stream, which then ends as [`VideoError::Cancelled`].
+pub fn stream_frames_sized(
+    path: &Path,
+    start_t: f64,
+    shown: (u32, u32),
+    frame_rate: Option<f64>,
+    max_size: usize,
+    fps_cap: Option<f64>,
+    limits: &Limits,
+) -> Result<FrameStream, VideoError> {
+    let (width, height) = fit_frame(shown.0, shown.1, max_size);
+    let start = if start_t.is_finite() && start_t >= 0.0 { start_t.min(MAX_SEEK_SECS) } else { 0.0 };
+    let spec = StreamSpec { start, fps: playback_fps(frame_rate, fps_cap), width, height };
+    let spawned = sidecar::spawn_rawvideo(path, start, width, height, spec.fps)?;
+    FrameStream::from_parts(spawned.stdout, spawned.stderr, spawned.control, spec, QUEUE_FRAMES, limits.cancel.clone())
 }
 
 /// Whether the verified sidecar can be used here: `Ok` once it is found and checked, else why not

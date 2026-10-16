@@ -2305,5 +2305,9 @@
   "Clear Trim": "Сбросить обрезку",
   "Start the clip at the frame on screen": "Начать клип с кадра на экране",
   "End the clip at the frame on screen": "Закончить клип на кадре на экране",
-  "Keep the whole clip again": "Снова использовать весь клип"
+  "Keep the whole clip again": "Снова использовать весь клип",
+  "Pause": "Пауза",
+  "Playing Video": "Воспроизведение видео",
+  "Video support isn't installed": "Поддержка видео не установлена",
+  "Playback position": "Позиция воспроизведения"
 }

@@ -2304,5 +2304,9 @@
   "Clear Trim": "Effacer la coupe",
   "Start the clip at the frame on screen": "Faire commencer le clip à l’image affichée",
   "End the clip at the frame on screen": "Faire finir le clip à l’image affichée",
-  "Keep the whole clip again": "Garder de nouveau tout le clip"
+  "Keep the whole clip again": "Garder de nouveau tout le clip",
+  "Pause": "Pause",
+  "Playing Video": "Lecture de la vidéo",
+  "Video support isn't installed": "La prise en charge de la vidéo n'est pas installée",
+  "Playback position": "Position de lecture"
 }

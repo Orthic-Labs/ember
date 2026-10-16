@@ -3,9 +3,21 @@
 //! Windows and macOS only (`rightkit-ffmpeg` has approved catalog rows for no other platform). Elsewhere every call is
 //! [`VideoError::Unsupported`].
 
-pub(crate) use native::{available, ffprobe_json, frame_rgba};
+pub(crate) use native::{available, ffprobe_json, frame_rgba, spawn_rawvideo};
 #[cfg(all(test, any(target_os = "windows", target_os = "macos")))]
 pub(crate) use native::resolve_in;
+
+use std::io::Read;
+
+use crate::stream::Kill;
+
+/// A running `ffmpeg` that streams raw frames: its video pipe, its error pipe, and what ends it.
+#[cfg_attr(not(any(target_os = "windows", target_os = "macos")), allow(dead_code))]
+pub(crate) struct Spawned {
+    pub stdout: Box<dyn Read + Send>,
+    pub stderr: Option<Box<dyn Read + Send>>,
+    pub control: Box<dyn Kill>,
+}
 
 /// The verified `ffmpeg`, for the clip export (`crate::clip`).
 #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -17,6 +29,7 @@ pub(crate) fn ffmpeg() -> Result<rightkit_ffmpeg::VerifiedFfmpeg, crate::VideoEr
 mod native {
     use std::path::Path;
 
+    use super::Spawned;
     use crate::{Limits, VideoError};
 
     pub(crate) fn available() -> Result<(), VideoError> {
@@ -30,20 +43,27 @@ mod native {
     pub(crate) fn frame_rgba(_path: &Path, _t: f64, _w: u32, _h: u32, _limits: &Limits) -> Result<Option<Vec<u8>>, VideoError> {
         Err(VideoError::Unsupported)
     }
+
+    pub(crate) fn spawn_rawvideo(_path: &Path, _t: f64, _w: u32, _h: u32, _fps: f64) -> Result<Spawned, VideoError> {
+        Err(VideoError::Unsupported)
+    }
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 mod native {
+    use std::io::Read;
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex, PoisonError};
     use std::time::Duration;
 
-    use rightkit_ffmpeg::runner::run_capture_with;
+    use rightkit_ffmpeg::runner::{run_capture_with, spawn_streaming};
     use rightkit_ffmpeg::{
-        CancellationToken, DECODE_VARIANT, FfmpegCommand, MediaError, RunError, RunOptions, Tool, VerifiedFfmpeg, VerifiedFfprobe,
-        verify_bundled_ffmpeg, verify_bundled_ffprobe,
+        CancellationToken, DECODE_VARIANT, FfmpegCommand, MediaError, OwnedChild, RunError, RunOptions, StdioMode, StdioPolicy, Tool,
+        VerifiedFfmpeg, VerifiedFfprobe, verify_bundled_ffmpeg, verify_bundled_ffprobe,
     };
 
+    use super::Spawned;
+    use crate::stream::Kill;
     use crate::{Limits, MAX_PROBE_JSON, VideoError};
 
     /// Names a directory holding the sidecar (`ffmpeg` and `ffprobe`), ahead of the places a release bundle puts it. The binaries are
@@ -191,5 +211,44 @@ mod native {
             Ok(n) if n == expected => Ok(Some(out.stdout)),
             _ => Err(VideoError::Failed(format!("ffmpeg wrote {} bytes for a {w}x{h} frame", out.stdout.len()))),
         }
+    }
+
+    /// Ends the child of a stream and its whole process tree. The kill is sent at once; waiting for the reap happens on a helper
+    /// thread, so stopping playback never holds up the caller (and a failed thread start drops the child, which kills it too).
+    struct OwnedKill(Option<OwnedChild>);
+
+    impl Kill for OwnedKill {
+        fn kill(&mut self) {
+            if let Some(mut child) = self.0.take() {
+                let _ = std::thread::Builder::new().name("lc-video-kill".into()).spawn(move || {
+                    let _ = child.terminate_tree();
+                });
+            }
+        }
+    }
+
+    /// Start `ffmpeg` streaming `path` from `t` seconds as `w` x `h` RGBA frames at `fps`, paced at the clip's speed (`-re`), on a
+    /// pipe. The child is owned: killing it (or dropping [`Spawned::control`]) stops its whole process tree. There is no deadline;
+    /// the stream's owner stops it.
+    pub(crate) fn spawn_rawvideo(path: &Path, t: f64, w: u32, h: u32, fps: f64) -> Result<Spawned, VideoError> {
+        let tools = tools()?;
+        let input = input_of(path)?;
+        let mut cmd = FfmpegCommand::new();
+        cmd.texts(["-hide_banner", "-nostdin", "-v", "error", "-protocol_whitelist", "file", "-re", "-ss"]).text(format!("{t:.3}")).input(&input);
+        // the frames are scaled to the exact size asked for (after the automatic rotation) at a fixed rate, so the bytes per frame and
+        // the time of each frame are known without reading the stream's timestamps
+        cmd.texts(["-an", "-sn", "-dn", "-vf"]).text(format!("fps={fps:.5},scale={w}:{h}:flags=bilinear"));
+        cmd.texts(["-pix_fmt", "rgba", "-f", "rawvideo", "pipe:1"]);
+        let policy = StdioPolicy { stdout: StdioMode::Piped, stderr: StdioMode::Piped, ..StdioPolicy::default() };
+        let mut child = spawn_streaming(&tools.ffmpeg, &cmd, policy).map_err(map_run_error)?;
+        let (Some(stdout), stderr) = (child.take_stdout(), child.take_stderr()) else {
+            let _ = child.terminate_tree();
+            return Err(VideoError::Failed("ffmpeg gave no output pipe".into()));
+        };
+        Ok(Spawned {
+            stdout: Box::new(stdout),
+            stderr: stderr.map(|e| Box::new(e) as Box<dyn Read + Send>),
+            control: Box::new(OwnedKill(Some(child))),
+        })
     }
 }

@@ -140,6 +140,8 @@ mod tests_titlebar;
 #[cfg(test)]
 mod tests_unsaved;
 #[cfg(test)]
+mod tests_video_player;
+#[cfg(test)]
 mod tests_wb_selector;
 #[cfg(test)]
 mod tests_zoom;
@@ -1091,6 +1093,7 @@ impl LightcraftApp {
         self.preview_build_status(ctx);
         self.save_status(ctx);
         self.slideshow_tick(ctx);
+        panels::video_player::idle(self);
         panels::faces::pump(self, ctx);
         // back from an external editor: pick up the files it saved
         let focused = ctx.input(|i| i.focused);

@@ -77,6 +77,7 @@ pub mod slideshow;
 pub mod smart;
 pub mod sync;
 pub mod video;
+pub mod video_player;
 mod view;
 pub mod walk;
 
@@ -328,6 +329,10 @@ pub struct Session {
     /// Background tasks in flight (imports, exports, preview builds…), for the activity stack and
     /// `activity.list` / `activity.cancel`.
     pub activity: activity::Activity,
+    /// Silent playback of a video in the loupe (`video.play`, `video.pause`, `video.seek`; issue #73).
+    pub video: video_player::Player,
+    /// Opens the frame stream a clip plays from: the ffmpeg sidecar's, unless a test puts its own here.
+    pub video_opener: video_player::OpenStream,
     /// The last (or running) Build Previews.
     pub preview_build: Option<std::sync::Arc<cmd::previews::PreviewBuild>>,
     /// Develop defaults applied on import (persisted in prefs.json).
@@ -439,6 +444,8 @@ impl Session {
             import_probes: Default::default(),
             folder_changes: None,
             activity: Default::default(),
+            video: Default::default(),
+            video_opener: video_player::real_opener(),
             preview_build: None,
             import_defaults: import::ImportDefaults::default(),
             cache_mb: 0,
@@ -1150,5 +1157,7 @@ mod tests_spots;
 mod tests_sync;
 #[cfg(test)]
 mod tests_video;
+#[cfg(test)]
+mod tests_video_player;
 #[cfg(test)]
 mod tests_xmp;

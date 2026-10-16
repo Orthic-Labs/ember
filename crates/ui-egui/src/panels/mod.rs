@@ -30,6 +30,7 @@ pub mod settings;
 pub mod strip;
 pub mod topbar;
 pub mod unnamed;
+pub mod video_player;
 pub mod view_options;
 
 use egui::{Align2, Rect, pos2, vec2};

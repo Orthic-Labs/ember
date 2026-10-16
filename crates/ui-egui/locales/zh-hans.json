@@ -2306,5 +2306,9 @@
   "Clear Trim": "清除剪辑",
   "Start the clip at the frame on screen": "从屏幕上显示的帧开始剪辑",
   "End the clip at the frame on screen": "在屏幕上显示的帧结束剪辑",
-  "Keep the whole clip again": "恢复使用整个剪辑"
+  "Keep the whole clip again": "恢复使用整个剪辑",
+  "Pause": "暂停",
+  "Playing Video": "正在播放视频",
+  "Video support isn't installed": "未安装视频支持",
+  "Playback position": "播放位置"
 }

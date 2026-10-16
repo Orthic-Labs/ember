@@ -2307,5 +2307,9 @@
   "Clear Trim": "トリムを解除",
   "Start the clip at the frame on screen": "表示中のフレームからクリップを開始します",
   "End the clip at the frame on screen": "表示中のフレームでクリップを終了します",
-  "Keep the whole clip again": "クリップ全体を再び使用します"
+  "Keep the whole clip again": "クリップ全体を再び使用します",
+  "Pause": "一時停止",
+  "Playing Video": "動画を再生中",
+  "Video support isn't installed": "動画のサポートがインストールされていません",
+  "Playback position": "再生位置"
 }

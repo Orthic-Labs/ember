@@ -2304,5 +2304,9 @@
   "Clear Trim": "Quitar recorte",
   "Start the clip at the frame on screen": "Empezar el clip en el fotograma que se ve",
   "End the clip at the frame on screen": "Terminar el clip en el fotograma que se ve",
-  "Keep the whole clip again": "Conservar de nuevo todo el clip"
+  "Keep the whole clip again": "Conservar de nuevo todo el clip",
+  "Pause": "Pausa",
+  "Playing Video": "Reproduciendo vídeo",
+  "Video support isn't installed": "La compatibilidad con vídeo no está instalada",
+  "Playback position": "Posición de reproducción"
 }

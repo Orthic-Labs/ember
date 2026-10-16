@@ -2305,5 +2305,9 @@
   "Clear Trim": "Hapus pangkasan",
   "Start the clip at the frame on screen": "Mulai klip dari bingkai yang tampil",
   "End the clip at the frame on screen": "Akhiri klip pada bingkai yang tampil",
-  "Keep the whole clip again": "Simpan seluruh klip lagi"
+  "Keep the whole clip again": "Simpan seluruh klip lagi",
+  "Pause": "Jeda",
+  "Playing Video": "Memutar video",
+  "Video support isn't installed": "Dukungan video belum terpasang",
+  "Playback position": "Posisi pemutaran"
 }

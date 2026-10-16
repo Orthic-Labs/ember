@@ -690,6 +690,8 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     if app.ui.show_clipping && !show_before && !fullscreen {
         clipping_overlay(app, &p, img_rect);
     }
+    // a playing video: its picture over the poster
+    super::video_player::draw_frame(app, ui, canvas, img_rect, &photo);
     register(ui.ctx(), "canvas:image", img_rect);
     let map = CanvasMap::new(&frame, img_rect);
     info_overlay(app, &p, canvas, &photo);
@@ -809,6 +811,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     if photo.kind == lightcraft_catalog::MediaKind::Video && !fullscreen {
         crate::video_trim::show(app, ui, canvas, &photo);
     }
+    super::video_player::transport(app, ui, canvas, &photo);
     resp.context_menu(|ui| {
         ui.menu_button(crate::i18n::tr("Zoom"), |ui| {
             for (label, cmd) in [("Fit", "view.zoomFit"), ("100%", "view.zoom100"), ("Zoom In", "view.zoomIn"), ("Zoom Out", "view.zoomOut")] {

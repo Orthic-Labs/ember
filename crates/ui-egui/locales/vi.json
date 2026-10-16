@@ -2305,5 +2305,9 @@
   "Clear Trim": "Xóa đoạn cắt",
   "Start the clip at the frame on screen": "Bắt đầu clip từ khung hình đang hiển thị",
   "End the clip at the frame on screen": "Kết thúc clip tại khung hình đang hiển thị",
-  "Keep the whole clip again": "Giữ lại toàn bộ clip"
+  "Keep the whole clip again": "Giữ lại toàn bộ clip",
+  "Pause": "Tạm dừng",
+  "Playing Video": "Đang phát video",
+  "Video support isn't installed": "Chưa cài đặt hỗ trợ video",
+  "Playback position": "Vị trí phát"
 }
