@@ -843,6 +843,12 @@ fn brush_settings(app: &mut LightcraftApp, ui: &mut egui::Ui) {
             if text_button(ui, "brushErase", crate::i18n::tr("Erase"), app.ui.brush_erase).clicked() {
                 app.ui.brush_erase = true;
             }
+            if text_button(ui, "brushPresetA", "A", !app.ui.brush_slot_b).clicked() {
+                let _ = app.run("brush.presetA", json!({}));
+            }
+            if text_button(ui, "brushPresetB", "B", app.ui.brush_slot_b).clicked() {
+                let _ = app.run("brush.presetB", json!({}));
+            }
         });
         let mut auto = app.ui.brush_auto_mask;
         if ui

@@ -506,6 +506,24 @@ fn top_bar_shown() -> bool {
     true
 }
 
+/// Brush settings kept in one of the Masking panel's brush slots, A or B (#63).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct BrushPreset {
+    pub size: f32,
+    pub feather: f32,
+    pub flow: f32,
+    pub density: f32,
+    pub erase: bool,
+    pub auto_mask: bool,
+}
+
+impl Default for BrushPreset {
+    fn default() -> Self {
+        BrushPreset { size: 0.04, feather: 50.0, flow: 60.0, density: 100.0, erase: false, auto_mask: false }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct UiState {
@@ -690,6 +708,10 @@ pub struct UiState {
     pub brush_flow: f32,
     /// Brush density, 1..100: how much paint the stroke's dabs build up to.
     pub brush_density: f32,
+    /// Brush slot B is the active brush (false: slot A). The live `brush_*` values are the active slot's;
+    /// `brush_presets` holds each slot's settings, the active one's kept up to date on switching and saving.
+    pub brush_slot_b: bool,
+    pub brush_presets: [BrushPreset; 2],
     pub brush_erase: bool,
     /// Brush Auto Mask: dabs stick to areas like the one under the brush centre.
     pub brush_auto_mask: bool,
@@ -1162,6 +1184,8 @@ impl Default for UiState {
             brush_feather: 50.0,
             brush_flow: 60.0,
             brush_density: 100.0,
+            brush_slot_b: false,
+            brush_presets: [BrushPreset::default(), BrushPreset { size: 0.015, feather: 20.0, flow: 100.0, ..Default::default() }],
             brush_erase: false,
             brush_auto_mask: false,
             remove_size: 0.02,
@@ -1208,6 +1232,36 @@ impl Default for UiState {
 }
 
 impl UiState {
+    /// The active brush's settings, as its slot keeps them.
+    pub fn brush_now(&self) -> BrushPreset {
+        BrushPreset {
+            size: self.brush_size,
+            feather: self.brush_feather,
+            flow: self.brush_flow,
+            density: self.brush_density,
+            erase: self.brush_erase,
+            auto_mask: self.brush_auto_mask,
+        }
+    }
+
+    /// Make slot A (`b` false) or slot B (`b` true) the active brush. The settings in use are kept in
+    /// the slot they came from; the other slot's settings become the brush's.
+    pub fn select_brush_slot(&mut self, b: bool) {
+        if b == self.brush_slot_b {
+            return;
+        }
+        let now = self.brush_now();
+        self.brush_presets[usize::from(self.brush_slot_b)] = now;
+        self.brush_slot_b = b;
+        let p = self.brush_presets[usize::from(b)];
+        self.brush_size = p.size;
+        self.brush_feather = p.feather;
+        self.brush_flow = p.flow;
+        self.brush_density = p.density;
+        self.brush_erase = p.erase;
+        self.brush_auto_mask = p.auto_mask;
+    }
+
     /// Which colour grading wheels (shadows, midtones, highlights) are hidden for viewing `photo`.
     pub fn grading_hidden_for(&self, photo: lightcraft_catalog::PhotoId) -> [bool; 3] {
         match self.grading_hidden {
@@ -1259,6 +1313,14 @@ impl UiState {
         self.right_width = RIGHT_WIDTH.clamp(self.right_width);
         self.brush_size = self.brush_size.clamp(0.002, 0.5);
         self.brush_density = self.brush_density.clamp(1.0, 100.0);
+        for p in &mut self.brush_presets {
+            p.size = p.size.clamp(0.002, 0.5);
+            p.feather = p.feather.clamp(0.0, 100.0);
+            p.flow = p.flow.clamp(1.0, 100.0);
+            p.density = p.density.clamp(1.0, 100.0);
+        }
+        let now = self.brush_now();
+        self.brush_presets[usize::from(self.brush_slot_b)] = now;
         self.sidebar.adopt_collapsed(&std::mem::take(&mut self.collapsed_sidebar));
         self.dialog = None;
         self.fullscreen = false;

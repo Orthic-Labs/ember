@@ -348,6 +348,29 @@ fn brush_strokes_carry_density() {
     h.settle(SETTLE);
 }
 
+/// Brush slots A and B (#63) keep their own settings: switching restores each one, and a stroke made in B carries B's size.
+#[test]
+fn brush_slots_a_and_b_keep_their_own_settings() {
+    let mut h = detail("panel.masking");
+    exec(&mut h, "tool.brush", json!({}));
+    let r = h.request("ui.set", json!({"brushSize": 0.1, "brushDensity": 30.0}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    exec(&mut h, "brush.presetB", json!({}));
+    assert!(h.app.ui.brush_slot_b);
+    assert!((h.app.ui.brush_size - 0.015).abs() < 1e-6, "slot B's own size: {}", h.app.ui.brush_size);
+    assert!((h.app.ui.brush_density - 100.0).abs() < 1e-6, "slot B's own density: {}", h.app.ui.brush_density);
+    exec(&mut h, "brush.presetA", json!({}));
+    assert!(!h.app.ui.brush_slot_b);
+    assert!((h.app.ui.brush_size - 0.1).abs() < 1e-6, "slot A kept its size: {}", h.app.ui.brush_size);
+    assert!((h.app.ui.brush_density - 30.0).abs() < 1e-6, "and its density: {}", h.app.ui.brush_density);
+    exec(&mut h, "brush.presetB", json!({}));
+    pointer(&mut h, json!([{"kind": "down", "x": 0.3, "y": 0.5}, {"kind": "drag", "x": 0.4, "y": 0.5}, {"kind": "up", "x": 0.4, "y": 0.5}]));
+    let d = develop(&h);
+    let MaskShape::Brush { strokes } = &d.masks[0].components[0].shape else { panic!("brush") };
+    assert!((strokes[0].size - 0.015).abs() < 1e-6, "{strokes:?}");
+    h.settle(SETTLE);
+}
+
 #[test]
 fn brush_strokes_carry_auto_mask() {
     let mut h = detail("panel.masking");
