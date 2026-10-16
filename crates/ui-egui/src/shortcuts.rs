@@ -593,6 +593,11 @@ pub fn handle(app: &mut LightcraftApp, ctx: &egui::Context) {
             }
             // Up / Down in the grids go to the cell above / below (the filmstrip steps one photo)
             if matches!(f.as_str(), "library.up" | "library.down") {
+                // in Compare, Up and Down promote the next candidate (Make Candidate the Select)
+                if app.ui.view == crate::state::ViewMode::Compare {
+                    let _ = compare::make_select(app);
+                    continue;
+                }
                 // over a slider the arrows nudge it (widgets::slider takes the key)
                 let over_slider =
                     ctx.pointer_hover_pos().is_some_and(|p| app.widgets.iter().any(|(id, r)| id.starts_with("slider:") && r.contains(p)));

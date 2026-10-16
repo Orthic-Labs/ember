@@ -45,6 +45,27 @@ fn filmstrip_click_in_compare_keeps_the_active_photo_on_screen() {
     }
 }
 
+/// Up and Down in Compare promote the next candidate: the candidate becomes the select and the
+/// photo after it becomes the candidate, as Make Candidate the Select does.
+#[test]
+fn up_and_down_promote_the_next_candidate_to_select() {
+    let mut h = demo();
+    let vis: Vec<u64> = h.app.session.visible_cloned().iter().map(|p| p.0).collect();
+    h.request("engine.execute", json!({"command": "library.select", "params": {"ids": [vis[0], vis[1]], "active": vis[0]}}), T);
+    let r = h.request("engine.execute", json!({"command": "view.compare"}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    h.settle(SETTLE);
+    assert_eq!(h.app.ui.compare, Some((vis[0], vis[1])));
+    let r = h.request("ui.key", json!({"key": "Down"}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    h.settle(SETTLE);
+    assert_eq!(h.app.ui.compare, Some((vis[1], vis[2])), "Down makes the candidate the select");
+    let r = h.request("ui.key", json!({"key": "Up"}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    h.settle(SETTLE);
+    assert_eq!(h.app.ui.compare, Some((vis[2], vis[3])), "Up promotes the next candidate again");
+}
+
 /// A filmstrip click in Compare puts the photo into the active side: the candidate after
 /// entering Compare, the select after clicking the select's pane; a photo already on the other
 /// side swaps the two. `compare.set` does the same for agents, with an explicit `side`.
