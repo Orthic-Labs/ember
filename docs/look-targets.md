@@ -31,11 +31,13 @@ lightcraft-cli run --import photo.raf develop.applyLook path=look.json app.expor
 3. **Exposure against the real render**: the proxy is rendered through the actual pipeline (float linear Rec. 2020) & exposure bisected (10 steps, ±2 EV around the tone-map estimate) until the rendered median meets the look's. This is a true closed loop: local stages the fit only models (the edge-aware highlight/shadow base) are in the render.
 4. **Vibrance** from the rendered 90th-percentile chroma vs the look's: `40 × log2(want / have)`, clamped ±40.
 
-One undo step. `dryRun: true` returns the values without editing. Regressions (`look::tests`): a sample rendered a stop brighter & flatter, applied to a frame 1.5 stops darker, lands within 0.03 of the look's median & 0.08 of its highlight percentile; a muted sample pulls vibrance down; hostile targets are refused before any edit; repeat-stable.
+One undo step. `dryRun: true` returns the values without editing.
+
+**Batch**: `ids: [photoId, …]` (at most 512, duplicates collapse) applies the look to each photo, each refit from its own source & settings, as **one undo step**. The reply is `{dryRun, applied, photos: [{id, values}], errors: [{id, error}]}`: a photo that cannot take the look (unknown id, unreadable source) is listed in `errors` & the others still apply. An empty or oversized list, or a non-integer id, is refused before any edit. A batch holds an activity-stack task (`look`, not cancellable). Without `ids` the active photo is used, as before. Regressions (`look::tests`): a sample rendered a stop brighter & flatter, applied to a frame 1.5 stops darker, lands within 0.03 of the look's median & 0.08 of its highlight percentile; a muted sample pulls vibrance down; hostile targets are refused before any edit; repeat-stable.
 
 ## Limits & next
 
 - Tone & colourfulness only: no hue shifts, split toning, curves or grain are transferred (a preset does those; a look target & a preset combine: apply the preset, then the target).
 - Percentile statistics do not see *where* tones sit. Spatial targets (centre vs edge, sky vs ground) & face-weighted exposure follow the same path as Auto's next steps (`auto-tone.md`). [#203](https://github.com/Orthic-Labs/ember/issues/203)
-- Batch: `develop.applyLook` with `ids` is not yet implemented; drive it per photo (CLI `run`, MCP) or via sync after one apply. [#202](https://github.com/Orthic-Labs/ember/issues/202)
+- Batch: `develop.applyLook` with `ids` is implemented (see Apply). [#202](https://github.com/Orthic-Labs/ember/issues/202)
 - Personal style from accepted edits (`personal-auto-evaluation.md`) is the learned counterpart: a look target needs no training & five samples; a residual model needs hundreds of accepted edits & qualifies against held-out shoots.

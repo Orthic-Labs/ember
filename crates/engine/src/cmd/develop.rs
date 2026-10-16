@@ -24,6 +24,63 @@ fn edit(s: &mut Session, c: &str, label: &str, f: impl FnOnce(&mut DevelopSettin
     ok()
 }
 
+/// Most photos one `develop.applyLook` call with `ids` applies (each is measured and rendered).
+const LOOK_BATCH_MAX: usize = 512;
+
+/// One photo's Apply Look: its own refit from its own source and settings. Nothing is written.
+fn look_one(s: &mut Session, id: PhotoId, look: &lightcraft_pipeline::look::LookTarget) -> std::result::Result<(AutoTone, DevelopSettings), String> {
+    if s.catalog.photo(id).is_none() {
+        return Err("no such photo".into());
+    }
+    let src = s.source_now(id, SourceLevel::Thumb)?;
+    let info = s.source_info(id);
+    let d = s.develop_of(id).unwrap_or_default();
+    let a = lightcraft_pipeline::look::apply(&src, &info, &d, look)?;
+    let next = lightcraft_pipeline::look::settings_with(&d, a);
+    Ok((a, next))
+}
+
+/// `develop.applyLook` over `ids`: each photo is refit separately and all of them commit as one
+/// undo step. A photo that cannot take the look is listed in `errors`; the others still apply.
+fn apply_look_batch(s: &mut Session, c: &str, ids: &Value, look: &lightcraft_pipeline::look::LookTarget, dry: bool) -> Result<Value> {
+    let list = ids.as_array().ok_or_else(|| bad(c, "ids must be an array of photo ids"))?;
+    if list.is_empty() {
+        return Err(bad(c, "ids is empty"));
+    }
+    if list.len() > LOOK_BATCH_MAX {
+        return Err(bad(c, format!("ids: at most {LOOK_BATCH_MAX} photos per call")));
+    }
+    let mut targets: Vec<u64> = Vec::with_capacity(list.len());
+    for v in list {
+        let id = v.as_u64().ok_or_else(|| bad(c, "ids must be photo ids (whole numbers)"))?;
+        if !targets.contains(&id) {
+            targets.push(id);
+        }
+    }
+    // A batch can run for a while (each photo decodes and renders); it shows in the activity stack.
+    let label = format!("Applying look to {} photo{}", targets.len(), if targets.len() == 1 { "" } else { "s" });
+    let _task = s.activity.start("look", &label, crate::activity::Cancel::No);
+    let mut ops = Vec::new();
+    let mut photos = Vec::new();
+    let mut errors = Vec::new();
+    for raw in targets {
+        match look_one(s, PhotoId(raw), look) {
+            Ok((a, next)) => {
+                if !dry && let Some(op) = s.develop_op(PhotoId(raw), next, "Apply Look") {
+                    ops.push(op);
+                }
+                photos.push(json!({"id": raw, "values": a}));
+            }
+            Err(error) => errors.push(json!({"id": raw, "error": error})),
+        }
+    }
+    let applied = if dry { 0 } else { photos.len() };
+    if !dry && !ops.is_empty() {
+        s.commit("Apply Look", Op::Batch { ops })?;
+    }
+    Ok(json!({"dryRun": dry, "applied": applied, "photos": photos, "errors": errors}))
+}
+
 /// Auto's value for one control, `None` for a control Auto does not set.
 fn auto_control_value(a: &AutoTone, id: &str) -> Option<f64> {
     Some(match id {
@@ -604,8 +661,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Look Target",
             [],
             None,
-            "{look?: {schema, samples, luminance, clip, chroma}, path?: string, dryRun?: bool}",
-            has_active,
+            "{look?: {schema, samples, luminance, clip, chroma}, path?: string, ids?: [photoId] (batch, max 512, one undo step), dryRun?: bool}",
+            has_selection,
             |s, p| {
                 // A look target (`lightcraft-cli look extract`) is the rendered statistics of
                 // sample photos; Auto refits the eight values so this photo lands on them.
@@ -623,6 +680,9 @@ pub fn specs() -> Vec<CommandSpec> {
                     (None, None) => return Err(bad(c, "missing `look` (a look target) or `path` (its JSON file)")),
                 };
                 look.validate().map_err(|e| bad(c, e))?;
+                if let Some(ids) = p.get("ids").filter(|v| !v.is_null()) {
+                    return apply_look_batch(s, c, ids, &look, bool_or(p, "dryRun", false));
+                }
                 let id = active(s, c)?;
                 let src = s.source_now(id, SourceLevel::Thumb).map_err(|e| bad(c, e))?;
                 let info = s.source_info(id);

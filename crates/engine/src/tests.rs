@@ -926,6 +926,44 @@ fn apply_look_refits_the_eight_values_toward_sample_statistics() {
 }
 
 #[test]
+fn apply_look_batch_refits_each_photo_in_one_undo_step_and_reports_unknown_ids() {
+    use lightcraft_catalog::PhotoId;
+    use lightcraft_raster::Rgba8;
+    let mut s = demo();
+    let sample = Rgba8::from_fn(64, 64, |x, _| [150 + (x as u8 / 2), 150 + (x as u8 / 2), 140 + (x as u8 / 2), 255]);
+    let look = lightcraft_pipeline::look::extract(&[sample]).unwrap();
+    let ids: Vec<u64> = s.catalog.photos().take(2).map(|p| p.id.0).collect();
+    let before: Vec<_> = ids.iter().map(|&i| (*s.develop_of(PhotoId(i)).unwrap()).clone()).collect();
+    let unknown = 999_999_999_u64;
+    let mut batch = ids.clone();
+    batch.push(unknown);
+    // a dry run reports every photo's own values and edits nothing
+    let dry = s.execute("develop.applyLook", &json!({"look": look, "ids": batch, "dryRun": true})).unwrap();
+    assert_eq!(dry["photos"].as_array().unwrap().len(), 2, "{dry}");
+    assert_eq!(dry["applied"], 0);
+    assert_eq!(dry["errors"][0]["id"].as_u64(), Some(unknown), "{dry}");
+    for (&i, b) in ids.iter().zip(&before) {
+        assert_eq!(s.develop_of(PhotoId(i)).unwrap().light, b.light, "a dry run edits nothing");
+    }
+    // the batch applies each photo's refit (the unknown id does not stop the others) as one commit
+    let r = s.execute("develop.applyLook", &json!({"look": look, "ids": batch})).unwrap();
+    assert_eq!(r["photos"], dry["photos"], "repeat stable");
+    assert_eq!(r["applied"], 2);
+    for (k, &i) in ids.iter().enumerate() {
+        let d = s.develop_of(PhotoId(i)).unwrap();
+        assert_eq!(d.light.exposure, r["photos"][k]["values"]["exposure"].as_f64().unwrap());
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    for (&i, b) in ids.iter().zip(&before) {
+        assert_eq!(s.develop_of(PhotoId(i)).unwrap().light, b.light, "one undo step reverts the whole batch");
+    }
+    // an empty or oversized batch is refused before any edit
+    assert!(s.execute("develop.applyLook", &json!({"look": look, "ids": []})).is_err());
+    let too_many: Vec<u64> = vec![ids[0]; 513];
+    assert!(s.execute("develop.applyLook", &json!({"look": look, "ids": too_many})).is_err());
+}
+
+#[test]
 fn auto_bw_mix_separates_colours() {
     let mut s = demo();
     s.execute("develop.autoBwMix", &json!({})).unwrap();
