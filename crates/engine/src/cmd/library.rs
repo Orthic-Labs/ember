@@ -41,6 +41,8 @@ pub struct ImportRequest {
     pub opts: crate::import::ImportOptions,
     pub album: Option<u64>,
     pub album_name: Option<String>,
+    /// Run Assisted Culling's read-only analysis on the photos this import adds.
+    pub cull: bool,
 }
 
 pub fn import_scan_options(p: &Value, command: &str) -> Result<crate::import::ImportScanOptions> {
@@ -125,7 +127,8 @@ pub fn import_params(s: &Session, p: &Value) -> Result<ImportRequest> {
         raw_jpeg_policy,
     };
     let album_name = str_param(p, "albumName").map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
-    Ok(ImportRequest { paths, opts, album, album_name })
+    let cull = bool_or(p, "cull", false);
+    Ok(ImportRequest { paths, opts, album, album_name, cull })
 }
 
 /// After a batch of an import was committed: the album (a new one named `album_name` when there
@@ -1502,7 +1505,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Photos",
             ["File"],
             Some("Cmd+Shift+I"),
-            "{paths: [file or folder (recursive)], mode?: add|copy|move (add = reference the files in place; copy = into the library's Originals/YYYY/YYYY-MM-DD/; move = as copy, then each original and its XMP sidecars are removed from the source — only after the copy is verified (a hard link on the same volume, else copied, synced and compared byte for byte) and its catalog record is saved; failed, duplicate and unchecked files keep their sources; a taken name gets -1, -2…; undo removes the photos from the library but leaves the files at the destination), rawJpegPolicy?: keepBoth|rawOnly (pair notices and review default; explicit paths are always honored), destination?: folder for copies / moves, organize?: date (YYYY/YYYY-MM-DD) | month (YYYY/YYYY-MM) | flat | a folder template, e.g. `{date:%Y}/{date:%Y%m%d}` → 2026/20260114 (the template's `/` make the folders, each level expanded with the rename tokens and made a safe folder name: never outside the destination; must be relative, no `..`; a level with missing metadata is `unknown`) — dated by capture time, else the import time, rename?: file-name template for copies, original extension added (tokens: {name} {num} {seq} {seq:N} {date} {date:%Y%m%d} {folder} {camera} {lens} {iso} {rating} {title} {creator} {ext}; photo.renameTokens explains each; blank = keep names), renameStart?: 1, metadataPreset?: name, dng?: bool (copy raws as DNG; copy only), local?: bool (browsing: the photos stay out of the library, like library.browse; not with move), album?: albumId, albumName?: new album, preset?: presetId, keywords?: [..], onDeleted?: restore|skip|fresh (a file that is in Recently Deleted: restore (default) = bring the photo back with its edits — relinked to the file when its own is gone, skip = leave it there and say so, fresh = delete the trashed record and import the file as new)} → {imported, duplicates: [{path, existing, reason, existingDeleted?}], restored?: [photoId], failed, warnings?: [{path, code: cameraProfile|uprightGeometry|unmappedXmp, profile?, mode?: off|auto|level|vertical|full|guided|unknown, fields?}], moved?: [{from, to, sidecars?}], kept?: [{path, reason}] (move: sources left in place and why), album?}",
+            "{paths: [file or folder (recursive)], mode?: add|copy|move (add = reference the files in place; copy = into the library's Originals/YYYY/YYYY-MM-DD/; move = as copy, then each original and its XMP sidecars are removed from the source — only after the copy is verified (a hard link on the same volume, else copied, synced and compared byte for byte) and its catalog record is saved; failed, duplicate and unchecked files keep their sources; a taken name gets -1, -2…; undo removes the photos from the library but leaves the files at the destination), rawJpegPolicy?: keepBoth|rawOnly (pair notices and review default; explicit paths are always honored), destination?: folder for copies / moves, organize?: date (YYYY/YYYY-MM-DD) | month (YYYY/YYYY-MM) | flat | a folder template, e.g. `{date:%Y}/{date:%Y%m%d}` → 2026/20260114 (the template's `/` make the folders, each level expanded with the rename tokens and made a safe folder name: never outside the destination; must be relative, no `..`; a level with missing metadata is `unknown`) — dated by capture time, else the import time, rename?: file-name template for copies, original extension added (tokens: {name} {num} {seq} {seq:N} {date} {date:%Y%m%d} {folder} {camera} {lens} {iso} {rating} {title} {creator} {ext}; photo.renameTokens explains each; blank = keep names), renameStart?: 1, metadataPreset?: name, dng?: bool (copy raws as DNG; copy only), local?: bool (browsing: the photos stay out of the library, like library.browse; not with move), album?: albumId, albumName?: new album, preset?: presetId, keywords?: [..], cull?: bool (run Assisted Culling's read-only analysis on the photos this import added; no flags change; → culling: {photos, failed, stopped?}; the app runs it as a cancellable background job), onDeleted?: restore|skip|fresh (a file that is in Recently Deleted: restore (default) = bring the photo back with its edits — relinked to the file when its own is gone, skip = leave it there and say so, fresh = delete the trashed record and import the file as new)} → {imported, duplicates: [{path, existing, reason, existingDeleted?}], restored?: [photoId], failed, warnings?: [{path, code: cameraProfile|uprightGeometry|unmappedXmp, profile?, mode?: off|auto|level|vertical|full|guided|unknown, fields?}], moved?: [{from, to, sidecars?}], kept?: [{path, reason}] (move: sources left in place and why), album?}",
             always,
             |s, p| {
                 let req = import_params(s, p)?;
@@ -1511,7 +1514,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 }
                 let undo0 = s.undo.len();
                 let report = crate::import::import_with(s, &req.paths, &req.opts)?;
-                let report = import_batch_done(s, report, req.album, req.album_name.as_deref())?;
+                let mut report = import_batch_done(s, report, req.album, req.album_name.as_deref())?;
                 // one undo step for the whole import
                 let ids_of = |k: &str| -> Vec<u64> { report[k].as_array().map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default() };
                 let (imported, restored) = (ids_of("imported"), ids_of("restored"));
@@ -1519,6 +1522,12 @@ pub fn specs() -> Vec<CommandSpec> {
                 let (verb, count) = if imported.is_empty() && !restored.is_empty() { ("Restore", restored.len()) } else { ("Add", imported.len()) };
                 s.merge_undo(n, &format!("{verb} {count} Photo{}", if count == 1 { "" } else { "s" }));
                 let imported = if imported.is_empty() { restored } else { imported };
+                if req.cull {
+                    let added = ids_of("imported");
+                    if !added.is_empty() {
+                        report["culling"] = super::cull::analyze_imported(s, &added);
+                    }
+                }
                 if let Some(f) = imported.first() {
                     s.selection = Selection::single(PhotoId(*f));
                 }

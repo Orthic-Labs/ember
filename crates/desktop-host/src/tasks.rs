@@ -7,6 +7,8 @@ use serde_json::{Value, json};
 
 use lightcraft_catalog::PhotoId;
 use lightcraft_engine::import::{ImportCandidate, ImportJob, ImportOptions, Prepared, RawJpegImportPolicy, ScanInput, ScanOutput, ScanProgress};
+use lightcraft_engine::activity::Cancel;
+use lightcraft_engine::cmd::cull::CULL_IDS_PER_JOB;
 use lightcraft_engine::media::QuickSource;
 use lightcraft_engine::merge::{MergeJob, MergeOutput};
 use lightcraft_engine::{CullApplyJob, CullJob, CullJobResult, Selection, Session};
@@ -18,6 +20,7 @@ const MAX_TASKS: usize = 128;
 const MAX_MERGE_IDS: usize = 256;
 const MAX_REVIEW_PATHS: usize = 512;
 const MAX_PENDING_PREVIEW_IDS: usize = 8_192;
+const MAX_PENDING_CULL_IDS: usize = 65_536;
 const MAX_COMPLETED_TASKS: usize = 64;
 const MAX_IMPORT_PREVIEWS: usize = 128;
 const IMPORT_PREVIEW_EDGE: usize = 256;
@@ -57,6 +60,7 @@ enum Event {
         undo_before: usize,
         cancelled: bool,
         preserve_selection: bool,
+        cull: bool,
     },
     LightroomPrepared {
         id: String,
@@ -128,6 +132,7 @@ pub(crate) struct Tasks {
     notices: Vec<String>,
     completed: VecDeque<TerminalTask>,
     pending_preview_ids: VecDeque<u64>,
+    pending_cull_ids: VecDeque<u64>,
     previews: crate::PreviewStore,
 }
 
@@ -146,6 +151,7 @@ impl Tasks {
             notices: Vec::new(),
             completed: VecDeque::new(),
             pending_preview_ids: VecDeque::new(),
+            pending_cull_ids: VecDeque::new(),
             previews,
         }
     }
@@ -479,6 +485,92 @@ impl Tasks {
         self.start_preview_build_for_ids(session, &unique);
     }
 
+    /// Queue Assisted Culling's read-only pass over the photos an import just added (`cull: true`).
+    /// Ids that the running culling job can't take wait in `pending_cull_ids`, one job after another.
+    fn queue_import_cull(&mut self, session: &mut Session, ids: &[u64]) {
+        let mut seen: HashSet<u64> = self.pending_cull_ids.iter().copied().collect();
+        let mut dropped = 0;
+        for id in ids.iter().copied().filter(|id| *id != 0) {
+            if !seen.insert(id) {
+                continue;
+            }
+            if self.pending_cull_ids.len() >= MAX_PENDING_CULL_IDS {
+                dropped += 1;
+            } else {
+                self.pending_cull_ids.push_back(id);
+            }
+        }
+        if dropped > 0 {
+            self.notices.push(format!("culling queue full; {dropped} imported photo(s) not analyzed"));
+        }
+        self.start_pending_cull(session);
+    }
+
+    /// Start the next culling job for queued import ids. At most one culling job runs at a time;
+    /// a cancelled job clears the queue (see `Event::Cull`).
+    fn start_pending_cull(&mut self, session: &mut Session) {
+        while !self.pending_cull_ids.is_empty() && !self.running_kind("cull") && self.jobs.len() < MAX_TASKS {
+            let take = self.pending_cull_ids.len().min(CULL_IDS_PER_JOB);
+            let ids: Vec<PhotoId> = self.pending_cull_ids.drain(..take).map(PhotoId).filter(|id| session.catalog.photo(*id).is_some()).collect();
+            if ids.is_empty() {
+                continue;
+            }
+            if let Err(error) = self.start_import_cull_job(session, &ids) {
+                self.notices.push(format!("culling after import did not start: {error}"));
+            }
+            return;
+        }
+    }
+
+    /// Read-only culling of `ids` on a detached worker. Its activity row shares the job's cancel
+    /// flag, so cancelling either the activity row or the task stops the same pass.
+    fn start_import_cull_job(&mut self, session: &mut Session, ids: &[PhotoId]) -> Result<Value, String> {
+        let job = session.plan_cull_job(ids, None, false).map_err(|error| error.to_string())?;
+        let library_id = session.library.as_ref().map(|library| library.dir.to_string_lossy().into_owned());
+        let photos = job.photos.len() as u64;
+        let cancel = Arc::new(AtomicBool::new(false));
+        let guard = session.activity.start("cull", "Assisted Culling", Cancel::Flag(cancel.clone()));
+        guard.progress(0, photos);
+        let handle = guard.handle();
+        let total = Arc::new(AtomicUsize::new(job.photos.len().saturating_add(1).max(1)));
+        let completed = Arc::new(AtomicUsize::new(0));
+        let task_id = self.new_id("cull");
+        let task = Task {
+            id: task_id.clone(),
+            kind: "cull".into(),
+            label: "Assisted Culling".into(),
+            total: total.clone(),
+            completed: completed.clone(),
+            cancel: cancel.clone(),
+            worker: None,
+            progress: None,
+        };
+        let tx = self.tx.clone();
+        let id_for_worker = task_id.clone();
+        let worker_cancel = cancel.clone();
+        let worker_total = total.clone();
+        let worker = std::thread::Builder::new()
+            .name("lightcraft-cull-import".into())
+            .spawn(move || {
+                let result = lightcraft_engine::guard::catch("import culling", || {
+                    job.run(&|fraction, _stage| {
+                        let terminal = worker_total.load(Ordering::Relaxed).saturating_sub(1);
+                        let done = (fraction.clamp(0.0, 1.0) * terminal as f32).round() as usize;
+                        completed.store(done, Ordering::Relaxed);
+                        handle.progress(done as u64, photos);
+                        !worker_cancel.load(Ordering::Relaxed)
+                    })
+                })
+                .unwrap_or_else(Err);
+                let cancelled = worker_cancel.load(Ordering::Relaxed);
+                let _ = tx.send(Event::Cull { id: id_for_worker, job, result, cancelled, library_id });
+                drop(guard);
+            })
+            .map_err(|error| format!("could not start culling after import: {error}"))?;
+        self.insert(Task { worker: Some(worker), ..task })?;
+        Ok(json!({"taskId": task_id, "kind": "cull", "total": total.load(Ordering::Relaxed)}))
+    }
+
     pub(crate) fn start_auto_import(&mut self, session: &mut Session, params: &Value) -> Result<Value, String> {
         self.start_import_with_selection(session, params, true)
     }
@@ -695,6 +787,7 @@ impl Tasks {
         };
         let tx = self.tx.clone();
         let id_for_worker = task_id.clone();
+        let cull = request.cull;
         let paths = request.paths;
         let opts = request.opts;
         let album = request.album;
@@ -718,6 +811,7 @@ impl Tasks {
                             undo_before,
                             cancelled,
                             preserve_selection,
+                            cull,
                         });
                     }
                     Err(error) => {
@@ -732,6 +826,7 @@ impl Tasks {
                             undo_before,
                             cancelled: worker_cancel.load(Ordering::Relaxed),
                             preserve_selection,
+                            cull,
                         });
                         log::error!("import task failed: {error}");
                     }
@@ -888,7 +983,7 @@ impl Tasks {
                     };
                     self.finish(id, result, "merge", cancelled);
                 }
-                Event::Import { id, prepared, opts, now, album, album_name, undo_before, cancelled, preserve_selection } => {
+                Event::Import { id, prepared, opts, now, album, album_name, undo_before, cancelled, preserve_selection, cull } => {
                     let cancelled = cancelled || self.jobs.get(&id).is_some_and(|task| task.cancel.load(Ordering::Relaxed));
                     let selection_before = preserve_selection.then(|| session.selection.clone());
                     let result = if cancelled || now.is_empty() {
@@ -923,6 +1018,9 @@ impl Tasks {
                         .unwrap_or_default();
                     self.finish(id, result, "import", cancelled);
                     self.schedule_preview_ids(session, &preview_ids);
+                    if cull {
+                        self.queue_import_cull(session, &preview_ids);
+                    }
                 }
                 Event::LightroomPrepared { id, result, cancelled } => self.poll_lightroom_prepared(session, id, result, cancelled),
                 Event::LightroomFinalized { id, report, result, index_path, commit_error } => {
@@ -981,6 +1079,11 @@ impl Tasks {
                         result.and_then(|result| session.validate_cull_job_result(&job, &result).map_err(|error| error.to_string()))
                     };
                     self.finish(id, result, "cull", cancelled);
+                    if cancelled {
+                        self.pending_cull_ids.clear();
+                    } else {
+                        self.start_pending_cull(session);
+                    }
                 }
                 Event::CullApply { id, prepared, params, result, cancelled, library_id } => {
                     let cancelled = cancelled || self.jobs.get(&id).is_some_and(|task| task.cancel.load(Ordering::Relaxed));
@@ -1636,6 +1739,28 @@ mod tests {
             assert!(error.contains(expected), "{error:?} should mention {expected:?}");
             assert!(tasks.statuses().is_empty());
         }
+    }
+
+    #[test]
+    fn import_culling_queues_only_the_imported_photos_and_cancel_stops_it() {
+        let mut tasks = Tasks::new();
+        let mut session = Session::with_demo();
+        let ids: Vec<u64> = session.visible_cloned().iter().map(|id| id.0).collect();
+        assert!(!ids.is_empty(), "demo fixture provides culling sources");
+        tasks.queue_import_cull(&mut session, &ids);
+        let statuses = tasks.statuses();
+        let culls: Vec<_> = statuses.iter().filter(|job| job.kind == "cull").collect();
+        assert_eq!(culls.len(), 1, "one culling job covers the imported photos: {statuses:?}");
+        assert_eq!(culls[0].total, ids.len() + 1, "one unit per imported photo plus the terminal publication");
+        assert!(culls[0].cancellable);
+        let task_id = culls[0].id.clone();
+        // a cancel before the owner thread publishes the result wins, and the queue is cleared
+        assert_eq!(tasks.cancel(None).expect("cancel culling")["cancelled"], 1);
+        let terminal = wait_for_terminal(&mut tasks, &mut session, &task_id, Duration::from_secs(10), "import culling");
+        assert_eq!(terminal.state, "cancelled");
+        assert!(terminal.result.is_none());
+        assert!(tasks.pending_cull_ids.is_empty());
+        assert!(!tasks.running_kind("cull"));
     }
 
     #[test]

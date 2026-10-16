@@ -1016,6 +1016,52 @@ fn analyze(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"photos": out, "groups": best.len(), "rejected": rejected, "picked": picked, "failed": failed}))
 }
 
+/// Most photos one culling job measures; longer id lists run as several jobs.
+pub const CULL_IDS_PER_JOB: usize = 8_192;
+
+/// `library.import` with `cull: true`: the read-only Assisted Culling pass over the photos the
+/// import added, in jobs of at most [`CULL_IDS_PER_JOB`]. It writes no flags or analysis. A stop
+/// (a cancel or a failed measurement pass) is reported in `stopped`; the import itself has
+/// already committed and is never reported as failed.
+pub fn analyze_imported(s: &mut Session, ids: &[u64]) -> Value {
+    let task = s.activity.start("cull", "Assisted Culling", crate::activity::Cancel::Yes);
+    let handle = task.handle();
+    let total = ids.len() as u64;
+    handle.progress(0, total);
+    let mut photos = Vec::with_capacity(ids.len());
+    let mut failed = Vec::new();
+    let mut done = 0_u64;
+    let mut stopped = None;
+    for chunk in ids.chunks(CULL_IDS_PER_JOB) {
+        if handle.is_cancelled() {
+            stopped = Some("cancelled".to_string());
+            break;
+        }
+        let chunk_ids: Vec<PhotoId> = chunk.iter().copied().map(PhotoId).collect();
+        let span = chunk.len() as f32;
+        let base = done;
+        let run = s.plan_cull_job(&chunk_ids, None, false).map_err(|error| error.to_string()).and_then(|job| {
+            job.run(&|fraction, _stage| {
+                handle.progress(base + (fraction.clamp(0.0, 1.0) * span) as u64, total);
+                !handle.is_cancelled()
+            })
+        });
+        match run {
+            Ok(result) => {
+                photos.extend(result.value["photos"].as_array().cloned().unwrap_or_default());
+                failed.extend(result.value["failed"].as_array().cloned().unwrap_or_default());
+            }
+            Err(error) => {
+                stopped = Some(error);
+                break;
+            }
+        }
+        done += chunk.len() as u64;
+        handle.progress(done, total);
+    }
+    json!({"photos": photos, "failed": failed, "stopped": stopped})
+}
+
 /// Find Similar: photos that look like `id` (signatures from thumbnail-level sources, cached by
 /// content), most similar first; the view is filtered to them.
 fn find_similar(s: &mut Session, p: &Value) -> Result<Value> {

@@ -83,6 +83,8 @@ pub struct ImportDialog {
     pub metadata_preset: String,
     /// Copy: raws are copied as DNG.
     pub dng: bool,
+    /// Run Assisted Culling's read-only pass on the imported photos, in the background (the `cull` param).
+    pub cull: bool,
     /// Per candidate: the library already has it in Recently Deleted ([`ImportDialog::set_trashed`]).
     pub trashed: Vec<bool>,
     /// What to do with those: `restore` (the default: the photo comes back with its edits), `fresh`
@@ -657,6 +659,9 @@ pub fn start(app: &mut LightcraftApp, d: &ImportDialog) -> Result<Value, String>
         if d.dng && !d.move_files {
             params["dng"] = json!(true);
         }
+        if d.cull {
+            params["cull"] = json!(true);
+        }
     }
     let total = queue.len();
     app.import = Some(ImportTask::new(queue, params, undo0, false));
@@ -1188,6 +1193,10 @@ pub fn body(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &mut ImportDialog) {
                 register(ui.ctx(), "check:importDng", r.rect);
             });
         }
+        field(ui, "Culling", |ui| {
+            let r = ui.checkbox(&mut d.cull, crate::i18n::tr("Assisted culling after import"));
+            register(ui.ctx(), "check:importCull", r.rect);
+        });
         let rename_id = crate::text_field::id("field:importRename");
         let tags_open = field(ui, "Rename", |ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
