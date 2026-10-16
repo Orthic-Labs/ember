@@ -64,6 +64,7 @@ pub mod proof;
 pub mod rename;
 pub mod segment;
 pub mod sidecar;
+pub mod slideshow;
 pub mod smart;
 pub mod sync;
 mod view;
@@ -268,6 +269,10 @@ pub struct Session {
     pub last_export: Option<serde_json::Value>,
     /// The user's export presets (built-ins: [`export::builtin_presets`]), persisted in prefs.json.
     pub export_presets: Vec<export::ExportPreset>,
+    /// The Classic Slideshow settings in use (`slideshow.set`); not persisted.
+    pub slideshow: slideshow::Model,
+    /// The user's Classic Slideshow templates (`slideshow.saveTemplate`), persisted in prefs.json.
+    pub slideshow_templates: Vec<slideshow::Template>,
     /// Metadata presets (`metadata.*`), persisted in prefs.json.
     pub metadata_presets: Vec<cmd::metadata::MetadataPreset>,
     /// Saved filter-bar settings (`filter.*`), persisted in prefs.json.
@@ -388,6 +393,8 @@ impl Session {
             xmp: sidecar::XmpPrefs::default(),
             last_export: None,
             export_presets: Vec::new(),
+            slideshow: slideshow::Model::default(),
+            slideshow_templates: Vec::new(),
             metadata_presets: Vec::new(),
             filter_presets: Vec::new(),
             curve_presets: Vec::new(),

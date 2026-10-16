@@ -177,7 +177,7 @@ fn caption_text(name: &str, width: usize) -> String {
     format!("{}…{}", cells.iter().take(left).copied().collect::<String>(), cells.iter().skip(cells.len() - right).copied().collect::<String>())
 }
 
-fn blit(dst: &mut Rgba8, src: &Rgba8, x: usize, y: usize) -> Result<(), String> {
+pub(crate) fn blit(dst: &mut Rgba8, src: &Rgba8, x: usize, y: usize) -> Result<(), String> {
     if x.checked_add(src.width).is_none_or(|w| w > dst.width) || y.checked_add(src.height).is_none_or(|h| h > dst.height) {
         return Err("contact sheet image outside page".into());
     }
@@ -197,14 +197,14 @@ fn blit(dst: &mut Rgba8, src: &Rgba8, x: usize, y: usize) -> Result<(), String> 
 }
 
 // Minimal PDF 1.4: one JPEG XObject per page, explicit byte lengths and classic xref offsets.
-struct Pdf {
+pub(crate) struct Pdf {
     bytes: Vec<u8>,
     offsets: Vec<usize>,
     points: (f64, f64),
 }
 
 impl Pdf {
-    fn new(pages: usize, points: (f64, f64)) -> Self {
+    pub(crate) fn new(pages: usize, points: (f64, f64)) -> Self {
         let mut p = Self { bytes: b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n".to_vec(), offsets: vec![0], points };
         p.object(1, b"<< /Type /Catalog /Pages 2 0 R >>");
         let kids = (0..pages).map(|i| format!("{} 0 R", 3 + i * 3)).collect::<Vec<_>>().join(" ");
@@ -226,7 +226,7 @@ impl Pdf {
         self.object(id, &body);
     }
 
-    fn page(&mut self, index: usize, jpg: &[u8], width: usize, height: usize) {
+    pub(crate) fn page(&mut self, index: usize, jpg: &[u8], width: usize, height: usize) {
         let id = 3 + index * 3;
         let (w, h) = self.points;
         self.object(
@@ -246,7 +246,7 @@ impl Pdf {
         );
     }
 
-    fn finish(mut self) -> Vec<u8> {
+    pub(crate) fn finish(mut self) -> Vec<u8> {
         let start = self.bytes.len();
         self.bytes.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", self.offsets.len()).as_bytes());
         for offset in self.offsets.iter().skip(1) {

@@ -35,6 +35,7 @@ mod prefs;
 mod preset_files;
 pub mod previews;
 mod query;
+mod slideshow;
 mod sync;
 mod xmp;
 
@@ -170,6 +171,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(face_detect::specs());
         v.extend(face_recognize::specs());
         v.extend(activity::specs());
+        v.extend(slideshow::specs());
         v
     })
 }
