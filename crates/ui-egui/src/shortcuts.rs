@@ -347,7 +347,11 @@ fn keyboard_owned(app: &LightcraftApp, ctx: &egui::Context) -> bool {
         .as_ref()
         .is_some_and(|workspace| craft_ui::docking::DockArea::new(egui::Id::new("lightcraft-docking")).chrome_has_focus(ctx, &workspace.layout));
     if !chrome {
-        return true;
+        // Tab moves egui focus onto a button or other non-text widget; that focus is not a text edit and
+        // must not swallow the next Tab (Classic Tab / Shift+Tab toggle the panels)
+        let tab = ctx.input(|input| input.key_pressed(Key::Tab));
+        let on_text = ctx.memory(|m| m.focused()).is_some_and(|id| egui::text_edit::TextEditState::load(ctx, id).is_some());
+        return !tab || on_text;
     }
     ctx.input(|input| {
         [Key::Enter, Key::Space, Key::Tab, Key::Escape, Key::ArrowLeft, Key::ArrowRight, Key::ArrowUp, Key::ArrowDown]
@@ -814,11 +818,12 @@ mod tests {
         assert!(!h.app.ui.settings.classic_keymap);
         h.app.ui.right = RightPanel::None;
         key(&mut h, "E", false);
+        // the primary E opens the Edit panel, which opens the loupe (every edit tool needs a photo up)
         assert_eq!(h.app.ui.right, RightPanel::Edit);
-        assert_eq!(h.app.ui.view, ViewMode::PhotoGrid);
+        assert_eq!(h.app.ui.view, ViewMode::Detail);
         key(&mut h, "C", false);
         assert_eq!(h.app.ui.right, RightPanel::Crop);
-        assert_eq!(h.app.ui.view, ViewMode::PhotoGrid);
+        assert_eq!(h.app.ui.view, ViewMode::Detail);
     }
 
     #[test]

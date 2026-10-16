@@ -101,7 +101,9 @@ pub(super) fn choices<V: PartialEq + Copy>(ui: &mut egui::Ui, id: &str, options:
 // ------------------------------------------------------------------------------------- General
 
 fn general_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
-    row(ui, t, crate::i18n::tr("Language"), |ui| {
+    // one wrapping line under its label: the catalog list is long and a single row ran off the dialog
+    ui.label(RichText::new(crate::i18n::tr("Language")).color(t.text_label));
+    ui.horizontal_wrapped(|ui| {
         let languages: Vec<_> = crate::i18n::Locale::ALL.iter().map(|language| (*language, language.name())).collect();
         choices(ui, "settingsLanguage", &languages, &mut app.ui.language);
         crate::i18n::set_language(app.ui.language);
@@ -656,12 +658,9 @@ fn interface_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
         choices(ui, "settingsInfo", &[(I::Off, "Off"), (I::Info1, "Info 1"), (I::Info2, "Info 2")], &mut app.ui.info_overlay);
     });
     heading(ui, t, crate::i18n::tr("Keyboard"));
-    check(
-        ui,
-        "settings.classicKeymap",
-        &mut app.ui.settings.classic_keymap,
-        "Classic keymap: E Loupe, C Compare, L Lights Out, I Info, R Crop, K Brush, M Linear Gradient",
-    );
+    check(ui, "settings.classicKeymap", &mut app.ui.settings.classic_keymap, "Classic keymap");
+    // the key list is its own wrapping line: in the checkbox label it widened the whole dialog
+    hint(ui, t, "E Loupe, C Compare, L Lights Out, I Info, R Crop, K Brush, M Linear Gradient");
 }
 
 /// Appearance Mode (`button:settingsAppearance-{0,1,2}`: Auto, Dark, Light) above the light and

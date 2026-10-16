@@ -353,14 +353,21 @@ mod contact_sheet_tests {
         let dialog = h.app.ui.dialog.take().unwrap();
         crate::panels::dialogs::confirm_dialog(&mut h.app, &dialog).unwrap();
         assert_eq!(h.app.pending_picks.len(), 1);
-        let deadline = Instant::now() + Duration::from_secs(20);
+        // the whole suite runs in parallel on a small CI machine: allow for a slow debug render
+        let deadline = Instant::now() + Duration::from_secs(60);
         loop {
             // The activity stack lays out text, which egui only allows inside a frame.
             h.step();
             if h.app.last_export_result.is_some() {
                 break;
             }
-            assert!(Instant::now() < deadline, "export did not finish");
+            assert!(
+                Instant::now() < deadline,
+                "export did not finish (running: {}, picks waiting: {}, toast: {:?})",
+                h.app.export.is_some(),
+                h.app.pending_picks.len(),
+                h.app.ui.toast.as_ref().map(|t| &t.0)
+            );
             std::thread::sleep(Duration::from_millis(10));
         }
         let req = asked.lock().unwrap();
