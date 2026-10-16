@@ -491,7 +491,7 @@ pub fn show_module(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::
     }
     if play {
         match start(app, ctx) {
-            Ok(_) => app.toast(ctx, crate::i18n::tr("Classic slideshow · Space pauses · arrows step · Esc ends")),
+            Ok(_) => app.toast(ctx, crate::i18n::tr("Play Slideshow Module · Space pauses · arrows step · Esc ends")),
             Err(e) => app.toast_error(ctx, e),
         }
     }

@@ -2276,5 +2276,14 @@
   "Radius (metres)": "Bán kính (mét)",
   "The radius must be a number of metres": "Bán kính phải là một số tính bằng mét",
   "Slideshow Module": "Mô-đun trình chiếu",
-  "Play Slideshow Module": "Phát mô-đun trình chiếu"
+  "Play Slideshow Module": "Phát mô-đun trình chiếu",
+  "Play Slideshow Module · Space pauses · arrows step · Esc ends": "Phát mô-đun trình chiếu · Space tạm dừng · mũi tên chuyển · Esc kết thúc",
+  "Filename captions": "Tên tệp làm chú thích",
+  "Info text (metadata fields in braces)": "Văn bản thông tin (trường siêu dữ liệu đặt trong dấu ngoặc nhọn)",
+  "Next page": "Trang sau",
+  "Page": "Trang",
+  "Previous page": "Trang trước",
+  "Repeat one photo per page": "Lặp một ảnh cho mỗi trang",
+  "Rotate to fit": "Xoay cho vừa",
+  "Select photos to print.": "Chọn ảnh để in."
 }

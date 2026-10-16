@@ -617,7 +617,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             // Classic Slideshow: the selected photos (or the visible ones), full screen
             let r = crate::slideshow_view::start(app, &ctx);
             if r.is_ok() {
-                app.toast(&ctx, crate::i18n::tr("Classic slideshow · Space pauses · arrows step · Esc ends"));
+                app.toast(&ctx, crate::i18n::tr("Play Slideshow Module · Space pauses · arrows step · Esc ends"));
             }
             r
         }

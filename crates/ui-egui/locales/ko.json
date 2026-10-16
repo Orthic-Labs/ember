@@ -2276,5 +2276,14 @@
   "Radius (metres)": "반경(미터)",
   "The radius must be a number of metres": "반경은 미터 단위의 숫자여야 합니다",
   "Slideshow Module": "슬라이드쇼 모듈",
-  "Play Slideshow Module": "슬라이드쇼 모듈 재생"
+  "Play Slideshow Module": "슬라이드쇼 모듈 재생",
+  "Play Slideshow Module · Space pauses · arrows step · Esc ends": "슬라이드쇼 모듈 재생 · 스페이스 일시정지 · 화살표 이동 · Esc 종료",
+  "Filename captions": "파일 이름 캡션",
+  "Info text (metadata fields in braces)": "정보 텍스트 (중괄호 안은 메타데이터 필드)",
+  "Next page": "다음 페이지",
+  "Page": "페이지",
+  "Previous page": "이전 페이지",
+  "Repeat one photo per page": "페이지마다 사진 하나 반복",
+  "Rotate to fit": "맞게 회전",
+  "Select photos to print.": "인쇄할 사진을 선택하세요."
 }

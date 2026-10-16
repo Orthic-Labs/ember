@@ -2275,5 +2275,14 @@
   "Radius (metres)": "Radio (metros)",
   "The radius must be a number of metres": "El radio debe ser un número de metros",
   "Slideshow Module": "Módulo de presentación",
-  "Play Slideshow Module": "Reproducir módulo de presentación"
+  "Play Slideshow Module": "Reproducir módulo de presentación",
+  "Play Slideshow Module · Space pauses · arrows step · Esc ends": "Reproducir módulo de presentación · Espacio pausa · flechas avanzan · Esc termina",
+  "Filename captions": "Nombres de archivo como pies de foto",
+  "Info text (metadata fields in braces)": "Texto de información (campos de metadatos entre llaves)",
+  "Next page": "Página siguiente",
+  "Page": "Página",
+  "Previous page": "Página anterior",
+  "Repeat one photo per page": "Repetir una foto por página",
+  "Rotate to fit": "Girar para ajustar",
+  "Select photos to print.": "Selecciona fotos para imprimir."
 }

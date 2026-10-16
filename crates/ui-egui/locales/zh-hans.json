@@ -2277,5 +2277,14 @@
   "Radius (metres)": "半径（米）",
   "The radius must be a number of metres": "半径必须是以米为单位的数字",
   "Slideshow Module": "幻灯片模块",
-  "Play Slideshow Module": "播放幻灯片模块"
+  "Play Slideshow Module": "播放幻灯片模块",
+  "Play Slideshow Module · Space pauses · arrows step · Esc ends": "播放幻灯片模块 · 空格暂停 · 方向键切换 · Esc 结束",
+  "Filename captions": "文件名作为说明",
+  "Info text (metadata fields in braces)": "信息文本（大括号内为元数据字段）",
+  "Next page": "下一页",
+  "Page": "页",
+  "Previous page": "上一页",
+  "Repeat one photo per page": "每页重复一张照片",
+  "Rotate to fit": "旋转以适应",
+  "Select photos to print.": "选择要打印的照片。"
 }

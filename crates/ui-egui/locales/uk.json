@@ -2276,5 +2276,14 @@
   "Radius (metres)": "Радіус (метри)",
   "The radius must be a number of metres": "Радіус має бути числом у метрах",
   "Slideshow Module": "Модуль слайд-шоу",
-  "Play Slideshow Module": "Відтворити модуль слайд-шоу"
+  "Play Slideshow Module": "Відтворити модуль слайд-шоу",
+  "Play Slideshow Module · Space pauses · arrows step · Esc ends": "Відтворення модуля слайд-шоу · Пробіл — пауза · стрілки — перегортати · Esc — завершити",
+  "Filename captions": "Імена файлів як підписи",
+  "Info text (metadata fields in braces)": "Текст відомостей (поля метаданих у фігурних дужках)",
+  "Next page": "Наступна сторінка",
+  "Page": "Сторінка",
+  "Previous page": "Попередня сторінка",
+  "Repeat one photo per page": "Повторювати одне фото на кожній сторінці",
+  "Rotate to fit": "Повернути за розміром",
+  "Select photos to print.": "Виберіть фото для друку."
 }

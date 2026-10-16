@@ -2275,5 +2275,14 @@
   "Radius (metres)": "半徑（公尺）",
   "The radius must be a number of metres": "半徑必須是以公尺為單位的數字",
   "Slideshow Module": "投影片模組",
-  "Play Slideshow Module": "播放投影片模組"
+  "Play Slideshow Module": "播放投影片模組",
+  "Play Slideshow Module · Space pauses · arrows step · Esc ends": "播放投影片模組 · 空白鍵暫停 · 方向鍵切換 · Esc 結束",
+  "Filename captions": "檔名作為說明",
+  "Info text (metadata fields in braces)": "資訊文字（大括號內為中繼資料欄位）",
+  "Next page": "下一頁",
+  "Page": "頁",
+  "Previous page": "上一頁",
+  "Repeat one photo per page": "每頁重複一張照片",
+  "Rotate to fit": "旋轉以符合",
+  "Select photos to print.": "選取要列印的照片。"
 }

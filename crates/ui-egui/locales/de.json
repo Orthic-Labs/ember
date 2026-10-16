@@ -2276,5 +2276,14 @@
   "Radius (metres)": "Radius (Meter)",
   "The radius must be a number of metres": "Der Radius muss eine Zahl in Metern sein",
   "Slideshow Module": "Diashow-Modul",
-  "Play Slideshow Module": "Diashow-Modul abspielen"
+  "Play Slideshow Module": "Diashow-Modul abspielen",
+  "Play Slideshow Module · Space pauses · arrows step · Esc ends": "Diashow-Modul abspielen · Leertaste pausiert · Pfeile blättern · Esc beendet",
+  "Filename captions": "Dateinamen als Bildunterschrift",
+  "Info text (metadata fields in braces)": "Infotext (Metadatenfelder in geschweiften Klammern)",
+  "Next page": "Nächste Seite",
+  "Page": "Seite",
+  "Previous page": "Vorherige Seite",
+  "Repeat one photo per page": "Ein Foto pro Seite wiederholen",
+  "Rotate to fit": "Zum Einpassen drehen",
+  "Select photos to print.": "Fotos zum Drucken auswählen."
 }
