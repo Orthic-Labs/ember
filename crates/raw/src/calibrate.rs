@@ -217,7 +217,7 @@ pub fn fit_chart(patches: &[[f64; 3]], edition: ChartEdition, illuminant: Xy) ->
         den += r[1] * r[1];
     }
     let n = num.map(|v| v / den);
-    if n.iter().any(|v| !(*v > 1e-6)) {
+    if n.iter().any(|v| v.is_nan() || *v <= 1e-6) {
         return Err("the grey patches are black or negative: check exposure and black level".into());
     }
     let m = n.iter().cloned().fold(f64::MIN, f64::max);

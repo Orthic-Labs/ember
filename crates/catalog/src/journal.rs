@@ -52,7 +52,7 @@
 //! | 7 | Kelvin white balance for raws whose camera has matrices (#730) | `Op::SetAsShotWb`, `WhiteBalance.scale` |
 //! | 8 | History cursor: Go to History Step adds no step | `Op::SetHistoryCursor`, `Photo.history_cursor` |
 //! | 9 | "Not this person" for suggested faces (#109) | `Op::SetFaceRejection`, `Catalog.face_rejections` |
-| 10 | Saved locations: named circles for the map (#116) | `Op::SetSavedLocation`, `Catalog.saved_locations`, `Catalog.next_location` |
+//! | 10 | Saved locations: named circles for the map (#116) | `Op::SetSavedLocation`, `Catalog.saved_locations`, `Catalog.next_location` |
 //!
 //! Rules:
 //! - **Bump [`VERSION`]** (and add a row above) in the change that adds an [`Op`] variant or a

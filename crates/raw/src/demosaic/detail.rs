@@ -201,7 +201,7 @@ mod tests {
             let d = ((fx - w as f32 * 0.35).powi(2) + (fy - h as f32 * 0.4).powi(2)).sqrt();
             let lum = if d < w as f32 * 0.18 {
                 0.85
-            } else if x > w * 2 / 3 && (y / 3) % 2 == 0 {
+            } else if x > w * 2 / 3 && (y / 3).is_multiple_of(2) {
                 0.15
             } else if fx + fy * 0.5 > w as f32 * 1.1 {
                 0.7
