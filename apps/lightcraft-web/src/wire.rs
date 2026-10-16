@@ -13,13 +13,12 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
-use lightcraft_engine::auto_measure::{AutoInput, measure_auto, with_lens_pick};
+use lightcraft_engine::auto_measure::{AutoInput, AutoKind, AutoMeasured, measure_kind, with_lens_pick};
 use lightcraft_engine::catalog::Source;
 use lightcraft_engine::develop::{DevelopSettings, EmbeddedLens};
 use lightcraft_engine::export::{ExportOptions, Exported, RenderParts, encode_gain_map_jpeg, encode_rendered};
 use lightcraft_engine::media::{DecodedSource, MediaCache, RenderJob, SourceLevel, SourceRef};
 use lightcraft_engine::pipeline::auto::FaceBox;
-use lightcraft_engine::pipeline::auto::regions::RegionAuto;
 use lightcraft_engine::pipeline::{OutputDepth, OutputSpace, Quality, RenderRequest, Rendered, SourceInfo, StageCache};
 use lightcraft_meta::Metadata;
 use lightcraft_preview::{Hash128, Lru, PreviewCache};
@@ -202,12 +201,16 @@ impl WireExport {
     }
 }
 
-/// One photo's Auto measure for a worker (#192): where the thumbnail-level source comes from and
-/// the settings and facts it is read against ([`WireJob`], no render), and what to measure. The
-/// worker answers with the values (`RegionAuto` as JSON); the main thread applies them.
+/// One photo's Auto measure for a worker (#192): where the source comes from (thumbnail level; the
+/// original for the noise fit) and the settings and facts it is read against ([`WireJob`], no
+/// render), and what to measure. The worker answers with the values (`AutoMeasured` as JSON); the
+/// main thread applies them.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WireAuto {
     pub job: WireJob,
+    /// What to measure (Auto Settings when absent).
+    #[serde(default)]
+    pub kind: AutoKind,
     /// The subject, background and sky get their own masks too.
     pub regions: bool,
     /// Cached face boxes (x0, y0, x1, y1 as fractions of the frame) that meter the key.
@@ -227,9 +230,9 @@ impl WireAuto {
             cache_generation: 0,
             // the file's identity: a replaced file is not measured from the old decode
             source_identity: Some(input.source_identity.to_string()),
-            level: SourceLevel::Thumb,
+            level: input.kind.level(),
             origin: input.origin.clone(),
-            max_edge: SourceLevel::Thumb.max_edge(),
+            max_edge: input.kind.level().max_edge(),
             raw: info.raw,
             relative_wb: info.relative_wb,
             legacy_relative_wb: info.legacy_relative_wb,
@@ -249,6 +252,7 @@ impl WireAuto {
         };
         WireAuto {
             job,
+            kind: input.kind,
             regions: input.regions,
             // a box with a NaN or infinite side can't cross as JSON, and Auto ignores it anyway
             faces: input.faces.iter().map(|f| [f.x0, f.y0, f.x1, f.y1]).filter(|b| b.iter().all(|v| v.is_finite())).collect(),
@@ -315,12 +319,13 @@ impl WorkerCore {
         Ok(src)
     }
 
-    /// Measure Auto for `a` (#192): the same decode as a thumbnail's, then the engine's pure measure.
-    /// `original` holds the file's bytes when [`WorkerCore::needs_original`] asked.
-    pub fn measure(&mut self, a: &WireAuto, original: Option<&[u8]>) -> Result<RegionAuto, String> {
+    /// Measure Auto for `a` (#192): the same decode as a thumbnail's (the original's for the noise
+    /// fit), then the engine's pure measure. `original` holds the file's bytes when
+    /// [`WorkerCore::needs_original`] asked.
+    pub fn measure(&mut self, a: &WireAuto, original: Option<&[u8]>) -> Result<AutoMeasured, String> {
         let src = self.source_for(&a.job, original)?;
         let info = with_lens_pick(src.info_or(a.job.info()), a.lens_picked.then_some(a.lens_pick));
-        Ok(measure_auto(&src.image, &info, &a.job.settings, &a.faces(), a.regions))
+        Ok(measure_kind(a.kind, &src.image, &info, &a.job.settings, &a.faces(), a.regions))
     }
 
     /// Render `job`; `original` holds the file's bytes when [`WorkerCore::needs_original`] asked.
@@ -638,11 +643,46 @@ mod tests {
         let mut core = WorkerCore::default();
         assert_eq!(core.needs_original(&wire.job), None, "demo scenes are generated");
         let values = core.measure(&wire, None).unwrap();
-        let values: RegionAuto = serde_json::from_str(&serde_json::to_string(&values).unwrap()).unwrap();
+        let AutoMeasured::Tone(values) = serde_json::from_str(&serde_json::to_string(&values).unwrap()).unwrap() else {
+            panic!("Auto Settings measures the tone");
+        };
         assert_eq!(serde_json::to_value(&values).unwrap(), shown, "the worker finds what the session finds");
         s.execute("develop.applyAutoValues", &serde_json::json!({"values": values, "basis": input.basis})).unwrap();
         s.execute("edit.undo", &serde_json::json!({})).unwrap();
         assert!(core.measure(&wire, None).is_ok(), "the decoded source is kept for the next measure");
+    }
+
+    // Issue #192: the other Auto commands are measured by a worker too, and the command the values are
+    // handed to writes what it always wrote
+    #[test]
+    fn a_worker_measures_every_auto_kind_like_the_session() {
+        use lightcraft_engine::auto_measure::auto_input_for;
+        for (command, params, kind) in [
+            ("develop.autoBwMix", serde_json::json!({}), AutoKind::BwMix),
+            ("develop.autoNoise", serde_json::json!({}), AutoKind::Noise),
+            ("develop.autoWhiteBalance", serde_json::json!({}), AutoKind::WhiteBalance),
+            ("develop.autoBatch", serde_json::json!({"regions": false}), AutoKind::Tone),
+        ] {
+            let mut native = Session::with_demo();
+            let mut s = Session::with_demo();
+            let id = s.visible_cloned()[0];
+            for session in [&mut native, &mut s] {
+                session.execute("library.select", &serde_json::json!({"ids": [id.0]})).unwrap();
+            }
+            let want = native.execute(command, &params).unwrap();
+            let input = auto_input_for(&s, id, kind, false, None).unwrap();
+            let wire: WireAuto = serde_json::from_str(&serde_json::to_string(&WireAuto::from_input(&input)).unwrap()).unwrap();
+            assert_eq!(wire.kind, kind, "{command}");
+            assert_eq!(wire.job.max_edge, kind.level().max_edge(), "{command}: the noise fit reads the original, the rest a thumbnail");
+            let mut core = WorkerCore::default();
+            let values: AutoMeasured = serde_json::from_str(&serde_json::to_string(&core.measure(&wire, None).unwrap()).unwrap()).unwrap();
+            assert_eq!(values.kind(), kind, "{command}");
+            s.prepare_auto(id, false, input.basis, values);
+            let got = s.execute(command, &params).unwrap();
+            s.clear_prepared_auto();
+            assert_eq!(got, want, "{command}");
+            assert_eq!((*s.develop_of(id).unwrap()).clone(), (*native.develop_of(id).unwrap()).clone(), "{command}");
+        }
     }
 
     /// A prepared export of the first demo photo, as the main thread builds it for a worker.

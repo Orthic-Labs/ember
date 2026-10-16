@@ -1,20 +1,21 @@
-//! Auto Settings off the browser's main thread (#192).
+//! Auto off the browser's main thread (#192).
 //!
-//! `develop.auto`, `develop.autoTone` and `develop.autoControl` prepare their input on the main
-//! thread (cheap; it needs the session), and the measuring runs in a render worker
-//! ([`Workers::offer_auto`]): the worker decodes the photo's thumbnail-level source itself (from
-//! storage, or from the bytes the page sends with `?store=memory`) and measures with the engine's
-//! pure `measure_auto`. The values come back as JSON; the UI's `auto_task` then applies them on
-//! this thread as one undo step, refused when the photo changed meanwhile. A first command after a
-//! reload needs no original on the main thread, so it does not wait for one.
+//! `develop.auto`, `develop.autoTone`, `develop.autoControl`, `develop.autoBatch`,
+//! `develop.autoBwMix`, `develop.autoNoise`, White Balance Auto, a preset that applies Auto and a
+//! dry run prepare their input on the main thread (cheap; it needs the session), and the measuring
+//! runs in a render worker ([`Workers::offer_auto`]): the worker decodes the photo's source itself
+//! (thumbnail level, the original for the noise fit; from storage, or from the bytes the page sends
+//! with `?store=memory`) and measures with the engine's pure `measure_kind`. The values come back as
+//! JSON; the UI's `auto_task` then applies them on this thread as one undo step, refused when the
+//! photo changed meanwhile. A first command after a reload needs no original on the main thread, so
+//! it does not wait for one.
 //!
 //! The row in the activity stack belongs to `auto_task`. When every worker is busy (they also
 //! render the views) the measure waits for one, polling every [`RETRY_MS`] for up to
 //! [`GIVE_UP_MS`]; if no worker is alive the host declines and the command runs in the session.
 
-use lightcraft_engine::auto_measure::AutoInput;
+use lightcraft_engine::auto_measure::{AutoInput, AutoMeasured};
 use lightcraft_engine::catalog::Source;
-use lightcraft_engine::pipeline::auto::regions::RegionAuto;
 use lightcraft_ui_egui::auto_task::{AutoDone, AutoOffload};
 use std::rc::Rc;
 
@@ -66,8 +67,8 @@ impl AutoHost {
         let ctx = self.ctx.clone();
         let reply: WorkerDone = Box::new(move |result| {
             let values = match result {
-                Ok(text) => serde_json::from_str::<RegionAuto>(&text).map_err(|e| format!("Auto values: {e}")),
-                Err(f) if f.worker_lost => Err(format!("Auto Settings: its render worker failed ({}); run it again", f.message)),
+                Ok(text) => serde_json::from_str::<AutoMeasured>(&text).map_err(|e| format!("Auto values: {e}")),
+                Err(f) if f.worker_lost => Err(format!("Auto: its render worker failed ({}); run it again", f.message)),
                 Err(f) => Err(f.message),
             };
             done(values);
@@ -84,7 +85,7 @@ impl AutoHost {
             AutoOffer::NoWorkers(reply) => reply(Err(AutoFailure { message: "no render worker is running".into(), worker_lost: true })),
             AutoOffer::Busy(reply) => {
                 if js_sys::Date::now() - since > GIVE_UP_MS {
-                    reply(Err(AutoFailure { message: "Auto Settings: every render worker stayed busy; try again".into(), worker_lost: false }));
+                    reply(Err(AutoFailure { message: "Auto: every render worker stayed busy; try again".into(), worker_lost: false }));
                     return;
                 }
                 // if the browser won't schedule it, the reply is dropped and the UI ends the row

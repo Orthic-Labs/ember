@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 use super::{CommandSpec, always, bad, bool_or, cmd, f64_or, f64_req, has_active, has_clipboard, has_selection, index_req, ok, str_param};
+use crate::auto_measure::{AutoKind, AutoMeasured};
 use crate::{Result, Session, auto_measure, media::SourceLevel};
 
 fn active(s: &Session, c: &str) -> Result<PhotoId> {
@@ -86,12 +87,22 @@ fn apply_look_batch(s: &mut Session, c: &str, ids: &Value, look: &lightcraft_pip
 /// written. The measuring itself is [`auto_measure::measure_auto`], which a host can run elsewhere
 /// (the web's render workers, #192) and hand to `develop.applyAutoValues`.
 fn auto_values(s: &mut Session, c: &str, id: PhotoId, regions: bool) -> Result<RegionAuto> {
+    // a host that measured elsewhere (#192) handed its values over; refused when the photo changed since
+    if let Some(AutoMeasured::Tone(r)) = prepared_auto(s, c, id, AutoKind::Tone, regions)? {
+        return Ok(r);
+    }
     let src = s.source_now(id, SourceLevel::Thumb).map_err(|e| bad(c, e))?;
     let info = s.source_info(id);
     let d = s.develop_of(id).unwrap_or_default();
     // cached face regions (a Detect Faces run, or the file's own) meter the key; none = as before
     let faces = auto_measure::auto_faces(s, id);
     Ok(auto_measure::measure_auto(&src, &info, &d, &faces, regions))
+}
+
+/// The measure of `kind` that a host made elsewhere for photo `id` ([`Session::prepare_auto`]), taken
+/// for this command to use in place of measuring. `None`: there is none, so the command measures.
+fn prepared_auto(s: &mut Session, c: &str, id: PhotoId, kind: AutoKind, regions: bool) -> Result<Option<AutoMeasured>> {
+    s.take_prepared_auto(id, kind, regions).map_err(|e| bad(c, e))
 }
 
 /// Phase 2 of Auto: write `r`, measured against `basis` ([`auto_measure::auto_basis`]), into photo
@@ -103,7 +114,7 @@ fn apply_auto_values(s: &mut Session, c: &str, id: PhotoId, r: &RegionAuto, basi
         return Err(bad(c, "no such photo"));
     }
     if auto_measure::auto_basis(s, id).as_deref() != Some(basis) {
-        return Err(bad(c, "the photo's settings or source changed since Auto measured it; run Auto again"));
+        return Err(bad(c, auto_measure::STALE));
     }
     let mut d = (*s.develop_of(id).unwrap_or_default()).clone();
     if let Some(ctl) = control {
@@ -533,10 +544,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_active,
             |s, _| {
                 let id = active(s, "develop.autoBwMix")?;
-                let src = s.source_now(id, SourceLevel::Thumb).map_err(|e| bad("develop.autoBwMix", e))?;
-                let info = s.source_info(id);
-                let d = s.develop_of(id).unwrap_or_default();
-                let m = lightcraft_pipeline::auto::auto_bw_mix(&src, &info, &d);
+                let m = match prepared_auto(s, "develop.autoBwMix", id, AutoKind::BwMix, false)? {
+                    Some(AutoMeasured::BwMix(m)) => m,
+                    _ => {
+                        let src = s.source_now(id, SourceLevel::Thumb).map_err(|e| bad("develop.autoBwMix", e))?;
+                        let info = s.source_info(id);
+                        let d = s.develop_of(id).unwrap_or_default();
+                        lightcraft_pipeline::auto::auto_bw_mix(&src, &info, &d)
+                    }
+                };
                 edit(s, "develop.autoBwMix", "Auto B&W Mix", |d| {
                     d.treatment = Treatment::Bw;
                     let b = &mut d.bw_mix;
@@ -692,8 +708,13 @@ pub fn specs() -> Vec<CommandSpec> {
             let c = "develop.autoNoise";
             let id = active(s, c)?;
             let (iso, raw) = s.catalog.photo(id).map(|p| (p.meta.iso, p.develops_raw())).unwrap_or((None, false));
-            let src = s.source_now(id, SourceLevel::Full).map_err(|e| bad(c, e))?;
-            let estimate = lightcraft_pipeline::noise::estimate(&src, 1.0);
+            let estimate = match prepared_auto(s, c, id, AutoKind::Noise, false)? {
+                Some(AutoMeasured::Noise(estimate)) => estimate,
+                _ => {
+                    let src = s.source_now(id, SourceLevel::Full).map_err(|e| bad(c, e))?;
+                    lightcraft_pipeline::noise::estimate(&src, 1.0)
+                }
+            };
             let nr = lightcraft_pipeline::noise::auto_noise_reduction(estimate, iso, raw);
             if !bool_or(p, "dryRun", false) {
                 edit(s, c, "Auto Noise Reduction", |d| {
@@ -759,10 +780,13 @@ pub fn specs() -> Vec<CommandSpec> {
                 let info = s.source_info(id);
                 let (mut t, mut tint) = match mode {
                     WbMode::AsShot => (info.as_shot_temp, info.as_shot_tint),
-                    WbMode::Auto => {
-                        let src = s.source_now(id, SourceLevel::Thumb).map_err(|e| bad("develop.wb", e))?;
-                        lightcraft_pipeline::auto::auto_wb(&src, &info)
-                    }
+                    WbMode::Auto => match prepared_auto(s, "develop.wb", id, AutoKind::WhiteBalance, false)? {
+                        Some(AutoMeasured::WhiteBalance { temp, tint }) => (temp, tint),
+                        _ => {
+                            let src = s.source_now(id, SourceLevel::Thumb).map_err(|e| bad("develop.wb", e))?;
+                            lightcraft_pipeline::auto::auto_wb(&src, &info)
+                        }
+                    },
                     m => m
                         .preset()
                         .map(|(t, ti)| {

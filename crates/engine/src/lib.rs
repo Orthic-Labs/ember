@@ -197,6 +197,8 @@ pub struct Session {
     /// Auto Sync: edits to the active photo also change the other selected photos (the settings
     /// that changed, nothing else).
     pub auto_sync: bool,
+    /// Auto measures a host made elsewhere, for the next Auto command ([`auto_measure::PreparedAuto`], #192).
+    prepared_auto: auto_measure::PreparedAuto,
     pub catalog: Catalog,
     pub source: LibrarySource,
     pub filter: Filter,
@@ -369,6 +371,7 @@ impl Session {
         Session {
             library_generation: LIBRARY_GEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             auto_sync: false,
+            prepared_auto: auto_measure::PreparedAuto::default(),
             catalog: Catalog::new(),
             source: LibrarySource::All,
             filter: Filter::default(),

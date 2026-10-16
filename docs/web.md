@@ -181,27 +181,40 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
   before, and a worker that fails mid-photo hands that photo back to the main thread. Photos a
   worker can't make also run on the main thread, one per timer tick: *Original* copies and DNGs
   (they only read the file) and photos with a Denoise edit.
-- **Auto Settings run in the render workers** ([#192](https://github.com/Orthic-Labs/ember/issues/192)).
+- **Auto commands run in the render workers** ([#192](https://github.com/Orthic-Labs/ember/issues/192)).
   Auto is two phases ([`auto_measure`](../crates/engine/src/auto_measure.rs)): a pure measure
-  (`measure_auto`: the decoded thumbnail-level source, its facts and the photo's settings in, the
-  adjustment values out; no `Session`) and an apply command, `develop.applyAutoValues {values,
-  basis, id?, control?}`, that writes the values as one undo step. The basis is a hash of the
-  photo's settings, face regions and source; the apply is refused with an error when it no longer
-  matches, so values measured for an older photo are never written. On the desktop and native
-  builds `develop.auto*` composes the two in place and behaves as before. On the web,
-  `develop.auto`, `develop.autoTone` and `develop.autoControl` hand the measure to a worker (a
-  `WireAuto` message: the origin, settings and face boxes; the worker reads the original from storage
-  itself) and answer `{"background": true}` at once (as `app.export` does: `command()` resolves before the
-  values are applied); an "Auto Settings" row shows in the activity
-  stack until the values are back, and `auto_task::poll` then applies them. A second Auto on the
-  same photo while one is away is refused ("already measuring"); one that finds every worker busy
-  waits up to 30 s for a free one. If no worker is alive, or an original is not stored, the command
-  runs on the main thread as before. Edit the photo while the measure is away and the apply is
-  refused with the basis error; run Auto again. The decoded source is the one the worker keeps for
-  the photo, so a repeat measure does not decode again. Native unit tests cover measure + apply
-  equal to `develop.auto`, the stale basis, one undo step, and the host handoff; the browser check
-  is not run yet. (A raw file's as-shot white balance, which the main thread's own decode records
-  in the catalog, is not recorded by a worker's decode.)
+  (`measure_kind`: the decoded source, its facts and the photo's settings in, the values out; no
+  `Session`) and an apply on the thread that owns the session, always as one undo step. The apply
+  is refused with an error when the photo's settings, face regions or source changed since the
+  measure (a hash, the basis), so values measured for an older photo are never written. On the
+  desktop and native builds the commands measure and apply in place and behave as before. On the
+  web the measure is handed to a worker (a `WireAuto` message: the origin, settings, face boxes and
+  what to measure; the worker reads the original from storage itself) and the command answers
+  `{"background": true}` at once (as `app.export` does: `command()` resolves before the values are
+  applied); an activity row shows until the values are back, and `auto_task::poll` then applies
+  them. Two ways to apply:
+  - `develop.auto`, `develop.autoTone` and `develop.autoControl` (Auto Settings, Auto Tone, Auto
+    Slider): `develop.applyAutoValues {values, basis, id?, control?}`.
+  - Every other Auto command is run itself once its measures are back, with the measures handed to
+    the session (`Session::prepare_auto`) for it to use in place of measuring; what it writes is
+    what it always wrote. `develop.autoBatch` (Auto Settings to Selection) measures every photo, up
+    to four away at a time, and writes none of them unless every photo is still what was
+    measured, as one undo step for the batch. `develop.autoBwMix`; `develop.autoNoise` (reads the
+    original at native resolution, in the worker); White Balance ▸ Auto (`develop.wb` with mode
+    `auto`, and `develop.autoWhiteBalance`); the Auto step of a preset (`preset.apply` of a preset
+    that applies Auto: each photo is measured, then the preset goes on top, one undo step); and any
+    of them with `dryRun`. A dry run answers with the values, which come back later: the command
+    answers `{"background": true, "task": n}` internally and the browser's `command()` promise
+    resolves with the values (or rejects) once the worker has measured; nothing is written.
+  A second Auto on a photo that is being measured is refused ("already measuring"); one that finds
+  every worker busy waits up to 30 s for a free one. If no worker is alive, or an original is not
+  stored, the command runs on the main thread as before. Edit a photo while its measure is away and
+  the apply is refused with the basis error; run Auto again. The decoded source is the one the
+  worker keeps for the photo, so a repeat measure does not decode again. Native unit tests cover,
+  per command, measure + apply equal to the old result, the stale basis refused with nothing
+  written, one undo step, and the host handoff (`tests_auto_apply.rs`, `auto_task.rs`, `wire.rs`);
+  the browser check is not run yet. (A raw file's as-shot white balance, which the main thread's
+  own decode records in the catalog, is not recorded by a worker's decode.)
 - **Preset files.** *File ▸ Import Profiles & Presets…* opens the browser's file picker for
   `.lcpreset`, `.xmp`, `.lrtemplate`, `.zip`, `.dng`, Luminar `.lmp` / `.mplumpack`; the bytes are
   read and imported by the same reader as the desktop (`Session::import_preset_bytes`), and a
@@ -217,15 +230,9 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
 
 ## Not yet
 
-- **Some auto-adjustments still compute on the main thread** ([#192](https://github.com/Orthic-Labs/ember/issues/192)
-  stays open for them). Auto Settings, Auto Tone and Auto Slider measure in the render workers (*Auto
-  Settings run in the render workers*). Still in the engine's synchronous command, on the main
-  thread: `develop.autoBatch` (Auto Settings to Selection), `develop.autoBwMix`, `develop.autoNoise`,
-  White Balance ▸ Auto, the Auto step of a preset (`preset.apply`), and `develop.auto` with
-  `dryRun` (it has to answer with the values). Each measures one photo from its own
-  thumbnail-level source, so they can take the same route (a measure function that needs no
-  session, then an apply command); batches need one `applyAutoValues` that takes several photos as
-  one undo step.
+- **Auto-adjustments no longer compute on the main thread; exports mostly don't** ([#192](https://github.com/Orthic-Labs/ember/issues/192)
+  stays open for the *Original*/DNG and Denoise exports below and for the browser check). Every
+  Auto command measures in the render workers (*Auto commands run in the render workers*).
   Separately, **the "still loading" failure after a reload** is fixed for every `develop.auto*`
   command: the browser host parks a `develop.auto*` command that fails because the original is still coming from storage
   (`apps/lightcraft-web/src/retry.rs`) and runs it again every 50 ms until it works, fails for

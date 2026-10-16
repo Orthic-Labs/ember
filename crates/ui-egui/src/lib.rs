@@ -417,6 +417,8 @@ pub struct LightcraftApp {
     pub auto_offload: Option<auto_task::AutoOffload>,
     /// Measures that are away with the host, until their values come back to be applied.
     pub auto_tasks: Vec<auto_task::AutoTask>,
+    /// What dry-run Auto commands that were away found, until their caller reads it ([`auto_task::take_answer`]).
+    pub auto_answers: Vec<(u64, Result<serde_json::Value, String>)>,
     /// Assisted Culling's analysis and reviewed proposal, until it is applied or discarded (#44).
     pub cull_review: cull_review::CullReview,
     /// Background file-system work of other commands (Find Missing Photos, auto import…).
@@ -518,6 +520,7 @@ impl LightcraftApp {
             export_offload: None,
             auto_offload: None,
             auto_tasks: Vec::new(),
+            auto_answers: Vec::new(),
             tasks: Default::default(),
             last_export_result: None,
             hover_preview: None,

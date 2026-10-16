@@ -9,10 +9,10 @@
 
 use lightcraft_color::luminance_2020;
 use lightcraft_raster::Rgb32f;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Fitted noise of one image (see [`estimate`]).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct NoiseEstimate {
     /// `var(Y) = a·Y + b` in scene-linear luminance (middle grey = 0.18), at native resolution.
     pub a: f32,

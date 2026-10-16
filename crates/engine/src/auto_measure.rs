@@ -9,25 +9,100 @@
 //!    changed since: the values were measured for a photo that is no longer there.
 //!
 //! Native and desktop keep calling `develop.auto*`, which composes the two in place.
+//!
+//! The other Auto commands (Auto Settings to Selection, Auto B&W Mix, Auto Noise Reduction, White
+//! Balance Auto, the Auto step of a preset, and a dry run) keep their own apply, which is the
+//! command itself: a host measures where the pixels are ([`AutoKind`], [`measure_kind`]), hands the
+//! values over with [`Session::prepare_auto`] and runs the command, which uses them in place of its
+//! own measure ([`Session::take_prepared_auto`]) and otherwise behaves as before: the same writes,
+//! one undo step. The values are refused when the photo changed since the measure.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use lightcraft_catalog::{PhotoId, Source};
 use lightcraft_develop::{DevelopSettings, EmbeddedLens};
 use lightcraft_pipeline::SourceInfo;
 use lightcraft_pipeline::auto::regions::{RegionAuto, region_auto_with};
-use lightcraft_pipeline::auto::{AutoHints, AutoTone, FaceBox, auto_tone_with};
+use lightcraft_pipeline::auto::{AutoHints, AutoTone, FaceBox, auto_bw_mix, auto_tone_with, auto_wb};
+use lightcraft_pipeline::noise::{self, NoiseEstimate};
 use lightcraft_preview::{Hash128, Hasher128};
 use lightcraft_raster::Rgb32f;
+use serde::{Deserialize, Serialize};
 
 use crate::Session;
-use crate::media::content_key;
+use crate::media::{SourceLevel, content_key};
 
 /// What Auto finds for a photo from its decoded source (regions on: the subject, background and
 /// sky too). Reads only; nothing is written.
 pub fn measure_auto(src: &Rgb32f, info: &SourceInfo, d: &DevelopSettings, faces: &[FaceBox], regions: bool) -> RegionAuto {
     let hints = AutoHints { faces, clipped_share: None };
     if regions { region_auto_with(src, info, d, &hints) } else { RegionAuto::global_only(auto_tone_with(src, info, d, &hints)) }
+}
+
+/// What a measure looks for.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AutoKind {
+    /// Auto Settings: the eight values and, with regions on, the region masks.
+    #[default]
+    Tone,
+    /// Auto B&W Mix: the eight channel weights.
+    BwMix,
+    /// Auto Noise Reduction: the noise fit (the sliders come from it and the photo's ISO).
+    Noise,
+    /// White Balance Auto: the temperature and tint.
+    WhiteBalance,
+}
+
+impl AutoKind {
+    /// How much of the source the measure reads. Noise reads the original at native resolution: a
+    /// proxy has already averaged the noise away.
+    pub fn level(self) -> SourceLevel {
+        match self {
+            AutoKind::Noise => SourceLevel::Full,
+            _ => SourceLevel::Thumb,
+        }
+    }
+}
+
+/// What a measure found, as it crosses from where it was made to the session.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "values", rename_all = "camelCase")]
+pub enum AutoMeasured {
+    Tone(RegionAuto),
+    BwMix([f64; 8]),
+    /// `None`: no flat tiles to fit (the sliders then come from the ISO).
+    Noise(Option<NoiseEstimate>),
+    WhiteBalance {
+        temp: f64,
+        tint: f64,
+    },
+}
+
+impl AutoMeasured {
+    pub fn kind(&self) -> AutoKind {
+        match self {
+            AutoMeasured::Tone(_) => AutoKind::Tone,
+            AutoMeasured::BwMix(_) => AutoKind::BwMix,
+            AutoMeasured::Noise(_) => AutoKind::Noise,
+            AutoMeasured::WhiteBalance { .. } => AutoKind::WhiteBalance,
+        }
+    }
+}
+
+/// The measure of `kind` for a photo from its decoded source (`faces` and `regions` matter to
+/// [`AutoKind::Tone`] only). Reads only; nothing is written.
+pub fn measure_kind(kind: AutoKind, src: &Rgb32f, info: &SourceInfo, d: &DevelopSettings, faces: &[FaceBox], regions: bool) -> AutoMeasured {
+    match kind {
+        AutoKind::Tone => AutoMeasured::Tone(measure_auto(src, info, d, faces, regions)),
+        AutoKind::BwMix => AutoMeasured::BwMix(auto_bw_mix(src, info, d)),
+        AutoKind::Noise => AutoMeasured::Noise(noise::estimate(src, 1.0)),
+        AutoKind::WhiteBalance => {
+            let (temp, tint) = auto_wb(src, info);
+            AutoMeasured::WhiteBalance { temp, tint }
+        }
+    }
 }
 
 /// A lens the user picked in place of the file's own: `Some(lens)` replaces the source's (even
@@ -95,7 +170,9 @@ pub fn auto_basis(s: &Session, id: PhotoId) -> Option<String> {
 #[derive(Clone, Debug)]
 pub struct AutoInput {
     pub photo: PhotoId,
-    /// The subject, background and sky get their own masks too.
+    /// What to measure.
+    pub kind: AutoKind,
+    /// The subject, background and sky get their own masks too ([`AutoKind::Tone`]).
     pub regions: bool,
     /// One slider only (`develop.autoControl`); the values are the same, `apply` takes this one.
     pub control: Option<String>,
@@ -111,12 +188,18 @@ pub struct AutoInput {
     pub basis: String,
 }
 
-/// The input for measuring photo `id`, or why there is none.
+/// The input for measuring Auto Settings of photo `id`, or why there is none.
 pub fn auto_input(s: &Session, id: PhotoId, regions: bool, control: Option<String>) -> Result<AutoInput, String> {
+    auto_input_for(s, id, AutoKind::Tone, regions, control)
+}
+
+/// The input for measuring `kind` of photo `id`, or why there is none.
+pub fn auto_input_for(s: &Session, id: PhotoId, kind: AutoKind, regions: bool, control: Option<String>) -> Result<AutoInput, String> {
     let p = s.catalog.photo(id).ok_or("no such photo")?;
     let basis = auto_basis(s, id).ok_or("no such photo")?;
     Ok(AutoInput {
         photo: id,
+        kind,
         regions,
         control,
         origin: p.source.clone(),
@@ -127,4 +210,48 @@ pub fn auto_input(s: &Session, id: PhotoId, regions: bool, control: Option<Strin
         faces: auto_faces(s, id),
         basis,
     })
+}
+
+/// Why a measure is refused: the photo is not the one it was made for.
+pub const STALE: &str = "the photo's settings or source changed since Auto measured it; run Auto again";
+
+/// One measure a host made elsewhere, until the command that wants it runs.
+struct Prepared {
+    basis: String,
+    regions: bool,
+    values: AutoMeasured,
+}
+
+/// Measures made outside the session, waiting for their command ([`Session::prepare_auto`]).
+#[derive(Default)]
+pub struct PreparedAuto(HashMap<(PhotoId, AutoKind), Prepared>);
+
+impl Session {
+    /// Hand the session a measure for photo `id` that was made elsewhere against `basis`
+    /// ([`auto_basis`]), `regions` as asked. The next Auto command that needs it uses it in place of
+    /// measuring (and refuses it when the photo changed since); [`Session::clear_prepared_auto`]
+    /// drops what the command left unused. A second measure of the same kind replaces the first.
+    pub fn prepare_auto(&mut self, id: PhotoId, regions: bool, basis: String, values: AutoMeasured) {
+        self.prepared_auto.0.insert((id, values.kind()), Prepared { basis, regions, values });
+    }
+
+    /// Drop every prepared measure.
+    pub fn clear_prepared_auto(&mut self) {
+        self.prepared_auto.0.clear();
+    }
+
+    /// The prepared measure of `kind` for photo `id`, taken (it is used once). `Ok(None)`: none, or
+    /// one made for other options, so the caller measures. `Err`: it was measured for a photo that
+    /// is no longer there (its settings, face regions or source changed), and nothing may be written.
+    pub fn take_prepared_auto(&mut self, id: PhotoId, kind: AutoKind, regions: bool) -> Result<Option<AutoMeasured>, String> {
+        let Some(p) = self.prepared_auto.0.get(&(id, kind)) else { return Ok(None) };
+        if kind == AutoKind::Tone && p.regions != regions {
+            return Ok(None);
+        }
+        let Some(p) = self.prepared_auto.0.remove(&(id, kind)) else { return Ok(None) };
+        if auto_basis(self, id).as_deref() != Some(p.basis.as_str()) {
+            return Err(STALE.into());
+        }
+        Ok(Some(p.values))
+    }
 }

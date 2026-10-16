@@ -577,6 +577,9 @@ struct WebApp {
     held: Vec<(serde_json::Value, Reply)>,
     /// [`command`] calls waiting for an original to load from storage (`retry`).
     parked: Parked<(String, String, Reply)>,
+    /// [`command`] calls for a dry-run Auto command whose measure is away in a worker: the reply is
+    /// the values, once they are back (`auto_task`).
+    answering: Vec<(u64, Reply)>,
 }
 
 impl WebApp {
@@ -692,6 +695,7 @@ impl WebApp {
             ui_written,
             held: Vec::new(),
             parked: Parked::default(),
+            answering: Vec::new(),
         }
     }
 
@@ -873,6 +877,14 @@ impl WebApp {
         for (since, (id, params_text, (resolve, reject))) in todo {
             let params: serde_json::Value = serde_json::from_str(&params_text).unwrap_or(json!({}));
             let r = if id == "web.stats" { Ok(self.web_stats()) } else { self.app.run(&id, params) };
+            // a dry run measuring in a worker (#192): the caller is answered with the values when they are back
+            if let Ok(v) = &r
+                && v.get("background").is_some()
+                && let Some(task) = v.get("task").and_then(serde_json::Value::as_u64)
+            {
+                self.answering.push((task, (resolve, reject)));
+                continue;
+            }
             match r {
                 // the caller learns the outcome only once its writes are in browser storage
                 Ok(v) if self.must_wait_for_storage() => self.held.push((v, (resolve, reject))),
@@ -890,6 +902,25 @@ impl WebApp {
         }
         if !self.parked.is_empty() {
             ctx.request_repaint_after(std::time::Duration::from_millis(crate::retry::RETRY_EVERY_MS));
+        }
+    }
+
+    /// Answer the dry-run Auto commands whose measure has come back with their values (or why there
+    /// are none); the others keep waiting.
+    fn release_answers(&mut self) {
+        for (task, (resolve, reject)) in std::mem::take(&mut self.answering) {
+            match lightcraft_ui_egui::auto_task::take_answer(&mut self.app, task) {
+                Some(Ok(v)) => {
+                    let _ = resolve.call1(&JsValue::NULL, &v.to_string().into());
+                }
+                Some(Err(e)) => {
+                    let _ = reject.call1(&JsValue::NULL, &e.into());
+                }
+                None if lightcraft_ui_egui::auto_task::answer_pending(&self.app, task) => self.answering.push((task, (resolve, reject))),
+                None => {
+                    let _ = reject.call1(&JsValue::NULL, &"Auto stopped before it measured".into());
+                }
+            }
         }
     }
 
@@ -938,6 +969,7 @@ impl eframe::App for WebApp {
             w.set_budget(self.app.session.cache_bytes());
         }
         self.app.logic(ctx);
+        self.release_answers();
         self.save();
         self.release_held(ctx);
         if let Some(b) = self.bench.as_mut()
