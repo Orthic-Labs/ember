@@ -1,4 +1,4 @@
-use super::{AutoTone, SceneKey, auto_tone, key_target, percentile};
+use super::{AutoHints, AutoTone, FaceBox, SceneKey, auto_tone, auto_tone_of, fit, key_target, percentile, scene_population_with};
 use lightcraft_color::perceptual::oklab_from_2020;
 use lightcraft_color::transfer::decode_srgb8;
 use lightcraft_color::{REC2020, SRGB, luminance_2020};
@@ -436,4 +436,92 @@ fn auto_wb_resists_a_large_coloured_surface_and_holds_tint_near_the_locus() {
     let bad = Rgb32f::from_fn(16, 16, |x, _| if x % 2 == 0 { [f32::NAN, -1.0, f32::INFINITY] } else { [0.2, 0.2, 0.2] });
     let (t, ti) = auto_wb(&bad, &info);
     assert!(t.is_finite() && ti.is_finite());
+}
+
+fn auto_with(src: &Rgb32f, info: &SourceInfo, hints: &AutoHints) -> AutoTone {
+    let pop = scene_population_with(src, info, &DevelopSettings::default(), hints);
+    pop.map(|p| auto_tone_of(&p, info)).unwrap_or_default()
+}
+
+/// A mid-tone frame with a dark patch in its top-left corner, outside the central ellipse.
+fn dark_face_scene() -> (Rgb32f, FaceBox) {
+    let src = Rgb32f::from_fn(64, 64, |x, y| if x < 20 && y < 20 { [0.01, 0.009, 0.008] } else { [0.12, 0.115, 0.105] });
+    (src, FaceBox { x0: 0.0, y0: 0.0, x1: 20.0 / 64.0, y1: 20.0 / 64.0 })
+}
+
+#[test]
+fn a_face_darker_than_the_frame_raises_exposure() {
+    let (src, face) = dark_face_scene();
+    let info = SourceInfo::default();
+    let plain = auto_with(&src, &info, &AutoHints::default());
+    let faces = [face];
+    let metered = auto_with(&src, &info, &AutoHints { faces: &faces, clipped_share: None });
+    assert!(metered.exposure > plain.exposure + 0.3, "face should lift the key: plain {plain:?}, with face {metered:?}");
+    assert!(finite_outputs(metered));
+    // a face brighter than the frame pulls exposure down instead
+    let bright = Rgb32f::from_fn(64, 64, |x, y| if x < 20 && y < 20 { [0.8, 0.75, 0.7] } else { [0.05, 0.048, 0.045] });
+    let a = auto_with(&bright, &info, &AutoHints::default());
+    let b = auto_with(&bright, &info, &AutoHints { faces: &faces, clipped_share: None });
+    assert!(b.exposure < a.exposure, "bright face should lower exposure: {a:?} vs {b:?}");
+}
+
+#[test]
+fn without_usable_faces_auto_is_identical() {
+    let (src, face) = dark_face_scene();
+    let info = SourceInfo::default();
+    let base = auto_tone(&src, &info, &DevelopSettings::default());
+    assert_eq!(auto_with(&src, &info, &AutoHints::default()), base);
+    let empty: [FaceBox; 0] = [];
+    assert_eq!(auto_with(&src, &info, &AutoHints { faces: &empty, clipped_share: None }), base);
+    // invalid, inverted and sub-threshold boxes are ignored
+    let junk = [
+        FaceBox { x0: f32::NAN, y0: 0.0, x1: 0.3, y1: 0.3 },
+        FaceBox { x0: 0.5, y0: 0.5, x1: 0.2, y1: 0.2 },
+        FaceBox { x0: 0.0, y0: 0.0, x1: 0.05, y1: 0.05 },
+    ];
+    assert_eq!(auto_with(&src, &info, &AutoHints { faces: &junk, clipped_share: None }), base);
+    // the key and every other value stay deterministic with a face
+    let faces = [face];
+    let h = AutoHints { faces: &faces, clipped_share: None };
+    assert_eq!(auto_with(&src, &info, &h), auto_with(&src, &info, &h));
+}
+
+fn clipped_raw_scene() -> Rgb32f {
+    Rgb32f::from_fn(64, 64, |x, _| if x < 20 { [1.0, 1.0, 1.0] } else { [0.2, 0.19, 0.18] })
+}
+
+#[test]
+fn highlight_floor_is_pinned_and_monotonic() {
+    assert_eq!(fit::highlight_floor(0.0), -90.0);
+    assert_eq!(fit::highlight_floor(0.005), -90.0);
+    assert!((fit::highlight_floor(0.1) + 18.0).abs() < 1e-4);
+    assert!((fit::highlight_floor(1.0) + 18.0).abs() < 1e-4);
+    assert_eq!(fit::highlight_floor(f32::NAN), -90.0);
+    let mut last = f32::MIN;
+    for i in 0..=100 {
+        let f = fit::highlight_floor(i as f32 / 100.0);
+        assert!(f >= last, "floor must rise with the clipped share: {f} after {last}");
+        last = f;
+    }
+}
+
+#[test]
+fn a_heavily_clipped_raw_caps_highlight_recovery() {
+    let src = clipped_raw_scene();
+    let raw = SourceInfo { raw: true, ..Default::default() };
+    let pop = scene_population_with(&src, &raw, &DevelopSettings::default(), &AutoHints::default()).expect("population");
+    assert!(pop.clipped > 0.25 && pop.clipped < 0.4, "plateau share of a 31 % clipped frame: {}", pop.clipped);
+    let capped = auto_tone_of(&pop, &raw);
+    assert!(capped.highlights >= -18.0, "recovery must stay under the cap: {capped:?}");
+    let free = auto_with(&src, &raw, &AutoHints { faces: &[], clipped_share: Some(0.0) });
+    assert!(capped.highlights >= free.highlights, "the cap never deepens recovery: capped {capped:?}, free {free:?}");
+    // a rendered source has no raw clipping to cap
+    let jpeg = auto_with(&src, &SourceInfo::default(), &AutoHints::default());
+    assert_eq!(jpeg, auto_with(&src, &SourceInfo::default(), &AutoHints { faces: &[], clipped_share: Some(0.0) }));
+    // an unclipped raw is untouched
+    let ordinary = ordinary_underexposed_scene();
+    assert_eq!(auto_with(&ordinary, &raw, &AutoHints::default()), auto_with(&ordinary, &raw, &AutoHints { faces: &[], clipped_share: Some(0.0) }));
+    // the decoder's own count wins over the estimate
+    let told = auto_with(&src, &raw, &AutoHints { faces: &[], clipped_share: Some(0.5) });
+    assert!(told.highlights >= -18.0 && finite_outputs(told));
 }

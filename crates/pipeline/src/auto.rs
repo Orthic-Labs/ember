@@ -83,7 +83,44 @@ pub struct ScenePopulation {
     pub p995: f32,
     /// 90th-percentile Oklab chroma.
     pub chroma_p90: f32,
+    /// Share (0..=1) of the proxy's channel samples that sit on a clipped plateau; 0 for
+    /// non-raw sources unless supplied ([`AutoHints::clipped_share`]). Caps highlight recovery
+    /// ([`fit::highlight_floor`]).
+    pub clipped: f32,
 }
+
+/// A detected face as a fraction of the frame (0..=1, y down), the shape `lightcraft_faces::Face`
+/// reports. Auto takes plain boxes so the pipeline does not depend on a detector or its weights.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FaceBox {
+    pub x0: f32,
+    pub y0: f32,
+    pub x1: f32,
+    pub y1: f32,
+}
+
+/// Optional facts Auto cannot measure from the proxy alone. `Default` changes nothing.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AutoHints<'a> {
+    /// Detected faces: the exposure key follows them (see [`FACE_MIN_SHARE`]).
+    pub faces: &'a [FaceBox],
+    /// The decoder's own share of clipped channel samples, when it knows; raw sources otherwise
+    /// get a plateau estimate from the proxy.
+    pub clipped_share: Option<f32>,
+}
+
+/// Faces covering less than this share of the valid pixels (or fewer than `FACE_MIN_PIXELS`)
+/// are too small to meter on and leave the key as it was.
+pub const FACE_MIN_SHARE: f32 = 0.005;
+const FACE_MIN_PIXELS: usize = 16;
+/// Most boxes considered, and the furthest (EV) the face median may sit from the frame's before
+/// it stops counting, so a mis-detection cannot move the key by more than half of this.
+const MAX_FACES: usize = 64;
+const FACE_MAX_OFFSET_EV: f32 = 2.5;
+/// A channel only counts as clipped on a plateau at or above this (sensor white is 1.0 before
+/// white balance; dark flat areas are not clipping), within `PLATEAU_TOL` of its maximum.
+const PLATEAU_MIN: f32 = 0.9;
+const PLATEAU_TOL: f32 = 0.995;
 
 /// Squared radius (normalized: 1 at the frame's edge midpoints) of the central ellipse whose
 /// median counts for half of the scene's key (about 28 % of the frame).
@@ -92,16 +129,65 @@ const CENTRE_R2: f32 = 0.36;
 /// Measure `src` under `s`'s white balance (tone settings ignored), centre-weighted (see
 /// [`CENTRE_R2`]). `None` for an empty or entirely invalid image.
 pub fn scene_population(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) -> Option<ScenePopulation> {
+    scene_population_with(src, info, s, &AutoHints::default())
+}
+
+/// Share of channel samples on a clipped plateau: per channel, samples within `PLATEAU_TOL` of
+/// the channel's maximum, when that maximum is at least `PLATEAU_MIN`. Non-finite samples are
+/// skipped; 0 for an empty image.
+fn plateau_share(img: &Rgb32f) -> f32 {
+    let mut max = [0f32; 3];
+    for p in &img.data {
+        for (m, c) in max.iter_mut().zip(p) {
+            if c.is_finite() && *c > *m {
+                *m = *c;
+            }
+        }
+    }
+    let mut hit = 0usize;
+    let mut total = 0usize;
+    for p in &img.data {
+        if !p.iter().all(|c| c.is_finite()) {
+            continue;
+        }
+        total += 3;
+        for (m, c) in max.iter().zip(p) {
+            if *m >= PLATEAU_MIN && *c >= *m * PLATEAU_TOL {
+                hit += 1;
+            }
+        }
+    }
+    if total == 0 { 0.0 } else { hit as f32 / total as f32 }
+}
+
+/// [`scene_population`] with optional [`AutoHints`]. With usable faces the key's median is half
+/// the frame's, half the faces' (replacing the central ellipse's half); without them, exactly as
+/// before.
+pub fn scene_population_with(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings, hints: &AutoHints) -> Option<ScenePopulation> {
     if src.width == 0 || src.height == 0 || src.data.is_empty() {
         return None;
     }
     let mut img = lightcraft_raster::resample::fit(src, 512, 512, lightcraft_raster::resample::Filter::Box);
+    let clipped = match hints.clipped_share {
+        Some(c) if c.is_finite() => c.clamp(0.0, 1.0),
+        Some(_) => 0.0,
+        None if info.raw => plateau_share(&img),
+        None => 0.0,
+    };
+    let faces: Vec<FaceBox> = hints
+        .faces
+        .iter()
+        .filter(|f| [f.x0, f.y0, f.x1, f.y1].iter().all(|v| v.is_finite()) && f.x1 > f.x0 && f.y1 > f.y0)
+        .take(MAX_FACES)
+        .copied()
+        .collect();
     let mut base = DevelopSettings { wb: s.wb, process: s.process, ..DevelopSettings::default() };
     base.light.exposure = 0.0;
     crate::local::scene_linear_pre(&mut img, info, &base);
     let (w, h) = (img.width.max(1) as f32, img.height.max(1) as f32);
     let mut ev = Vec::with_capacity(img.data.len());
     let mut centre = Vec::with_capacity(img.data.len() / 2);
+    let mut face_ev = Vec::new();
     let mut chroma = Vec::with_capacity(img.data.len());
     for (i, c) in img.data.iter().enumerate() {
         let y = luminance_2020(*c);
@@ -117,6 +203,10 @@ pub fn scene_population(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) ->
         let (dx, dy) = ((px / w - 0.5) * 2.0, (py / h - 0.5) * 2.0);
         if dx * dx + dy * dy < CENTRE_R2 {
             centre.push(e);
+        }
+        let (fx, fy) = (px / w, py / h);
+        if faces.iter().any(|f| fx >= f.x0 && fx < f.x1 && fy >= f.y0 && fy < f.y1) {
+            face_ev.push(e);
         }
         let lab = oklab_from_2020(*c);
         let c = (lab[1] * lab[1] + lab[2] * lab[2]).sqrt();
@@ -134,10 +224,17 @@ pub fn scene_population(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) ->
     // Centre weighting: the key follows the subject as much as the frame (a dark subject
     // against a bright sky, a lit face in a dark room). Half the frame's median, half the
     // central ellipse's; without centre pixels (tiny images), the frame's.
-    let median = if centre.is_empty() { global } else { 0.5 * global + 0.5 * percentile(&centre, 0.5) };
+    let mut median = if centre.is_empty() { global } else { 0.5 * global + 0.5 * percentile(&centre, 0.5) };
+    // Faces: a lit face in a dark room (or a shaded one against a bright wall) is what the
+    // viewer reads, so it takes the central ellipse's half of the key, bounded around the frame's.
+    if face_ev.len() >= FACE_MIN_PIXELS && face_ev.len() as f32 >= FACE_MIN_SHARE * ev.len() as f32 {
+        face_ev.sort_by(|a, b| a.total_cmp(b));
+        let face = percentile(&face_ev, 0.5).clamp(global - FACE_MAX_OFFSET_EV, global + FACE_MAX_OFFSET_EV);
+        median = 0.5 * global + 0.5 * face;
+    }
     let (p05, p95, p995) = (percentile(&ev, 0.05), percentile(&ev, 0.95), percentile(&ev, 0.995));
     let chroma_p90 = percentile(&chroma, 0.9);
-    Some(ScenePopulation { ev, median, p05, p95, p995, chroma_p90 })
+    Some(ScenePopulation { ev, median, p05, p95, p995, chroma_p90, clipped })
 }
 
 /// Compute auto tone values for `src` under the current white balance (ignores current tone values).
@@ -162,7 +259,7 @@ pub(crate) fn key_target(key: SceneKey) -> f32 {
 /// Auto tone values for a measured scene ([`scene_population`], possibly with its `median`
 /// replaced by a region-aware one).
 pub fn auto_tone_of(pop: &ScenePopulation, info: &SourceInfo) -> AutoTone {
-    let ScenePopulation { ev, median, p05, p95, p995, chroma_p90 } = pop;
+    let ScenePopulation { ev, median, p05, p95, p995, chroma_p90, clipped } = pop;
     let (ev, median, p05, p95, p995, chroma_p90) = (ev.as_slice(), *median, *p05, *p95, *p995, *chroma_p90);
     let key = SceneKey::of(median, p05, p95, p995);
 
@@ -176,7 +273,7 @@ pub fn auto_tone_of(pop: &ScenePopulation, info: &SourceInfo) -> AutoTone {
     exposure -= key.backlit * (exposure - 2.0).max(0.0);
     let exposure = (exposure as f64 * 100.0).round() / 100.0;
 
-    let shape = fit::fit(ev, exposure as f32, key, info);
+    let shape = fit::fit_capped(ev, exposure as f32, key, info, *clipped);
 
     let colour_headroom = ((0.16 - chroma_p90) / 0.16).clamp(0.0, 1.0);
     let vibrance = (14.0 * colour_headroom).round();
@@ -400,24 +497,47 @@ pub mod fit {
     }
 
     pub fn fit(ev_sorted: &[f32], exposure: f32, key: SceneKey, info: &SourceInfo) -> Shape {
+        fit_capped(ev_sorted, exposure, key, info, 0.0)
+    }
+
+    /// [`fit`] with highlight recovery capped by the share of clipped channel samples
+    /// ([`highlight_floor`]); 0 is [`fit`] exactly.
+    pub fn fit_capped(ev_sorted: &[f32], exposure: f32, key: SceneKey, info: &SourceInfo, clipped: f32) -> Shape {
         if ev_sorted.is_empty() {
             return Shape::default();
         }
         let t = auto_targets(ev_sorted, exposure, key, info);
-        fit_guarded(ev_sorted, exposure, &t, key, info)
+        fit_guarded_capped(ev_sorted, exposure, &t, key, info, clipped)
+    }
+
+    /// Lowest Highlights value Auto may fit given the share of clipped channel samples. Clipped
+    /// channels carry no detail to recover: pulling Highlights down on them only greys the
+    /// reconstructed neutral. Full range (-90) up to 0.5 % clipped, falling linearly to a fifth of
+    /// it (-18) from 10 %, continuous in between; non-finite shares count as none.
+    pub fn highlight_floor(clipped: f32) -> f32 {
+        let c = if clipped.is_finite() { clipped } else { 0.0 };
+        let t = ((c - 0.005) / 0.095).clamp(0.0, 1.0);
+        AUTO_BOUNDS[1].0 * (1.0 - 0.8 * t)
     }
 
     /// Auto's own fit toward `t` (from [`auto_targets`], possibly reweighted): [`AUTO_BOUNDS`]
     /// and a guard that keeps the deep shadows from rising above neutral shaping (backlit scenes,
     /// whose dark foreground wants lifting, relax it).
     pub fn fit_guarded(ev_sorted: &[f32], exposure: f32, t: &Targets, key: SceneKey, info: &SourceInfo) -> Shape {
+        fit_guarded_capped(ev_sorted, exposure, t, key, info, 0.0)
+    }
+
+    /// [`fit_guarded`] with the Highlights range capped for a clipped share ([`highlight_floor`]).
+    pub fn fit_guarded_capped(ev_sorted: &[f32], exposure: f32, t: &Targets, key: SceneKey, info: &SourceInfo, clipped: f32) -> Shape {
         if ev_sorted.is_empty() || !exposure.is_finite() {
             return Shape::default();
         }
         let neutral = tone_map(info, 0.0, 0.0, 0.0);
         let p10 = stats(&sample(ev_sorted, exposure), [0.0; 5], &neutral).p[2];
         let weight = 8.0 * (1.0 - key.backlit).clamp(0.0, 1.0);
-        fit_core(ev_sorted, exposure, t, info, &AUTO_BOUNDS, Some(Guard { p10, weight }))
+        let mut bounds = AUTO_BOUNDS;
+        bounds[1].0 = highlight_floor(clipped);
+        fit_core(ev_sorted, exposure, t, info, &bounds, Some(Guard { p10, weight }))
     }
 
     /// Fit the shaping sliders of `ev_sorted` (scene EVs before exposure) toward `t` (a measured
