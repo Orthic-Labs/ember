@@ -64,7 +64,12 @@ fn apply_auto(c: &str, d: &mut DevelopSettings, r: &RegionAuto) -> Result<()> {
     d.color.vibrance = a.vibrance;
     d.color.saturation = a.saturation;
     d.masks.retain(|m| !is_auto_mask(m));
-    let masks = r.masks_for(&d.masks).ok_or_else(|| bad(c, "no free Auto mask IDs"))?;
+    // the regions are stamped with the photo's geometry (Update AI Settings compares it after a crop)
+    let g = lightcraft_develop::geometry_stamp(d);
+    let mut masks = r.masks_for(&d.masks).ok_or_else(|| bad(c, "no free Auto mask IDs"))?;
+    for m in &mut masks {
+        m.ai_geometry = Some(g);
+    }
     d.masks.extend(masks);
     Ok(())
 }
@@ -517,6 +522,46 @@ pub fn specs() -> Vec<CommandSpec> {
                     s.commit("Auto Settings", Op::Batch { ops })?;
                 }
                 Ok(json!({"changed": n}))
+            }
+        ),
+        // Update AI Settings: restamp the AI masks an older algorithm (or another crop) made, on each target photo, as one undo step.
+        cmd!(
+            "develop.updateAi",
+            "Update AI Settings",
+            [],
+            None,
+            "{ids?, dryRun?: bool} — recomputes the stale AI masks (Subject, Sky, Background, People, Landscape) of each target photo (`ids`, else the selection) as one undo step. A mask is stale when an older AI algorithm made it or the photo's crop, rotation or lens changed since. Object and Describe masks need the SAM 3 model: they stay stale and are counted in `pending` → {stale, updated, pending, changed}",
+            has_selection,
+            |s, p| {
+                let c = "develop.updateAi";
+                let dry = bool_or(p, "dryRun", false);
+                let ids: Vec<PhotoId> = s.targets(p)?.into_iter().filter(|id| s.catalog.photo(*id).is_some()).collect();
+                let (mut stale, mut updated, mut pending, mut changed) = (0, 0, 0, 0);
+                let mut ops = Vec::new();
+                for id in ids {
+                    let base = s.develop_of(id).unwrap_or_default();
+                    let g = lightcraft_develop::geometry_stamp(&base);
+                    stale += lightcraft_develop::ai_stale_count(&base.masks, g);
+                    let mut d = (*base).clone();
+                    let mut photo_changed = false;
+                    for m in d.masks.iter_mut().filter(|m| m.ai_stale(g)) {
+                        if m.ai_recomputable() {
+                            m.restamp(g);
+                            updated += 1;
+                            photo_changed = true;
+                        } else {
+                            pending += 1;
+                        }
+                    }
+                    if photo_changed {
+                        changed += 1;
+                        ops.extend(s.develop_op(id, d, "Update AI Settings"));
+                    }
+                }
+                if !dry && !ops.is_empty() {
+                    s.commit("Update AI Settings", Op::Batch { ops })?;
+                }
+                Ok(json!({"stale": stale, "updated": updated, "pending": pending, "changed": changed, "dryRun": dry}))
             }
         ),
         // Thin wrappers (Classic ⌘U / ⇧⌘U): the same runs as Auto Settings and White Balance ▸ Auto.

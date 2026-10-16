@@ -184,11 +184,14 @@ pub fn specs() -> Vec<CommandSpec> {
                     return Ok(json!({"pending": true}));
                 }
                 let next = s.active().and_then(|id| s.develop_of(id)).map(|d| d.next_mask_id()).unwrap_or(1);
+                // an AI selection is stamped with the photo's geometry now (Update AI Settings compares it after a crop)
+                let ai_geometry = if shape.is_ai() { s.active().and_then(|id| s.develop_of(id)).map(|d| lightcraft_develop::geometry_stamp(&d)) } else { None };
                 let out = masks_edit(s, "mask.add", "Add Mask", |masks, active| {
                     masks.push(Mask {
                         id: next,
                         name: name.unwrap_or_else(|| format!("Mask {next}")),
                         components: vec![MaskComponent { name: None, op: MaskOp::Add, invert: false, shape }],
+                        ai_geometry,
                         ..Default::default()
                     });
                     *active = Some(next);
@@ -221,10 +224,14 @@ pub fn specs() -> Vec<CommandSpec> {
                     segment(s, |s| s.segment_text_later(id, Some(mid), op, None, text))?;
                     return Ok(json!({"pending": true}));
                 }
+                let ai_geometry = if shape.is_ai() { s.develop_of(id).map(|d| lightcraft_develop::geometry_stamp(&d)) } else { None };
                 let mut comp = 0;
                 let out = masks_edit(s, "mask.addComponent", "Edit Mask", |masks, _| {
                     let i = find(masks, mid, "mask.addComponent")?;
                     masks[i].components.push(MaskComponent { name: None, op, invert: bool_or(p, "invert", false), shape });
+                    if masks[i].ai_geometry.is_none() {
+                        masks[i].ai_geometry = ai_geometry;
+                    }
                     comp = masks[i].components.len() - 1;
                     Ok(())
                 })?;

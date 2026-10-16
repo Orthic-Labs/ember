@@ -1039,6 +1039,28 @@ pub struct Mask {
     /// person made, whatever it is named.
     #[serde(skip_serializing_if = "is_false")]
     pub auto: bool,
+    /// The AI algorithm version ([`AI_MASK_VERSION`]) the mask's AI selections were computed with. Not written
+    /// for the legacy version, so masks that are current keep their JSON.
+    #[serde(default = "legacy_ai_version", skip_serializing_if = "is_legacy_ai_version")]
+    pub ai_version: u32,
+    /// [`geometry_stamp`] of the photo when the AI selections were computed. `None` when not recorded: such a
+    /// mask is never stale for its geometry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ai_geometry: Option<u64>,
+}
+
+/// The AI mask algorithms: Subject, Sky, Background, People and Landscape (evaluated on render) and the SAM 3
+/// Object and Describe selections. Bump it when a change would select different pixels; a mask stamped with an
+/// older version is then stale until Update AI Settings restamps it.
+pub const AI_MASK_VERSION: u32 = 1;
+
+/// The version of a mask saved without a stamp: the first one, so an upgrade marks nothing stale.
+fn legacy_ai_version() -> u32 {
+    1
+}
+
+fn is_legacy_ai_version(v: &u32) -> bool {
+    *v == legacy_ai_version()
 }
 
 fn is_zero(v: &f64) -> bool {
@@ -1061,8 +1083,71 @@ impl Default for Mask {
             refine: 0.0,
             feather: 0.0,
             auto: false,
+            ai_version: AI_MASK_VERSION,
+            ai_geometry: None,
         }
     }
+}
+
+impl Mask {
+    /// Whether a component is an AI selection.
+    pub fn has_ai(&self) -> bool {
+        self.components.iter().any(|c| c.shape.is_ai())
+    }
+
+    /// Whether Update AI Settings must recompute the AI selections: another algorithm version made them, or the
+    /// photo's geometry has changed since (`geometry` is the photo's current [`geometry_stamp`]).
+    pub fn ai_stale(&self, geometry: u64) -> bool {
+        self.has_ai() && (self.ai_version != AI_MASK_VERSION || self.ai_geometry.is_some_and(|g| g != geometry))
+    }
+
+    /// Whether Update AI Settings can recompute every AI selection here. Object and Describe selections hold a
+    /// SAM 3 segmentation that only the model can recompute.
+    pub fn ai_recomputable(&self) -> bool {
+        !self.components.iter().any(|c| matches!(c.shape, MaskShape::Object { .. } | MaskShape::Prompt { .. }))
+    }
+
+    /// Stamp the AI selections as computed now, for `geometry`.
+    pub fn restamp(&mut self, geometry: u64) {
+        self.ai_version = AI_MASK_VERSION;
+        self.ai_geometry = Some(geometry);
+    }
+}
+
+impl MaskShape {
+    /// Whether this shape is an AI selection (a segmenter or a model decides its pixels).
+    pub fn is_ai(&self) -> bool {
+        matches!(
+            self,
+            MaskShape::Subject
+                | MaskShape::Sky
+                | MaskShape::Background
+                | MaskShape::Object { .. }
+                | MaskShape::Prompt { .. }
+                | MaskShape::People { .. }
+                | MaskShape::Landscape { .. }
+        )
+    }
+}
+
+/// How many of `masks` are stale for a photo whose current geometry stamp is `geometry`.
+pub fn ai_stale_count(masks: &[Mask], geometry: u64) -> usize {
+    masks.iter().filter(|m| m.ai_stale(geometry)).count()
+}
+
+/// How many AI masks of a photo's settings need Update AI Settings (no geometry stamp is computed without an AI mask).
+pub fn ai_stale_in(d: &DevelopSettings) -> usize {
+    if !d.masks.iter().any(Mask::has_ai) {
+        return 0;
+    }
+    ai_stale_count(&d.masks, geometry_stamp(d))
+}
+
+/// A stable 64-bit FNV-1a of the photo's crop, rotation, orientation and lens override: the geometry an AI
+/// selection was computed for. Stable across runs and builds (unlike `DefaultHasher`), so it can be stored.
+pub fn geometry_stamp(d: &DevelopSettings) -> u64 {
+    let json = serde_json::to_vec(&(&d.geometry, &d.crop, &d.orientation, &d.lens_override)).unwrap_or_default();
+    json.iter().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0000_0100_0000_01b3))
 }
 
 // ---------------------------------------------------------------------------------------------
