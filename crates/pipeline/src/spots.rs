@@ -3,12 +3,15 @@
 //! - **Clone** copies the source patch with a feathered edge.
 //! - **Heal** copies the source's *detail* and keeps the target's *tone*: result = src + blur(target − src)
 //!   (frequency separation — a fast, stable approximation of gradient-domain healing).
-//! - **Remove** is Heal with an automatically chosen source: candidate offsets on rings around the
-//!   spot are scored by how well the source's surrounding annulus matches the target's.
+//! - **Remove** is content-aware: with no source chosen it is a **Fill**, rebuilt by PatchMatch from the spot's
+//!   surroundings. With a source offset set (a "refresh source" pick) it heals from that source like Heal;
+//!   [`auto_source`] still ranks candidate offsets on rings around the spot by how well the source's surrounding
+//!   annulus matches the target's.
 //! - **Fill** (content-aware) rebuilds the spot from patches of its surroundings instead of one
 //!   source: PatchMatch-based completion ([`lightcraft_inpaint::complete`]), coarse to fine, so the
 //!   structure is chosen at a scale set by the spot's size (the same at preview and export size).
-//!   Deterministic; the source offset is ignored.
+//!   Deterministic (seeded by the spot's own geometry, so preview equals export); a box over a pixel budget is
+//!   completed reduced; the source offset is ignored.
 
 use lightcraft_develop::{Spot, SpotMode};
 use lightcraft_geom::Point;
@@ -256,16 +259,115 @@ pub fn window_for_reads_checked(
     )
 }
 
+/// Most pixels a content-aware box is completed at. A bigger box (a long stroke, a large size on a 24 MP export) is
+/// completed at a whole-number fraction of its size and the result scaled back up, so the work stays bounded.
+const MAX_FILL_PIXELS: usize = if cfg!(target_arch = "wasm32") { 600_000 } else { 1_500_000 };
+
+/// A seed for a spot's PatchMatch search from what the spot *is* (mode, size and points in normalized coordinates,
+/// rounded so float noise does not change it): the same spot gets the same fill at preview and export size, and a
+/// different spot a different search. Spots have no id of their own.
+fn spot_seed(spot: &Spot) -> u64 {
+    let mut h: u64 = 0xCBF2_9CE4_8422_2325;
+    let mut mix = |v: i64| {
+        for b in v.to_le_bytes() {
+            h = (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01B3);
+        }
+    };
+    let q = |v: f64| (v * 1.0e6).round() as i64;
+    mix(spot.mode as i64);
+    mix(q(spot.size));
+    for p in &spot.points {
+        mix(q(p.x));
+        mix(q(p.y));
+    }
+    h
+}
+
+/// `tgt` and `hole` (`bw × bh`) reduced by the whole factor `k`: a pixel is the mean of the block's known pixels (of
+/// all of it when none is), and a hole where any pixel of the block is.
+fn reduce_box(tgt: &[f32], hole: &[bool], bw: usize, bh: usize, k: usize) -> (Vec<f32>, Vec<bool>, usize, usize) {
+    let (lw, lh) = (bw.div_ceil(k), bh.div_ceil(k));
+    let mut img = vec![0.0f32; lw * lh * 3];
+    let mut lhole = vec![false; lw * lh];
+    for ly in 0..lh {
+        for lx in 0..lw {
+            let (mut known, mut all) = ([0.0f32; 3], [0.0f32; 3]);
+            let (mut nk, mut na) = (0.0f32, 0.0f32);
+            for y in ly * k..((ly + 1) * k).min(bh) {
+                for x in lx * k..((lx + 1) * k).min(bw) {
+                    let i = y * bw + x;
+                    na += 1.0;
+                    let px = tgt.get(i * 3..i * 3 + 3).unwrap_or(&[0.0; 3]);
+                    for (a, v) in all.iter_mut().zip(px) {
+                        *a += v;
+                    }
+                    if hole.get(i).copied().unwrap_or(false) {
+                        lhole[ly * lw + lx] = true;
+                    } else {
+                        nk += 1.0;
+                        for (a, v) in known.iter_mut().zip(px) {
+                            *a += v;
+                        }
+                    }
+                }
+            }
+            let o = (ly * lw + lx) * 3;
+            let mean = if nk > 0.0 { known.map(|v| v / nk) } else { all.map(|v| v / na.max(1.0)) };
+            img[o..o + 3].copy_from_slice(&mean);
+        }
+    }
+    (img, lhole, lw, lh)
+}
+
+/// Bilinear sample of the interleaved 3-channel `low` (`lw × lh`) at the centre of full-size pixel `(x, y)`, `k` full
+/// pixels to a low one.
+fn sample_low(low: &[f32], lw: usize, lh: usize, k: usize, x: usize, y: usize) -> [f32; 3] {
+    let fx = ((x as f32 + 0.5) / k as f32 - 0.5).clamp(0.0, lw.saturating_sub(1) as f32);
+    let fy = ((y as f32 + 0.5) / k as f32 - 0.5).clamp(0.0, lh.saturating_sub(1) as f32);
+    let (x0, y0) = (fx.floor() as usize, fy.floor() as usize);
+    let (x1, y1) = ((x0 + 1).min(lw.saturating_sub(1)), (y0 + 1).min(lh.saturating_sub(1)));
+    let (tx, ty) = (fx - x0 as f32, fy - y0 as f32);
+    let at = |xx: usize, yy: usize, c: usize| low.get((yy * lw + xx) * 3 + c).copied().unwrap_or(0.0);
+    let mut out = [0.0f32; 3];
+    for (c, o) in out.iter_mut().enumerate() {
+        let top = at(x0, y0, c) * (1.0 - tx) + at(x1, y0, c) * tx;
+        let bot = at(x0, y1, c) * (1.0 - tx) + at(x1, y1, c) * tx;
+        *o = top * (1.0 - ty) + bot * ty;
+    }
+    out
+}
+
 /// Content-aware fill of the box: `src` becomes `tgt` with every pixel under the stroke (`alpha > 0`)
-/// rebuilt from the rest of the box. Falls back to a smooth membrane fill when the box holds no whole
-/// patch to copy from.
-fn fill_box(src: &mut [[f32; 3]], tgt: &[[f32; 3]], alpha: &[f32], bw: usize, bh: usize) {
+/// rebuilt from the rest of the box by PatchMatch completion seeded with `seed`. Falls back to a smooth
+/// membrane fill when the box holds no whole patch to copy from. A box over [`MAX_FILL_PIXELS`] is
+/// completed reduced and scaled back up (only the hole's pixels are written).
+fn fill_box(src: &mut [[f32; 3]], tgt: &[[f32; 3]], alpha: &[f32], bw: usize, bh: usize, seed: u64) {
     let hole: Vec<bool> = alpha.iter().map(|a| *a > 0.0).collect();
     let flat: Vec<f32> = tgt.iter().flatten().copied().collect();
-    let out = lightcraft_inpaint::complete(bw, bh, 3, &flat, &hole, &lightcraft_inpaint::CompleteParams::default())
-        .unwrap_or_else(|| lightcraft_inpaint::membrane_fill(bw, bh, 3, &flat, &hole));
-    for (d, v) in src.iter_mut().zip(out.as_chunks::<3>().0) {
-        *d = *v;
+    let params = lightcraft_inpaint::CompleteParams { seed, ..Default::default() };
+    let run = |img: &[f32], hole: &[bool], w: usize, h: usize| {
+        lightcraft_inpaint::complete(w, h, 3, img, hole, &params).unwrap_or_else(|| lightcraft_inpaint::membrane_fill(w, h, 3, img, hole))
+    };
+    let area = bw.saturating_mul(bh);
+    if area <= MAX_FILL_PIXELS {
+        let out = run(&flat, &hole, bw, bh);
+        for (d, v) in src.iter_mut().zip(out.as_chunks::<3>().0) {
+            *d = *v;
+        }
+        return;
+    }
+    let k = ((area as f64 / MAX_FILL_PIXELS as f64).sqrt().ceil() as usize).max(2);
+    let (low, lhole, lw, lh) = reduce_box(&flat, &hole, bw, bh, k);
+    let out = run(&low, &lhole, lw, lh);
+    for y in 0..bh {
+        for x in 0..bw {
+            let i = y * bw + x;
+            if hole[i] {
+                if let Some(d) = src.get_mut(i) {
+                    *d = sample_low(&out, lw, lh, k, x, y);
+                }
+            }
+        }
     }
 }
 
@@ -287,7 +389,9 @@ pub fn apply(img: &mut Rgb32f, spots: &[Spot], frame: &Frame, ppl: f64) {
             })
             .collect();
         let Some(&first) = pts.first() else { continue };
-        let fill = spot.mode == SpotMode::Fill;
+        // Fill, and Remove with no source chosen, rebuild the spot from its surroundings; a Remove with a source
+        // offset set (a "refresh source" pick) still heals from it, like Heal and Clone
+        let fill = spot.mode == SpotMode::Fill || (spot.mode == SpotMode::Remove && spot.source_offset.is_none());
         let offset = match spot.source_offset {
             _ if fill => (0.0, 0.0),
             Some(o) => {
@@ -330,9 +434,9 @@ pub fn apply(img: &mut Rgb32f, spots: &[Spot], frame: &Frame, ppl: f64) {
             }
         }
         if fill {
-            fill_box(&mut src, &tgt, &alpha, bw, bh);
+            fill_box(&mut src, &tgt, &alpha, bw, bh, spot_seed(spot));
         }
-        let heal = matches!(spot.mode, SpotMode::Remove | SpotMode::Heal);
+        let heal = !fill && matches!(spot.mode, SpotMode::Remove | SpotMode::Heal);
         let low = if heal {
             // Tone correction from the spot's *surroundings* only: normalized convolution of
             // (target − source) over pixels outside the stroke (a membrane-like interpolation).
@@ -517,6 +621,129 @@ mod tests {
             apply(&mut img, &[spot], &frame, frame.px_per_long(40));
             assert!(img.data.iter().flatten().all(|v| v.is_finite()));
         }
+    }
+
+    /// A checkerboard of `sq`-pixel squares (period `2 * sq`), the ground truth for a removed blot.
+    fn checker(x: usize, y: usize, sq: usize) -> f32 {
+        if ((x / sq) + (y / sq)).is_multiple_of(2) { 0.2 } else { 0.7 }
+    }
+
+    fn checker_with_blot(w: usize, h: usize, sq: usize) -> Rgb32f {
+        let mut img = Rgb32f::from_fn(w, h, |x, y| [checker(x, y, sq); 3]);
+        let (cx, cy, r) = (w as f32 / 2.0, h as f32 / 2.0, w as f32 * 0.04);
+        for y in 0..h {
+            for x in 0..w {
+                if (x as f32 + 0.5 - cx).hypot(y as f32 + 0.5 - cy) < r {
+                    img.set(x, y, [0.0; 3]);
+                }
+            }
+        }
+        img
+    }
+
+    fn remove_spot() -> Spot {
+        Spot { mode: SpotMode::Remove, points: vec![Point::new(0.5, 0.5)], size: 0.06, feather: 0.0, source_offset: None, ..Default::default() }
+    }
+
+    #[test]
+    fn remove_fills_a_periodic_texture_with_matching_texture() {
+        let (w, h) = (240, 200);
+        let mut img = checker_with_blot(w, h, 4);
+        let frame = Frame::new(w, h, &DevelopSettings::default(), true);
+        apply(&mut img, &[remove_spot()], &frame, frame.px_per_long(w));
+        let (mut err, mut n) = (0.0f32, 0);
+        for y in 0..h {
+            for x in 0..w {
+                if (x as f32 + 0.5 - w as f32 / 2.0).hypot(y as f32 + 0.5 - h as f32 / 2.0) < w as f32 * 0.04 {
+                    err += (img.get(x, y)[0] - checker(x, y, 4)).abs();
+                    n += 1;
+                }
+            }
+        }
+        assert!(n > 100);
+        // a plain heal from one source or a flat fill would sit near 0.25 here; the texture is 0.5 apart
+        assert!(err / n as f32 < 0.15, "mean error {}", err / n as f32);
+        assert!(img.data.iter().flatten().all(|v| v.is_finite()));
+    }
+
+    #[test]
+    fn remove_is_deterministic() {
+        let (w, h) = (200, 160);
+        let frame = Frame::new(w, h, &DevelopSettings::default(), true);
+        let (mut a, mut b) = (checker_with_blot(w, h, 4), checker_with_blot(w, h, 4));
+        apply(&mut a, &[remove_spot()], &frame, frame.px_per_long(w));
+        apply(&mut b, &[remove_spot()], &frame, frame.px_per_long(w));
+        assert_eq!(a.data, b.data);
+    }
+
+    #[test]
+    fn remove_matches_between_preview_and_export_size() {
+        let (mut big, mut small) = (checker_with_blot(320, 240, 8), checker_with_blot(160, 120, 4));
+        let (fb, fs) = (Frame::new(320, 240, &DevelopSettings::default(), true), Frame::new(160, 120, &DevelopSettings::default(), true));
+        apply(&mut big, &[remove_spot()], &fb, fb.px_per_long(320));
+        apply(&mut small, &[remove_spot()], &fs, fs.px_per_long(160));
+        let (mut err, mut n) = (0.0f32, 0);
+        for y in 50..70 {
+            for x in 70..90 {
+                let b: f32 = [(0, 0), (1, 0), (0, 1), (1, 1)].iter().map(|(dx, dy)| big.get(2 * x + dx, 2 * y + dy)[0]).sum::<f32>() / 4.0;
+                err += (b - small.get(x, y)[0]).abs();
+                n += 1;
+            }
+        }
+        assert!(err / n as f32 <= 0.12, "mean difference {}", err / n as f32);
+    }
+
+    #[test]
+    fn remove_with_a_chosen_source_still_heals_from_it() {
+        // a source offset set: the spot copies from there (here a bright area), not a fill from its surroundings
+        let mut img = Rgb32f::from_fn(100, 100, |x, _| if x < 50 { [0.1; 3] } else { [0.9; 3] });
+        let frame = Frame::new(100, 100, &DevelopSettings::default(), true);
+        let spot =
+            Spot { source_offset: Some(Point::new(0.5, 0.0)), feather: 0.0, size: 0.05, points: vec![Point::new(0.25, 0.5)], ..Default::default() };
+        apply(&mut img, &[spot], &frame, frame.px_per_long(100));
+        assert!(img.get(25, 50)[0] > 0.3, "{:?}", img.get(25, 50));
+    }
+
+    #[test]
+    fn remove_survives_empty_and_degenerate_regions() {
+        let frame = Frame::new(40, 30, &DevelopSettings::default(), true);
+        let empty = Spot { points: vec![], ..Default::default() };
+        let mut img = Rgb32f::from_fn(40, 30, |x, _| [x as f32 / 40.0; 3]);
+        let before = img.data.clone();
+        apply(&mut img, &[empty], &frame, frame.px_per_long(40));
+        assert_eq!(img.data, before);
+        let hostile =
+            [((0.0, 0.0), 2.0), ((-5.0, 9.0), 0.1), ((0.5, 0.5), 0.0), ((f64::NAN, 0.5), 0.1), ((0.5, 0.5), f64::INFINITY), ((0.5, 0.5), -1.0)];
+        for (p, size) in hostile {
+            let mut img = Rgb32f::from_fn(40, 30, |x, _| [x as f32 / 40.0; 3]);
+            let spot = Spot { mode: SpotMode::Remove, points: vec![Point::new(p.0, p.1)], size, ..Default::default() };
+            apply(&mut img, &[spot], &frame, frame.px_per_long(40));
+            assert!(img.data.iter().flatten().all(|v| v.is_finite()));
+        }
+    }
+
+    #[test]
+    fn a_box_over_the_pixel_budget_is_filled_reduced_and_stays_bounded() {
+        // a stroke whose box is over MAX_FILL_PIXELS: filled through the reduced path, every hole pixel written and finite
+        let (w, h) = (1800, 1000);
+        let mut img = Rgb32f::from_fn(w, h, |x, y| [checker(x, y, 8); 3]);
+        let frame = Frame::new(w, h, &DevelopSettings::default(), true);
+        let spot = Spot {
+            mode: SpotMode::Remove,
+            points: vec![Point::new(0.3, 0.5), Point::new(0.7, 0.5)],
+            size: 0.05,
+            feather: 0.0,
+            source_offset: None,
+            ..Default::default()
+        };
+        for y in 450..550 {
+            for x in 540..1260 {
+                img.set(x, y, [0.0; 3]);
+            }
+        }
+        apply(&mut img, &[spot], &frame, frame.px_per_long(w));
+        assert!(img.data.iter().flatten().all(|v| v.is_finite()));
+        assert!(img.get(900, 500)[0] > 0.05, "the stroke is filled: {:?}", img.get(900, 500));
     }
 
     #[test]
