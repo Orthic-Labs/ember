@@ -782,16 +782,17 @@ fn control_port_from(what: &str, value: Option<String>) -> Option<u16> {
     port
 }
 
-/// An isolated profile keeps the emergency crash log with its other app data. With no
-/// override (or an empty override), retain the historical system-temp location.
-fn panic_log_path_with(env: impl Fn(&str) -> Option<std::ffi::OsString>, temp: std::path::PathBuf) -> std::path::PathBuf {
-    env("LIGHTCRAFT_CONFIG_DIR").filter(|value| !value.is_empty()).map(std::path::PathBuf::from).unwrap_or(temp).join("lightcraft-panics.log")
+/// The folder for `rightkit-crash`'s panic reports. An isolated profile keeps them with its other
+/// app data. With no override (or an empty override), they go in the system temp folder, where the
+/// old `lightcraft-panics.log` was.
+fn crash_dir_with(env: impl Fn(&str) -> Option<std::ffi::OsString>, temp: std::path::PathBuf) -> std::path::PathBuf {
+    env("LIGHTCRAFT_CONFIG_DIR").filter(|value| !value.is_empty()).map(std::path::PathBuf::from).unwrap_or(temp).join("lightcraft-crash-reports")
 }
 
 fn main() -> eframe::Result {
     // First, so every start-up record is kept for the log file (`logging`).
     let logger = logging::install();
-    lightcraft_engine::guard::install_hook(panic_log_path_with(|name| std::env::var_os(name), std::env::temp_dir()));
+    lightcraft_engine::guard::install_hook(crash_dir_with(|name| std::env::var_os(name), std::env::temp_dir()));
     if let Some(logger) = logger {
         logging::record_panics(logger);
     }
@@ -1354,10 +1355,10 @@ mod config_path_tests {
     use super::*;
 
     #[test]
-    fn config_override_keeps_panic_log_in_isolated_profile() {
+    fn config_override_keeps_crash_reports_in_isolated_profile() {
         let temp = std::path::PathBuf::from("temp");
-        assert_eq!(panic_log_path_with(|_| Some("isolated".into()), temp.clone()), std::path::PathBuf::from("isolated/lightcraft-panics.log"));
-        assert_eq!(panic_log_path_with(|_| None, temp.clone()), temp.join("lightcraft-panics.log"));
-        assert_eq!(panic_log_path_with(|_| Some("".into()), temp.clone()), temp.join("lightcraft-panics.log"));
+        assert_eq!(crash_dir_with(|_| Some("isolated".into()), temp.clone()), std::path::PathBuf::from("isolated/lightcraft-crash-reports"));
+        assert_eq!(crash_dir_with(|_| None, temp.clone()), temp.join("lightcraft-crash-reports"));
+        assert_eq!(crash_dir_with(|_| Some("".into()), temp.clone()), temp.join("lightcraft-crash-reports"));
     }
 }

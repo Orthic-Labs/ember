@@ -47,6 +47,8 @@ lightcraft-segment = { workspace = true, optional = true }
 # model downloads run natively only (the web build fetches no models)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 lightcraft-fetch = { workspace = true }
+# panic hook and reports for contained panics (RightKit owner of crash-reporting; native only, the web build aborts on panic)
+rightkit-crash = { version = "=0.3.0", default-features = false }
 
 [features]
 # AI masks with SAM 3 (Object / Describe). Off for the web and CLI builds.

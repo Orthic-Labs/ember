@@ -1,5 +1,14 @@
 # What's new in Ember
 
+## 2026-10-17
+
+### Crash reports come from RightKit
+- A panic now leaves a redacted JSON report (owner-only, bounded retention) in `lightcraft-crash-reports`,
+  replacing the one-line `lightcraft-panics.log`. The folder is in the system temp folder, or inside
+  `LIGHTCRAFT_CONFIG_DIR` for an isolated profile. A panic that the command guard contained is also reported, with
+  the command that was running. The panic still prints on standard error and still reaches `logs/lightcraft.log`.
+  The reports come from the shared `rightkit-crash` library; the web build has no panic hook (it aborts on panic).
+
 ## 2026-10-15
 
 ### The GPU no longer runs out of memory and switches itself off
