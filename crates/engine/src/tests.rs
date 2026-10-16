@@ -1826,8 +1826,12 @@ fn auto_batch_sets_each_selected_photo_to_its_own_auto_in_one_undo_step() {
 fn auto_batch_with_regions_replaces_its_masks_and_keeps_the_users() {
     let mut s = demo();
     let ids: Vec<_> = s.visible_cloned().into_iter().take(2).collect();
+    // mask.add edits the active photo only (Auto Sync is off), so each photo gets its own mask
+    for id in &ids {
+        s.execute("library.select", &json!({"ids": [id.0]})).unwrap();
+        s.execute("mask.add", &json!({"kind": "radial", "center": [0.3, 0.3], "name": "mine"})).unwrap();
+    }
     s.execute("library.select", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
-    s.execute("mask.add", &json!({"kind": "radial", "center": [0.3, 0.3], "name": "mine"})).unwrap();
     let auto_masks = |s: &Session, id| s.develop_of(id).unwrap().masks.iter().filter(|m| lightcraft_pipeline::auto::regions::is_auto_mask(m)).count();
     s.execute("develop.autoBatch", &json!({})).unwrap();
     let first: Vec<usize> = ids.iter().map(|id| auto_masks(&s, *id)).collect();
