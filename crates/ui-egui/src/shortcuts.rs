@@ -84,6 +84,8 @@ pub const CLASSIC_KEYS: &[(&str, &str)] = &[
     ("R", "panel.crop"),
     ("K", "tool.brush"),
     ("M", "tool.linear"),
+    // flag cycle (Classic's backtick)
+    ("`", "photo.cycleFlag"),
 ];
 
 /// Commands other than `id` whose shortcut is the key `sc` (contextual partners excepted).
@@ -270,6 +272,7 @@ pub fn parse(s: &str) -> Option<(Modifiers, Key)> {
                             "]" => Some(Key::CloseBracket),
                             "'" => Some(Key::Quote),
                             "," => Some(Key::Comma),
+                            "`" => Some(Key::Backtick),
                             _ => None,
                         })
                         .filter(|k| !is_modifier(*k))?,
@@ -851,6 +854,19 @@ mod tests {
         let off = h.app.run("app.classicKeymap", json!({})).unwrap();
         assert_eq!(off["classicKeymap"], false);
         assert!(!h.app.ui.settings.classic_keymap);
+    }
+
+    #[test]
+    fn classic_backtick_cycles_the_flag() {
+        use crate::state::RightPanel;
+        use lightcraft_catalog::PhotoId;
+        let mut h = library();
+        h.app.run("app.classicKeymap", json!({"on": true})).unwrap();
+        h.app.ui.right = RightPanel::None;
+        // backtick cycles the active photo's flag (photo.cycleFlag)
+        let flag = h.app.session.catalog.photo(PhotoId(1)).unwrap().flag;
+        key(&mut h, "Backtick", false);
+        assert_ne!(h.app.session.catalog.photo(PhotoId(1)).unwrap().flag, flag);
     }
 
     #[test]
