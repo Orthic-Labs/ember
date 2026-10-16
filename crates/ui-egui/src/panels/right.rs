@@ -113,9 +113,9 @@ fn custom_aspect(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     let mut apply = false;
     ui.horizontal(|ui| {
         ui.label(crate::i18n::tr("Custom"));
-        let a = crate::text_field::TextField::singleline("field:cropCustomW", &mut w).width(34.0).show(ui).response;
+        let a = crate::text_field::TextField::singleline("field:cropCustomW", &mut w).width(34.0).select_on_focus(true).show(ui).response;
         ui.label("×");
-        let b = crate::text_field::TextField::singleline("field:cropCustomH", &mut h).width(34.0).show(ui).response;
+        let b = crate::text_field::TextField::singleline("field:cropCustomH", &mut h).width(34.0).select_on_focus(true).show(ui).response;
         let go = text_button(ui, "cropCustomApply", "Apply", false);
         apply = go.clicked() || ((a.lost_focus() || b.lost_focus()) && ui.input(|i| i.key_pressed(egui::Key::Enter)));
     });

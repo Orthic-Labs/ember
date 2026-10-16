@@ -182,8 +182,27 @@ impl<'a> TextField<'a> {
                 Action::Refocus => {}
             }
         }
+        // An IME composition under way, from the events of earlier frames or this one. egui's own
+        // composition state is crate-private, so the field follows the IME events itself.
+        let composing_before = memo.composing;
+        let mut composing = composing_before;
+        ui.input(|i| {
+            for event in &i.events {
+                if let egui::Event::Ime(ime) = event {
+                    match ime {
+                        egui::ImeEvent::Preedit { text, .. } => composing = !text.is_empty(),
+                        egui::ImeEvent::Commit(_) => composing = false,
+                        _ => {}
+                    }
+                }
+            }
+        });
+        memo.composing = composing;
         let mut edit = if self.multiline { egui::TextEdit::multiline(self.text) } else { egui::TextEdit::singleline(self.text) };
-        edit = edit.id(id);
+        // the default filter: arrows move the caret, Tab and Esc move the focus. While a composition
+        // is under way Esc is the IME's (it cancels the composition), so it does not take the focus away.
+        let filter = egui::EventFilter { horizontal_arrows: true, vertical_arrows: true, escape: composing, ..Default::default() };
+        edit = edit.id(id).event_filter(filter);
         if let Some(hint) = self.hint {
             edit = edit.hint_text(hint);
         }
@@ -214,6 +233,10 @@ impl<'a> TextField<'a> {
         let right = ui.input(|i| i.pointer.button_down(egui::PointerButton::Secondary) || i.pointer.button_released(egui::PointerButton::Secondary));
         let selection = egui::text_edit::TextEditState::load(ui.ctx(), id).and_then(|s| s.cursor.char_range());
         let mut response = ui.add(edit);
+        // egui selects the line under a triple-click; a field selects all of its text, as a browser's does
+        if response.triple_clicked() {
+            select_all(ui.ctx(), id, self.text);
+        }
         // The menu may take focus on a primary-button release. egui collapses a
         // TextEdit selection when focus leaves; retain the range our own menu acts on.
         if right && response.contains_pointer() || memo.menu_open && !ui.memory(|m| m.has_focus(id)) {
@@ -270,6 +293,8 @@ impl<'a> TextField<'a> {
             if escape && menu_was_open {
                 // Esc closes only the menu, as in native menus: the field takes the focus back
                 memo.action = Some(Action::Refocus);
+            } else if escape && composing_before {
+                // Esc during a composition is the IME's to cancel: the text is not given back
             } else if escape {
                 if let Some(before) = memo.before.take()
                     && *self.text != before
@@ -321,6 +346,8 @@ struct Memo {
     /// The field took the focus with select-on-focus under a press: select all on its release,
     /// unless it dragged a selection.
     select_on_release: bool,
+    /// An IME composition is under way: its preedit text is in the field.
+    composing: bool,
     /// The frame (egui pass) the field was last drawn in.
     pass: u64,
 }
@@ -383,6 +410,14 @@ mod tests {
     use crate::headless::HeadlessView;
 
     const FIELD: &str = "cityField";
+
+    fn preedit(text: &str) -> Event {
+        Event::Ime(egui::ImeEvent::Preedit { text: text.to_string(), active_range_chars: None })
+    }
+
+    fn commit(text: &str) -> Event {
+        Event::Ime(egui::ImeEvent::Commit(text.to_string()))
+    }
 
     /// A field alone in a window, with a blank area beside it to click away to.
     struct Rig {
@@ -477,6 +512,25 @@ mod tests {
         fn type_text(&mut self, text: &str) {
             self.frame(vec![Event::Text(text.to_string())]);
             self.settle();
+        }
+
+        /// Press and release `times` times in quick succession at `at`: two make a double-click, three a triple-click.
+        fn clicks_at(&mut self, at: Pos2, times: usize) {
+            let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+            for _ in 0..times {
+                self.frame(vec![Event::PointerMoved(at), press(true)]);
+                self.frame(vec![press(false)]);
+            }
+            self.settle();
+        }
+
+        /// The selection, as the (start, end) character offsets it covers.
+        fn selection(&self) -> (usize, usize) {
+            let range = egui::text_edit::TextEditState::load(&self.view.ctx, id(FIELD))
+                .and_then(|s| s.cursor.char_range())
+                .unwrap_or_default()
+                .as_sorted_char_range();
+            (usize::from(range.start), usize::from(range.end))
         }
 
         fn focused(&self) -> bool {
@@ -781,6 +835,69 @@ mod tests {
         rig.settle();
         rig.type_text("X");
         assert!(rig.text.starts_with("Lisbon") && rig.text.ends_with('X') && rig.text != "X", "{:?}", rig.text);
+    }
+
+    /// Double-click selects the word under the pointer, not the space after it.
+    #[test]
+    fn double_click_selects_the_word_under_the_pointer() {
+        let mut rig = Rig::new("Lisbon Porto");
+        let r = rig.rect(FIELD).expect("the field");
+        rig.clicks_at(egui::pos2(r.left() + 10.0, r.center().y), 2);
+        assert_eq!(rig.selection(), (0, 6));
+        assert_eq!(rig.text, "Lisbon Porto");
+    }
+
+    /// Triple-click selects all of a multi-line field's text, not just the line clicked.
+    #[test]
+    fn triple_click_selects_all_the_text() {
+        let mut rig = Rig::with("Ada\nLovelace", true);
+        let r = rig.rect(FIELD).expect("the field");
+        rig.clicks_at(egui::pos2(r.left() + 10.0, r.top() + 6.0), 3);
+        assert_eq!(rig.selection(), (0, rig.text.chars().count()));
+    }
+
+    /// Shift with the arrow keys extends the selection from the caret.
+    #[test]
+    fn shift_arrows_extend_the_selection() {
+        let mut rig = Rig::new("Lisbon");
+        let r = rig.rect(FIELD).expect("the field");
+        rig.click_at(egui::pos2(r.left() + 2.0, r.center().y), PointerButton::Primary);
+        for _ in 0..3 {
+            rig.key(Key::ArrowRight, Modifiers::SHIFT);
+        }
+        assert_eq!(rig.selection(), (0, 3));
+        assert_eq!(rig.text, "Lisbon");
+    }
+
+    /// An IME composition shows in the field while it is typed, and its commit replaces it.
+    #[test]
+    fn ime_composition_is_shown_and_then_committed() {
+        let mut rig = Rig::new("");
+        rig.click(FIELD, PointerButton::Primary);
+        rig.frame(vec![preedit("ni")]);
+        rig.settle();
+        assert_eq!(rig.text, "ni", "the composition is shown in the field");
+        rig.frame(vec![commit("你")]);
+        rig.settle();
+        assert_eq!(rig.text, "你");
+        assert_eq!(rig.endings, vec![], "composing is not leaving the field");
+    }
+
+    /// Esc during a composition belongs to the IME: the field keeps the focus and the text, and the
+    /// edit goes on. Once the composition is dismissed, Esc gives back the text from before the edit.
+    #[test]
+    fn escape_during_a_composition_is_left_to_the_ime() {
+        let mut rig = Rig::new("Lisbon");
+        rig.select_all_by_keys();
+        rig.frame(vec![preedit("Ro")]);
+        rig.settle();
+        rig.key(Key::Escape, Modifiers::NONE);
+        assert_eq!((rig.text.as_str(), rig.endings.clone()), ("Ro", vec![]), "the edit goes on");
+        assert!(rig.focused(), "the field keeps the focus");
+        rig.frame(vec![preedit("")]);
+        rig.settle();
+        rig.key(Key::Escape, Modifiers::NONE);
+        assert_eq!((rig.text.as_str(), rig.endings.clone()), ("Lisbon", vec![Ending::Escape]));
     }
 }
 

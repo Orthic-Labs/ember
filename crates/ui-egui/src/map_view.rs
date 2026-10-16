@@ -308,7 +308,7 @@ fn edit_window(app: &mut LightcraftApp, ctx: &egui::Context, editor: &mut Editor
             }
             ui.end_row();
             ui.label(tr("Radius (metres)"));
-            if TextField::singleline("field:mapLocationRadius", &mut editor.radius).width(220.0).show(ui).committed() {
+            if TextField::singleline("field:mapLocationRadius", &mut editor.radius).width(220.0).select_on_focus(true).show(ui).committed() {
                 action = Some("save");
             }
             ui.end_row();
