@@ -1,6 +1,6 @@
 # RAW parity: cameras, formats, demosaic, colour and lens profiles
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (upstream absorb 2026-10-14: Hasselblad Lunar verified and Leaf MOS recognised, 236 verified and 232 preview; Nikon D4 and D90 image areas; Nikon in-file distortion)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-17 · **Change:** minor (raw-domain denoise wired through the loaders, #201; upstream absorb 2026-10-14: Hasselblad Lunar verified and Leaf MOS recognised, 236 verified and 232 preview; Nikon D4 and D90 image areas; Nikon in-file distortion)
 
 Raw processing is the deepest single dimension of reference editor parity: a photographer whose camera
 does not decode, or decodes with the wrong colour, cannot switch. This document measures it model by
@@ -177,6 +177,7 @@ sample files. A pointer for contributors, not legal advice.
 | Lens metadata | ✅ read for profile selection | EXIF lens fields read; used only for the in-file corrections below | 🟡 |
 | Highlight reconstruction | ✅ | neutral clip, chromaticity diffusion (`highlight.rs`) | 🟡 tuned by eye |
 | AI denoise | ✅ Bayer and X-Trans, model bundled | Bayer only, user-installed weights, pure-Rust CPU / GPU | 🟡 no X-Trans, no shippable weights |
+| Raw-domain denoise (classical) | — | Detail ▸ Raw Noise Reduction (`enhance.rawDenoise`, 0–100): per-colour Poisson-Gaussian fit, Anscombe transform, non-local means per mosaic plane, before demosaic (`crates/raw/src/rawdenoise.rs`); Bayer only; preview, export, CLI and MCP share one loader, the decoded-source cache is keyed by the strength; thumbnails skip it ([#201](https://github.com/Orthic-Labs/ember/issues/201)) | 🟡 not qualified on consented ISO strata, no web build, X-Trans untouched |
 | Super Resolution | ✅ | — | ⬜ |
 | HDR / panorama merge to raw DNG | ✅ | linear DNG (float16 HDR) with the source's colour tags | ✅ |
 | Convert to DNG | ✅ | uncompressed or LJ92 tiles (`dngwrite.rs`) | ✅ (no lossy DNG) |

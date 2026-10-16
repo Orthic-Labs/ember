@@ -881,3 +881,57 @@ fn enhance_sets_denoise_and_raw_details_in_one_undo_step_and_refuses_super_resol
     drop(x.s);
     let _ = std::fs::remove_dir_all(x.dir);
 }
+
+/// A noisy flat Bayer DNG (Poisson-Gaussian noise of a mid-grey), the kind of mosaic the raw-domain denoise is for.
+fn noisy_flat_dng(w: usize, h: usize) -> Vec<u8> {
+    let mut state = 0x2545_f491_4f6c_dd1du64;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        ((state >> 11) as f64 + 0.5) / (1u64 << 53) as f64
+    };
+    let (level, a, b) = (0.4f64, 2e-3f64, 2e-5f64);
+    let data: Vec<u16> = (0..w * h)
+        .map(|_| {
+            let normal = (-2.0 * next().ln()).sqrt() * (std::f64::consts::TAU * next()).cos();
+            let v = level + (a * level).sqrt() * normal + b.sqrt() * (-2.0 * next().ln()).sqrt() * (std::f64::consts::TAU * next()).cos();
+            (256.0 + v.clamp(0.0, 1.0) * 15744.0) as u16
+        })
+        .collect();
+    synthetic_dng_of(w, h, "RGGB", data, None, Default::default())
+}
+
+/// Raw Noise Reduction (issue #201) reaches the picture through the loaders: on, a raw renders differently; off (zero,
+/// and again after it is switched back off) it renders exactly as it did before, and an export of the photo goes
+/// through the same loader.
+#[test]
+fn raw_noise_reduction_changes_the_render_and_off_changes_nothing() {
+    let dir = temp_dir("rawdenoise");
+    let originals = dir.join("originals");
+    std::fs::create_dir_all(&originals).unwrap();
+    std::fs::write(originals.join("noisy.dng"), noisy_flat_dng(544, 544)).unwrap();
+    let mut s = Session::new().with_fs();
+    s.open_library(dir.join("library"), false).unwrap();
+    s.execute("library.import", &json!({"paths": [originals.join("noisy.dng").to_string_lossy()]})).unwrap();
+    let id = photo(&s);
+    s.execute("library.select", &json!({"ids": [id.0]})).unwrap();
+    let render = |s: &mut Session| s.render_now(id, 540, 540).unwrap().image.data.clone();
+    // (larger than a thumbnail, which skips the denoise: the preview level)
+    let export = |s: &mut Session| {
+        s.render_export(id, 540, 540, lightcraft_pipeline::OutputSpace::Srgb, lightcraft_pipeline::OutputDepth::U8).unwrap().image.data.clone()
+    };
+    let before = render(&mut s);
+    let export_before = export(&mut s);
+    assert_eq!(render(&mut s), before, "the render is deterministic");
+    s.execute("develop.set", &json!({"control": "enhance.rawDenoise", "value": 0})).unwrap();
+    assert_eq!(render(&mut s), before, "strength zero renders exactly as before");
+    s.execute("develop.set", &json!({"control": "enhance.rawDenoise", "value": 70})).unwrap();
+    let denoised = render(&mut s);
+    assert_ne!(denoised, before, "the denoised mosaic renders differently");
+    assert_ne!(export(&mut s), export_before, "an export goes through the same loader");
+    s.execute("develop.set", &json!({"control": "enhance.rawDenoise", "value": 0})).unwrap();
+    assert_eq!(render(&mut s), before, "switched off again, the picture is the original one");
+    drop(s);
+    let _ = std::fs::remove_dir_all(dir);
+}

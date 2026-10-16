@@ -346,19 +346,19 @@ pub fn bin_factor(raw: &lightcraft_raw::RawImage, max_edge: usize) -> Option<usi
 /// instead of each one waking the pool from outside and waiting for it (which costs more than the
 /// loops themselves when the machine is busy).
 pub fn load_bytes(bytes: &[u8], max_edge: usize) -> Result<(Rgb32f, SourceInfo), String> {
-    rayon::scope(|_| load_bytes_now(std::borrow::Cow::Borrowed(bytes), max_edge, None, None, false).map(|(img, _, info)| (img, info)))
+    rayon::scope(|_| load_bytes_now(std::borrow::Cow::Borrowed(bytes), max_edge, None, None, false, 0.0).map(|(img, _, info)| (img, info)))
 }
 
 /// [`load_bytes`] taking the file's bytes: a raw file's bytes are freed as soon as it is decoded
 /// (less memory held while it is developed).
 pub fn load_vec(bytes: Vec<u8>, max_edge: usize) -> Result<(Rgb32f, SourceInfo), String> {
-    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, None, false).map(|(img, _, info)| (img, info)))
+    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, None, false, 0.0).map(|(img, _, info)| (img, info)))
 }
 
 /// [`load_vec`] with the "Raw Details" demosaic ([`lightcraft_raw::Method::RawDetails`]) for the levels that demosaic the
 /// sensor (previews that bin the mosaic instead are unaffected, as are files that are not Bayer raws).
 pub fn load_vec_detailed(bytes: Vec<u8>, max_edge: usize) -> Result<(Rgb32f, SourceInfo), String> {
-    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, None, true).map(|(img, _, info)| (img, info)))
+    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, None, true, 0.0).map(|(img, _, info)| (img, info)))
 }
 
 /// Per-file crop provenance for an offline registration source, in un-oriented active-area pixels.
@@ -377,15 +377,23 @@ pub fn load_vec_for_alignment(bytes: Vec<u8>, max_edge: usize) -> Result<(Rgb32f
         .transpose()
         .map_err(|error| error.to_string())?;
     rayon::scope(move |_| {
-        load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, crop, false).map(|(image, _, info)| (image, info, provenance))
+        load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, crop, false, 0.0).map(|(image, _, info)| (image, info, provenance))
     })
+}
+
+/// [`load_vec`] (or [`load_vec_detailed`] when `detail` is set) with the classical raw-domain denoise of strength `strength`
+/// (`0..=100`, [`lightcraft_raw::rawdenoise`]) applied to a raw file's mosaic before it is demosaiced. Zero, and every file that is
+/// not a raw, load exactly as the plain loaders do. Pictures small enough to be thumbnails are not denoised (the noise is gone
+/// at that size); everything larger is developed from the full sensor, never from the binned one.
+pub fn load_vec_raw_denoised(bytes: Vec<u8>, max_edge: usize, detail: bool, strength: f64) -> Result<(Rgb32f, SourceInfo), String> {
+    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, None, None, detail, strength).map(|(img, _, info)| (img, info)))
 }
 
 /// [`load_vec`] that also develops the photo's cached denoised picture (`spec`) from the same decode: the plain
 /// picture, the denoised one (`None` when it cannot be read or does not fit this raw: the plain one is then all
 /// there is) and the source facts. Both pictures are the same size.
 pub fn load_vec_pair(bytes: Vec<u8>, max_edge: usize, spec: &DenoiseSpec) -> Result<(Rgb32f, Option<Rgb32f>, SourceInfo), String> {
-    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, Some(spec), None, false))
+    rayon::scope(move |_| load_bytes_now(std::borrow::Cow::Owned(bytes), max_edge, Some(spec), None, false, 0.0))
 }
 
 /// The denoised camera RGB of `raw` from its cached product, as the plain development would have it: the default
@@ -410,12 +418,16 @@ fn denoised_camera_rgb(raw: &lightcraft_raw::RawImage, spec: &DenoiseSpec, facto
     }
 }
 
+/// The longest edge (pixels) of a raw development that stays bilinear and skips the raw-domain denoise: thumbnails.
+pub(crate) const RAW_SMALL_EDGE: usize = 600;
+
 fn load_bytes_now(
     bytes: std::borrow::Cow<'_, [u8]>,
     max_edge: usize,
     denoise: Option<&DenoiseSpec>,
     alignment_crop: Option<lightcraft_raw::Rect>,
     raw_details: bool,
+    raw_denoise: f64,
 ) -> Result<(Rgb32f, Option<Rgb32f>, SourceInfo), String> {
     if lightcraft_raw::probe(&bytes).is_some() {
         let mut raw = match lightcraft_raw::decode(&bytes).map_err(|e| preview_reason(&bytes, e)) {
@@ -448,7 +460,10 @@ fn load_bytes_now(
         // Previews and thumbnails bin the mosaic straight to (about) the size they need; only
         // larger levels (exports, 1:1) demosaic the whole sensor.
         let t0 = web_time::Instant::now();
-        let bin = bin_factor(&raw, max_edge);
+        // The raw-domain denoise works on the whole mosaic, so a denoised picture is never binned (thumbnail-sized ones
+        // skip it: the filter would cost more than anything it could show).
+        let denoise_strength = if raw_denoise.is_finite() && raw_denoise > 0.0 && max_edge > RAW_SMALL_EDGE { raw_denoise } else { 0.0 };
+        let bin = if denoise_strength > 0.0 { None } else { bin_factor(&raw, max_edge) };
         // (binned: block means, and which colours had a clipped sample in each block)
         let binned = match bin {
             Some(k) => raw.develop_binned_masked(k, HIGHLIGHT_CLIP).map_err(|e| e.to_string())?,
@@ -459,12 +474,13 @@ fn load_bytes_now(
             Some((img, mask)) => (img, Some(mask)),
             None => {
                 // (Raw Details only changes the levels that demosaic the sensor; the small ones stay bilinear)
-                let method = match (max_edge <= 600, raw_details) {
+                let method = match (max_edge <= RAW_SMALL_EDGE, raw_details) {
                     (true, _) => lightcraft_raw::Method::Bilinear,
                     (false, true) => lightcraft_raw::Method::RawDetails,
                     (false, false) => lightcraft_raw::Method::Ahd,
                 };
-                (raw.develop(method).map_err(|e| e.to_string())?, None)
+                let developed = if denoise_strength > 0.0 { raw.develop_denoised(method, denoise_strength) } else { raw.develop(method) };
+                (developed.map_err(|e| e.to_string())?, None)
             }
         };
         // the same development from the denoised mosaic, when the photo has been denoised
@@ -1025,15 +1041,23 @@ pub fn fs_pair_loader() -> PairLoader {
     })
 }
 
-/// The filesystem-backed [`FileLoader`], with the "Raw Details" demosaic when `detail` is set.
-fn fs_loader(detail: bool) -> FileLoader {
+/// The filesystem-backed [`FileLoader`], with the "Raw Details" demosaic when `detail` is set and the raw-domain denoise
+/// ([`load_vec_raw_denoised`]) when `strength` is above zero.
+fn fs_loader(detail: bool, strength: f64) -> FileLoader {
     Arc::new(move |path: &str, max_edge: usize| {
         let len = std::fs::metadata(path).map(|m| usize::try_from(m.len()).unwrap_or(usize::MAX)).unwrap_or(0);
-        let weight = len * if max_edge <= crate::media::SourceLevel::Thumb.max_edge() { 3 } else { 6 };
+        // (the raw-domain denoise holds more planes of the mosaic at once)
+        let weight = len * if max_edge <= crate::media::SourceLevel::Thumb.max_edge() { 3 } else if strength > 0.0 { 8 } else { 6 };
         let gate = crate::memory::work_gate();
         let _permit = if crate::memory::is_background() { gate.acquire(weight) } else { gate.acquire_urgent(weight) };
         let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
-        let r = if detail { load_vec_detailed(bytes, max_edge) } else { load_vec(bytes, max_edge) };
+        let r = if strength > 0.0 {
+            load_vec_raw_denoised(bytes, max_edge, detail, strength)
+        } else if detail {
+            load_vec_detailed(bytes, max_edge)
+        } else {
+            load_vec(bytes, max_edge)
+        };
         // the file, the samples and the intermediate images are gone: give their pages back
         crate::memory::release();
         r
@@ -1042,7 +1066,13 @@ fn fs_loader(detail: bool) -> FileLoader {
 
 /// The filesystem-backed loader of photos whose Raw Details setting is on ([`crate::media::MediaCache::file_loader_detailed`]).
 pub fn fs_detailed_loader() -> FileLoader {
-    fs_loader(true)
+    fs_loader(true, 0.0)
+}
+
+/// The filesystem-backed loader of photos whose Raw Noise Reduction is on ([`crate::media::RawDenoiseLoader`]): `detail` for
+/// Raw Details too, `strength` (`0..=100`) of the denoise. It takes the same memory gate as every other loader.
+pub fn fs_raw_denoise_loader() -> crate::media::RawDenoiseLoader {
+    Arc::new(|detail: bool, strength: f64| fs_loader(detail, strength))
 }
 
 /// Filesystem-backed hooks (native). On the web the host installs bytes-based hooks instead.
@@ -1053,7 +1083,7 @@ pub fn fs_detailed_loader() -> FileLoader {
 /// interactive loads (the loupe, exports) never wait — they are counted, so background work
 /// yields to them.
 pub fn fs_hooks() -> (FileLoader, FileProbe) {
-    let loader = fs_loader(false);
+    let loader = fs_loader(false, 0.0);
     let probe: FileProbe = Arc::new(|path: &str| {
         let before = std::fs::metadata(path).map_err(|e| format!("{path}: {e}"))?;
         let len = usize::try_from(before.len()).map_err(|_| format!("{path}: file too large"))?;
@@ -1090,6 +1120,8 @@ impl crate::Session {
         let (l, p) = fs_hooks();
         self.media.file_loader = Some(l);
         self.media.file_loader_detailed = Some(fs_detailed_loader());
+        self.media.raw_denoise_loader = Some(fs_raw_denoise_loader());
+        self.media.activity = Some(self.activity.clone());
         self.media.file_probe = Some(p);
         self.media.preview_loader = Some(fs_preview_loader());
         self.media.denoise.loader = Some(fs_pair_loader());

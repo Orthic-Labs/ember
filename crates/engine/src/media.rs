@@ -121,6 +121,29 @@ fn source_edge_needed(p: &Photo, settings: &DevelopSettings, apply_crop: bool, o
 /// Decodes a file into a linear Rec.2020 image no larger than `max_edge` (set by the app).
 pub type FileLoader = Arc<dyn Fn(&str, usize) -> Result<(Rgb32f, SourceInfo), String> + Send + Sync>;
 
+/// Makes the [`FileLoader`] of photos whose Raw Noise Reduction is on: from whether Raw Details is on too and the strength
+/// (`1..=100`), a loader that denoises a raw file's mosaic before it is demosaiced (every other file loads as usual).
+pub type RawDenoiseLoader = Arc<dyn Fn(bool, f64) -> FileLoader + Send + Sync>;
+
+/// What a photo's decoded sources were made with besides its file: the part of the develop settings that changes the
+/// decoded picture itself (not only how it is rendered). The default, no Raw Details and no raw denoise, is the key every
+/// photo had before these settings existed; a decoded source whose key no longer agrees with the photo's is dropped.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct SourceKey {
+    /// Developed with Raw Details (the enhanced demosaic).
+    pub detail: bool,
+    /// The raw-domain denoise strength, quantised to whole numbers `1..=100`; 0 = not denoised.
+    pub raw_denoise: u8,
+}
+
+impl SourceKey {
+    /// The quantised raw denoise strength of `s` (0 when it is off, or its Detail section is): what a decoded source is
+    /// keyed by and what the loader is given, so a source and the strength it was made with always agree.
+    pub fn raw_denoise_of(s: &DevelopSettings) -> u8 {
+        if s.enhance.raw_denoise_enabled() && s.section_enabled("detail") { s.enhance.raw_denoise.round().clamp(1.0, 100.0) as u8 } else { 0 }
+    }
+}
+
 /// A raw file's embedded (camera-rendered) preview as display sRGB, oriented, no larger than
 /// `max_edge` (set by the app). `None`: no usable preview.
 pub type PreviewLoader = Arc<dyn Fn(&str, usize) -> Option<Rgba8> + Send + Sync>;
@@ -339,9 +362,15 @@ pub struct MediaCache {
     /// [`Self::file_loader`] with the "Raw Details" demosaic, used for photos whose Raw Details setting is on
     /// (`None`: this build has none, and every photo is developed as usual).
     pub file_loader_detailed: Option<FileLoader>,
-    /// Photos whose cached sources were (or are being) developed with Raw Details; a photo whose setting no longer
-    /// agrees has its decoded sources dropped ([`Self::sync_raw_details`]).
-    detail_sources: std::collections::HashSet<PhotoId>,
+    /// [`Self::file_loader`] made for Raw Noise Reduction ([`RawDenoiseLoader`]); `None`: this build has none, and every
+    /// photo is developed without it.
+    pub raw_denoise_loader: Option<RawDenoiseLoader>,
+    /// The activity stack a raw-denoised load shows itself in (set where the loaders are, [`crate::Session::with_fs`]).
+    pub activity: Option<crate::activity::Activity>,
+    /// The [`SourceKey`] of photos whose cached sources were (or are being) developed with Raw Details or the raw denoise (a
+    /// photo with the default key has no entry); a photo whose key no longer agrees has its decoded sources dropped
+    /// ([`Self::sync_source_key`]).
+    source_keys: HashMap<PhotoId, SourceKey>,
     pub file_probe: Option<FileProbe>,
     pub preview_loader: Option<PreviewLoader>,
     /// Reads a photo file's bytes (Photo Merge); `None` = the local file system.
@@ -418,7 +447,9 @@ impl Default for MediaCache {
             budget,
             file_loader: None,
             file_loader_detailed: None,
-            detail_sources: Default::default(),
+            raw_denoise_loader: None,
+            activity: None,
+            source_keys: Default::default(),
             file_probe: None,
             preview_loader: None,
             file_bytes: None,
@@ -663,7 +694,7 @@ impl MediaCache {
     /// which the thumbnail would lose. Other readers (Auto, masks, [`crate::Session::source_now`]) keep
     /// the plain source so their measurements don't depend on what the cache holds.
     pub fn thumb_source_ref(&mut self, p: &Photo, level: SourceLevel) -> SourceRef {
-        self.sync_raw_details(p);
+        self.sync_source_key(p);
         if level == SourceLevel::Thumb
             && self.get_source(p.id, level).is_none()
             && self.denoise.spec(p.id).is_none()
@@ -674,25 +705,67 @@ impl MediaCache {
         self.source_ref(p, level)
     }
 
-    /// Whether photo `p` is developed with Raw Details (its setting is on and this build can). A decoded source made the
-    /// other way is dropped, so what is cached always matches the setting; nothing changes for a photo that never had it on.
-    fn sync_raw_details(&mut self, p: &Photo) -> bool {
-        let want = p.develop.enhance.raw_details && self.file_loader_detailed.is_some();
-        if self.detail_sources.contains(&p.id) != want {
+    /// The key photo `p`'s decoded sources are made with: Raw Details when its setting is on and this build can, and the
+    /// quantised raw denoise strength when it is on and this build can. The default key (both off) is the old one.
+    pub fn source_key(&self, p: &Photo) -> SourceKey {
+        SourceKey {
+            detail: p.develop.enhance.raw_details && self.file_loader_detailed.is_some(),
+            raw_denoise: if self.raw_denoise_loader.is_some() { SourceKey::raw_denoise_of(&p.develop) } else { 0 },
+        }
+    }
+
+    /// What a decoded source of photo `p` is accepted into the cache by: its file's content, and its [`SourceKey`] when that
+    /// is not the default (so the identity of every photo without Raw Details or the raw denoise is the one it always had).
+    /// A load that started under another key, a slider ago, is not kept.
+    pub fn source_identity(&self, p: &Photo) -> Hash128 {
+        let mut h = Hasher128::new();
+        h.str(&content_key(p));
+        let key = self.source_key(p);
+        if key != SourceKey::default() {
+            h.u64(u64::from(key.detail) | (u64::from(key.raw_denoise) << 1));
+        }
+        h.finish()
+    }
+
+    /// Photo `p`'s [`SourceKey`]. A decoded source made with another key is dropped, so what is cached always matches the
+    /// settings (changing the strength drops only this photo's sources); nothing changes for a photo that never had them on.
+    fn sync_source_key(&mut self, p: &Photo) -> SourceKey {
+        let want = self.source_key(p);
+        if self.source_keys.get(&p.id).copied().unwrap_or_default() != want {
             self.forget(p.id);
-            if want {
-                self.detail_sources.insert(p.id);
+            if want == SourceKey::default() {
+                self.source_keys.remove(&p.id);
             } else {
-                self.detail_sources.remove(&p.id);
+                self.source_keys.insert(p.id, want);
             }
         }
         want
     }
 
+    /// The loader of photos with Raw Noise Reduction `strength` (`1..=100`, with Raw Details when `detail`): the denoising
+    /// loader, which holds an activity row while it works on anything larger than a thumbnail.
+    fn raw_denoise_file_loader(&self, detail: bool, strength: u8) -> Option<FileLoader> {
+        let make = self.raw_denoise_loader.as_ref()?;
+        let inner = make(detail, f64::from(strength));
+        let activity = self.activity.clone();
+        Some(Arc::new(move |path: &str, max_edge: usize| {
+            let _task = activity
+                .as_ref()
+                .filter(|_| max_edge > crate::files::RAW_SMALL_EDGE)
+                .map(|a| a.start("denoise", "Raw Noise Reduction", crate::activity::Cancel::No));
+            inner(path, max_edge)
+        }))
+    }
+
     fn source_ref_with(&mut self, p: &Photo, level: SourceLevel, cached: bool) -> SourceRef {
-        let detailed = self.sync_raw_details(p);
+        let key = self.sync_source_key(p);
         let mut r = self.source_ref_plain(p, level, cached);
-        if detailed
+        if key.raw_denoise > 0
+            && let SourceRef::File { loader: loader @ Some(_), .. } = &mut r
+            && let Some(l) = self.raw_denoise_file_loader(key.detail, key.raw_denoise)
+        {
+            *loader = Some(l);
+        } else if key.detail
             && let SourceRef::File { loader: loader @ Some(_), .. } = &mut r
             && let Some(l) = &self.file_loader_detailed
         {
@@ -1228,8 +1301,8 @@ impl crate::Session {
         // share a result (a view slot showing photo A would otherwise look current for photo B)
         // …and so is the file's content: a file changed on disk (Reload) renders afresh
         let content_key = content_key(&p);
-        let source_key = Hasher128::new().str(&content_key).finish();
-        let content = source_key.0 as u64;
+        let content = Hasher128::new().str(&content_key).finish().0 as u64;
+        let source_key = self.media.source_identity(&p);
         // Temporary "before" settings must not replace the photo's cached develop hash.
         let settings_hash = if before { settings.hash64() } else { self.media.settings_hashes.get(id, &settings) };
         let salt = self.media.denoise_salt(id, &settings);
@@ -1304,7 +1377,7 @@ impl crate::Session {
         Some(RenderJob {
             request_id: 0,
             cache_generation: self.media.rendered.generation(),
-            source_key: Some(Hasher128::new().str(&content_key(&p)).finish()),
+            source_key: Some(self.media.source_identity(&p)),
             photo: id,
             level,
             source,
@@ -1350,7 +1423,7 @@ impl crate::Session {
         Some(RenderJob {
             request_id: 0,
             cache_generation: self.media.rendered.generation(),
-            source_key: Some(Hasher128::new().str(&content_key(&p)).finish()),
+            source_key: Some(self.media.source_identity(&p)),
             photo: id,
             level,
             source,
@@ -1523,7 +1596,7 @@ impl crate::Session {
     /// has wrong is corrected too ([`Self::learn_as_shot_wb`]).
     pub fn accept(&mut self, r: &RenderResult) {
         if let Some(src) = &r.loaded
-            && r.source_key.is_none_or(|key| self.catalog.photo(r.photo).is_some_and(|p| Hasher128::new().str(&content_key(p)).finish() == key))
+            && r.source_key.is_none_or(|key| self.catalog.photo(r.photo).is_some_and(|p| self.media.source_identity(p) == key))
         {
             if let Some(info) = &src.info {
                 self.learn_as_shot_wb(r.photo, info);
@@ -1793,6 +1866,118 @@ mod thumbnail_hash_tests {
         set(&mut s, true);
         s.media.file_loader_detailed = None;
         assert_eq!(loads(&mut s), 8);
+    }
+    /// Raw Noise Reduction is part of the key a photo's decoded sources are made with: off it is the key every photo had
+    /// before the setting existed, any other strength is a key of its own (whole numbers; the loader is given the same
+    /// number), and changing it drops only that photo's decoded sources.
+    #[test]
+    fn raw_denoise_strength_keys_the_decoded_source_and_drops_only_that_photos_sources() {
+        let mut s = session();
+        let two = Photo::new(PhotoId(2), Source::File { path: "second.jpg".into() }, "second.jpg", "JPEG", 6000, 4000, "2026-01-01");
+        s.catalog.apply(Op::AddPhoto { photo: Box::new(two) }).unwrap();
+        let plain: FileLoader = Arc::new(|_, _| Ok((Rgb32f::new(8, 8), SourceInfo::default())));
+        s.media.file_loader = Some(plain);
+        // the denoising loader makes a picture as wide as the strength it is given, plus 10
+        let denoising: RawDenoiseLoader = Arc::new(|_, strength| {
+            let width = 10 + strength as usize;
+            let load: FileLoader = Arc::new(move |_, _| Ok((Rgb32f::new(width, width), SourceInfo::default())));
+            load
+        });
+        let key_of = |s: &crate::Session, id: u64| s.media.source_key(s.catalog.photo(PhotoId(id)).unwrap());
+        let set = |s: &mut crate::Session, id: u64, strength: f64| {
+            let mut d = (*s.catalog.photo(PhotoId(id)).unwrap().develop).clone();
+            d.enhance.raw_denoise = strength;
+            let op = s.develop_op(PhotoId(id), d, "Raw Noise Reduction").unwrap();
+            s.catalog.apply(op).unwrap();
+        };
+        let width = |s: &mut crate::Session, id: u64| {
+            let p = s.catalog.photo(PhotoId(id)).unwrap().clone();
+            match s.media.source_ref_uncached(&p, SourceLevel::Preview) {
+                SourceRef::File { loader: Some(l), path, max_edge, .. } => l(&path, max_edge).unwrap().0.width,
+                _ => panic!("not a file source with a loader"),
+            }
+        };
+        let cached = |s: &mut crate::Session, id: u64| {
+            let p = s.catalog.photo(PhotoId(id)).unwrap().clone();
+            matches!(s.media.source_ref(&p, SourceLevel::Preview), SourceRef::Loaded(_))
+        };
+        // off, and in a build without the loader, the key is the old one
+        assert_eq!(key_of(&s, 1), SourceKey::default());
+        set(&mut s, 1, 40.0);
+        assert_eq!(key_of(&s, 1), SourceKey::default(), "no loader, no key");
+        s.media.raw_denoise_loader = Some(denoising);
+        assert_eq!(key_of(&s, 1), SourceKey { detail: false, raw_denoise: 40 });
+        assert_ne!(key_of(&s, 1), SourceKey::default());
+        assert_eq!(key_of(&s, 2), SourceKey::default(), "another photo keeps the old key");
+        // whole numbers: 40.3 is the key of 40, 41 is another
+        set(&mut s, 1, 40.3);
+        assert_eq!(key_of(&s, 1).raw_denoise, 40);
+        set(&mut s, 1, 41.0);
+        assert_eq!(key_of(&s, 1).raw_denoise, 41);
+        set(&mut s, 1, 0.2);
+        assert_eq!(key_of(&s, 1).raw_denoise, 1, "any strength above zero is on");
+        set(&mut s, 1, 250.0);
+        assert_eq!(key_of(&s, 1).raw_denoise, 100);
+        // the loader of a denoised photo is the denoising one, given the key's strength; strength 0 loads as it always did
+        set(&mut s, 1, 40.0);
+        assert_eq!(width(&mut s, 1), 50);
+        assert_eq!(width(&mut s, 2), 8);
+        // a switched-off Detail section switches the denoise off with it
+        let mut d = (*s.catalog.photo(PhotoId(1)).unwrap().develop).clone();
+        d.set_section_enabled("detail", false);
+        let op = s.develop_op(PhotoId(1), d, "Detail off").unwrap();
+        s.catalog.apply(op).unwrap();
+        assert_eq!(key_of(&s, 1), SourceKey::default());
+        let mut d = (*s.catalog.photo(PhotoId(1)).unwrap().develop).clone();
+        d.set_section_enabled("detail", true);
+        d.enhance.raw_denoise = 0.0;
+        let op = s.develop_op(PhotoId(1), d, "Detail on").unwrap();
+        s.catalog.apply(op).unwrap();
+        assert_eq!(key_of(&s, 1), SourceKey::default());
+        // decoded sources: a changed strength drops this photo's, never another's
+        for id in [1, 2] {
+            s.media.insert(PhotoId(id), SourceLevel::Preview, Arc::new(Rgb32f::new(8, 8)));
+        }
+        assert!(cached(&mut s, 1) && cached(&mut s, 2));
+        set(&mut s, 1, 30.0);
+        assert!(!cached(&mut s, 1), "the source made without the denoise is dropped");
+        assert!(cached(&mut s, 2), "another photo's source stays");
+        s.media.insert(PhotoId(1), SourceLevel::Preview, Arc::new(Rgb32f::new(40, 40)));
+        assert!(cached(&mut s, 1), "a source made with this strength stays");
+        set(&mut s, 1, 31.0);
+        assert!(!cached(&mut s, 1), "and goes when the strength changes");
+        s.media.insert(PhotoId(1), SourceLevel::Preview, Arc::new(Rgb32f::new(41, 41)));
+        set(&mut s, 1, 0.0);
+        assert!(!cached(&mut s, 1), "turning it off drops it too");
+        assert_eq!(width(&mut s, 1), 8);
+    }
+    /// A load that began under one raw denoise strength and lands after the slider moved is not cached: it would be served
+    /// for the new strength.
+    #[test]
+    fn a_source_loaded_under_another_raw_denoise_strength_is_not_kept() {
+        let mut s = session();
+        let plain: FileLoader = Arc::new(|_, _| Ok((Rgb32f::new(8, 8), SourceInfo::default())));
+        s.media.file_loader = Some(plain);
+        let denoising: RawDenoiseLoader = Arc::new(|_, _| {
+            let load: FileLoader = Arc::new(|_, _| Ok((Rgb32f::new(9, 9), SourceInfo::default())));
+            load
+        });
+        s.media.raw_denoise_loader = Some(denoising);
+        let set = |s: &mut crate::Session, strength: f64| {
+            let mut d = (*s.catalog.photo(PhotoId(1)).unwrap().develop).clone();
+            d.enhance.raw_denoise = strength;
+            let op = s.develop_op(PhotoId(1), d, "Raw Noise Reduction").unwrap();
+            s.catalog.apply(op).unwrap();
+        };
+        set(&mut s, 20.0);
+        let old = s.thumb_job(PhotoId(1), 256).unwrap().run();
+        assert!(old.loaded.is_some());
+        set(&mut s, 30.0);
+        s.accept(&old);
+        assert_eq!(s.media.source_usage().0, 0, "the source made for strength 20 is refused at 30");
+        let fresh = s.thumb_job(PhotoId(1), 256).unwrap().run();
+        s.accept(&fresh);
+        assert_eq!(s.media.source_usage().0, 1);
     }
     /// A panic while rendering (here in the decoder) used to end the pool's worker thread without
     /// an answer, so the view that asked showed "Rendering…" forever. It is the job's failure now,

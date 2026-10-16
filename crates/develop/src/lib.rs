@@ -386,4 +386,19 @@ mod tests {
         s.reset_section(Section::Detail);
         assert_eq!(s.enhance.denoise_on, None);
     }
+
+    #[test]
+    fn the_raw_noise_reduction_strength_is_a_zero_to_a_hundred_slider() {
+        let spec = controls::find("enhance.rawDenoise").expect("the control exists");
+        assert_eq!((spec.label, spec.section, spec.min, spec.max, spec.default), ("Raw Noise Reduction", Section::Detail, 0.0, 100.0, 0.0));
+        let mut s = DevelopSettings::default();
+        assert_eq!(controls::get(&s, "enhance.rawDenoise"), Some(0.0));
+        assert!(controls::set(&mut s, "enhance.rawDenoise", 35.0));
+        assert_eq!(s.enhance.raw_denoise, 35.0);
+        assert!(s.enhance.raw_denoise_enabled());
+        controls::set(&mut s, "enhance.rawDenoise", 500.0);
+        assert_eq!(s.enhance.raw_denoise, 100.0);
+        controls::set(&mut s, "enhance.rawDenoise", -5.0);
+        assert!(!s.enhance.raw_denoise_enabled());
+    }
 }
