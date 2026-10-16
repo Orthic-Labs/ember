@@ -182,7 +182,7 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         Mode::Header => h.min(MASK_ROWS),
     };
     let data = if info.compression == t::compression::NIKON {
-        compressed(bytes, &info, mn.as_ref(), rows)?
+        compressed(bytes, &info, tiff.order, mn.as_ref(), rows)?
     } else {
         uncompressed(bytes, &info, tiff.order, mn.as_ref(), rows)?
     };
@@ -287,9 +287,42 @@ fn uncompressed(bytes: &[u8], info: &ImageInfo, order: ByteOrder, mn: Option<&ma
     read_image(bytes, &top, order, packing)
 }
 
+/// Samples stored plainly under the compression tag 34713, told from a Huffman stream by the strip size alone: the
+/// chunks add up to exactly `height` rows of `width` samples packed MSB-first at the declared depth (12, 14 or 16
+/// bits, rows on byte boundaries), or of 16-bit words. Any other size is not this layout (`None`), so a real
+/// compressed stream, a padded layout or a truncated file is never read as samples. Written from the TIFF 6.0
+/// bit-packing convention and the strip sizes of Z 6II files; no third-party decoder consulted.
+fn stored_plain(bytes: &[u8], info: &ImageInfo, order: ByteOrder, rows: usize) -> Option<Result<RawData>> {
+    if info.samples_per_pixel != 1 {
+        return None;
+    }
+    let (w, h) = (info.width as usize, info.height as usize);
+    let bits = info.bits() as u32;
+    if w == 0 || h == 0 || !matches!(bits, 12 | 14 | 16) {
+        return None;
+    }
+    let total = info.chunks(bytes.len() as u64).iter().try_fold(0u64, |a, c| a.checked_add(c.len))?;
+    let packed = u64::try_from(h).ok()?.checked_mul(u64::try_from(w.checked_mul(bits as usize)?.div_ceil(8)).ok()?)?;
+    let words = u64::try_from(h).ok()?.checked_mul(u64::try_from(w.checked_mul(2)?).ok()?)?;
+    let packing = if total == packed && bits != 16 {
+        Packing::Msb
+    } else if total == words {
+        Packing::Word16
+    } else {
+        return None;
+    };
+    // the samples are plain: read them as an uncompressed image
+    let plain = ImageInfo { compression: 1, ..info.clone() };
+    Some(if rows >= h {
+        read_image(bytes, &plain, order, packing)
+    } else {
+        check_image(bytes, &plain).and_then(|_| read_image(bytes, &ImageInfo { height: rows as u32, ..plain }, order, packing))
+    })
+}
+
 /// Nikon Huffman-compressed strip (see [`super::nefc`]); the decode table is maker note `0x0096`. Decodes the first
 /// `rows` rows of the `info.height`.
-fn compressed(bytes: &[u8], info: &ImageInfo, mn: Option<&makernote::MakerNote>, rows: usize) -> Result<RawData> {
+fn compressed(bytes: &[u8], info: &ImageInfo, order: ByteOrder, mn: Option<&makernote::MakerNote>, rows: usize) -> Result<RawData> {
     let starts_with = |magic: &[u8]| {
         let start = info.chunks(bytes.len() as u64).first().and_then(|c| usize::try_from(c.offset).ok());
         start.and_then(|o| bytes.get(o..o.checked_add(magic.len())?)) == Some(magic)
@@ -297,7 +330,12 @@ fn compressed(bytes: &[u8], info: &ImageInfo, mn: Option<&makernote::MakerNote>,
     if starts_with(&JPEG_XS_START) {
         return Err(RawError::Unsupported(HIGH_EFFICIENCY.into()));
     }
-    // (some Z bodies label uncompressed, row-padded data 34713 without a table: not handled here yet)
+    // a Z body that labels plainly stored samples 34713 writes no `0x0096` table (the Z 6II's uncompressed 14-bit
+    // mode, the D850's uncompressed 12-bit): the strip is then exactly the size of the uncompressed layout
+    let has_table = mn.is_some_and(|m| m.ifd.bytes(LINEARIZATION_TABLE).is_some());
+    if !has_table && let Some(plain) = stored_plain(bytes, info, order, rows) {
+        return plain;
+    }
     let table = mn
         .and_then(|m| Some((m.ifd.bytes(LINEARIZATION_TABLE)?, m.order)))
         .ok_or_else(|| RawError::Unsupported("Nikon compressed NEF without a linearization table (maker note 0x96)".into()))?;
@@ -713,7 +751,53 @@ mod tests {
             assert!(why.starts_with("Nikon High Efficiency NEF ("), "{why}");
         }
         // a strip too short to hold the markers is still the missing-table case, not a panic
-        let short = nef(34713, 14, vec![vec![0xff, 0x10]], 1, 1, 1);
+        let short = nef(34713, 14, vec![vec![0xff, 0x10, 0xff]], 1, 1, 1);
         assert!(matches!(crate::decode(&short), Err(RawError::Unsupported(w)) if w.contains("linearization table")));
+    }
+
+    /// Z 6II: a 14-bit NEF labelled 34713 (no `0x0096` table) whose strip is the plain MSB-first packed 14-bit
+    /// stream decodes to the samples (it was refused as a compressed NEF without a table). A strip of any other
+    /// size stays unsupported, and short or hostile files fail without a panic.
+    #[test]
+    fn packed_14_bit_under_the_compressed_tag_decodes() {
+        let (w, h) = (16usize, 6usize);
+        let px: Vec<u16> = (0..w * h).map(|i| (i * 251 % 16384) as u16).collect();
+        let mut packed = Vec::new();
+        for row in px.chunks(w) {
+            let (mut acc, mut n) = (0u32, 0u32);
+            for &v in row {
+                acc = (acc << 14) | u32::from(v);
+                n += 14;
+                while n >= 8 {
+                    packed.push((acc >> (n - 8)) as u8);
+                    n -= 8;
+                }
+                acc &= (1 << n) - 1;
+            }
+            if n > 0 {
+                packed.push((acc << (8 - n)) as u8);
+            }
+        }
+        assert_eq!(packed.len(), h * (w * 14).div_ceil(8));
+        let bytes = nef(34713, 14, vec![packed.clone()], w as u32, h as u32, h as u32);
+        let r = crate::decode(&bytes).unwrap();
+        assert_eq!((r.bits, r.data), (14, RawData::U16(px.clone())));
+        // the header probe agrees
+        assert!(crate::probe_info(&bytes).is_ok());
+        // 16-bit words under the same label
+        let words: Vec<u8> = px.iter().flat_map(|v| v.to_be_bytes()).collect();
+        let bytes = nef(34713, 14, vec![words], w as u32, h as u32, h as u32);
+        assert_eq!(crate::decode(&bytes).unwrap().data, RawData::U16(px));
+        // any other strip size is not this layout
+        let mut odd = packed.clone();
+        odd.push(0);
+        let bytes = nef(34713, 14, vec![odd], w as u32, h as u32, h as u32);
+        assert!(matches!(crate::decode(&bytes), Err(RawError::Unsupported(w)) if w.contains("linearization table")));
+        // truncated: same
+        let bytes = nef(34713, 14, vec![packed[..packed.len() - 5].to_vec()], w as u32, h as u32, h as u32);
+        assert!(crate::decode(&bytes).is_err());
+        for cut in [0usize, 8, 60, bytes.len() / 2] {
+            let _ = crate::decode(&bytes[..cut.min(bytes.len())]);
+        }
     }
 }

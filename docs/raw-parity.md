@@ -119,7 +119,7 @@ checked, and Canon, the largest bucket, is the weakest of the big four.
 | CR3 | dual-pixel raw | ⬜ | never substituted |
 | CRW | all | ⬜ | preview |
 | NEF | uncompressed, lossless, lossy type 1 / 2, lossy after split | ✅ | D5100, D7000, D7500, Z f corpus; ~60 NEFs by hand; #633; D4, D90, D5000, D600 and D610 image area measured against the camera JPEG (white level too for the D4, D90 and D5000) |
-| NEF | packed 14-bit stored under a compressed tag (Z 6II uncompressed) | ⬜ | #769; fix in PR #671 (not merged) |
+| NEF | packed 14-bit stored under a compressed tag (Z 6II uncompressed) | 🟡 | `nef.rs` `stored_plain`: a 34713 strip with no `0x0096` table whose size is exactly the MSB-first packed (12/14/16-bit) or 16-bit-word layout is read as samples; synthetic test only, no real Z 6II file measured (#161) |
 | NEF | High Efficiency / HE★ (JPEG XS) | ⬜ | named, preview (#193); needs a JPEG XS decoder |
 | ARW | uncompressed, cRAW (ARW2), lossless LJ92 (L / M / S) | ✅ | 86 bodies (#535); M/S black level 1024; the Hasselblad Lunar, a NEX-7 under Make HASSELBLAD, routed by Sony's raw coding (upstream #1275) |
 | ARW | packed 12-bit (A900) | ✅ | one CC0 file; A850 unmeasured |
