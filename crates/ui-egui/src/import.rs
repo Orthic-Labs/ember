@@ -248,6 +248,8 @@ pub struct ImportTask {
     pub done: usize,
     params: Value,
     pub imported: usize,
+    /// The photos the import added (for Assisted Culling's pass, the `cull` param).
+    imported_ids: Vec<u64>,
     /// Brought back from Recently Deleted (`onDeleted: restore`).
     pub restored: usize,
     pub duplicates: usize,
@@ -659,9 +661,9 @@ pub fn start(app: &mut LightcraftApp, d: &ImportDialog) -> Result<Value, String>
         if d.dng && !d.move_files {
             params["dng"] = json!(true);
         }
-        if d.cull {
-            params["cull"] = json!(true);
-        }
+    }
+    if d.cull {
+        params["cull"] = json!(true);
     }
     let total = queue.len();
     app.import = Some(ImportTask::new(queue, params, undo0, false));
@@ -758,6 +760,7 @@ fn commit_batch(app: &mut LightcraftApp, task: &mut ImportTask, prepared: lightc
             }
             let len = |k: &str| v[k].as_array().map_or(0, Vec::len);
             task.imported += len("imported");
+            task.imported_ids.extend(v["imported"].as_array().into_iter().flatten().filter_map(Value::as_u64));
             task.restored += len("restored");
             task.duplicates += len("duplicates");
             task.existing.extend(v["duplicates"].as_array().into_iter().flatten().filter_map(|d| d["existing"].as_u64()));
@@ -846,6 +849,13 @@ fn finish(app: &mut LightcraftApp, ctx: &egui::Context, task: ImportTask) {
         crate::i18n::tr_format!("Add {} Photo{}", task.imported, crate::i18n::plural_suffix(task.imported == 1))
     };
     app.session.merge_undo(steps, &label);
+    if task.params["cull"] == true && !task.browse && !task.auto && !task.imported_ids.is_empty() {
+        // the dialog's Assisted Culling option: the read-only pass over what was added, off the UI thread
+        if let Err(e) = crate::cull_review::queue_import(app, &task.imported_ids) {
+            log::warn!("import: culling did not start: {e}");
+            app.toast(ctx, e);
+        }
+    }
     if task.auto {
         if !task.warnings.is_empty() {
             app.toast_for(ctx, xmp_warnings_text(&task.warnings), 8.0);

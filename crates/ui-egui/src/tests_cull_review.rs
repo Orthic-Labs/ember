@@ -8,6 +8,7 @@ use lightcraft_catalog::Flag;
 use lightcraft_engine::Session;
 
 use crate::cull_review::{self, Phase};
+use crate::headless::Headless;
 use crate::{LightcraftApp, Services};
 
 fn app() -> LightcraftApp {
@@ -99,4 +100,33 @@ fn cancel_leaves_the_catalog_untouched() {
     assert!(matches!(app.cull_review.phase, Phase::Idle), "a cancelled analysis shows no proposal");
     assert_eq!(flags(&app), before, "cancelling flags nothing");
     assert_eq!(app.session.undo.len(), undo, "cancelling adds no undo step");
+}
+
+/// The import dialog's Assisted Culling option (#41): the import queues the read-only pass for exactly the photos it added.
+#[test]
+fn import_with_the_culling_option_queues_the_pass_for_the_imported_photos() {
+    let dir = std::env::temp_dir().join(format!("lc-import-cull-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for i in 0..3 {
+        std::fs::write(dir.join(format!("IMG_{i:03}.jpg")), format!("not really a jpeg {i}")).unwrap();
+    }
+    let mut session = Session::new();
+    session.media.file_probe = Some(std::sync::Arc::new(|p: &str| {
+        Ok(lightcraft_engine::media::ProbeInfo { width: 60, height: 40, format: "JPEG".into(), content_hash: Some(p.to_string()), ..Default::default() })
+    }));
+    let mut h = Headless::new(LightcraftApp::new(session, Services { png: None, ..Default::default() }), [1200.0, 800.0], 1.0);
+    h.settle(Duration::from_secs(20));
+    let undo0 = h.app.session.undo.len();
+    let task = crate::import::ImportTask::new(vec![dir.to_string_lossy().to_string()], serde_json::json!({"mode": "add", "cull": true}), undo0, false);
+    h.app.import = Some(task);
+    assert!(h.step_until(Duration::from_secs(60), |h| h.app.import.is_none()));
+    let mut added: Vec<u64> = h.app.session.catalog.photos().map(|photo| photo.id.0).collect();
+    added.sort_unstable();
+    assert_eq!(added.len(), 3, "all imported");
+    assert_eq!(h.app.cull_review.import_cull_queued.len(), 1, "one pass queued");
+    let mut queued = h.app.cull_review.import_cull_queued[0].clone();
+    queued.sort_unstable();
+    assert_eq!(queued, added, "the pass covers exactly the imported photos");
+    let _ = std::fs::remove_dir_all(&dir);
 }

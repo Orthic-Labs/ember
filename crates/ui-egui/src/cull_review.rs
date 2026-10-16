@@ -47,6 +47,10 @@ pub struct Run<T> {
 #[derive(Default)]
 pub struct CullReview {
     pub phase: Phase,
+    /// Assisted Culling passes over the photos imports just added (one per import, run in the background).
+    import_cull: Vec<Run<Result<usize, String>>>,
+    /// The photos each import queued such a pass for, in order (exactly the photos that import added).
+    pub import_cull_queued: Vec<Vec<u64>>,
 }
 
 /// A reviewed proposal: the engine's proposal (applied as it is, minus the suggestions the user
@@ -164,6 +168,65 @@ fn background<T: Send + 'static>(name: &str, work: impl FnOnce() -> T + Send + '
     #[cfg(target_arch = "wasm32")]
     run();
     Ok(rx)
+}
+
+/// Queue Assisted Culling's read-only pass over `ids`, the photos an import just added, as a cancellable
+/// background job with its own activity row. It writes no flags or analysis, like the engine's `cull: true`.
+pub fn queue_import(app: &mut LightcraftApp, ids: &[u64]) -> Result<(), String> {
+    let ids: Vec<u64> = ids.iter().copied().filter(|id| app.session.catalog.photo(lightcraft_catalog::PhotoId(*id)).is_some()).collect();
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let mut jobs = Vec::new();
+    for chunk in ids.chunks(lightcraft_engine::cmd::cull::CULL_IDS_PER_JOB) {
+        let chunk: Vec<lightcraft_catalog::PhotoId> = chunk.iter().copied().map(lightcraft_catalog::PhotoId).collect();
+        jobs.push(app.session.plan_cull_job(&chunk, None, false).map_err(|error| error.to_string())?);
+    }
+    let total = ids.len() as u64;
+    let cancel = Arc::new(AtomicBool::new(false));
+    let guard = app.session.activity.start("cull", "Assisted Culling", Cancel::Flag(cancel.clone()));
+    guard.progress(0, total);
+    let handle = guard.handle();
+    let stop = cancel.clone();
+    let rx = background("lightcraft-import-cull", move || {
+        let mut measured = 0_u64;
+        for job in jobs {
+            let span = job.photos.len() as u64;
+            let base = measured;
+            job.run(&|fraction, stage| {
+                handle.progress(base + (fraction.clamp(0.0, 1.0) * span as f32) as u64, total);
+                handle.detail(stage);
+                !stop.load(Ordering::Relaxed)
+            })?;
+            measured += span;
+            handle.progress(measured, total);
+        }
+        Ok::<usize, String>(measured as usize)
+    })?;
+    app.cull_review.import_cull.push(Run { rx, _guard: guard, cancel });
+    app.cull_review.import_cull_queued.push(ids);
+    Ok(())
+}
+
+/// Takes the finished import passes (dropping their activity rows); a failure comes back as a notice.
+pub fn poll_import(app: &mut LightcraftApp) -> Option<String> {
+    let mut notice = None;
+    app.cull_review.import_cull.retain(|pass| match pass.rx.try_recv() {
+        Ok(outcome) => {
+            if let Err(error) = outcome
+                && !pass.cancel.load(Ordering::Relaxed)
+            {
+                notice = Some(error);
+            }
+            false
+        }
+        Err(TryRecvError::Empty) => true,
+        Err(TryRecvError::Disconnected) => {
+            notice = Some(crate::i18n::tr("Culling stopped unexpectedly").to_string());
+            false
+        }
+    });
+    notice
 }
 
 /// Photo ▸ Assisted Culling: queue the read-only analysis of the selected photos (or those in view).
@@ -285,10 +348,10 @@ pub fn poll_state(app: &mut LightcraftApp) -> Option<String> {
 
 /// Per frame: take a finished job's result and keep the frame coming while one runs.
 pub fn poll(app: &mut LightcraftApp, ctx: &egui::Context) {
-    if let Some(notice) = poll_state(app) {
+    if let Some(notice) = poll_state(app).or_else(|| poll_import(app)) {
         app.toast(ctx, notice);
     }
-    if matches!(app.cull_review.phase, Phase::Analyzing(_) | Phase::Applying(_)) {
+    if matches!(app.cull_review.phase, Phase::Analyzing(_) | Phase::Applying(_)) || !app.cull_review.import_cull.is_empty() {
         ctx.request_repaint_after(Duration::from_millis(100));
     }
 }
