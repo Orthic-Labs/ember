@@ -134,7 +134,7 @@ impl TrainConfig {
             return config("need 0 <= lr_min <= lr and lr > 0");
         }
         let m = self.model.pad_multiple();
-        if self.pair.patch == 0 || self.pair.patch % m != 0 {
+        if self.pair.patch == 0 || !self.pair.patch.is_multiple_of(m) {
             return config(format!("patch {} must be a positive multiple of {m}", self.pair.patch));
         }
         Ok(())

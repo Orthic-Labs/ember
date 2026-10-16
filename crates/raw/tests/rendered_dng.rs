@@ -75,7 +75,7 @@ fn lossy_jxl_dng_has_the_dng_17_tags_and_reads_back_close_to_the_source() {
     assert_eq!(ifd.u16(t::SAMPLE_FORMAT), Some(3));
     assert_eq!(ifd.u16(t::SAMPLES_PER_PIXEL), Some(3));
     assert_eq!(ifd.u32(t::TILE_WIDTH), Some(128));
-    assert_eq!(ifd.u64s(t::TILE_OFFSETS).map(|v| v.len()), Some(3 * 1));
+    assert_eq!(ifd.u64s(t::TILE_OFFSETS).map(|v| v.len()), Some(3));
     assert_eq!(ifd.bytes(t::DNG_VERSION), Some(&[1u8, 7, 1, 0][..]));
     let d = ifd.f64(t::JXL_DISTANCE).unwrap();
     assert!((d - 1.0).abs() < 1e-5, "distance {d}"); // quality 90 → 0.1 + 10 × 0.09

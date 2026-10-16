@@ -357,7 +357,7 @@ fn decide(f: &[Plane; 3], dw: usize, dh: usize, m: &Affine) -> Option<Plane> {
     Some(blur(&plane, 1.5))
 }
 
-/// 4. Upsample the work-size `region` onto the output pixels, snap it to the photo's edges and
+/// Step 4: upsample the work-size `region` onto the output pixels, snap it to the photo's edges and
 /// smooth it. `off` and `full`: the output's offset in, and the size of, the whole output the
 /// region covers (a window of a larger output, or `(0, 0)` and `(w, h)`).
 pub(super) fn refine(region: &Plane, frame: &Frame, w: usize, h: usize, log_l: &Plane, off: (f64, f64), full: (f64, f64)) -> Plane {
