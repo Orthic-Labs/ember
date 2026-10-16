@@ -1,4 +1,4 @@
-use super::{AutoTone, auto_tone, percentile};
+use super::{AutoTone, SceneKey, auto_tone, key_target, percentile};
 use lightcraft_color::perceptual::oklab_from_2020;
 use lightcraft_color::transfer::decode_srgb8;
 use lightcraft_color::{REC2020, SRGB, luminance_2020};
@@ -187,18 +187,21 @@ fn ordinary_underexposed_auto_reaches_middle_exposure_in_render() {
     let legacy_settings = legacy_settings(&src);
     let legacy = output_luma(&render_with(&src, &legacy_settings));
     let clipped = |v: &[f32]| v.iter().filter(|v| **v > 0.98).count() as f32 / v.len() as f32;
-    // reaches middle grey (the legacy rule left a bias), lifts the mid-tones at least as much
-    // as the legacy rule, and clips no more of the bright wall than it did
+    // reaches the ordinary key (a little under middle grey, as the finals do: #28), still lifts
+    // the dark body of the frame by well over a stop, and clips no more of the bright wall than
+    // the legacy rule did
     let mid = |v: &[f32]| v.iter().filter(|v| (0.1..0.98).contains(*v)).sum::<f32>() / v.len() as f32;
+    let key = key_target(SceneKey::default());
     assert!(
-        median > -0.25 && a.exposure > legacy_settings.light.exposure + 0.2 && mid(&pixels) >= mid(&legacy) && clipped(&pixels) <= clipped(&legacy),
-        "median {median:.2}, mean {:.3}/{:.3}, mid {:.3}/{:.3}, clipped {:.3}/{:.3}, settings {a:?}",
+        (median - key).abs() < 0.1 && a.exposure > 1.0 && clipped(&pixels) <= clipped(&legacy),
+        "median {median:.2} (key {key:.2}), mean {:.3}/{:.3}, mid {:.3}/{:.3}, clipped {:.3}/{:.3}, legacy {:.2} EV, settings {a:?}",
         mean(&pixels),
         mean(&legacy),
         mid(&pixels),
         mid(&legacy),
         clipped(&pixels),
-        clipped(&legacy)
+        clipped(&legacy),
+        legacy_settings.light.exposure
     );
 }
 
@@ -206,11 +209,49 @@ fn ordinary_underexposed_auto_reaches_middle_exposure_in_render() {
 fn auto_tone_does_not_leave_ordinary_raw_midtone_underexposed() {
     // This scene is deliberately encoded below middle grey, while its bright region keeps it
     // out of the low-key branch. A RAW loader may have already applied BaselineExposure; Auto
-    // must target the decoded scene itself without another fixed darkening offset.
+    // must target the decoded scene itself and land its median on the ordinary key (0.5 EV under
+    // middle grey, #28), neither left underexposed nor lifted past it.
     let src = ordinary_underexposed_scene();
     let a = auto_tone(&src, &SourceInfo::default(), &DevelopSettings::default());
     let median = median_after(&src, a);
-    assert!(median.abs() < 0.08, "decoded median should reach middle grey: {median:.3}, settings {a:?}");
+    let key = key_target(SceneKey::default());
+    assert!((median - key).abs() < 0.08, "decoded median should reach the ordinary key {key:.2}: {median:.3}, settings {a:?}");
+    assert!(median < -0.3 && median > -0.7, "ordinary key moved: {median:.3}, settings {a:?}");
+}
+
+#[test]
+fn key_target_is_pinned_and_fades_the_ordinary_offset_for_keyed_scenes() {
+    let at = |low: f32, high: f32| key_target(SceneKey { low, high, backlit: 0.0 });
+    // ordinary scenes sit half a stop under middle grey
+    assert!((at(0.0, 0.0) + 0.5).abs() < 1e-6, "{}", at(0.0, 0.0));
+    assert!((key_target(SceneKey::default()) + 0.5).abs() < 1e-6);
+    // fully keyed scenes keep their own targets, no extra darkening
+    assert!((at(1.0, 0.0) + 0.9).abs() < 1e-6, "{}", at(1.0, 0.0));
+    assert!((at(0.0, 1.0) - 0.65).abs() < 1e-6, "{}", at(0.0, 1.0));
+    // halfway: the offset is half, the keyed share is half
+    assert!((at(0.5, 0.0) + 0.7).abs() < 1e-6, "{}", at(0.5, 0.0));
+    // never darker than a full low-key scene's target
+    assert!(at(1.0, 0.0) <= at(0.5, 0.0) && at(0.5, 0.0) <= at(0.0, 0.0));
+}
+
+#[test]
+fn a_deep_shadow_tail_is_not_lifted_by_default() {
+    // 30 % of the frame is near black, the body sits a stop under grey, a bright part above it:
+    // an ordinary scene whose deep shadows Auto used to lift (shadows >= 0, blacks up to +20).
+    let src = Rgb32f::from_fn(64, 64, |x, _| {
+        if x < 19 {
+            [0.003, 0.003, 0.003]
+        } else if x < 45 {
+            [0.09, 0.085, 0.08]
+        } else {
+            [0.35, 0.33, 0.3]
+        }
+    });
+    for info in [SourceInfo::default(), SourceInfo { raw: true, ..Default::default() }] {
+        let a = auto_tone(&src, &info, &DevelopSettings::default());
+        assert!(a.shadows <= 0.0, "shadows must not lift a deep tail: {a:?}");
+        assert!(a.blacks <= 0.0, "blacks must not lift a deep tail: {a:?}");
+    }
 }
 
 #[test]

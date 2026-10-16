@@ -19,7 +19,7 @@ use crate::local::effective_wb;
 
 /// Identity of the Auto rules below. Bump it when their output changes: offline receipts
 /// (Personal Auto) bind baseline values to it.
-pub const REVISION: &str = "lightcraft.deterministic-auto.v4";
+pub const REVISION: &str = "lightcraft.deterministic-auto.v5";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -145,9 +145,18 @@ pub fn auto_tone(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) -> AutoTo
     scene_population(src, info, s).map(|pop| auto_tone_of(&pop, info)).unwrap_or_default()
 }
 
+/// How far under middle grey (EV) Auto keeps an ordinary scene's key median. The offset fades out
+/// as a scene becomes low- or high-key (those keys carry their own targets). Measured on 7,524
+/// finished photos (issue #28): Auto's median sat at 0.499 against the photographer's 0.371, 2.4x
+/// as far from the camera render as the finals; 0.5 EV closes most of that gap without
+/// underexposing (the 0.371 / 0.499 ratio is -0.43 EV in linear luminance, -0.9 EV on a 2.2 gamma
+/// scale; 0.5 EV is the conservative end).
+const ORDINARY_KEY_OFFSET: f32 = -0.5;
+
 /// Scene EV (over middle grey) Auto aims a scene's key median at.
 pub(crate) fn key_target(key: SceneKey) -> f32 {
-    -0.9 * key.low + 0.65 * key.high
+    let keyed = key.low.max(key.high);
+    -0.9 * key.low + 0.65 * key.high + ORDINARY_KEY_OFFSET * (1.0 - keyed)
 }
 
 /// Auto tone values for a measured scene ([`scene_population`], possibly with its `median`
@@ -218,8 +227,21 @@ pub mod fit {
     /// Furthest a slider moves in one pass (in steps).
     const MAX_MOVES: usize = 6;
 
-    /// Auto's slider ranges: highlights only recover, shadows only lift (as users expect of Auto).
-    const BOUNDS: [(f32, f32); 5] = [(-20.0, 30.0), (-90.0, 0.0), (0.0, 70.0), (-30.0, 40.0), (-35.0, 20.0)];
+    /// Auto's slider ranges: highlights only recover. Shadows may deepen (down to -30) and blacks
+    /// no longer lift (at most +5): on 7,524 finished photos the photographer deepens the low end,
+    /// and an Auto that only lifts moved the 10th percentile the right way on 46 % of them (#28).
+    const AUTO_BOUNDS: [(f32, f32); 5] = [(-20.0, 30.0), (-90.0, 0.0), (-30.0, 70.0), (-30.0, 40.0), (-35.0, 5.0)];
+    /// Ranges for measured look targets ([`fit_with`]): a look may ask for lifted, faded blacks.
+    const LOOK_BOUNDS: [(f32, f32); 5] = [(-20.0, 30.0), (-90.0, 0.0), (0.0, 70.0), (-30.0, 40.0), (-35.0, 20.0)];
+
+    /// Keeps Auto from lifting the deep shadows: the rendered 10th percentile may not rise above
+    /// where neutral shaping leaves it.
+    #[derive(Clone, Copy)]
+    struct Guard {
+        /// Encoded 10th percentile under neutral shaping at the chosen exposure.
+        p10: f32,
+        weight: f32,
+    }
 
     /// What the fit aims the rendered histogram at (all on the gamma-2.2 encoded scale). Auto
     /// derives them from the scene key; a look target ([`crate::look`]) supplies measured ones.
@@ -263,8 +285,8 @@ pub mod fit {
     /// Rendered statistics of `ev` under slider values `v` (contrast, highlights, shadows,
     /// whites, blacks).
     struct Stats {
-        /// Encoded output luminance at the 1st, 5th, 50th, 95th and 99.5th percentiles.
-        p: [f32; 5],
+        /// Encoded output luminance at the 1st, 5th, 10th, 50th, 95th and 99.5th percentiles.
+        p: [f32; 6],
         /// Share of the frame at or over white.
         clip: f32,
         /// 99.5th percentile of log luminance after the highlight/shadow offsets, before the
@@ -298,13 +320,13 @@ pub mod fit {
             }
         }
         let n = ev.len().max(1) as f32;
-        let mut p = [0f32; 5];
+        let mut p = [0f32; 6];
         let mut acc = 0u32;
         let mut k = 0;
-        let qs = [0.01, 0.05, 0.5, 0.95, 0.995];
+        let qs = [0.01, 0.05, 0.10, 0.5, 0.95, 0.995];
         for (i, h) in hist.iter().enumerate() {
             acc += h;
-            while k < 5 && acc as f32 >= qs[k] * n {
+            while k < 6 && acc as f32 >= qs[k] * n {
                 p[k] = i as f32 / (BINS - 1) as f32;
                 k += 1;
             }
@@ -328,15 +350,18 @@ pub mod fit {
         LUT_MIN_EV + (LUT_MAX_EV - LUT_MIN_EV) * i as f32 / (lut.len().max(2) - 1) as f32
     }
 
-    fn cost(ev: &[f32], v: [f32; 5], info: &SourceInfo, t: &Targets) -> f32 {
+    fn cost(ev: &[f32], v: [f32; 5], info: &SourceInfo, t: &Targets, guard: Option<Guard>) -> f32 {
         let tone = tone_map(info, v[0] as f64, v[3] as f64, v[4] as f64);
         let Stats { p, clip, top_ev } = stats(ev, v, &tone);
-        let terms = [p[4] - t.top, p[0] - t.bottom, (p[3] - p[1]) - t.spread, p[2] - t.median];
+        let terms = [p[5] - t.top, p[0] - t.bottom, (p[4] - p[1]) - t.spread, p[3] - t.median];
         let mut c = 0.0;
         for (d, w) in terms.iter().zip(t.w) {
             c += w * d * d;
         }
         c += 40.0 * (clip - t.clip).max(0.0).powi(2);
+        if let Some(g) = guard {
+            c += g.weight * (p[2] - g.p10).max(0.0).powi(2);
+        }
         // the bright tail should sit under the tone map's white point (in EV, so this keeps
         // pulling while the output is saturated)
         c += t.w[0] * 0.25 * (top_ev - (white_ev(&tone) - 0.2)).max(0.0).powi(2);
@@ -364,7 +389,7 @@ pub mod fit {
             top: 0.95 - 0.12 * key.low,
             bottom: 0.05 + 0.08 * key.high,
             spread: 0.62 - 0.18 * keyed - 0.1 * key.backlit,
-            median: p0[2],
+            median: p0[3],
             clip: 0.003 + 0.03 * key.high,
             w: [1.0 - 0.6 * key.low, 1.0 - 0.6 * key.high, 0.25 * (1.0 - 0.5 * keyed - 0.4 * key.backlit), 2.0],
         }
@@ -375,18 +400,36 @@ pub mod fit {
             return Shape::default();
         }
         let t = auto_targets(ev_sorted, exposure, key, info);
-        fit_with(ev_sorted, exposure, &t, info)
+        fit_guarded(ev_sorted, exposure, &t, key, info)
     }
 
-    /// Fit the shaping sliders of `ev_sorted` (scene EVs before exposure) toward `t`.
+    /// Auto's own fit toward `t` (from [`auto_targets`], possibly reweighted): [`AUTO_BOUNDS`]
+    /// and a guard that keeps the deep shadows from rising above neutral shaping (backlit scenes,
+    /// whose dark foreground wants lifting, relax it).
+    pub fn fit_guarded(ev_sorted: &[f32], exposure: f32, t: &Targets, key: SceneKey, info: &SourceInfo) -> Shape {
+        if ev_sorted.is_empty() || !exposure.is_finite() {
+            return Shape::default();
+        }
+        let neutral = tone_map(info, 0.0, 0.0, 0.0);
+        let p10 = stats(&sample(ev_sorted, exposure), [0.0; 5], &neutral).p[2];
+        let weight = 2.0 * (1.0 - key.backlit).clamp(0.0, 1.0);
+        fit_core(ev_sorted, exposure, t, info, &AUTO_BOUNDS, Some(Guard { p10, weight }))
+    }
+
+    /// Fit the shaping sliders of `ev_sorted` (scene EVs before exposure) toward `t` (a measured
+    /// look: lifted blacks allowed, no shadow guard).
     pub fn fit_with(ev_sorted: &[f32], exposure: f32, t: &Targets, info: &SourceInfo) -> Shape {
+        fit_core(ev_sorted, exposure, t, info, &LOOK_BOUNDS, None)
+    }
+
+    fn fit_core(ev_sorted: &[f32], exposure: f32, t: &Targets, info: &SourceInfo, bounds: &[(f32, f32); 5], guard: Option<Guard>) -> Shape {
         if ev_sorted.is_empty() || !exposure.is_finite() {
             return Shape::default();
         }
         let ev = sample(ev_sorted, exposure);
         let t = &Targets { w: t.w.map(|w| if w.is_finite() { w.max(0.0) } else { 0.0 }), ..*t };
         let mut v = [0f32; 5];
-        let mut best = cost(&ev, v, info, t);
+        let mut best = cost(&ev, v, info, t, guard);
         for step in STEPS {
             // fixed order: the clipping sliders first, then the range, then contrast
             for i in [1usize, 2, 3, 4, 0] {
@@ -394,13 +437,13 @@ pub mod fit {
                     for _ in 0..MAX_MOVES {
                         let mut trial = v;
                         let Some(x) = trial.get_mut(i) else { break };
-                        let Some(&(lo, hi)) = BOUNDS.get(i) else { break };
+                        let Some(&(lo, hi)) = bounds.get(i) else { break };
                         let next = (*x + dir * step).clamp(lo, hi);
                         if next == *x {
                             break;
                         }
                         *x = next;
-                        let c = cost(&ev, trial, info, t);
+                        let c = cost(&ev, trial, info, t, guard);
                         if c < best - 1e-9 {
                             best = c;
                             v = trial;

@@ -18,7 +18,7 @@ use lightcraft_develop::{DevelopSettings, LocalAdjustments, Mask, MaskComponent,
 use lightcraft_raster::{Plane, Rgb32f};
 use serde::{Deserialize, Serialize};
 
-use super::fit::{auto_targets, encode, fit_with, tone_map};
+use super::fit::{auto_targets, encode, fit_guarded, tone_map};
 use super::{AutoTone, SceneKey, auto_tone_of, key_target, percentile, scene_population};
 use crate::SourceInfo;
 use crate::geometry::Frame;
@@ -305,13 +305,13 @@ pub fn region_auto(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) -> Regi
     // is not precise enough to be trusted with more.
     let mut t = auto_targets(&subject_ev, exposure + delta, key, info);
     t.w = [t.w[0] * 0.3, t.w[1] * 0.3, t.w[2], t.w[3]];
-    let sh = fit_with(&subject_ev, exposure + delta, &t, info);
+    let sh = fit_guarded(&subject_ev, exposure + delta, &t, key, info);
     let mut subject = LocalAdjustments { exposure: round_ev(delta), shadows: local(sh.shadows, global.shadows, 0.0, 40.0), ..Default::default() };
 
     // --- background: keep its key, restore contrast, blacks and haze
     let background = (background_share >= MIN_SHARE && usable(&background_ev)).then(|| {
         let t = auto_targets(&background_ev, exposure, key, info);
-        let sh = fit_with(&background_ev, exposure, &t, info);
+        let sh = fit_guarded(&background_ev, exposure, &t, key, info);
         // haze: lifted blacks (the 5th percentile well above black under the global render) in
         // a flat region (a bright wall has lifted blacks too, but spread); 0 at 0.12, full at
         // 0.37 encoded, full below 0.5 EV of spread, none above 1.5
@@ -331,7 +331,7 @@ pub fn region_auto(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings) -> Regi
     // --- sky: recover its highlights
     let sky = (sky_share >= MIN_SHARE && usable(&sky_ev)).then(|| {
         let t = auto_targets(&sky_ev, exposure, key, info);
-        let sh = fit_with(&sky_ev, exposure, &t, info);
+        let sh = fit_guarded(&sky_ev, exposure, &t, key, info);
         LocalAdjustments {
             highlights: local(sh.highlights, global.highlights, -60.0, 0.0),
             whites: local(sh.whites, global.whites, -30.0, 0.0),
