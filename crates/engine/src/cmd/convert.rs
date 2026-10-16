@@ -107,8 +107,55 @@ fn convert(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"converted": converted, "skipped": skipped}))
 }
 
+/// Render to DNG: each selected photo is rendered with its edits baked in as a linear 16-bit float
+/// DNG (`<name>-Rendered.dng`, never overwriting) next to the original, added to the library and
+/// stacked on top of the original. The original is untouched.
+fn render_to_dng(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "photo.renderToDng";
+    let mut ids = s.targets(p)?;
+    ids.dedup();
+    if ids.is_empty() {
+        return Err(bad(C, "no active photo"));
+    }
+    if ids.len() > MAX_EDIT_COPIES {
+        return Err(bad(C, format!("{} photos selected: render at most {MAX_EDIT_COPIES} at a time", ids.len())));
+    }
+    let space = match super::str_param(p, "colorSpace").unwrap_or("prophoto") {
+        "srgb" => lightcraft_pipeline::OutputSpace::Srgb,
+        "displayP3" => lightcraft_pipeline::OutputSpace::DisplayP3,
+        "adobeRgb" => lightcraft_pipeline::OutputSpace::AdobeRgb,
+        "prophoto" | "proPhoto" => lightcraft_pipeline::OutputSpace::ProPhoto,
+        "rec2020" => lightcraft_pipeline::OutputSpace::Rec2020,
+        c => return Err(bad(C, format!("colorSpace {c:?}: use srgb, displayP3, adobeRgb, prophoto or rec2020"))),
+    };
+    let opts = crate::export::ExportOptions {
+        format: crate::export::ExportFormat::RenderedDng,
+        color_space: space,
+        hdr: bool_or(p, "hdr", false),
+        naming: "{name}-Rendered".into(),
+        conflict: crate::export::Conflict::Unique,
+        ..Default::default()
+    };
+    let mut copies = Vec::new();
+    for id in ids {
+        copies.push(render_copy(s, p, id, &opts, C)?);
+    }
+    let new: Vec<lightcraft_catalog::PhotoId> = copies.iter().filter_map(|c| c["id"].as_u64()).map(lightcraft_catalog::PhotoId).collect();
+    s.selection = crate::Selection { active: new.first().copied(), ids: new };
+    let first = copies.first().cloned().unwrap_or(Value::Null);
+    Ok(json!({"path": first["path"], "id": first["id"], "original": first["original"], "copies": copies}))
+}
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![cmd!(
+        "photo.renderToDng",
+        "Render to DNG",
+        ["Photo"],
+        None,
+        "{ids?, colorSpace=prophoto|srgb|displayP3|adobeRgb|rec2020, hdr=false, dir? (demo photos)} — render each photo with its edits as a linear 16-bit float DNG next to the original, add it to the library and stack it on the original → {path, id, original, copies}",
+        has_selection,
+        render_to_dng
+    ), cmd!(
         "photo.convertToDng",
         "Convert to DNG",
         ["Photo"],
@@ -172,13 +219,18 @@ const MAX_EDIT_COPIES: usize = 50;
 /// One photo's edit copy for [`edit_external`]: rendered with `opts` next to its original (a demo
 /// photo into `dir`), added to the library and stacked on top of the original, expanded.
 fn edit_copy(s: &mut Session, p: &Value, id: lightcraft_catalog::PhotoId, opts: &crate::export::ExportOptions) -> Result<Value> {
-    const C: &str = "photo.editExternal";
-    let ph = s.catalog.photo(id).cloned().ok_or_else(|| bad(C, format!("no photo {}", id.0)))?;
+    render_copy(s, p, id, opts, "photo.editExternal")
+}
+
+/// [`edit_copy`] for command `C` (Render to DNG shares it): render with `opts` next to the
+/// original, add, stack.
+fn render_copy(s: &mut Session, p: &Value, id: lightcraft_catalog::PhotoId, opts: &crate::export::ExportOptions, c: &str) -> Result<Value> {
+    let ph = s.catalog.photo(id).cloned().ok_or_else(|| bad(c, format!("no photo {}", id.0)))?;
     let dir = match &ph.source {
         Source::File { path } => Path::new(path).parent().map(|d| d.to_string_lossy().to_string()).unwrap_or_default(),
         Source::Demo { .. } => match super::str_param(p, "dir") {
             Some(d) => d.to_string(),
-            None => return Err(bad(C, "a generated demo photo has no folder: give `dir`")),
+            None => return Err(bad(c, "a generated demo photo has no folder: give `dir`")),
         },
     };
     let mut written = Vec::new();
@@ -189,11 +241,11 @@ fn edit_copy(s: &mut Session, p: &Value, id: lightcraft_catalog::PhotoId, opts: 
         Ok(())
     };
     let to = crate::export::Destination { dir, exact: None };
-    crate::export::export_batch(s, &[id], opts, &to, &mut write, &|path| Path::new(path).exists()).map_err(|e| bad(C, e))?;
+    crate::export::export_batch(s, &[id], opts, &to, &mut write, &|path| Path::new(path).exists()).map_err(|e| bad(c, e))?;
     let ext = format!(".{}", opts.format.extension());
-    let out = written.into_iter().find(|w| w.ends_with(&ext)).ok_or_else(|| bad(C, "nothing was written"))?;
+    let out = written.into_iter().find(|w| w.ends_with(&ext)).ok_or_else(|| bad(c, "nothing was written"))?;
     let r = s.execute("library.import", &json!({"paths": [out]}))?;
-    let new = r["imported"].get(0).and_then(Value::as_u64).ok_or_else(|| bad(C, "the edit copy could not be added"))?;
+    let new = r["imported"].get(0).and_then(Value::as_u64).ok_or_else(|| bad(c, "the edit copy could not be added"))?;
     // stack: the edit on top of the original, expanded so both show
     let _ = s.execute("stack.group", &json!({"ids": [new, id.0], "top": new, "collapsed": false}));
     Ok(json!({"path": out, "id": new, "original": id.0}))

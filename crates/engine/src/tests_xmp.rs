@@ -880,6 +880,49 @@ fn external_edit_copy_is_stacked() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Render to DNG (#188, #80): the edit is baked into a linear DNG next to the original, which
+/// is added and stacked; the file reads back through Ember's own reader with the DNG tags; bad
+/// input is an error, not a panic.
+#[test]
+fn render_to_dng_adds_a_linear_dng_next_to_the_original() {
+    let dir = temp_dir("rendereddng");
+    let src = dir.join("beach.png");
+    write_png(&src, 9);
+    let mut s = Session::new().with_fs();
+    s.execute("library.import", &json!({"paths": [src.to_string_lossy()]})).unwrap();
+    let orig = s.active().unwrap();
+    s.execute("develop.set", &json!({"control": "light.exposure", "value": 1.0})).unwrap();
+    let r = s.execute("photo.renderToDng", &json!({"colorSpace": "srgb"})).unwrap();
+    let path = r["path"].as_str().unwrap().to_string();
+    assert!(path.ends_with("beach-Rendered.dng"), "{path}");
+    let bytes = std::fs::read(&path).unwrap();
+    assert_eq!(lightcraft_raw::probe(&bytes), Some(lightcraft_raw::RawFormat::Dng));
+    let raw = lightcraft_raw::decode(&bytes).unwrap();
+    let ph = s.catalog.photo(orig).unwrap().clone();
+    assert_eq!((raw.width, raw.height, raw.cpp, raw.cfa.is_none()), (ph.width as usize, ph.height as usize, 3, true));
+    // the DNG's own tags: DNGVersion, LinearRaw (34892) photometric, 16-bit float samples, neutral white, identity tone curve
+    use lightcraft_tiff::tags as t;
+    let tiff = lightcraft_tiff::Tiff::parse(&bytes).unwrap();
+    let ifd0 = tiff.ifds.first().unwrap();
+    assert!(ifd0.contains(t::DNG_VERSION) && ifd0.contains(t::AS_SHOT_NEUTRAL) && ifd0.contains(t::PROFILE_TONE_CURVE));
+    assert_eq!((ifd0.u16(t::PHOTOMETRIC), ifd0.u16(t::SAMPLE_FORMAT)), (Some(34892), Some(3)));
+    let new = lightcraft_catalog::PhotoId(r["id"].as_u64().unwrap());
+    assert_eq!(s.active(), Some(new));
+    assert_eq!(s.catalog.photo(new).unwrap().format, "DNG");
+    let st = s.catalog.stack_of(new).expect("stacked");
+    assert!(st.photos.contains(&orig));
+    assert!(src.exists(), "the original is untouched");
+    // a second render never overwrites the first
+    let r2 = s.execute("photo.renderToDng", &json!({"ids": [orig.0]})).unwrap();
+    assert!(r2["path"].as_str().unwrap() != path, "{r2}");
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    // bad input
+    assert!(s.execute("photo.renderToDng", &json!({"colorSpace": "nope"})).is_err());
+    assert!(s.execute("photo.renderToDng", &json!({"ids": [99999]})).is_err());
+    assert!(s.execute("photo.renderToDng", &json!({"ids": ["x"]})).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Issue #920: with several photos selected, each gets its own `-Edit` copy stacked on its
 /// original, the copies end up selected and are all reported; `ids` picks photos explicitly.
 #[test]
