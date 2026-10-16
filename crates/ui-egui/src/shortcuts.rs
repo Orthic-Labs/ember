@@ -1030,18 +1030,34 @@ mod tests {
     fn j_cycles_the_grid_cell_style_in_the_grids_and_clips_in_develop() {
         use crate::state::GridStyle;
         let mut h = library();
-        assert_eq!(h.app.ui.grid_style, GridStyle::Compact, "today's look is the default");
+        assert_eq!(h.app.ui.grid_styles.of(h.app.ui.view), GridStyle::Compact, "today's look is the default");
         key(&mut h, "J", false);
-        assert_eq!(h.app.ui.grid_style, GridStyle::Expanded);
+        assert_eq!(h.app.ui.grid_styles.of(h.app.ui.view), GridStyle::Expanded);
         key(&mut h, "J", false);
-        assert_eq!(h.app.ui.grid_style, GridStyle::Thumbnails);
+        assert_eq!(h.app.ui.grid_styles.of(h.app.ui.view), GridStyle::Thumbnails);
         key(&mut h, "J", false);
-        assert_eq!(h.app.ui.grid_style, GridStyle::Compact, "the cycle wraps");
+        assert_eq!(h.app.ui.grid_styles.of(h.app.ui.view), GridStyle::Compact, "the cycle wraps");
         assert!(!h.app.ui.show_clipping, "J in the grids does not clip");
         h.app.ui.view = crate::state::ViewMode::Detail;
         key(&mut h, "J", false);
         assert!(h.app.ui.show_clipping, "J in Develop toggles clipping");
-        assert_eq!(h.app.ui.grid_style, GridStyle::Compact, "Develop leaves the grid style alone");
+        assert_eq!(h.app.ui.grid_styles.of(h.app.ui.view), GridStyle::Compact, "Develop leaves the grid style alone");
+    }
+
+    #[test]
+    fn each_grid_keeps_its_own_cell_style() {
+        use crate::state::{GridStyle, ViewMode};
+        let mut h = library();
+        h.app.run("view.gridStyle", json!({"style": "expanded"})).unwrap();
+        h.app.ui.view = ViewMode::SquareGrid;
+        assert_eq!(h.app.ui.grid_styles.of(ViewMode::SquareGrid), GridStyle::Compact, "the square grid keeps its own style");
+        key(&mut h, "J", false);
+        assert_eq!(h.app.ui.grid_styles.of(ViewMode::SquareGrid), GridStyle::Expanded);
+        h.app.ui.view = ViewMode::PhotoGrid;
+        assert_eq!(h.app.ui.grid_styles.of(ViewMode::PhotoGrid), GridStyle::Expanded, "the photo grid kept its style");
+        key(&mut h, "J", false);
+        assert_eq!(h.app.ui.grid_styles.of(ViewMode::PhotoGrid), GridStyle::Thumbnails, "J changes the photo grid only");
+        assert_eq!(h.app.ui.grid_styles.of(ViewMode::SquareGrid), GridStyle::Expanded, "the square grid keeps its style");
     }
 
     #[test]
@@ -1049,11 +1065,11 @@ mod tests {
         use crate::state::GridStyle;
         let mut h = library();
         assert!(h.app.run("view.gridStyle", json!({"style": "bogus"})).is_err());
-        assert_eq!(h.app.ui.grid_style, GridStyle::Compact, "an unknown name changes nothing");
+        assert_eq!(h.app.ui.grid_styles.of(h.app.ui.view), GridStyle::Compact, "an unknown name changes nothing");
         assert!(h.app.run("view.gridStyle", json!({"style": "thumbnails"})).is_ok());
-        assert_eq!(h.app.ui.grid_style, GridStyle::Thumbnails);
+        assert_eq!(h.app.ui.grid_styles.of(h.app.ui.view), GridStyle::Thumbnails);
         assert!(h.app.run("view.gridStyle", json!({})).is_ok());
-        assert_eq!(h.app.ui.grid_style, GridStyle::Compact, "without a name it cycles: Thumbnails goes to Compact");
+        assert_eq!(h.app.ui.grid_styles.of(h.app.ui.view), GridStyle::Compact, "without a name it cycles: Thumbnails goes to Compact");
     }
 
     #[test]

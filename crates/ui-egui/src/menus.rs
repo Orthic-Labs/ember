@@ -171,7 +171,8 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("view.gridInfo", "Grid Info", None, ""),
     ("view.thumbLarger", "Larger Thumbnails", Some("="), "View"),
     ("view.thumbSmaller", "Smaller Thumbnails", Some("-"), "View"),
-    // {style?: compact | expanded | thumbnails}: the grid cell style (cycles when omitted; J in the grids)
+    // {style?: compact | expanded | thumbnails}: the cell style of the current grid (cycles when omitted; J in the
+    // grids). View ▸ Grid Cell Style lists the styles.
     ("view.gridStyle", "Grid Cell Style", None, ""),
     // {mode?: auto | light | dark}: Appearance Mode (cycles Auto, Light, Dark when omitted; the
     // top bar's appearance button). View ▸ Appearance lists the modes.
@@ -435,15 +436,17 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             Ok(json!({"thumbSize": app.ui.thumb_size}))
         }
         "view.gridStyle" => {
-            // {style?: compact | expanded | thumbnails} (cycles when omitted; J in the grids)
+            // {style?: compact | expanded | thumbnails} (cycles when omitted; J in the grids). Square Grid keeps
+            // its own style; other views change the Photo Grid's.
+            let view = app.ui.view;
             let next = match p.get("style").and_then(Value::as_str) {
                 Some(name) => match crate::state::GridStyle::parse(name) {
                     Some(style) => style,
                     None => return Some(Err(format!("view.gridStyle: unknown `{name}` (compact|expanded|thumbnails)"))),
                 },
-                None => app.ui.grid_style.next(),
+                None => app.ui.grid_styles.of(view).next(),
             };
-            app.ui.grid_style = next;
+            app.ui.grid_styles.set(view, next);
             Ok(json!({"style": next.name()}))
         }
         "tool.keywordPainter" => {

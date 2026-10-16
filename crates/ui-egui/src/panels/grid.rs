@@ -201,7 +201,7 @@ fn show_inner(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     let square = app.ui.view == ViewMode::SquareGrid;
     let target = app.ui.thumb_size;
     // Expanded cells keep a caption under each photo
-    let caption = if app.ui.grid_style == GridStyle::Expanded { CAPTION_H } else { 0.0 };
+    let caption = if app.ui.grid_styles.of(app.ui.view) == GridStyle::Expanded { CAPTION_H } else { 0.0 };
     let avail_w = ui.available_width() - 8.0;
     let by = resolve_group(app.session.sort.group, target);
     let group_key = match app.session.source {
@@ -608,7 +608,7 @@ fn cell(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId, r: Rect, square
     let p = ui.painter();
     // the cell's style: Compact keeps today's badges and captions, Expanded puts its info under the
     // photo, Thumbnails shows the photo alone
-    let style = app.ui.grid_style;
+    let style = app.ui.grid_styles.of(app.ui.view);
     let expanded = style == GridStyle::Expanded;
     let caption = if expanded { CAPTION_H } else { 0.0 };
     let body = Rect::from_min_max(r.min, pos2(r.right(), r.bottom() - caption));
@@ -1265,13 +1265,15 @@ mod tests {
     #[test]
     fn grid_style_defaults_to_today_and_persists() {
         let old: crate::state::UiState = serde_json::from_str("{}").unwrap();
-        assert_eq!(old.grid_style, GridStyle::Compact, "settings saved before the field load as today's look");
+        assert_eq!(old.grid_styles.photo_grid, GridStyle::Compact, "settings saved before the field load as today's look");
+        assert_eq!(old.grid_styles.square_grid, GridStyle::Compact, "settings saved before the field load as today's look");
         let mut ui = crate::state::UiState::default();
-        ui.grid_style = GridStyle::Thumbnails;
+        ui.grid_styles.set(crate::state::ViewMode::SquareGrid, GridStyle::Thumbnails);
         let saved = serde_json::to_string(&ui).unwrap();
-        assert!(saved.contains("\"gridStyle\":\"thumbnails\""), "{saved}");
+        assert!(saved.contains("\"gridStyles\":{\"photoGrid\":\"compact\",\"squareGrid\":\"thumbnails\"}"), "{saved}");
         let back: crate::state::UiState = serde_json::from_str(&saved).unwrap();
-        assert_eq!(back.grid_style, GridStyle::Thumbnails);
+        assert_eq!(back.grid_styles.square_grid, GridStyle::Thumbnails);
+        assert_eq!(back.grid_styles.photo_grid, GridStyle::Compact, "each grid keeps its own style");
         assert!(back.survey_order.is_empty(), "the survey order is never saved");
     }
 

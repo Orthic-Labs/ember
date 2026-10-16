@@ -157,6 +157,29 @@ impl GridStyle {
     }
 }
 
+/// The cell style each grid keeps (J and `view.gridStyle` change the current view's grid). Square Grid
+/// has its own; every other view uses the Photo Grid's style, so a setting here reaches only the grids.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GridStyles {
+    /// Photo Grid (justified rows).
+    pub photo_grid: GridStyle,
+    /// Square Grid.
+    pub square_grid: GridStyle,
+}
+
+impl GridStyles {
+    /// The style of the grid `view` shows.
+    pub fn of(&self, view: ViewMode) -> GridStyle {
+        if view == ViewMode::SquareGrid { self.square_grid } else { self.photo_grid }
+    }
+
+    /// Sets the style of the grid `view` shows (see [`GridStyles::of`]).
+    pub fn set(&mut self, view: ViewMode, style: GridStyle) {
+        if view == ViewMode::SquareGrid { self.square_grid = style } else { self.photo_grid = style }
+    }
+}
+
 /// The loupe's info overlay (Cmd+I cycles Off → Info 1 → Info 2; I in the full-screen preview). Its
 /// lines are set in View Options (`crate::info_overlay::ViewOptions`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -617,8 +640,8 @@ pub struct UiState {
     pub zoom_anim: bool,
     pub before_after: BeforeAfter,
     pub thumb_size: f32,
-    /// How grid cells show their information (J cycles Compact, Expanded and Thumbnails only).
-    pub grid_style: GridStyle,
+    /// The cell style of each grid (J cycles Compact, Expanded and Thumbnails in the grids only).
+    pub grid_styles: GridStyles,
     /// The survey's photo order after drag-to-reorder. Session only, never saved; photos not listed
     /// keep the view order after the listed ones.
     #[serde(skip)]
@@ -1188,7 +1211,7 @@ impl Default for UiState {
             zoom_anim: false,
             before_after: BeforeAfter::Off,
             thumb_size: 220.0,
-            grid_style: GridStyle::Compact,
+            grid_styles: GridStyles::default(),
             survey_order: Vec::new(),
             open_sections: vec!["light".into()],
             open_flyouts: vec![],

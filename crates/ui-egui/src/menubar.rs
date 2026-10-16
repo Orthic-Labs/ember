@@ -125,6 +125,7 @@ const LAYOUT: &[(&str, &[&str])] = &[
             "view.thumbLarger",
             "view.thumbSmaller",
             "@Grid Info",
+            "@Grid Cell Style",
             "view.detail",
             "view.compare",
             "view.survey",
@@ -519,6 +520,19 @@ fn expanded(app: &LightcraftApp, name: &str) -> Option<Vec<MenuNode>> {
             .zip(["File Name", "Exposure (shutter · aperture · ISO)", "Capture Date"])
             .map(|(k, label)| item("view.gridInfo", json!({"info": k}), label, None, true, Some(app.ui.grid_info == k)))
             .collect(),
+        "Grid Cell Style" => {
+            // the current grid's style is checked; the styles are off outside the grids (J keeps clipping in Develop)
+            let grid = matches!(app.ui.view, ViewMode::PhotoGrid | ViewMode::SquareGrid);
+            let cur = app.ui.grid_styles.of(app.ui.view);
+            [
+                (crate::state::GridStyle::Compact, "Compact"),
+                (crate::state::GridStyle::Expanded, "Expanded"),
+                (crate::state::GridStyle::Thumbnails, "Thumbnails"),
+            ]
+            .into_iter()
+            .map(|(style, label)| item("view.gridStyle", json!({"style": style.name()}), label, None, grid, Some(cur == style)))
+            .collect()
+        }
         "Sort" => {
             use lightcraft_catalog::SortKey::*;
             let cur = app.session.sort;
@@ -1034,6 +1048,39 @@ mod tests {
 
     /// File opens with the import entry points, worded as importing (not as adding a sidebar
     /// folder): Import Photos… (⇧⌘I), Import from Folder…, Import from Device ▸.
+    #[test]
+    fn view_menu_lists_the_grid_cell_style_with_the_current_one_checked() {
+        fn styles(app: &LightcraftApp) -> Vec<(Value, bool, Option<bool>)> {
+            let bar = menu_bar(app);
+            let view = &bar.iter().find(|(t, _)| t == "View").expect("View menu").1;
+            let Some(children) = view.iter().find_map(|n| match n {
+                MenuNode::Submenu { label, children } if label == "Grid Cell Style" => Some(children),
+                _ => None,
+            }) else {
+                panic!("the View menu lists Grid Cell Style");
+            };
+            children
+                .iter()
+                .filter_map(|n| match n {
+                    MenuNode::Item { id, params, enabled, checked, .. } if id == "view.gridStyle" => {
+                        Some((params["style"].clone(), *enabled, *checked))
+                    }
+                    _ => None,
+                })
+                .collect()
+        }
+        let mut app = app();
+        app.ui.view = ViewMode::PhotoGrid;
+        assert_eq!(
+            styles(&app),
+            vec![(json!("compact"), true, Some(true)), (json!("expanded"), true, Some(false)), (json!("thumbnails"), true, Some(false))]
+        );
+        run_item(&mut app, "view.gridStyle", json!({"style": "thumbnails"})).unwrap();
+        assert_eq!(styles(&app).iter().filter(|s| s.2 == Some(true)).map(|s| s.0.clone()).collect::<Vec<_>>(), vec![json!("thumbnails")]);
+        app.ui.view = ViewMode::Detail;
+        assert!(styles(&app).iter().all(|s| !s.1), "the styles are off outside the grids");
+    }
+
     #[test]
     fn file_menu_starts_with_the_import_entry_points() {
         let bar = menu_bar(&app());
