@@ -246,5 +246,11 @@
   "{n} added to Apple Photos album “{album}”": "Добавлено в альбом «{album}» Apple Фото: {n}",
   "{n} added to Apple Photos": "Добавлено в Apple Фото: {n}",
   "{n} photos opened for editing; each is stacked with its original": "Открыто для редактирования фото: {n}; каждое объединено в стопку с оригиналом",
-  "· {in_source} identical copies": "· идентичных копий: {in_source}"
+  "· {in_source} identical copies": "· идентичных копий: {in_source}",
+  "Enhances {scope} in place: the originals are never changed and nothing is exported. Photos that are not raw are skipped.": "Улучшает {scope} на месте: оригиналы не изменяются, ничего не экспортируется. Фото не в формате RAW пропускаются.",
+  "Apply {n}": "Применить {n}",
+  "Page {n} of {pages}": "Страница {n} из {pages}",
+  "Burst {n}": "Серия {n}",
+  "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "Предложений: {suggested}, принято: {accepted}. Ничего не помечается, пока вы не примените.",
+  "Applied {n} culling flags": "Применено отметок отбора: {n}"
 }

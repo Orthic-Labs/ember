@@ -246,5 +246,11 @@
   "{n} added to Apple Photos album “{album}”": "{n} añadidas al álbum “{album}” de Fotos de Apple",
   "{n} added to Apple Photos": "{n} añadidas a Fotos de Apple",
   "{n} photos opened for editing; each is stacked with its original": "{n} fotos abiertas para editar; cada una está apilada con su original",
-  "· {in_source} identical copies": "· {in_source} copias idénticas"
+  "· {in_source} identical copies": "· {in_source} copias idénticas",
+  "Enhances {scope} in place: the originals are never changed and nothing is exported. Photos that are not raw are skipped.": "Mejora {scope} en el mismo sitio: los originales nunca cambian y no se exporta nada. Se omiten las fotos que no son raw.",
+  "Apply {n}": "Aplicar {n}",
+  "Page {n} of {pages}": "Página {n} de {pages}",
+  "Burst {n}": "Ráfaga {n}",
+  "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested} sugerencias, {accepted} aceptadas. No se marca nada hasta que apliques.",
+  "Applied {n} culling flags": "Se aplicaron {n} marcas de selección"
 }

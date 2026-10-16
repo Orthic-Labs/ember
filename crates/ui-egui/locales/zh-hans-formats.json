@@ -246,5 +246,11 @@
   "{n} added to Apple Photos album “{album}”": "已将 {n} 个添加到 Apple 照片相册“{album}”",
   "{n} added to Apple Photos": "已将 {n} 个添加到 Apple 照片",
   "{n} photos opened for editing; each is stacked with its original": "已打开 {n} 张照片进行编辑；每张都与其原片堆叠在一起",
-  "· {in_source} identical copies": "· {in_source} 个相同副本"
+  "· {in_source} identical copies": "· {in_source} 个相同副本",
+  "Enhances {scope} in place: the originals are never changed and nothing is exported. Photos that are not raw are skipped.": "就地增强{scope}：原始文件不会被更改，也不会导出任何内容。非 RAW 照片将被跳过。",
+  "Apply {n}": "应用 {n} 项",
+  "Page {n} of {pages}": "第 {n} 页，共 {pages} 页",
+  "Burst {n}": "连拍 {n}",
+  "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested} 条建议，已接受 {accepted} 条。应用前不会标记任何照片。",
+  "Applied {n} culling flags": "已应用 {n} 个筛选标记"
 }

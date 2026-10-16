@@ -246,5 +246,11 @@
   "{n} added to Apple Photos album “{album}”": "{n}件をAppleの写真のアルバム「{album}」に追加しました",
   "{n} added to Apple Photos": "{n}件をAppleの写真に追加しました",
   "{n} photos opened for editing; each is stacked with its original": "{n}枚の写真を編集用に開きました。それぞれ元の写真とスタックされています",
-  "· {in_source} identical copies": "・同一のコピー {in_source} 件"
+  "· {in_source} identical copies": "・同一のコピー {in_source} 件",
+  "Enhances {scope} in place: the originals are never changed and nothing is exported. Photos that are not raw are skipped.": "{scope}をその場で強化します。元のファイルは変更されず、何も書き出されません。RAW以外の写真はスキップされます。",
+  "Apply {n}": "{n}件を適用",
+  "Page {n} of {pages}": "{pages}ページ中{n}ページ",
+  "Burst {n}": "連写 {n}",
+  "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested}件の提案、{accepted}件を承認。適用するまでフラグは付きません。",
+  "Applied {n} culling flags": "{n}件の選別フラグを適用しました"
 }
