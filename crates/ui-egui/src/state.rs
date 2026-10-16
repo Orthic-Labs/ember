@@ -363,6 +363,11 @@ pub struct AppSettings {
     /// Early-access features the user turned on or off (feature key → on); a feature without a key
     /// takes its default ([`crate::early_access`]).
     pub early_access: std::collections::BTreeMap<String, bool>,
+    /// Online map (Settings ▸ General ▸ Map, `map.online`): the Map view fetches tiles from a tile server. Off by
+    /// default, and then the map makes no network request at all (a plain latitude / longitude grid).
+    pub online_map: bool,
+    /// The tile address with `{z}`, `{x}` and `{y}` (`map.tileUrl`); empty = OpenStreetMap's standard layer.
+    pub map_tile_url: String,
 }
 
 impl Default for AppSettings {
@@ -392,6 +397,8 @@ impl Default for AppSettings {
             favorite_themes: Vec::new(),
             display_profile: String::new(),
             early_access: Default::default(),
+            online_map: false,
+            map_tile_url: String::new(),
         }
     }
 }
@@ -862,6 +869,9 @@ pub struct UiState {
     /// The Classic Print view (`print.view`), drawn full window; not saved.
     #[serde(skip)]
     pub classic_print: Option<crate::print_view::Run>,
+    /// The Classic Map view (`map.view`), drawn full window; not saved.
+    #[serde(skip)]
+    pub classic_map: Option<crate::map_view::Run>,
     /// Info overlay on the loupe.
     pub info_overlay: InfoOverlay,
     /// View Options: the two info overlays' lines and the render message (`view.viewOptions`).
@@ -1301,6 +1311,7 @@ impl Default for UiState {
             slideshow: None,
             classic_slideshow: None,
             classic_print: None,
+            classic_map: None,
             second_window: false,
             keyword_painter: None,
             keywording_view: KeywordingView::default(),

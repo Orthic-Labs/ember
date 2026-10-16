@@ -25,6 +25,7 @@ pub mod info_overlay;
 pub mod lightroom_import;
 pub mod links;
 pub mod location;
+pub mod map_view;
 pub mod menu_level;
 pub mod menubar;
 pub mod menus;
@@ -1378,6 +1379,13 @@ impl LightcraftApp {
         self.hover_preview = None;
         self.ai_mask_detail(&ctx);
         self.place_names_outcome(&ctx);
+        if self.ui.classic_map.is_some() {
+            // Classic Map: the photos with a position on a map you can pan and zoom
+            egui::CentralPanel::default().show(ui, |ui| map_view::show(self, &ctx, ui));
+            self.widgets = widgets::take_registry(&ctx);
+            self.end_frame(&ctx, t0);
+            return;
+        }
         if self.ui.classic_print.is_some() {
             // Classic Print: one print page at a time, with its settings beside it
             egui::CentralPanel::default().show(ui, |ui| print_view::show(self, &ctx, ui));

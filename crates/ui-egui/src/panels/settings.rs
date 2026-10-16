@@ -190,6 +190,40 @@ fn general_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
     });
     edit_file_rows(ui, t, "externalFile", &mut app.ui.settings.external_file);
     hint(ui, t, crate::i18n::tr("Edit in Other Editor (⌥⌘E) opens the copy in this application (an app name on macOS, a program path elsewhere)."));
+    map_section(app, ui, t);
+}
+
+/// Settings ▸ General ▸ Map: the Online map switch (off, the Map view makes no network request) and the tile address.
+fn map_section(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
+    heading(ui, t, "Map");
+    check(ui, "settings.onlineMap", &mut app.ui.settings.online_map, "Online map: show OpenStreetMap tiles in the Map view");
+    hint(
+        ui,
+        t,
+        "Off by default, and then Ember makes no network request for the map. On, the tiles the map shows are fetched from the tile server, which sees your address and the area you look at (never a photo or its position); they are kept on this computer, up to 256 MB.",
+    );
+    // the text being typed is kept until the edit ends, so a frame does not reset it
+    let draft_id = egui::Id::new("map-tile-url-draft");
+    let mut draft: String = ui.data(|d| d.get_temp::<String>(draft_id)).unwrap_or_else(|| crate::map_view::template(&app.ui.settings));
+    let field = row(ui, t, "Tile address", |ui| crate::text_field::TextField::singleline("field:mapTileUrl", &mut draft).width(220.0).show(ui));
+    if field.editing {
+        ui.data_mut(|d| d.insert_temp(draft_id, draft.clone()));
+    } else {
+        ui.data_mut(|d| d.remove_temp::<String>(draft_id));
+    }
+    if field.committed()
+        && let Err(e) = app.run("map.tileUrl", json!({"url": draft}))
+    {
+        app.toast(ui.ctx(), e);
+    }
+    if !app.ui.settings.map_tile_url.is_empty() && ui.button(crate::i18n::tr("Use the default tile address")).clicked() {
+        let _ = app.run("map.tileUrl", json!({}));
+    }
+    hint(
+        ui,
+        t,
+        "{z}, {x} and {y} stand for a tile's zoom, column and row. The default is OpenStreetMap's standard layer; the usage policy of any other server you enter applies to it.",
+    );
 }
 
 /// The file Edit In hands an editor: format, colour space and bit depth (`button:{id}Format-…`).
