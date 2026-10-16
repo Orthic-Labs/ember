@@ -26,6 +26,7 @@ fn many(n: usize) -> Vec<Preset> {
             settings: json!({"light": {"exposure": (i % 40) as f64 / 10.0 - 2.0, "contrast": (i % 50) as f64}, "color": {"vibrance": (i % 30) as f64}}),
             favorite: false,
             builtin: false,
+            auto: false,
         })
         .collect()
 }

@@ -511,7 +511,7 @@ mod tests {
         let (s, _) = settings();
         let partial = json!({"masks": serde_json::to_value(&s.masks).unwrap(), "light": {"exposure": 0.5}});
         let p =
-            lightcraft_develop::Preset { id: "t".into(), name: "t".into(), group: "g".into(), settings: partial, favorite: false, builtin: false };
+            lightcraft_develop::Preset { id: "t".into(), name: "t".into(), group: "g".into(), settings: partial, favorite: false, builtin: false, auto: false };
         let mut mine = DevelopSettings::default();
         mine.masks.push(lightcraft_develop::Mask { id: 7, name: "Mine".into(), ..Default::default() });
         let once = p.apply(&mine, 1.0);

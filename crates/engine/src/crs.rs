@@ -543,7 +543,7 @@ pub fn preset_from_xmp(xmp: &str, fallback_name: &str) -> Option<Preset> {
     let group = first(props, "crs:Group").unwrap_or("Imported Presets").to_string();
     let uuid = first(props, "crs:UUID").map(|u| u.to_ascii_lowercase());
     let id = format!("user.xmp.{}", uuid.unwrap_or_else(|| crate::presets::slug(&format!("{group}-{name}"))));
-    Some(Preset { id, name, group, settings, favorite: false, builtin: false })
+    Some(Preset { id, name, group, settings, favorite: false, builtin: false, auto: false })
 }
 
 #[cfg(test)]

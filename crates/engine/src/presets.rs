@@ -241,7 +241,7 @@ pub struct PresetBytesImport {
 }
 
 fn p(group: &str, id: &str, name: &str, settings: serde_json::Value) -> Preset {
-    Preset { id: format!("lc.{id}"), name: name.into(), group: group.into(), settings, favorite: false, builtin: true }
+    Preset { id: format!("lc.{id}"), name: name.into(), group: group.into(), settings, favorite: false, builtin: true, auto: false }
 }
 
 pub fn builtin() -> Vec<Preset> {

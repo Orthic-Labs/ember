@@ -1675,6 +1675,7 @@ mod tests {
                 settings: json!({"light": {"exposure": (i % 20) as f64 / 10.0}}),
                 favorite: false,
                 builtin: false,
+                auto: false,
             })
             .collect();
         assert_eq!(h.app.session.add_presets(many).len(), 5000);
