@@ -605,7 +605,7 @@ fn range_controls(app: &mut LightcraftApp, ui: &mut egui::Ui, comp: usize, shape
         MaskShape::ColorRange { samples, refine } => {
             ui.horizontal(|ui| {
                 ui.label(
-                    egui::RichText::new(crate::i18n::tr_format!("{} sample{}", samples.len(), if samples.len() == 1 { "" } else { "s" }))
+                    egui::RichText::new(crate::i18n::tr_format!("{} sample{}", samples.len(), crate::i18n::plural_suffix(samples.len() == 1)))
                         .color(t.text_dim)
                         .size(11.5),
                 );

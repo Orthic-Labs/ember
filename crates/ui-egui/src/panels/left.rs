@@ -856,7 +856,7 @@ fn local_rows(app: &mut LightcraftApp, ui: &mut egui::Ui, now: &LocalNow) {
     }
     let hidden = app.ui.hidden_locations.len();
     if hidden > 0 {
-        let label = crate::i18n::tr_format!("Show {hidden} hidden location{}", if hidden == 1 { "" } else { "s" }, hidden = hidden);
+        let label = crate::i18n::tr_format!("Show {hidden} hidden location{}", crate::i18n::plural_suffix(hidden == 1), hidden = hidden);
         if row(app, ui, "local:restoreHidden", Icon::Folder, &label, None, false, 0.0)
             .on_hover_text(crate::i18n::tr("Put the locations you removed from Local back (no files change)"))
             .clicked()
@@ -1528,12 +1528,12 @@ fn drop_target(app: &mut LightcraftApp, ui: &mut egui::Ui, resp: &egui::Response
             Ok(r) => {
                 let n = r.get("added").and_then(serde_json::Value::as_u64).unwrap_or(0);
                 let skipped = r.get("skipped").and_then(serde_json::Value::as_u64).unwrap_or(0);
-                let mut msg = crate::i18n::tr_format!("Added {n} photo{} to “{}”", if n == 1 { "" } else { "s" }, a.name, n = n);
+                let mut msg = crate::i18n::tr_format!("Added {n} photo{} to “{}”", crate::i18n::plural_suffix(n == 1), a.name, n = n);
                 if skipped > 0 {
                     msg.push_str(" · ");
                     msg.push_str(&crate::i18n::tr_format!(
                         "{n} Local photo{} skipped: albums hold library photos (Add to My Photos first)",
-                        if skipped == 1 { "" } else { "s" },
+                        crate::i18n::plural_suffix(skipped == 1),
                         n = skipped
                     ));
                 }

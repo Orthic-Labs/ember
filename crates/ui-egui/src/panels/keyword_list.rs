@@ -306,7 +306,7 @@ fn drop_target(app: &mut LightcraftApp, ui: &mut egui::Ui, rect: Rect, path: &st
                     ui.ctx(),
                     crate::i18n::tr_format!(
                         "Added “{keyword}” to {n} photo{}",
-                        if n == 1 { "" } else { "s" },
+                        crate::i18n::plural_suffix(n == 1),
                         keyword = path.replace('|', " › "),
                         n = n
                     ),

@@ -163,6 +163,43 @@ pub fn language() -> Locale {
     LOCALE.with(std::cell::Cell::get)
 }
 
+/// How a language inflects a counted noun. The one/other languages add "s" after any count but
+/// one (English and the other Latin and Cyrillic catalogs that assume it); the no-inflection
+/// languages never change the noun, so their catalogs carry no English suffix.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Inflection {
+    OneOther,
+    NoInflection,
+}
+
+impl Locale {
+    const fn inflection(self) -> Inflection {
+        match self {
+            Self::Id | Self::Vi | Self::Ko | Self::Ja | Self::ZhHans | Self::ZhHant => Inflection::NoInflection,
+            _ => Inflection::OneOther,
+        }
+    }
+}
+
+/// The suffix for a translated message's plural slot (`photo{}`) in the active language: "s"
+/// after any count but one in the one/other languages, "" in the no-inflection languages. Pass
+/// `count == 1` as `one`; the caller never hardcodes "s".
+pub fn plural_suffix(one: bool) -> &'static str {
+    match language().inflection() {
+        Inflection::OneOther if !one => "s",
+        _ => "",
+    }
+}
+
+/// The English singular verb agreement after a count (the "stay{}" of "Unknown tag stays"): "s"
+/// after exactly one in the one/other languages, "" in the no-inflection languages.
+pub fn verb_suffix(one: bool) -> &'static str {
+    match language().inflection() {
+        Inflection::OneOther if one => "s",
+        _ => "",
+    }
+}
+
 /// Translate a built-in display label, preserving unknown labels verbatim.
 /// Never call this on editable user text, filenames or command identifiers.
 pub fn tr(source: &str) -> &str {
@@ -580,6 +617,43 @@ mod tests {
         assert_eq!(tr_format!("Reading photos… {} of {}", 3, 10), "Reading photos… 3 of 10");
     }
 
+    /// The plural slot of a translated message takes its suffix from the locale: English adds "s"
+    /// after any count but one, and the no-inflection languages add nothing, so "3 ảnh" has no
+    /// stray "s" and English output is unchanged.
+    #[test]
+    fn plural_suffix_follows_the_locale() {
+        let cases: [(Locale, &str, &str); 7] = [
+            (Locale::En, "Add 1 Photo", "Add 3 Photos"),
+            (Locale::Vi, "Thêm 1 ảnh", "Thêm 3 ảnh"),
+            (Locale::Ko, "사진 1장 추가", "사진 3장 추가"),
+            (Locale::Ja, "1枚の写真を追加", "3枚の写真を追加"),
+            (Locale::ZhHans, "添加 1 张照片", "添加 3 张照片"),
+            (Locale::Id, "Tambahkan 1 Foto", "Tambahkan 3 Foto"),
+            (Locale::De, "1 Foto hinzufügen", "3 Fotos hinzufügen"),
+        ];
+        for (language, one, many) in cases {
+            set_language(language);
+            assert_eq!(tr_format!("Add {} Photo{}", 1, plural_suffix(true)), one, "{language:?}");
+            assert_eq!(tr_format!("Add {} Photo{}", 3, plural_suffix(false)), many, "{language:?}");
+        }
+        // The singular verb agreement of "Unknown tag stays" follows the same rule.
+        set_language(Locale::En);
+        assert_eq!(
+            tr_format!("Unknown tag{s} {} stay{} as typed (see Tags)", "IMG", verb_suffix(true), s = plural_suffix(true)),
+            "Unknown tag IMG stays as typed (see Tags)"
+        );
+        assert_eq!(
+            tr_format!("Unknown tag{s} {} stay{} as typed (see Tags)", "A B", verb_suffix(false), s = plural_suffix(false)),
+            "Unknown tags A B stay as typed (see Tags)"
+        );
+        set_language(Locale::Vi);
+        assert_eq!(
+            tr_format!("Unknown tag{s} {} stay{} as typed (see Tags)", "IMG", verb_suffix(true), s = plural_suffix(true)),
+            "Thẻ không rõ IMG giữ nguyên như đã nhập (xem Thẻ)"
+        );
+        set_language(Locale::En);
+    }
+
     /// Every character a catalog paints has a glyph in the fonts the UI installs, so a translation
     /// never shows as boxes. Without craft-fonts there are no CJK faces at all, and the CJK
     /// catalogs are skipped (the same degradation the Japanese UI has always had).
@@ -868,7 +942,7 @@ mod tests {
         assert_eq!(display_time("2026-09-20T16:04:05"), "Неділя, 20.09.2026 16:04:05");
         // Count-neutral labels work for every Ukrainian integer category, with no English suffix.
         for n in [0, 1, 2, 5, 11, 21, 22, 25, 111] {
-            assert_eq!(tr_format!("Imported {} photo{}", n, if n == 1 { "" } else { "s" }), format!("Імпортовано фото: {n}"));
+            assert_eq!(tr_format!("Imported {} photo{}", n, crate::i18n::plural_suffix(n == 1)), format!("Імпортовано фото: {n}"));
             assert_eq!(tr_format!("{} files and {f} folder{}", n, "s", f = n), format!("Файлів: {n}, тек: {n}"));
             let noun = tr(if n == 1 { "cached picture" } else { "cached pictures" });
             assert_eq!(tr_format!("{n} {noun}", n = n, noun = noun), format!("Кешовані зображення: {n}"));

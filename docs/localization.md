@@ -68,17 +68,36 @@ the active language's translation with `format!` (English is the fallback arm). 
 format string is therefore checked by Rust against the call site's own arguments:
 
 ```rust
-tr_format!("Added {n} photo{} to “{}”", if n == 1 { "" } else { "s" }, album, n = n)
+tr_format!("Added {n} photo{} to “{}”", crate::i18n::plural_suffix(n == 1), album, n = n)
 ```
 
 - A translation is an ordinary Rust format string over the same arguments. Refer to named values by
   name (`{n}`) and to positional ones by index when the word order changes (`{0}`, `{1}`):
   `"已将 {n} 张照片添加到“{1}”{0:.0}"`. Keep the source's spec (`{:.1}`, `{d:+}`, `{:.0}%`).
-- `format!` rejects an unused argument, so a value a language does not need — the English plural
-  suffix (`"s"` / `""`) — is consumed as `{:.0}` (a string at precision 0 prints nothing).
+- `format!` rejects an unused argument, so a value a language does not need is consumed as `{:.0}`
+  (a string at precision 0 prints nothing). A plural suffix is never passed this way: see [Plural slots](#plural-slots).
 - Every formats catalog carries the same messages (`build.rs` fails the build otherwise), and a
   `tr_format!` call whose message is in no catalog does not compile: add it to every
   `*-formats.json` file.
+
+### Plural slots
+
+A message that counts a noun puts a suffix slot after the noun (`photo{}`, `Foto{}`, `ảnh{}`) and fills
+it with `crate::i18n::plural_suffix(n == 1)`; the caller never writes `"s"` or `""` itself. The suffix
+depends on the active language's inflection class (`Locale::inflection` in `crates/ui-egui/src/i18n.rs`):
+
+- **One/other** (English, and the catalogs that already assume it: de, es, fr, pt-br, ru, uk): `"s"` after
+  any count but one. The Russian and Ukrainian catalogs discard the slot with `{:.0}`.
+- **No inflection** (id, vi, ko, ja, zh-hans, zh-hant): nothing. The catalog keeps the slot only so the
+  English arguments still match, as in `"Thêm {} ảnh{}"`, which renders `3 ảnh`.
+
+`verb_suffix(n == 1)` is the English singular agreement after a count (the `stay{}` of
+`Unknown tag stays`): `"s"` for exactly one in the one/other languages, nothing elsewhere.
+
+A new language picks its class in `Locale::inflection`. A language with more than one plural form (for
+example, one/few/many) needs a new class there and a test in `i18n::tests` before its catalog ships.
+Words that a count selects rather than a suffix (`it is` / `they are`) are not covered by these helpers;
+keep them out of translated format strings.
 
 ## Testing and looking at it
 

@@ -417,7 +417,11 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     ui.add_space(4.0);
                     if view.problems.is_empty() {
                         ui.label(
-                            egui::RichText::new(crate::i18n::tr_format!("{n} photo{} match · updates automatically as photos change", if n == 1 { "" } else { "s" }, n = n))
+                            egui::RichText::new(crate::i18n::tr_format!(
+                                "{n} photo{} match · updates automatically as photos change",
+                                crate::i18n::plural_suffix(n == 1),
+                                n = n
+                            ))
                                 .color(t.text_dim),
                         );
                     } else {
@@ -432,7 +436,11 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     let n = app.session.catalog.query(&rules, &Default::default()).len();
                     ui.label(egui::RichText::new(crate::i18n::tr_format!("Matches: {}", crate::i18n::filter_label(&rules, &app.session.catalog))).color(t.text_label));
                     ui.label(
-                        egui::RichText::new(crate::i18n::tr_format!("{n} photo{} now · updates automatically as photos change", if n == 1 { "" } else { "s" }, n = n))
+                        egui::RichText::new(crate::i18n::tr_format!(
+                            "{n} photo{} now · updates automatically as photos change",
+                            crate::i18n::plural_suffix(n == 1),
+                            n = n
+                        ))
                             .color(t.text_dim),
                     );
                 }
@@ -519,7 +527,9 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 }
                 Dialog::Rename { template, start } => {
                     let n = app.session.selected().len();
-                    ui.label(egui::RichText::new(crate::i18n::tr_format!("{n} photo{}", if n == 1 { "" } else { "s" }, n = n)).color(t.text_dim));
+                    ui.label(
+                        egui::RichText::new(crate::i18n::tr_format!("{n} photo{}", crate::i18n::plural_suffix(n == 1), n = n)).color(t.text_dim),
+                    );
                     let template_id = crate::text_field::id("field:renameTemplate");
                     let tags_open = field(ui, "Template", |ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
@@ -574,7 +584,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     }
                     ui.label(
                         egui::RichText::new(crate::i18n::tr_format!("Renames “{from}” on {n} photo{} (keywords below it too). Use | for levels, e.g. Travel|Italy. An existing name merges the two.",
-                            if n == 1 { "" } else { "s" }, from = from, n = n))
+                            crate::i18n::plural_suffix(n == 1), from = from, n = n))
                         .color(t.text_dim),
                     );
                 }
@@ -629,7 +639,11 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 Dialog::PasteSettings { groups } => {
                     let n = app.session.selected().len();
                     ui.label(
-                        egui::RichText::new(crate::i18n::tr_format!("Paste into {n} photo{} — only settings that were copied are pasted", if n == 1 { "" } else { "s" }, n = n))
+                        egui::RichText::new(crate::i18n::tr_format!(
+                            "Paste into {n} photo{} — only settings that were copied are pasted",
+                            crate::i18n::plural_suffix(n == 1),
+                            n = n
+                        ))
                             .color(t.text_dim),
                     );
                     group_checklist(ui, "pasteGroup", groups);
@@ -655,7 +669,9 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 Dialog::Export { opts, full_size, resize, preset_name, limit_kb, dir } => {
                     use lightcraft_engine::export::{ExportFormat as F, MetadataPolicy as M, SharpenAmount as A, SharpenFor as S};
                     let n = app.session.selection.ids.len().max(1);
-                    ui.label(egui::RichText::new(crate::i18n::tr_format!("{n} photo{}", if n == 1 { "" } else { "s" }, n = n)).color(t.text_dim));
+                    ui.label(
+                        egui::RichText::new(crate::i18n::tr_format!("{n} photo{}", crate::i18n::plural_suffix(n == 1), n = n)).color(t.text_dim),
+                    );
                     // Preset: load a built-in or saved set of options into the dialog
                     field(ui, "Preset", |ui| {
                         let mut chosen = None;
@@ -1109,7 +1125,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                         } else {
                             crate::i18n::tr_format!(
                                 "It is taken off {count} photo{}, with the keywords below it. Undo brings it back.",
-                                if *count == 1 { "" } else { "s" },
+                                crate::i18n::plural_suffix(*count == 1),
                                 count = count
                             )
                         })
@@ -1135,7 +1151,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 Dialog::RemoveFolder { name, count, path, disk } => {
                     ui.label(crate::i18n::tr_format!(
                         "Remove “{name}” and its {count} photo{} from the library?",
-                        if *count == 1 { "" } else { "s" },
+                        crate::i18n::plural_suffix(*count == 1),
                         name = name,
                         count = count
                     ));
@@ -1229,7 +1245,12 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     Dialog::Import { opts } => {
                         let n = opts.selected_paths().len();
                         let verb = if opts.copy && opts.move_files { "Move" } else { "Import" };
-                        add_label = crate::i18n::tr_format!("{verb} {n} Photo{}", if n == 1 { "" } else { "s" }, verb = crate::i18n::tr(verb), n = n);
+                        add_label = crate::i18n::tr_format!(
+                            "{verb} {n} Photo{}",
+                            crate::i18n::plural_suffix(n == 1),
+                            verb = crate::i18n::tr(verb),
+                            n = n
+                        );
                         add_label.as_str()
                     }
                     Dialog::ContactSheet { .. } => "Choose PDF…",

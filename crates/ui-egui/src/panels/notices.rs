@@ -71,7 +71,7 @@ pub fn may_close(app: &mut LightcraftApp) -> bool {
         Some((n, e)) => {
             app.quit_prompt = Some(QuitPrompt::Unsaved(crate::i18n::tr_format!(
                 "{n} change{} couldn't be written to disk: {e}\nIf you quit now, {} lost.",
-                if n == 1 { "" } else { "s" },
+                crate::i18n::plural_suffix(n == 1),
                 if n == 1 { "it is" } else { "they are" },
                 n = n,
                 e = e

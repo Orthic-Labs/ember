@@ -498,7 +498,7 @@ fn smart_previews(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
             t,
             &crate::i18n::tr_format!(
                 "{count} smart preview{} · {:.1} MB",
-                if count == 1 { "" } else { "s" },
+                crate::i18n::plural_suffix(count == 1),
                 bytes as f64 / 1048576.0,
                 count = count
             ),

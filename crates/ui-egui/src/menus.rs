@@ -1524,7 +1524,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                             ctx,
                             crate::i18n::tr_format!(
                                 "Found {n} missing photo{}; {left} still missing{unsure}",
-                                if n == 1 { "" } else { "s" },
+                                crate::i18n::plural_suffix(n == 1),
                                 left = left,
                                 n = n,
                                 unsure = unsure
@@ -1592,7 +1592,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             if let Ok(v) = &r {
                 let n = v["tagged"].as_u64().unwrap_or(0);
                 let sk = &v["skipped"];
-                let mut msg = crate::i18n::tr_format!("Tagged {n} photo{} from the tracklog", if n == 1 { "" } else { "s" }, n = n);
+                let mut msg = crate::i18n::tr_format!("Tagged {n} photo{} from the tracklog", crate::i18n::plural_suffix(n == 1), n = n);
                 let outside = sk["outside"].as_u64().unwrap_or(0);
                 if outside > 0 {
                     msg += &crate::i18n::tr_format!("; {outside} outside its time range", outside = outside);
@@ -1700,7 +1700,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                         if profiles > 0 {
                             parts.push(crate::i18n::tr_format!(
                                 "Imported {profiles} profile{} (Profile browser ▸ their groups)",
-                                if profiles == 1 { "" } else { "s" },
+                                crate::i18n::plural_suffix(profiles == 1),
                                 profiles = profiles
                             ));
                         }
@@ -1731,11 +1731,11 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                     // a zip of LUTs only: the profile half already says what happened
                     (0, 0) if profile_news => None,
                     (0, 0) => Some("No new presets".to_string()),
-                    (n, 0) => Some(crate::i18n::tr_format!("Imported {n} preset{}", if n == 1 { "" } else { "s" }, n = n)),
+                    (n, 0) => Some(crate::i18n::tr_format!("Imported {n} preset{}", crate::i18n::plural_suffix(n == 1), n = n)),
                     (n, f) => Some(crate::i18n::tr_format!(
                         "Imported {n} preset{}, {f} file{} not readable",
-                        if n == 1 { "" } else { "s" },
-                        if f == 1 { "" } else { "s" },
+                        crate::i18n::plural_suffix(n == 1),
+                        crate::i18n::plural_suffix(f == 1),
                         f = f,
                         n = n
                     )),
@@ -1804,7 +1804,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             match &r {
                 Ok(v) => {
                     let (added, updated) = (v["added"].as_u64().unwrap_or(0), v["updated"].as_u64().unwrap_or(0));
-                    let mut msg = crate::i18n::tr_format!("Added {n} keyword{}", if added == 1 { "" } else { "s" }, n = added);
+                    let mut msg = crate::i18n::tr_format!("Added {n} keyword{}", crate::i18n::plural_suffix(added == 1), n = added);
                     if updated > 0 {
                         msg.push_str(&crate::i18n::tr_format!("; {n} gained synonyms", n = updated));
                     }
@@ -1836,7 +1836,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             }
             if let Ok(v) = &r {
                 let n = v["keywords"].as_u64().unwrap_or(0);
-                let mut msg = crate::i18n::tr_format!("Exported {n} keyword{}", if n == 1 { "" } else { "s" }, n = n);
+                let mut msg = crate::i18n::tr_format!("Exported {n} keyword{}", crate::i18n::plural_suffix(n == 1), n = n);
                 // Capture One's importer refuses ; , < > in a list: say which to rename first
                 let refuses: Vec<&str> = v["captureOneRefuses"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
                 if !refuses.is_empty() {
@@ -1898,7 +1898,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 other => other,
             };
             if let Ok(v) = &r {
-                app.toast(&ctx, crate::i18n::tr_format!("Exported {} preset{}", v["count"], if v["count"] == 1 { "" } else { "s" }));
+                app.toast(&ctx, crate::i18n::tr_format!("Exported {} preset{}", v["count"], crate::i18n::plural_suffix(v["count"] == 1)));
             }
             return Some(r);
         }
@@ -1925,9 +1925,9 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             if let Ok(v) = &r {
                 let n = v["imported"].as_array().map_or(0, Vec::len);
                 let failed = v["failed"].as_array().map_or(0, Vec::len);
-                let mut msg = crate::i18n::tr_format!("Imported {n} point curve preset{}", if n == 1 { "" } else { "s" }, n = n);
+                let mut msg = crate::i18n::tr_format!("Imported {n} point curve preset{}", crate::i18n::plural_suffix(n == 1), n = n);
                 if failed > 0 {
-                    msg += &crate::i18n::tr_format!(", {failed} file{} not readable", if failed == 1 { "" } else { "s" }, failed = failed);
+                    msg += &crate::i18n::tr_format!(", {failed} file{} not readable", crate::i18n::plural_suffix(failed == 1), failed = failed);
                 }
                 app.toast(&ctx, msg);
             }
@@ -1959,7 +1959,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             }
             let r = app.session.execute("curve.exportPresets", &params).map_err(|e| e.to_string());
             if let Ok(v) = &r {
-                app.toast(&ctx, crate::i18n::tr_format!("Exported {} point curve preset{}", v["count"], if v["count"] == 1 { "" } else { "s" }));
+                app.toast(&ctx, crate::i18n::tr_format!("Exported {} point curve preset{}", v["count"], crate::i18n::plural_suffix(v["count"] == 1)));
             }
             return Some(r);
         }

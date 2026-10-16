@@ -677,7 +677,7 @@ impl LightcraftApp {
             if self.ui.preview_build_seen != Some((key, true)) {
                 self.ui.preview_build_seen = Some((key, true));
                 let (done, failed) = (b.done.load(Ordering::Relaxed), b.failed.load(Ordering::Relaxed));
-                let plural = if done == 1 { "" } else { "s" };
+                let plural = crate::i18n::plural_suffix(done == 1);
                 let mut msg = match (b.error(), b.what) {
                     (Some(e), what) => format!("{}: {e}", if what.is_empty() { "previews" } else { what }),
                     (None, "") => crate::i18n::tr_format!("Previews ready for {done} photo{plural}", done = done, plural = plural),
@@ -707,7 +707,7 @@ impl LightcraftApp {
                 self.ui.toast = Some((
                     crate::i18n::tr_format!(
                         "{n} change{} saved in memory but not written to disk: {e} — Ember will retry",
-                        if n == 1 { "" } else { "s" },
+                        crate::i18n::plural_suffix(n == 1),
                         n = n,
                         e = e
                     ),
