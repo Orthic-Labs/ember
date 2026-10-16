@@ -688,6 +688,8 @@ pub struct UiState {
     pub brush_size: f32,
     pub brush_feather: f32,
     pub brush_flow: f32,
+    /// Brush density, 1..100: how much paint the stroke's dabs build up to.
+    pub brush_density: f32,
     pub brush_erase: bool,
     /// Brush Auto Mask: dabs stick to areas like the one under the brush centre.
     pub brush_auto_mask: bool,
@@ -1159,6 +1161,7 @@ impl Default for UiState {
             brush_size: 0.04,
             brush_feather: 50.0,
             brush_flow: 60.0,
+            brush_density: 100.0,
             brush_erase: false,
             brush_auto_mask: false,
             remove_size: 0.02,
@@ -1255,6 +1258,7 @@ impl UiState {
         self.left_width = LEFT_WIDTH.clamp(self.left_width);
         self.right_width = RIGHT_WIDTH.clamp(self.right_width);
         self.brush_size = self.brush_size.clamp(0.002, 0.5);
+        self.brush_density = self.brush_density.clamp(1.0, 100.0);
         self.sidebar.adopt_collapsed(&std::mem::take(&mut self.collapsed_sidebar));
         self.dialog = None;
         self.fullscreen = false;

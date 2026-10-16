@@ -334,6 +334,20 @@ fn holding_the_brush_still_does_not_harden_the_spot() {
     h.settle(SETTLE);
 }
 
+/// The Masking panel's Density reaches the committed stroke (#63).
+#[test]
+fn brush_strokes_carry_density() {
+    let mut h = detail("panel.masking");
+    let r = h.request("ui.set", json!({"brushDensity": 40.0}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    exec(&mut h, "tool.brush", json!({}));
+    pointer(&mut h, json!([{"kind": "down", "x": 0.3, "y": 0.5}, {"kind": "drag", "x": 0.4, "y": 0.5}, {"kind": "up", "x": 0.4, "y": 0.5}]));
+    let d = develop(&h);
+    let MaskShape::Brush { strokes } = &d.masks[0].components[0].shape else { panic!("brush") };
+    assert!((strokes[0].density - 40.0).abs() < 1e-9, "{strokes:?}");
+    h.settle(SETTLE);
+}
+
 #[test]
 fn brush_strokes_carry_auto_mask() {
     let mut h = detail("panel.masking");

@@ -1941,7 +1941,7 @@ fn mask_overlay(app: &mut LightcraftApp, ui: &mut egui::Ui, resp: &egui::Respons
                 r,
                 hard: r * (1.0 - (app.ui.brush_feather / 100.0).clamp(0.0, 1.0)),
                 flow: (app.ui.brush_flow / 100.0).clamp(0.0, 1.0),
-                density: 1.0,
+                density: (app.ui.brush_density / 100.0).clamp(0.0, 1.0),
                 color: app.ui.mask_overlay_color,
                 opacity: opacity.clamp(0.0, 1.0),
             };
@@ -1958,7 +1958,7 @@ fn mask_overlay(app: &mut LightcraftApp, ui: &mut egui::Ui, resp: &egui::Respons
             let erase = app.ui.brush_erase != resp.ctx.input(|i| i.modifiers.alt);
             let _ = app.run(
                 "mask.brushStroke",
-                json!({"points": pts, "size": app.ui.brush_size, "feather": app.ui.brush_feather, "flow": app.ui.brush_flow,
+                json!({"points": pts, "size": app.ui.brush_size, "feather": app.ui.brush_feather, "flow": app.ui.brush_flow, "density": app.ui.brush_density,
                        "erase": erase, "autoMask": app.ui.brush_auto_mask}),
             );
         }
