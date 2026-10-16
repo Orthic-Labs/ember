@@ -8,7 +8,8 @@ stronger Light sliders, issue #196) without changing a single photo someone has 
 | Process | What it changes |
 |---|---|
 | **V1** | Ember's rendering from before process versions existed. Frozen. |
-| **V2** (the latest) | Highlights and Shadows keep fine detail (issue #632): their base layer (`local::tone_base`) is the edge-aware filter of a separable median of log luminance (radius 0.15 % of the long edge, at most 24 px, `local::BASE_DETAIL`) instead of log luminance itself, so twigs, lines and texture take their surroundings' shift and keep their contrast; region edges stay sharp. CPU (`local::prepare`) and GPU prepare branch on `local::tone_base_detail` (0 = no median under V1); the base plane is cached per process (`local::BaseKey`). Renders without Highlights or Shadows (global or local) are the same as V1's. Tone map unchanged. |
+| **V2** | Highlights and Shadows keep fine detail (issue #632): their base layer (`local::tone_base`) is the edge-aware filter of a separable median of log luminance (radius 0.15 % of the long edge, at most 24 px, `local::BASE_DETAIL`) instead of log luminance itself, so twigs, lines and texture take their surroundings' shift and keep their contrast; region edges stay sharp. CPU (`local::prepare`) and GPU prepare branch on `local::tone_base_detail` (0 = no median under V1); the base plane is cached per process (`local::BaseKey`). Renders without Highlights or Shadows (global or local) are the same as V1's. Tone map unchanged. |
+| **V3** (the latest) | A neutral display tone map is the identity up to white (issue #30, upstream #1945). For display-referred sources (JPEG, PNG, TIFF; not raw), V1 and V2 run the short SDR shoulder above 0.95 even at neutral Contrast, Whites and Blacks, so display-linear 1.0 became 0.9875 and an unedited file exported 255 as 254 (254 as 253, 253 as 252). V3 (`ToneMap::display_hdr_v3`) blends the shoulder in with the edit amount, `k = clamp((abs(contrast) + abs(whites) + abs(blacks)) / 10, 0, 1)` in slider units: output = clipped identity + k * (shoulder - clipped identity), above 0.95 only. Neutral is exactly the identity (values above white clip), `k = 1` (ten units in total) is the V1/V2 curve, and nothing jumps when a slider leaves 0. HDR renders (`peak > 1`) and raw sources are unchanged; everything else is V2's. Photos made before V3 stay on V1/V2 and shift only through Update to Current Process. |
 
 ## The rule
 
@@ -24,11 +25,11 @@ stronger Light sliders, issue #196) without changing a single photo someone has 
 
 ## Adding a process
 
-1. Add a variant to `Process` (`V2`), append it to `Process::ALL` (oldest first), give it its number in
+1. Add a variant to `Process` (the next, e.g. `V4`), append it to `Process::ALL` (oldest first), give it its number in
    `Process::version` and make it `Process::LATEST`.
 2. The compiler then points at every `match` on `Process`. The base tone map is chosen in one place,
    `lightcraft_pipeline::finish::base_tone` (both the CPU and the GPU renderer take it from there): give
-   V2 its own arm and leave V1's alone. A process that changes another stage branches there the same
+   it its own arm and leave V1's alone. A process that changes another stage branches there the same
    way, on `s.process.process()`; if that stage is cached (`Plan::lin_key`, the planes in `local.rs`),
    add the process to its key.
 3. Keep `settings_saved_before_process_versions_load_as_v1` (`crates/develop/src/tests_process.rs`)

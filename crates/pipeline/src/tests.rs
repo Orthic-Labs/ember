@@ -735,3 +735,22 @@ fn sliver_crops_render_quickly_with_wide_stages_on() {
         assert!(r.image.width >= 1 && r.image.height >= 1, "{rect:?}");
     }
 }
+
+#[test]
+fn unedited_v3_rendered_source_round_trips_exactly() {
+    // display-referred sRGB values decoded to linear Rec.2020 come back unchanged (255 stays 255)
+    let ramp = [255u8, 254, 253, 252, 250, 240, 200, 128, 0];
+    let src8 = lightcraft_raster::Rgba8::from_fn(ramp.len(), 1, |x, _| [ramp[x], ramp[x], ramp[x], 255]);
+    let m = lightcraft_color::SRGB.to_space(&lightcraft_color::REC2020);
+    let src = src8.to_linear().map(|c| m.apply_f32(c));
+    let s = DevelopSettings::default();
+    assert_eq!(s.process, lightcraft_develop::ProcessVersion::LATEST);
+    assert!(s.process >= lightcraft_develop::Process::V3.version());
+    let r = render(&src, &SourceInfo::default(), &s, &RenderRequest::fit(ramp.len(), 1)).image;
+    let got: Vec<u8> = r.data.iter().map(|p| p[0]).collect();
+    assert_eq!(got, ramp, "unedited V3 neutral ramp");
+    // V1 keeps its old rendering (white is 254)
+    let v1 = DevelopSettings { process: lightcraft_develop::ProcessVersion::V1, ..Default::default() };
+    let r1 = render(&src, &SourceInfo::default(), &v1, &RenderRequest::fit(ramp.len(), 1)).image;
+    assert_eq!(r1.data[0][0], 254, "V1 is frozen");
+}

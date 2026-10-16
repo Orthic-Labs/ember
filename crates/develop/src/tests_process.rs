@@ -160,3 +160,17 @@ fn the_process_is_not_an_edit_nor_part_of_copied_settings() {
 
 /// A process other than the latest: a newer LightCraft's number (no older one than V1 exists).
 const LATEST_PLUS_ONE: u32 = ProcessVersion::LATEST.0 + 1;
+
+#[test]
+fn v1_and_v2_settings_keep_their_process_and_v3_is_the_latest() {
+    assert_eq!(Process::LATEST, Process::V3);
+    assert_eq!(Process::V3.version(), ProcessVersion(3));
+    for n in [1u32, 2] {
+        let s = DevelopSettings::from_json(&json!({"process": n, "light": {"exposure": 0.5}})).unwrap();
+        assert_eq!(s.process, ProcessVersion(n));
+        assert!(s.process.is_outdated(), "V{n} is updatable");
+        assert_eq!(DevelopSettings::from_json(&s.to_json()).unwrap().process, ProcessVersion(n), "kept when saved");
+    }
+    assert!(!DevelopSettings::default().process.is_outdated());
+    assert_eq!(ProcessVersion(3).process(), Process::V3);
+}

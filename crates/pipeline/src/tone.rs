@@ -181,11 +181,28 @@ impl ToneMap {
     /// source, e.g. a decoded gain-map image) pass through and roll off softly towards `peak`
     /// instead of clipping at 1; SDR sources (≤ 1) render as with [`ToneMap::display`].
     pub fn display_hdr(contrast: f64, whites: f64, blacks: f64, peak: f32) -> ToneMap {
+        Self::display_hdr_with(contrast, whites, blacks, peak, false)
+    }
+
+    /// [`ToneMap::display_hdr`] of process V3 (issue #30): at neutral Contrast, Whites and Blacks an
+    /// SDR render is the identity up to 1 (values above white clip), so an unedited JPEG or PNG
+    /// exports 255 as 255. The SDR shoulder above 0.95 fades in with the edit amount: its weight is
+    /// `k = clamp((|contrast| + |whites| + |blacks|) / 10, 0, 1)` (slider units / 100, so ten units
+    /// in total are a full shoulder) and the output blends `(1 - k)` of the clipped identity with
+    /// `k` of the shoulder. Both are continuous in the sliders, so nothing jumps when one leaves 0;
+    /// from `k = 1` on it is the V1/V2 curve. The HDR path (`peak > 1`) is unchanged.
+    pub fn display_hdr_v3(contrast: f64, whites: f64, blacks: f64, peak: f32) -> ToneMap {
+        Self::display_hdr_with(contrast, whites, blacks, peak, true)
+    }
+
+    fn display_hdr_with(contrast: f64, whites: f64, blacks: f64, peak: f32, fade_shoulder: bool) -> ToneMap {
         let peak = if peak.is_finite() { peak.max(1.0) } else { 1.0 };
         let c = (contrast / 100.0) as f32;
         let w = (whites / 100.0) as f32;
         let b = (blacks / 100.0) as f32;
         let m = GREY.powf(1.0 / 2.2);
+        // weight of the SDR shoulder: 1 (V1, V2), or fading in with the edit amount (V3)
+        let shoulder = if fade_shoulder { ((c.abs() + w.abs() + b.abs()) / 0.10).clamp(0.0, 1.0) } else { 1.0 };
         let lut = (0..LUT_N)
             .map(|i| {
                 let ev = LUT_MIN_EV + (LUT_MAX_EV - LUT_MIN_EV) * i as f32 / (LUT_N - 1) as f32;
@@ -210,7 +227,8 @@ impl ToneMap {
                     o = 0.95 + r * (1.0 - (-(o - 0.95) / r).exp());
                 } else if o > 0.95 {
                     let d = (o - 0.95).min(0.1);
-                    o = 0.95 + d - d * d / 0.2;
+                    let shouldered = 0.95 + d - d * d / 0.2;
+                    o = if shoulder >= 1.0 { shouldered } else { o.min(1.0) + (shouldered - o.min(1.0)) * shoulder };
                 }
                 o.clamp(0.0, peak)
             })
@@ -446,5 +464,47 @@ mod tests {
         assert!(ToneMap::new(0.0, 60.0, 0.0).apply(0.8) > base.apply(0.8));
         assert!(ToneMap::new(0.0, 0.0, -60.0).apply(0.01) < base.apply(0.01));
         assert!(ToneMap::new(0.0, 0.0, 60.0).apply(0.01) > base.apply(0.01));
+    }
+
+    #[test]
+    fn v3_display_neutral_is_the_identity_up_to_white() {
+        let t = ToneMap::display_hdr_v3(0.0, 0.0, 0.0, 1.0);
+        let mut y = 0.01f32;
+        while y <= 1.0 {
+            assert!((t.apply(y) - y).abs() < 2e-3, "{y}: {}", t.apply(y));
+            y += 0.01;
+        }
+        assert!((t.apply(1.0) - 1.0).abs() < 2e-3);
+        assert_eq!(t.apply(1.5), 1.0, "above white clips");
+        assert_eq!(t.apply(8.0), 1.0);
+        // V1 and V2 keep the shoulder at neutral: white maps to 0.9875
+        let v1 = ToneMap::display_hdr(0.0, 0.0, 0.0, 1.0);
+        assert!((v1.apply(1.0) - 0.9875).abs() < 2e-3, "{}", v1.apply(1.0));
+        assert!((ToneMap::display(0.0, 0.0, 0.0).apply(1.0) - v1.apply(1.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn v3_display_has_no_jump_when_a_slider_leaves_zero() {
+        let neutral = ToneMap::display_hdr_v3(0.0, 0.0, 0.0, 1.0);
+        for (c, w, b) in [(0.01, 0.0, 0.0), (0.0, 0.01, 0.0), (0.0, 0.0, 0.01), (0.0, -0.01, 0.0)] {
+            let t = ToneMap::display_hdr_v3(c, w, b, 1.0);
+            for y in [0.5f32, 0.9, 0.97, 1.0, 1.2] {
+                assert!((t.apply(y) - neutral.apply(y)).abs() < 5e-3, "({c}, {w}, {b}) at {y}: {} vs {}", t.apply(y), neutral.apply(y));
+            }
+        }
+        // from ten slider units on it is the V1/V2 curve
+        let full = ToneMap::display_hdr_v3(10.0, 0.0, 0.0, 1.0);
+        let old = ToneMap::display_hdr(10.0, 0.0, 0.0, 1.0);
+        assert_eq!(full.lut(), old.lut());
+        // monotone while the shoulder fades in
+        for c in [1.0, 3.0, 6.0] {
+            let t = ToneMap::display_hdr_v3(c, 0.0, 0.0, 1.0);
+            let mut prev = -1.0;
+            for i in 0..2000 {
+                let v = t.apply(1e-4 * 1.01f32.powi(i));
+                assert!(v >= prev - 1e-6, "c={c}");
+                prev = v;
+            }
+        }
     }
 }

@@ -262,3 +262,20 @@ fn update_to_current_process_checks_named_photos_not_the_selection() {
     // `ids: null` names nothing: the selection decides (and there is none)
     assert!(matches!(s.execute("develop.updateProcess", &json!({"ids": null})), Err(EngineError::Disabled(..))));
 }
+
+#[test]
+fn update_to_current_process_moves_v1_and_v2_to_v3_and_never_runs_by_itself() {
+    let mut s = Session::with_demo();
+    let ids: Vec<PhotoId> = s.visible_cloned().into_iter().take(2).collect();
+    put(&mut s, ids[0], ProcessVersion(1), 0.5);
+    put(&mut s, ids[1], ProcessVersion(2), 0.25);
+    // editing and resetting a slider never moves a photo to the latest process
+    select(&mut s, &ids);
+    s.execute("develop.set", &json!({"control": "light.contrast", "value": 10.0})).unwrap();
+    assert_eq!([process(&s, ids[0]), process(&s, ids[1])], [ProcessVersion(1), ProcessVersion(2)]);
+    let r = s.execute("develop.updateProcess", &json!({})).unwrap();
+    assert_eq!(r, json!({"changed": 2, "process": 3}));
+    assert_eq!([process(&s, ids[0]), process(&s, ids[1])], [ProcessVersion(3); 2]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!([process(&s, ids[0]), process(&s, ids[1])], [ProcessVersion(1), ProcessVersion(2)]);
+}

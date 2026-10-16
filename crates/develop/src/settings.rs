@@ -84,17 +84,23 @@ pub enum Process {
     /// Highlights and Shadows keep the local contrast of the tones they move: their edge-aware base
     /// is taken of a fine median of log luminance (issue #632).
     V2,
+    /// A neutral display tone map is the identity up to white: an unedited JPEG or PNG exports the
+    /// values it was decoded from (255 stays 255). V1 and V2 run the short SDR shoulder at neutral
+    /// Contrast, Whites and Blacks, which maps white to 0.9875 (255 → 254; issue #30, upstream
+    /// #1945). The shoulder fades in with the edit amount (`ToneMap::display_hdr_v3`).
+    V3,
 }
 
 impl Process {
     /// Every process, oldest first.
-    pub const ALL: [Process; 2] = [Process::V1, Process::V2];
-    pub const LATEST: Process = Process::V2;
+    pub const ALL: [Process; 3] = [Process::V1, Process::V2, Process::V3];
+    pub const LATEST: Process = Process::V3;
 
     pub const fn version(self) -> ProcessVersion {
         match self {
             Process::V1 => ProcessVersion(1),
             Process::V2 => ProcessVersion(2),
+            Process::V3 => ProcessVersion(3),
         }
     }
 }
