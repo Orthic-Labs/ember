@@ -735,6 +735,8 @@ pub struct ExportOptions {
     pub tiff_compression: TiffCompression,
     /// DNG export: how the raw data is stored.
     pub dng_compression: DngCompression,
+    /// DNG export: the embedded JPEG preview.
+    pub dng_preview: DngPreviewSize,
     pub metadata: MetadataPolicy,
     /// Strip GPS / location even when the policy would include it.
     pub remove_location: bool,
@@ -786,6 +788,7 @@ impl Default for ExportOptions {
             conflict: Conflict::Unique,
             tiff_compression: TiffCompression::Deflate,
             dng_compression: DngCompression::Lossless,
+            dng_preview: DngPreviewSize::Medium,
             metadata: MetadataPolicy::All,
             remove_location: false,
             watermark: None,
@@ -829,6 +832,7 @@ pub const OPTION_PARAMS: &[&str] = &[
     "conflict",
     "tiffCompression",
     "dngCompression",
+    "dngPreview",
     "metadata",
     "removeLocation",
     "watermark",
@@ -1029,6 +1033,9 @@ impl ExportOptions {
                     serde_json::from_value::<DngCompression>(v.clone())
                         .map_err(|_| bad(format!("`{k}` must be one of lossless|deflate|uncompressed|lossy")))?;
                 }
+                "dngPreview" => {
+                    serde_json::from_value::<DngPreviewSize>(v.clone()).map_err(|_| bad(format!("`{k}` must be one of none|medium|full")))?;
+                }
                 "metadata" => parses(k, v, |s| MetadataPolicy::parse(s).is_some(), &["all", "allExceptCamera", "copyright", "none"])?,
                 "colorSpace" => {
                     if OutputSpace::parse(string(cmd, k, v)?).is_none() {
@@ -1144,6 +1151,7 @@ impl ExportOptions {
                 _ => d.tiff_compression,
             },
             dng_compression: enm(p, "dngCompression").unwrap_or(d.dng_compression),
+            dng_preview: enm(p, "dngPreview").unwrap_or(d.dng_preview),
             metadata: s("metadata").and_then(MetadataPolicy::parse).unwrap_or(d.metadata),
             remove_location: p.get("removeLocation").and_then(Value::as_bool).unwrap_or(d.remove_location),
             watermark: match p.get("watermark") {
@@ -1704,6 +1712,8 @@ enum Work {
         read: Option<crate::merge::ByteReader>,
         packet: String,
         dng: Option<DngCompression>,
+        /// The edited photo for the DNG's embedded preview ([`ExportOptions::dng_preview`]).
+        preview: Option<Box<crate::media::RenderJob>>,
         /// The original must not carry a location ([`removes_location`]).
         remove_location: bool,
         label: String,
@@ -1786,17 +1796,26 @@ fn prepare_guarded(
             return Err(format!("{} is a generated demo photo: it has no original file to export", p.file_name));
         };
         let dng = (o.format == ExportFormat::Dng).then_some(o.dng_compression);
-        // the file's bytes; a DNG also decodes the raw data (16-bit samples) and writes it again
-        let weight = (p.file_size as usize).saturating_add(if dng.is_some() { full_px.saturating_mul(6) } else { 0 });
-        let work = Work::File {
-            path: path.clone(),
-            read: session.media.file_bytes.clone(),
-            packet: crate::sidecar::sidecar_packet_with(p, &session.catalog, removes_location(p, &session.catalog, o)),
-            dng,
-            remove_location: removes_location(p, &session.catalog, o),
-            label: p.file_name.clone(),
-            size: (p.width as usize, p.height as usize),
+        // the embedded preview shows the edited photo, whatever size the raw data is written at
+        let preview_size = dng.and_then(|_| {
+            let (w, h) = lightcraft_pipeline::native_output_size(p.width.max(1) as usize, p.height.max(1) as usize, &p.develop);
+            o.dng_preview.size_for(w.round().max(1.0) as usize, h.round().max(1.0) as usize)
+        });
+        let (packet, remove_location) = (
+            crate::sidecar::sidecar_packet_with(p, &session.catalog, removes_location(p, &session.catalog, o)),
+            removes_location(p, &session.catalog, o),
+        );
+        let (label, size, path, file_size) = (p.file_name.clone(), (p.width as usize, p.height as usize), path.clone(), p.file_size as usize);
+        let preview = match preview_size {
+            Some((w, h)) => Some(Box::new(session.export_job(id, w, h, OutputSpace::Srgb, OutputDepth::U8)?)),
+            None => None,
         };
+        // the file's bytes; a DNG also decodes the raw data (16-bit samples) and writes it again
+        let mut weight = file_size.saturating_add(if dng.is_some() { full_px.saturating_mul(6) } else { 0 });
+        if let (Some(job), Some((w, h))) = (&preview, preview_size) {
+            weight = weight.saturating_add(render_weight(full_px, long, job.level, w.saturating_mul(h)));
+        }
+        let work = Work::File { path, read: session.media.file_bytes.clone(), packet, dng, preview, remove_location, label, size };
         (work, weight)
     };
     Ok(PreparedExport { photo: id, file_name, work, guard, weight })
@@ -1852,7 +1871,7 @@ impl PreparedExport {
                 };
                 Ok(Exported { file_name, bytes, width: r.image.width, height: r.image.height, sidecars: Vec::new(), gpu_fallback })
             }
-            Work::File { path, read, packet, dng, label, size, remove_location } => {
+            Work::File { path, read, packet, dng, preview, label, size, remove_location } => {
                 let bytes = match &read {
                     Some(r) => r(&path)?,
                     None => std::fs::read(&path).map_err(|e| format!("{path}: {e}"))?,
@@ -1884,12 +1903,28 @@ impl PreparedExport {
                     DngCompression::Uncompressed => lightcraft_raw::DngCompression::Uncompressed,
                     DngCompression::Lossy => return Err(format!("{label}: lossy DNG is for Render to DNG; a raw DNG export is lossless")),
                 };
-                let dng = lightcraft_raw::write_dng(&raw, &lightcraft_raw::DngWriteOptions { xmp: Some(packet), compression, ..Default::default() })
-                    .map_err(|e| e.to_string())?;
+                let preview = match preview {
+                    Some(job) => Some(dng_preview((*job).run().rendered.map_err(|e| format!("{label}: preview: {e}"))?)?),
+                    None => None,
+                };
+                let dng = lightcraft_raw::write_dng_with_preview(
+                    &raw,
+                    &lightcraft_raw::DngWriteOptions { xmp: Some(packet), compression, ..Default::default() },
+                    preview.as_ref(),
+                )
+                .map_err(|e| e.to_string())?;
                 Ok(Exported { file_name, bytes: dng, width: raw.width, height: raw.height, sidecars: Vec::new(), gpu_fallback: None })
             }
         }
     }
+}
+
+/// The embedded preview of a DNG export: the rendered sRGB picture as a JPEG (4:2:0, quality 90) with its profile.
+fn dng_preview(r: lightcraft_pipeline::Rendered) -> Result<lightcraft_raw::DngPreview, String> {
+    let profile = icc::write_named(named_space(OutputSpace::Srgb));
+    let meta = EncodeMeta { icc: Some(&profile), ..Default::default() };
+    let jpeg = encode::encode_jpeg(&EncodeImage::rgba8(&r.image), 90, ChromaSubsampling::S420, &meta).map_err(|e| format!("DNG preview: {e}"))?;
+    Ok(lightcraft_raw::DngPreview { jpeg, width: r.image.width as u32, height: r.image.height as u32, subsampling: [2, 2] })
 }
 
 /// The render half of a [`PreparedExport`], for a host that runs it on another thread of its own
@@ -1989,6 +2024,43 @@ pub enum DngCompression {
     /// Lossy JPEG XL tiles (DNG 1.7; quality from [`ExportOptions::quality`]). Render to DNG only: a
     /// raw (CFA) DNG export refuses it. Highlights above white are clipped.
     Lossy,
+}
+
+/// The JPEG preview a DNG export embeds (Lightroom's "Embedded Preview"): other apps show it before
+/// they have rendered the raw data, and a file browser shows it as the thumbnail.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DngPreviewSize {
+    /// No preview.
+    None,
+    /// The edited photo, its long edge at most [`DngPreviewSize::MEDIUM_EDGE`] pixels.
+    #[default]
+    Medium,
+    /// The edited photo at its full (cropped) size.
+    Full,
+}
+
+impl DngPreviewSize {
+    /// Long edge of a [`Self::Medium`] preview (Lightroom's "Medium Size" is 1024 px).
+    pub const MEDIUM_EDGE: usize = 1024;
+
+    /// The preview's size for a photo whose full output is `w × h` pixels: the same shape, never enlarged.
+    pub fn size_for(self, w: usize, h: usize) -> Option<(usize, usize)> {
+        let (w, h) = (w.max(1), h.max(1));
+        match self {
+            Self::None => None,
+            Self::Full => Some((w, h)),
+            Self::Medium => {
+                let long = w.max(h);
+                if long <= Self::MEDIUM_EDGE {
+                    return Some((w, h));
+                }
+                let scale = Self::MEDIUM_EDGE as f64 / long as f64;
+                let fit = |v: usize| ((v as f64 * scale).round() as usize).clamp(1, Self::MEDIUM_EDGE);
+                Some((fit(w), fit(h)))
+            }
+        }
+    }
 }
 
 /// The destination of a batch: a folder (with `ExportOptions::subfolder` and the conflict policy

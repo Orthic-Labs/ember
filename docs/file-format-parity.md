@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (lossy JPEG XL DNG, #79, #188)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-17 · **Change:** minor (DNG embedded preview, #79)
 
 Every format reference editor reads or writes, with our support, fidelity and tests. Camera raw formats are
 deep enough to have their own document: [raw-parity.md](raw-parity.md).
@@ -81,3 +81,4 @@ Remaining: **26–47 h** (AVIF decode 8–15 h if a permissive decoder is writte
 | 2026-10-16 | minor | Render to DNG: `photo.renderToDng` catalog command; AVIF decode still blocked (no permissive pure-Rust AV1 decoder in the lockfile: rav1e/ravif are encoders); lossy DNG output not started |
 | 2026-10-16 | minor | Palette (indexed-colour) TIFF decodes through its ColorMap (1–8-bit indices; `crates/codecs/src/tiff_codec.rs`). Audit: GIF, BMP, WebP and JPEG XL already decode and sniff by magic; no new crate was added. Still missing: AVIF decode, HEIC in default builds |
 | 2026-10-16 | minor | Lossy JPEG XL DNG for Render to DNG (`dngCompression: lossy`, DNG 1.7 tags JXLDistance/Effort/DecodeSpeed); raw (CFA) lossy DNG still open |
+| 2026-10-17 | minor | DNG export: embedded JPEG preview option (`dngPreview`: none / medium / full), a SubIFD with NewSubFileType 1 |

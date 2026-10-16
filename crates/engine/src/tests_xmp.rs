@@ -1260,6 +1260,44 @@ fn dng_export_compression_choices() {
     assert!(sizes[2].1 > sizes[0].1 && sizes[2].1 > sizes[1].1, "uncompressed is the biggest: {sizes:?}");
 }
 
+/// DNG export embeds a JPEG preview of the edited photo in a NewSubFileType 1 SubIFD, sized by `dngPreview`: none
+/// writes no such IFD, medium caps the long edge at 1024 px, full is the photo's own size; a preset that never
+/// heard of the option gets the default (medium).
+#[test]
+fn dng_export_embeds_a_preview_of_the_chosen_size() {
+    use lightcraft_tiff::tags as t;
+    let (w, h) = (1536usize, 1024usize);
+    let data: Vec<u16> = (0..w * h).map(|i| 256 + ((i % w) * 7 + (i / w) * 5) as u16 % 8000).collect();
+    let src = temp_dir("dng-preview");
+    std::fs::write(src.join("big.dng"), synthetic_dng_of(w, h, "RGGB", data, None, Default::default())).unwrap();
+    let mut s = Session::new().with_fs();
+    s.execute("library.import", &json!({"paths": [src.to_string_lossy()]})).unwrap();
+    let id = s.active().unwrap();
+    let preview_of = |s: &mut Session, o: &serde_json::Value| {
+        let o = crate::export::ExportOptions::from_json(o);
+        let bytes = crate::export::export_photo(s, id, &o, 1).unwrap().bytes;
+        let tiff = lightcraft_tiff::Tiff::parse(&bytes).unwrap();
+        let found: Vec<_> = tiff.all_ifds().into_iter().filter(|i| i.u32(t::NEW_SUBFILE_TYPE) == Some(1)).collect();
+        assert!(found.len() <= 1, "one preview at most");
+        let size = found.first().map(|p| (p.u32(t::IMAGE_WIDTH).unwrap() as usize, p.u32(t::IMAGE_LENGTH).unwrap() as usize));
+        if let Some(jpeg) = lightcraft_raw::embedded_preview(&bytes) {
+            let img = lightcraft_codecs::decode_thumbnail(&jpeg, 4096).unwrap().image;
+            assert_eq!(Some((img.width, img.height)), size, "the JPEG is the size its IFD states");
+        } else {
+            assert!(size.is_none());
+        }
+        assert_eq!(lightcraft_raw::decode(&bytes).unwrap().width, w, "the raw data is untouched");
+        size
+    };
+    assert_eq!(preview_of(&mut s, &json!({"format": "dng", "dngPreview": "none"})), None);
+    assert_eq!(preview_of(&mut s, &json!({"format": "dng", "dngPreview": "medium"})), Some((1024, 683)));
+    assert_eq!(preview_of(&mut s, &json!({"format": "dng", "dngPreview": "full"})), Some((w, h)));
+    assert_eq!(preview_of(&mut s, &json!({"format": "dng"})), Some((1024, 683)), "an older preset has the default");
+    assert_eq!(crate::export::ExportOptions::default().dng_preview, crate::export::DngPreviewSize::Medium);
+    assert!(crate::export::ExportOptions::validate("app.export", &json!({"format": "dng", "dngPreview": "huge"})).is_err());
+    let _ = std::fs::remove_dir_all(&src);
+}
+
 fn write_jpeg(path: &Path, capture: Option<&str>) {
     let (w, h) = (32usize, 24usize);
     let data: Vec<[u8; 4]> = (0..w * h).map(|i| [(i % w * 7) as u8, (i / w * 9) as u8, 90, 255]).collect();

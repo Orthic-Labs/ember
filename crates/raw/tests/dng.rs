@@ -6,6 +6,7 @@ use lightcraft_raw::opcodes::{Area, Opcode};
 use lightcraft_raw::{
     BlackLevel, Cfa, ColorData, DngCompression, DngWriteOptions, Method, OpcodeLists, Orientation, RawData, RawFormat, RawImage, Rect, decode,
     embedded_preview, probe, write_dng,
+    write_dng_with_preview,
 };
 use lightcraft_tiff::tags::{self as t, compression, photometric};
 use lightcraft_tiff::{ByteOrder, IfdBuilder, ImageData, TiffWriter, Value};
@@ -1134,4 +1135,39 @@ fn legacy_lightcraft_dng_keeps_the_sensor_anchored_pattern() {
     assert_ne!(lightcraft_raw::dngwrite::SOFTWARE, "LightCraft");
     assert_ne!(lightcraft_raw::dngwrite::SOFTWARE, "Ember");
     assert_eq!(build(lightcraft_raw::dngwrite::SOFTWARE).cfa.unwrap().name(), "BGGR", "the current writer follows the spec");
+}
+
+/// DNG 1.7 preview images: a JPEG in a SubIFD with NewSubFileType 1, beside the raw IFD 0.
+#[test]
+fn embedded_preview_is_a_reduced_resolution_jpeg_subifd() {
+    let raw = synthetic(64, 48, Some(Cfa::bayer("RGGB").unwrap()), 1);
+    let jpeg = vec![0xff, 0xd8, 0xff, 0xd9];
+    let preview = lightcraft_raw::DngPreview { jpeg: jpeg.clone(), width: 40, height: 30, subsampling: [2, 2] };
+    let bytes = write_dng_with_preview(&raw, &DngWriteOptions::default(), Some(&preview)).unwrap();
+    let tiff = lightcraft_tiff::Tiff::parse(&bytes).unwrap();
+    let previews: Vec<_> = tiff.all_ifds().into_iter().filter(|i| i.u32(t::NEW_SUBFILE_TYPE) == Some(1)).collect();
+    assert_eq!(previews.len(), 1);
+    let p = previews[0];
+    assert_eq!((p.u32(t::IMAGE_WIDTH), p.u32(t::IMAGE_LENGTH)), (Some(40), Some(30)));
+    assert_eq!(p.u16(t::COMPRESSION), Some(compression::JPEG));
+    assert_eq!(p.u16(t::PHOTOMETRIC), Some(photometric::YCBCR));
+    assert_eq!(p.u16(t::SAMPLES_PER_PIXEL), Some(3));
+    // the raw data stays in IFD 0 and decodes as before
+    assert_eq!(tiff.ifds[0].u32(t::NEW_SUBFILE_TYPE), Some(0));
+    let back = decode(&bytes).unwrap();
+    assert_eq!((back.width, back.height), (64, 48));
+    assert_eq!(back.data, raw.data);
+    // no preview: no such IFD
+    let plain = write_dng_with_preview(&raw, &DngWriteOptions::default(), None).unwrap();
+    let tiff = lightcraft_tiff::Tiff::parse(&plain).unwrap();
+    assert!(tiff.all_ifds().into_iter().all(|i| i.u32(t::NEW_SUBFILE_TYPE) != Some(1)));
+    assert_eq!(plain, write_dng(&raw, &DngWriteOptions::default()).unwrap());
+    // data that is not a JPEG of a known size is refused
+    for bad in [
+        lightcraft_raw::DngPreview { jpeg: vec![1, 2, 3], ..preview.clone() },
+        lightcraft_raw::DngPreview { width: 0, ..preview.clone() },
+        lightcraft_raw::DngPreview { subsampling: [3, 1], ..preview.clone() },
+    ] {
+        assert!(write_dng_with_preview(&raw, &DngWriteOptions::default(), Some(&bad)).is_err());
+    }
 }

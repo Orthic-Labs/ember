@@ -961,6 +961,8 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     if opts.format == F::Dng {
                         use lightcraft_engine::export::DngCompression as Z;
                         choices(ui, "Compression", "exportDngCompression", &[(Z::Lossless, "Lossless"), (Z::Deflate, "ZIP"), (Z::Uncompressed, "None")], &mut opts.dng_compression);
+                        use lightcraft_engine::export::DngPreviewSize as P;
+                        choices(ui, "Embedded preview", "exportDngPreview", &[(P::None, "None"), (P::Medium, "Medium"), (P::Full, "Full size")], &mut opts.dng_preview);
                     }
                     let naming_id = crate::text_field::id("field:exportNaming");
                     let tags_open = field(ui, "File name", |ui| {

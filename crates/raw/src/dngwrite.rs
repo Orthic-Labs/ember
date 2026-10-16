@@ -150,8 +150,50 @@ fn rat_vec(v: &[f64]) -> Value {
     Value::Rational(v.iter().map(|&x| rational(x)).collect())
 }
 
+/// An embedded preview for [`write_dng_with_preview`]: a baseline JPEG of the picture (8-bit sRGB), written
+/// as a reduced-resolution SubIFD of IFD 0 (NewSubFileType 1, DNG 1.7 §"Preview Images").
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DngPreview {
+    /// The JPEG file.
+    pub jpeg: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    /// Chroma subsampling of the JPEG's `YCbCr` components (horizontal, vertical): `[1, 1]` is 4:4:4,
+    /// `[2, 2]` is 4:2:0.
+    pub subsampling: [u16; 2],
+}
+
+impl DngPreview {
+    /// The preview IFD: an 8-bit `YCbCr` JPEG (Compression 7) in one strip, sRGB, upright.
+    fn ifd(&self) -> Result<IfdBuilder> {
+        if self.width == 0 || self.height == 0 || !self.jpeg.starts_with(&[0xff, 0xd8]) || !matches!(self.subsampling, [1 | 2, 1 | 2]) {
+            return Err(RawError::Corrupt("the DNG preview is not a JPEG of known size".into()));
+        }
+        let mut sub = IfdBuilder::new();
+        sub.set(t::NEW_SUBFILE_TYPE, Value::Long(vec![1]));
+        sub.set(t::IMAGE_WIDTH, Value::Long(vec![self.width]));
+        sub.set(t::IMAGE_LENGTH, Value::Long(vec![self.height]));
+        sub.set(t::BITS_PER_SAMPLE, Value::Short(vec![8; 3]));
+        sub.set(t::COMPRESSION, Value::Short(vec![compression::JPEG]));
+        sub.set(t::PHOTOMETRIC, Value::Short(vec![photometric::YCBCR]));
+        sub.set(t::SAMPLES_PER_PIXEL, Value::Short(vec![3]));
+        sub.set(t::PLANAR_CONFIGURATION, Value::Short(vec![1]));
+        sub.set(t::YCBCR_SUBSAMPLING, Value::Short(self.subsampling.to_vec()));
+        // the preview is rendered upright (the picture, edits and orientation applied)
+        sub.set(t::ORIENTATION, Value::Short(vec![1]));
+        sub.set(t::PREVIEW_COLOR_SPACE, Value::Long(vec![1]));
+        sub.set_image(ImageData::Strips { rows_per_strip: self.height, strips: vec![self.jpeg.clone()] });
+        Ok(sub)
+    }
+}
+
 /// Serialise `raw` as a DNG.
 pub fn write_dng(raw: &RawImage, opts: &DngWriteOptions) -> Result<Vec<u8>> {
+    write_dng_with_preview(raw, opts, None)
+}
+
+/// [`write_dng`] with an embedded JPEG preview.
+pub fn write_dng_with_preview(raw: &RawImage, opts: &DngWriteOptions, preview: Option<&DngPreview>) -> Result<Vec<u8>> {
     raw.validate()?;
     let (w, h, cpp) = (raw.width, raw.height, raw.cpp);
     let mut ifd = IfdBuilder::new();
@@ -473,6 +515,9 @@ pub fn write_dng(raw: &RawImage, opts: &DngWriteOptions) -> Result<Vec<u8>> {
                 }
             }
         }
+    }
+    if let Some(p) = preview {
+        ifd.add_sub_ifd(p.ifd()?);
     }
     Ok(TiffWriter::new(opts.order, false).write(&[ifd])?)
 }

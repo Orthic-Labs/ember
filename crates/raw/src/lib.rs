@@ -52,7 +52,9 @@ mod unpack;
 mod vendor;
 
 pub use demosaic::{Method, demosaic};
-pub use dngwrite::{DngCompression, DngWriteOptions, jxl_distance_from_quality, write_dng, write_rendered_dng, write_rendered_dng_with};
+pub use dngwrite::{
+    DngCompression, DngPreview, DngWriteOptions, jxl_distance_from_quality, write_dng, write_dng_with_preview, write_rendered_dng, write_rendered_dng_with,
+};
 pub use lightcraft_color::Mat3;
 pub use lightcraft_geom::Orientation;
 pub use lightcraft_meta::Metadata;
