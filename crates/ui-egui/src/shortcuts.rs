@@ -316,14 +316,17 @@ fn matches(i: &egui::InputState, m: Modifiers, k: Key) -> bool {
     })
 }
 
-/// Grid-only meanings of default keys. Brackets rate in grids (Detail keeps resizing the brush), and
-/// `\` toggles the filter bar in grids (Show Original elsewhere). Remapped brush keys retain their
-/// brush action, and a saved assignment of either key to another command takes precedence over this default.
-fn grid_bracket_command(keymap: &Keymap, grid: bool, id: &'static str, shortcut: (Modifiers, Key)) -> Option<&'static str> {
-    let command = match (grid, id, shortcut) {
-        (true, "brush.smaller", (m, Key::OpenBracket)) if m == Modifiers::NONE => "photo.decreaseRating",
-        (true, "brush.larger", (m, Key::CloseBracket)) if m == Modifiers::NONE => "photo.increaseRating",
-        (true, "view.showOriginal", (m, Key::Backslash)) if m == Modifiers::NONE => "view.filterBar",
+/// Context meanings of default keys. Brackets rate in grids (Detail keeps resizing the brush), and
+/// `\` toggles the filter bar in grids (Show Original elsewhere). Z picks in grids (Detail zooms), and H
+/// hides the mask pins in the Masking panel (elsewhere it removes the panel). Remapped brush keys retain
+/// their brush action, and a saved assignment of either key to another command takes precedence over this default.
+fn grid_bracket_command(keymap: &Keymap, grid: bool, masking: bool, id: &'static str, shortcut: (Modifiers, Key)) -> Option<&'static str> {
+    let command = match (grid, masking, id, shortcut) {
+        (true, _, "brush.smaller", (m, Key::OpenBracket)) if m == Modifiers::NONE => "photo.decreaseRating",
+        (true, _, "brush.larger", (m, Key::CloseBracket)) if m == Modifiers::NONE => "photo.increaseRating",
+        (true, _, "view.showOriginal", (m, Key::Backslash)) if m == Modifiers::NONE => "view.filterBar",
+        (true, _, "view.zoomToggle", (m, Key::Z)) if m == Modifiers::NONE => "photo.pick",
+        (_, true, "panel.remove", (m, Key::H)) if m == Modifiers::NONE => "view.maskPins",
         _ => return Some(id),
     };
     if keymap.iter().any(|(other, sc)| other != id && find_bindable(other).is_some() && parse(sc) == Some(shortcut)) { None } else { Some(command) }
@@ -378,6 +381,7 @@ pub fn handle(app: &mut LightcraftApp, ctx: &egui::Context) {
     let mut aliased: Vec<(&str, serde_json::Value)> = Vec::new();
     let keymap = &app.ui.settings.keymap;
     let grid = library_grid(app);
+    let masking = app.ui.right == crate::state::RightPanel::Masking;
     // keys the user gave to a command: the fixed bindings below (aliases, ratings) yield to them
     let taken: Vec<(Modifiers, Key)> = keymap.values().filter_map(|s| parse(s)).collect();
     // the Classic layer's keys (bare letters) that no user assignment has taken: (modifiers, key, shortcut, command)
@@ -403,7 +407,7 @@ pub fn handle(app: &mut LightcraftApp, ctx: &egui::Context) {
                 && !classic.iter().any(|(cm, ck, _, _)| (*cm, *ck) == (m, k))
                 && !(k == Key::Escape && popup_open)
                 && matches(i, m, k)
-                && let Some(id) = grid_bracket_command(keymap, grid, b.id, (m, k))
+                && let Some(id) = grid_bracket_command(keymap, grid, masking, b.id, (m, k))
             {
                 fire.push(id.to_string());
             }
@@ -976,6 +980,36 @@ mod tests {
         assert_eq!(h.app.ui.filter_bar, filter);
         key(&mut h, "\\", false);
         assert_eq!(h.app.ui.before_after, BeforeAfter::Off);
+    }
+
+    #[test]
+    fn z_picks_in_grids_and_zooms_in_detail() {
+        use crate::state::{ViewMode, Zoom};
+        use lightcraft_catalog::{Flag, PhotoId};
+        let mut h = library();
+        key(&mut h, "Z", false);
+        assert_eq!(h.app.session.catalog.photo(PhotoId(1)).unwrap().flag, Flag::Pick);
+        assert_eq!(h.app.ui.zoom, Zoom::Fit);
+        h.app.ui.view = ViewMode::Detail;
+        key(&mut h, "Z", false);
+        assert_ne!(h.app.ui.zoom, Zoom::Fit);
+        assert_eq!(h.app.session.catalog.photo(PhotoId(1)).unwrap().flag, Flag::Pick);
+    }
+
+    #[test]
+    fn h_hides_mask_pins_in_the_masking_panel_and_removes_the_panel_elsewhere() {
+        use crate::state::RightPanel;
+        let mut h = library();
+        h.app.ui.right = RightPanel::Masking;
+        let pins = h.app.ui.mask_pins;
+        key(&mut h, "H", false);
+        assert_eq!(h.app.ui.mask_pins, !pins);
+        assert_eq!(h.app.ui.right, RightPanel::Masking);
+        key(&mut h, "H", false);
+        assert_eq!(h.app.ui.mask_pins, pins);
+        h.app.ui.right = RightPanel::None;
+        key(&mut h, "H", false);
+        assert_eq!(h.app.ui.right, RightPanel::Remove);
     }
 
     #[test]
