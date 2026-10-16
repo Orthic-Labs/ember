@@ -360,8 +360,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 }
                 Dialog::AllMetadata { title, rows, search } => {
                     ui.label(egui::RichText::new(title.as_str()).color(t.text_label));
-                    let r = ui.add(egui::TextEdit::singleline(search).hint_text(crate::i18n::tr("Filter fields")).desired_width(f32::INFINITY));
-                    crate::widgets::register(ui.ctx(), "field:metadataSearch", r.rect);
+                    crate::text_field::TextField::singleline("field:metadataSearch", search).hint(crate::i18n::tr("Filter fields")).width(f32::INFINITY).show(ui);
                     let q = search.trim().to_lowercase();
                     let keep = |n: &str, v: &str| q.is_empty() || n.to_lowercase().contains(&q) || v.to_lowercase().contains(&q);
                     let mut groups: Vec<(String, Vec<(String, String)>)> = Vec::new();
@@ -403,8 +402,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     });
                 }
                 Dialog::SmartRules { id, name, rules, .. } => {
-                    let r = ui.add(egui::TextEdit::singleline(name).hint_text(crate::i18n::tr("Name")).desired_width(f32::INFINITY));
-                    crate::widgets::register(ui.ctx(), "field:smartName", r.rect);
+                    crate::text_field::TextField::singleline("field:smartName", name).hint(crate::i18n::tr("Name")).width(f32::INFINITY).show(ui);
                     ui.add_space(6.0);
                     // the folder an album made from a folder view carries is not in the editor, but it counts
                     let folder = id.and_then(|id| app.session.catalog.album(lightcraft_catalog::AlbumId(id))).and_then(|a| a.smart.as_deref().and_then(|f| f.library_folder.clone()));
@@ -451,8 +449,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     let params = match mode.as_str() {
                         "set" => {
                             field(ui, "New time", |ui| {
-                                let r = ui.add(egui::TextEdit::singleline(time).hint_text("2026-09-30 14:05:00").desired_width(f32::INFINITY));
-                                crate::widgets::register(ui.ctx(), "field:captureTime", r.rect);
+                                crate::text_field::TextField::singleline("field:captureTime", time).hint("2026-09-30 14:05:00").width(f32::INFINITY).show(ui);
                             });
                             json!({"time": time})
                         }
@@ -509,13 +506,11 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                         field(ui, &colour, |ui| {
                             let (r, _) = ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
                             ui.painter().circle_filled(r.center(), 6.0, crate::panels::grid::label_color(*l));
-                            let te = ui.add(egui::TextEdit::singleline(&mut names[i]).hint_text(colour.as_str()).desired_width(f32::INFINITY));
-                            crate::widgets::register(ui.ctx(), format!("field:labelName-{}", colour.to_lowercase()), te.rect);
+                            crate::text_field::TextField::singleline(&format!("field:labelName-{}", colour.to_lowercase()), &mut names[i]).hint(colour.as_str()).width(f32::INFINITY).show(ui);
                         });
                     }
                     field(ui, "Save as set", |ui| {
-                        let te = ui.add(egui::TextEdit::singleline(save_as).hint_text(crate::i18n::tr("Optional name")).desired_width(f32::INFINITY));
-                        crate::widgets::register(ui.ctx(), "field:labelSetName", te.rect);
+                        crate::text_field::TextField::singleline("field:labelSetName", save_as).hint(crate::i18n::tr("Optional name")).width(f32::INFINITY).show(ui);
                     });
                     ui.label(
                         egui::RichText::new(crate::i18n::tr("Names appear in the label menu, the filter bar and the Info panel, and are written to XMP. Empty = the colour's name."))
@@ -525,12 +520,11 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                 Dialog::Rename { template, start } => {
                     let n = app.session.selected().len();
                     ui.label(egui::RichText::new(crate::i18n::tr_format!("{n} photo{}", if n == 1 { "" } else { "s" }, n = n)).color(t.text_dim));
-                    let template_id = egui::Id::new("rename-template");
+                    let template_id = crate::text_field::id("field:renameTemplate");
                     let tags_open = field(ui, "Template", |ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
                         let w = crate::import::tag_field_width(ui);
-                        let r = ui.add(egui::TextEdit::singleline(template).id(template_id).hint_text("{name}").desired_width(w));
-                        crate::widgets::register(ui.ctx(), "field:renameTemplate", r.rect);
+                        crate::text_field::TextField::singleline("field:renameTemplate", template).hint("{name}").width(w).show(ui);
                         crate::import::tag_toggle(ui, "renameTemplate")
                     });
                     if tags_open {
@@ -626,8 +620,8 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                     }
                 }
                 Dialog::CreatePreset { name, group, groups } => {
-                    ui.add(egui::TextEdit::singleline(name).hint_text(crate::i18n::tr("Preset name")).desired_width(f32::INFINITY));
-                    ui.add(egui::TextEdit::singleline(group).hint_text(crate::i18n::tr("Group")).desired_width(f32::INFINITY));
+                    crate::text_field::TextField::singleline("field:presetName", name).hint(crate::i18n::tr("Preset name")).width(f32::INFINITY).show(ui);
+                    crate::text_field::TextField::singleline("field:presetGroup", group).hint(crate::i18n::tr("Group")).width(f32::INFINITY).show(ui);
                     ui.label(egui::RichText::new(crate::i18n::tr("Settings to include")).color(t.text_dim));
                     group_checklist(ui, "presetInclude", groups);
                 }
@@ -857,7 +851,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                                     {
                                         wm.image = f;
                                     }
-                                    ui.add(egui::TextEdit::singleline(&mut wm.image).hint_text("logo.png").desired_width(ui.available_width()));
+                                    crate::text_field::TextField::singleline("field:exportWatermarkImage", &mut wm.image).hint("logo.png").width(ui.available_width()).show(ui);
                                 });
                             });
                             let mut width = wm.image_width as f64 * 100.0;
@@ -867,7 +861,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                         } else {
                             choices(ui, app.ui.language.tr("Text direction"), "exportWmOrientation", &[(false, app.ui.language.tr("Horizontal text")), (true, app.ui.language.tr("Vertical text"))], &mut wm.vertical);
                             field(ui, "Text", |ui| {
-                                ui.add(egui::TextEdit::multiline(&mut wm.text).desired_rows(2).hint_text(crate::i18n::tr("© Your Name")).desired_width(f32::INFINITY))
+                                crate::text_field::TextField::multiline("field:exportWatermarkText", &mut wm.text).rows(2).hint(crate::i18n::tr("© Your Name")).width(f32::INFINITY).show(ui).response
                             });
                         }
                         choices(
@@ -915,11 +909,11 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                         use lightcraft_engine::export::DngCompression as Z;
                         choices(ui, "Compression", "exportDngCompression", &[(Z::Lossless, "Lossless"), (Z::Deflate, "ZIP"), (Z::Uncompressed, "None")], &mut opts.dng_compression);
                     }
-                    let naming_id = egui::Id::new("export-naming");
+                    let naming_id = crate::text_field::id("field:exportNaming");
                     let tags_open = field(ui, "File name", |ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
                         let w = crate::import::tag_field_width(ui);
-                        ui.add(egui::TextEdit::singleline(&mut opts.naming).id(naming_id).hint_text("{name}-{seq}  ·  {date}  ·  {title}  ·  {folder}").desired_width(w));
+                        crate::text_field::TextField::singleline("field:exportNaming", &mut opts.naming).hint("{name}-{seq}  ·  {date}  ·  {title}  ·  {folder}").width(w).show(ui);
                         crate::import::tag_toggle(ui, "exportNaming")
                     });
                     if tags_open {
@@ -941,11 +935,11 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                             {
                                 *dir = d;
                             }
-                            ui.add(egui::TextEdit::singleline(dir).desired_width(ui.available_width()));
+                            crate::text_field::TextField::singleline("field:exportFolder", dir).width(ui.available_width()).show(ui);
                         });
                     });
                     field(ui, "Subfolder", |ui| {
-                        ui.add(egui::TextEdit::singleline(&mut opts.subfolder).hint_text(crate::i18n::tr("none")).desired_width(f32::INFINITY))
+                        crate::text_field::TextField::singleline("field:exportSubfolder", &mut opts.subfolder).hint(crate::i18n::tr("none")).width(f32::INFINITY).show(ui).response
                     });
                     use lightcraft_engine::export::Conflict as K;
                     choices(
@@ -962,7 +956,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                         crate::widgets::register(ui.ctx(), "exportAddToPhotos", r.rect);
                         if opts.add_to_photos {
                             field(ui, "Album", |ui| {
-                                ui.add(egui::TextEdit::singleline(&mut opts.photos_album).hint_text(crate::i18n::tr("none")).desired_width(f32::INFINITY))
+                                crate::text_field::TextField::singleline("field:exportPhotosAlbum", &mut opts.photos_album).hint(crate::i18n::tr("none")).width(f32::INFINITY).show(ui).response
                             });
                             ui.label(
                                 egui::RichText::new(crate::i18n::tr("The first time, macOS asks whether Ember may control Photos."))
@@ -990,7 +984,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
                                     Err(e) => app.toast(ui.ctx(), e),
                                 }
                             }
-                            ui.add(egui::TextEdit::singleline(preset_name).hint_text(crate::i18n::tr("Preset name")).desired_width(ui.available_width()));
+                            crate::text_field::TextField::singleline("field:exportPresetName", preset_name).hint(crate::i18n::tr("Preset name")).width(ui.available_width()).show(ui);
                         });
                     });
                 }
