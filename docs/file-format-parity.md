@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (Render to DNG catalog command, #188)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (lossy JPEG XL DNG, #79, #188)
 
 Every format reference editor reads or writes, with our support, fidelity and tests. Camera raw formats are
 deep enough to have their own document: [raw-parity.md](raw-parity.md).
@@ -24,8 +24,8 @@ import and export formats. Ours come from `crates/codecs/src/sniff.rs`, `crates/
 | JPEG XL | ✅ | ✅ | ✅ (`jxl-oxide`) incl. DNG 1.7 JXL tiles | ✅ lossy / lossless, 8/16-bit, PQ HDR (`jixel`, native only; ⬜ web) | `crates/engine/src/tests_export.rs` |
 | WebP | not in its document types | ⬜ | ✅ | ✅ | beyond target |
 | GIF, BMP | ⬜ | ⬜ | ✅ | ⬜ | beyond target |
-| DNG (from raw) | ✅ | ✅ incl. lossy, embedded original | ✅ | ✅ uncompressed or LJ92; ⬜ lossy DNG, embedded original | `crates/raw/src/dngwrite.rs` |
-| Render to DNG (15.5) | — | ✅ | — | ✅ export format "Rendered DNG" and the catalog command `photo.renderToDng` (linear float DNG, edit baked in, added next to the original and stacked) | `crates/raw/src/dngwrite.rs` (`write_rendered_dng`) |
+| DNG (from raw) | ✅ | ✅ incl. lossy, embedded original | ✅ | ✅ uncompressed, LJ92 or deflate; ⬜ lossy raw (CFA) DNG, embedded original | `crates/raw/src/dngwrite.rs` |
+| Render to DNG (15.5) | — | ✅ | — | ✅ export format "Rendered DNG" and the catalog command `photo.renderToDng` (linear float DNG, edit baked in, added next to the original and stacked); lossy JPEG XL option (`dngCompression: lossy`, DNG 1.7 Compression 52546 tiles via `jixel`, native only, CI verification pending) | `crates/raw/src/dngwrite.rs` (`write_rendered_dng_with`) |
 | Original + sidecar | — | ✅ | — | ✅ | |
 | HDR gain map JPEG (ISO 21496-1) | ✅ | ✅ | ✅ (gain map read) | ✅ | `crates/codecs/src/gainmap.rs` |
 | PQ / HLG HDR | ✅ | ✅ AVIF, JXL, TIFF | — | 🟡 PQ AVIF, PQ JPEG XL, float TIFF; no HLG | |
@@ -63,13 +63,13 @@ import and export formats. Ours come from `crates/codecs/src/sniff.rs`, `crates/
 
 | Part | Weight | Ready for real work | Kind |
 |---|---:|---:|---|
-| Standard image import / export | 35% | ~85% | estimated (table above; missing: AVIF read, PSD write, lossy DNG) |
+| Standard image import / export | 35% | ~85% | estimated (table above; missing: AVIF read, PSD write, lossy raw DNG) |
 | Sidecars, metadata, presets | 25% | ~85% | estimated |
 | reference editor catalog migration | 25% | ~50% | estimated (one-way, approximate rendering of unsupported settings) |
 | HDR, print, video output | 15% | ~35% | estimated |
 | **Non-raw file formats** | 100% | **~70%** | estimated; raw is in [raw-parity.md](raw-parity.md) (~50%) |
 
-Remaining: **26–47 h** (AVIF decode 8–15 h if a permissive decoder is written or found; PSD write 4–8 h; lossy DNG and Render to DNG 4–8 h; HLG 3–5 h; catalog import depth 8–12 h).
+Remaining: **26–47 h** (AVIF decode 8–15 h if a permissive decoder is written or found; PSD write 4–8 h; lossy raw (CFA) DNG 3–6 h; HLG 3–5 h; catalog import depth 8–12 h).
 
 ## Revision history
 
@@ -79,3 +79,4 @@ Remaining: **26–47 h** (AVIF decode 8–15 h if a permissive decoder is writte
 | 2026-10-10 | minor | JPEG XL export (#247): JXL write ✅ (native only), PQ JPEG XL HDR |
 | 2026-10-12 | minor | Render to DNG: "Rendered DNG" export format (linear 16-bit float DNG of the rendered photo) |
 | 2026-10-16 | minor | Render to DNG: `photo.renderToDng` catalog command; AVIF decode still blocked (no permissive pure-Rust AV1 decoder in the lockfile: rav1e/ravif are encoders); lossy DNG output not started |
+| 2026-10-16 | minor | Lossy JPEG XL DNG for Render to DNG (`dngCompression: lossy`, DNG 1.7 tags JXLDistance/Effort/DecodeSpeed); raw (CFA) lossy DNG still open |

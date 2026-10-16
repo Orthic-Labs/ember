@@ -23,6 +23,48 @@ pub enum DngCompression {
         tile: u32,
         half: bool,
     },
+    /// Lossy JPEG XL tiles (DNG 1.7, Compression 52546) of `tile × tile` pixels, 16-bit float, VarDCT.
+    /// `quality` is 1..=100 (90 is about visually lossless). Only for 3-component linear float images
+    /// with black level 0 and white level 1 (the Render to DNG layout); samples are clipped to 0..=1.
+    /// The IFD carries DNGVersion 1.7.1.0, the informational `JXLDistance`, `JXLEffort` and
+    /// `JXLDecodeSpeed` tags.
+    JxlLossy {
+        tile: u32,
+        quality: u8,
+    },
+}
+
+/// Butteraugli distance of a 1..=100 quality (the libjxl scale), recorded in `JXLDistance`.
+pub fn jxl_distance_from_quality(quality: u8) -> f32 {
+    let q = f32::from(quality.clamp(1, 100));
+    if q >= 100.0 {
+        0.0
+    } else if q >= 30.0 {
+        0.1 + (100.0 - q) * 0.09
+    } else {
+        53.0 / 3000.0 * q * q - 23.0 / 20.0 * q + 25.0
+    }
+}
+
+/// Encode one `w × h` RGB float tile (0..=1, linear) as a lossy JPEG XL codestream.
+#[cfg(all(feature = "jxl-encode", not(target_arch = "wasm32")))]
+fn jxl_tile(px: &[f32], w: usize, h: usize, quality: u8) -> Result<Vec<u8>> {
+    use jixel::{ColorEncoding, EncodeConfig, Speed};
+    let c = EncodeConfig::default()
+        .with_quality(f32::from(quality.clamp(1, 100)))
+        .with_color_encoding(ColorEncoding::srgb_linear())
+        .with_speed(Speed::Fast)
+        // the decoder here refuses a lossy tile whose intensity target is above 255 nits
+        .with_intensity_target(255.0);
+    // jixel asserts internally: a panic is an export error, not a crash
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| jixel::encode_image_f16(px, w, h, &c)))
+        .map_err(|_| RawError::Corrupt("JPEG XL encoder panicked".into()))?
+        .map_err(|e| RawError::Corrupt(format!("JPEG XL encode: {e}")))
+}
+
+#[cfg(not(all(feature = "jxl-encode", not(target_arch = "wasm32"))))]
+fn jxl_tile(_px: &[f32], _w: usize, _h: usize, _quality: u8) -> Result<Vec<u8>> {
+    Err(RawError::Unsupported("JPEG XL encoding is not available in this build".into()))
 }
 
 /// Software tag of the DNGs this writer makes. A bare "Ember" or "LightCraft" (the upstream name) marks older
@@ -110,8 +152,14 @@ pub fn write_dng(raw: &RawImage, opts: &DngWriteOptions) -> Result<Vec<u8>> {
     ifd.set(t::SAMPLES_PER_PIXEL, Value::Short(vec![cpp as u16]));
     ifd.set(t::PLANAR_CONFIGURATION, Value::Short(vec![1]));
     ifd.set(t::PHOTOMETRIC, Value::Short(vec![if raw.cfa.is_some() { photometric::CFA } else { photometric::LINEAR_RAW }]));
-    ifd.set(t::DNG_VERSION, Value::Byte(vec![1, 4, 0, 0]));
-    ifd.set(t::DNG_BACKWARD_VERSION, Value::Byte(vec![1, 3, 0, 0]));
+    if matches!(opts.compression, DngCompression::JxlLossy { .. }) {
+        // JPEG XL tiles need a reader that knows DNG 1.7
+        ifd.set(t::DNG_VERSION, Value::Byte(vec![1, 7, 1, 0]));
+        ifd.set(t::DNG_BACKWARD_VERSION, Value::Byte(vec![1, 7, 1, 0]));
+    } else {
+        ifd.set(t::DNG_VERSION, Value::Byte(vec![1, 4, 0, 0]));
+        ifd.set(t::DNG_BACKWARD_VERSION, Value::Byte(vec![1, 3, 0, 0]));
+    }
     let make = raw.metadata.make.as_deref().unwrap_or_default().trim();
     let model = raw.metadata.model.as_deref().unwrap_or_default().trim();
     if !make.is_empty() {
@@ -279,6 +327,45 @@ pub fn write_dng(raw: &RawImage, opts: &DngWriteOptions) -> Result<Vec<u8>> {
                 .collect();
             ifd.set_image(ImageData::Tiles { tile_width: tile as u32, tile_height: tile as u32, tiles });
         }
+        (RawData::F32(v), DngCompression::JxlLossy { tile, quality }) => {
+            let b = &raw.black;
+            let plain = cpp == 3
+                && raw.cfa.is_none()
+                && b.values.iter().all(|&x| x as f64 == 0.0)
+                && b.delta_h.is_empty()
+                && b.delta_v.is_empty()
+                && (0..cpp).all(|s| raw.white_at(s) == 1.0);
+            if !plain {
+                return Err(RawError::Unsupported("lossy JPEG XL DNG needs 3-component linear float data with black 0 and white 1".into()));
+            }
+            let tile = (tile.max(16) & !15) as usize;
+            ifd.set(t::BITS_PER_SAMPLE, Value::Short(vec![16; cpp]));
+            ifd.set(t::SAMPLE_FORMAT, Value::Short(vec![3; cpp]));
+            ifd.set(t::COMPRESSION, Value::Short(vec![compression::JPEG_XL]));
+            ifd.set(t::JXL_DISTANCE, Value::Float(vec![jxl_distance_from_quality(quality)]));
+            ifd.set(t::JXL_EFFORT, Value::Long(vec![3]));
+            ifd.set(t::JXL_DECODE_SPEED, Value::Long(vec![0]));
+            let (ta, td) = (w.div_ceil(tile), h.div_ceil(tile));
+            let tiles: Vec<Vec<u8>> = (0..ta * td)
+                .into_par_iter()
+                .map(|i| {
+                    let (tx, ty) = (i % ta * tile, i / ta * tile);
+                    let mut buf = Vec::with_capacity(tile * tile * cpp);
+                    for y in 0..tile {
+                        let sy = (ty + y).min(h - 1);
+                        for x in 0..tile {
+                            let sx = (tx + x).min(w - 1);
+                            for s in 0..cpp {
+                                let f = v[(sy * w + sx) * cpp + s];
+                                buf.push(if f.is_finite() { f.clamp(0.0, 1.0) } else { 0.0 });
+                            }
+                        }
+                    }
+                    jxl_tile(&buf, tile, tile, quality)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            ifd.set_image(ImageData::Tiles { tile_width: tile as u32, tile_height: tile as u32, tiles });
+        }
         (RawData::F32(v), _) => {
             ifd.set(t::BITS_PER_SAMPLE, Value::Short(vec![32; cpp]));
             ifd.set(t::SAMPLE_FORMAT, Value::Short(vec![3; cpp]));
@@ -342,6 +429,9 @@ pub fn write_dng(raw: &RawImage, opts: &DngWriteOptions) -> Result<Vec<u8>> {
                         .collect();
                     ifd.set_image(ImageData::Tiles { tile_width: tile as u32, tile_height: tile as u32, tiles });
                 }
+                DngCompression::JxlLossy { .. } => {
+                    return Err(RawError::Unsupported("lossy JPEG XL DNG needs floating-point linear data".into()));
+                }
                 DngCompression::Lj92 { tile } => {
                     let tile = (tile.max(2) & !1) as usize;
                     if tile > 65534 {
@@ -397,6 +487,22 @@ pub fn write_rendered_dng(
     metadata: &lightcraft_meta::Metadata,
     xmp: Option<String>,
 ) -> Result<Vec<u8>> {
+    write_rendered_dng_with(width, height, rgb, space, metadata, xmp, DngCompression::Deflate { tile: 256, half: true })
+}
+
+/// [`write_rendered_dng`] with a choice of compression: [`DngCompression::Deflate`] with `half` (the
+/// default; floats above 1 kept), [`DngCompression::Uncompressed`] (32-bit floats) or
+/// [`DngCompression::JxlLossy`] (samples clipped to 0..=1). Other choices store 32-bit floats as the
+/// raw writer does; `Lj92` is not for float data and writes them uncompressed.
+pub fn write_rendered_dng_with(
+    width: usize,
+    height: usize,
+    rgb: &[f32],
+    space: &lightcraft_color::RgbSpace,
+    metadata: &lightcraft_meta::Metadata,
+    xmp: Option<String>,
+    compression: DngCompression,
+) -> Result<Vec<u8>> {
     let n = width.checked_mul(height).and_then(|p| p.checked_mul(3)).ok_or(RawError::Limit("image too large"))?;
     if width == 0 || height == 0 || width > u32::MAX as usize || height > u32::MAX as usize {
         return Err(RawError::Corrupt(format!("cannot write a {width}×{height} DNG")));
@@ -436,5 +542,5 @@ pub fn write_rendered_dng(
         metadata: metadata.clone(),
     };
     let order = ByteOrder::Little;
-    write_dng(&raw, &DngWriteOptions { compression: DngCompression::Deflate { tile: 256, half: true }, order, xmp })
+    write_dng(&raw, &DngWriteOptions { compression, order, xmp })
 }

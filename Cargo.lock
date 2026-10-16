@@ -4854,6 +4854,7 @@ dependencies = [
 name = "lightcraft-raw"
 version = "0.7.0"
 dependencies = [
+ "jixel",
  "jpeg-encoder",
  "jxl-oxide",
  "lightcraft-color",

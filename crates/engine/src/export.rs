@@ -1020,7 +1020,7 @@ impl ExportOptions {
                 "jxlEffort" => one_of(k, v, &["fast", "normal"])?,
                 "dngCompression" => {
                     serde_json::from_value::<DngCompression>(v.clone())
-                        .map_err(|_| bad(format!("`{k}` must be one of lossless|deflate|uncompressed")))?;
+                        .map_err(|_| bad(format!("`{k}` must be one of lossless|deflate|uncompressed|lossy")))?;
                 }
                 "metadata" => parses(k, v, |s| MetadataPolicy::parse(s).is_some(), &["all", "allExceptCamera", "copyright", "none"])?,
                 "colorSpace" => {
@@ -1549,7 +1549,14 @@ pub fn encode_deep(img: &DeepImage, o: &ExportOptions, meta: Option<&Metadata>) 
         (ExportFormat::Psd, _) => encode::encode_psd(&e, &meta),
         (ExportFormat::RenderedDng, DeepSamples::F32(v)) => {
             let m = meta_src.cloned().unwrap_or_default();
-            return lightcraft_raw::write_rendered_dng(img.width, img.height, v, &img.space.rgb_space(), &m, xmp.clone()).map_err(|e| e.to_string());
+            let compression = match o.dng_compression {
+                DngCompression::Lossy => lightcraft_raw::DngCompression::JxlLossy { tile: 256, quality: o.quality },
+                DngCompression::Uncompressed => lightcraft_raw::DngCompression::Uncompressed,
+                // the render's floats are 16-bit half Deflate tiles, whichever lossless choice was made
+                DngCompression::Lossless | DngCompression::Deflate => lightcraft_raw::DngCompression::Deflate { tile: 256, half: true },
+            };
+            return lightcraft_raw::write_rendered_dng_with(img.width, img.height, v, &img.space.rgb_space(), &m, xmp.clone(), compression)
+                .map_err(|e| e.to_string());
         }
         (ExportFormat::Avif, DeepSamples::F32(v)) if img.space == OutputSpace::Rec2020 => {
             lightcraft_codecs::encode_avif_hdr(w, h, v, o.quality, 8, &meta, o.hdr_transfer.codec())
@@ -1841,6 +1848,7 @@ impl PreparedExport {
                     DngCompression::Lossless => lightcraft_raw::DngCompression::Lj92 { tile: 256 },
                     DngCompression::Deflate => lightcraft_raw::DngCompression::Deflate { tile: 256, half: false },
                     DngCompression::Uncompressed => lightcraft_raw::DngCompression::Uncompressed,
+                    DngCompression::Lossy => return Err(format!("{label}: lossy DNG is for Render to DNG; a raw DNG export is lossless")),
                 };
                 let dng = lightcraft_raw::write_dng(&raw, &lightcraft_raw::DngWriteOptions { xmp: Some(packet), compression, ..Default::default() })
                     .map_err(|e| e.to_string())?;
@@ -1924,6 +1932,9 @@ impl AfterExport {
 
     /// Like [`AfterExport::run`], without waiting: Photos works on a worker thread and the
     /// outcome is the running job (`{job, running: true, requested, album}`; its result comes
+    /// Lossy JPEG XL tiles (DNG 1.7; quality from [`ExportOptions::quality`]). Render to DNG only: a
+    /// raw (CFA) DNG export refuses it. Highlights above white are clipped.
+    Lossy,
     /// from `export.photosImports`, and the desktop app announces it). For a caller on the UI
     /// thread, which must not wait minutes for Photos.
     pub fn start(self, files: &[serde_json::Value]) -> Option<serde_json::Value> {

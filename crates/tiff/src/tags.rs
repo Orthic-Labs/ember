@@ -170,6 +170,12 @@ pub const CURRENT_PREVIEW_DATE_TIME: u16 = 50971;
 pub const OPCODE_LIST_1: u16 = 51008;
 pub const OPCODE_LIST_2: u16 = 51009;
 pub const OPCODE_LIST_3: u16 = 51022;
+/// DNG 1.7 JPEG XL: the Butteraugli distance the tiles were encoded at (FLOAT; informational).
+pub const JXL_DISTANCE: u16 = 52553;
+/// DNG 1.7 JPEG XL: the encoder effort, 1 (fastest) to 9 (LONG; informational).
+pub const JXL_EFFORT: u16 = 52554;
+/// DNG 1.7 JPEG XL: the encoder's decode-speed tier, 0 (default) to 4 (LONG; informational).
+pub const JXL_DECODE_SPEED: u16 = 52555;
 pub const NOISE_PROFILE: u16 = 51041;
 pub const DEFAULT_USER_CROP: u16 = 51125;
 pub const PROFILE_GAIN_TABLE_MAP: u16 = 52525;
