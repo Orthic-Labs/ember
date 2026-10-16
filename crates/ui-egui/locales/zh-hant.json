@@ -2179,5 +2179,11 @@
   "Power saving": "節能",
   "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "節能會優先使用內建顯示卡（如果有）。變更將在下次啟動 GPU 時生效。",
   "Look-alike groups": "相似臉孔分組",
-  "Name this person": "為此人命名"
+  "Name this person": "為此人命名",
+  "GPU adapter": "GPU 介面卡",
+  "Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts.": "如果這台機器有多張 GPU，依名稱選擇。變更會在下次啟動 GPU 時生效。",
+  "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.": "此資料夾無法使用（磁碟機是否已中斷連接？）。在它恢復或你選擇其他資料夾之前，縮圖會快取在資料庫中。",
+  "Thumbnail cache folder changed": "縮圖快取資料夾已變更",
+  "Thumbnail cache folder changed; moved {n}": "縮圖快取資料夾已變更；已移動 {n} 個",
+  "Thumbnails are a cache: they are rebuilt when missing, so the folder can be cleared or moved safely. It can't be inside the library's Originals.": "縮圖只是快取：缺少的會重新產生，因此可以安全地清空或移動該資料夾。它不能位於資料庫的 Originals 內。"
 }

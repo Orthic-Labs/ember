@@ -2180,5 +2180,11 @@
   "Power saving": "Tiết kiệm điện",
   "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Tiết kiệm điện ưu tiên GPU tích hợp nếu có. Thay đổi có hiệu lực lần GPU khởi động tiếp theo.",
   "Look-alike groups": "Nhóm khuôn mặt giống nhau",
-  "Name this person": "Đặt tên cho người này"
+  "Name this person": "Đặt tên cho người này",
+  "GPU adapter": "Bộ điều hợp GPU",
+  "Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts.": "Chọn GPU theo tên khi máy này có nhiều hơn một GPU. Thay đổi có hiệu lực lần GPU khởi động tiếp theo.",
+  "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.": "Thư mục này không khả dụng (ổ đĩa đã ngắt kết nối?). Ảnh thu nhỏ được lưu đệm trong thư viện cho đến khi thư mục trở lại hoặc bạn chọn thư mục khác.",
+  "Thumbnail cache folder changed": "Đã đổi thư mục bộ nhớ đệm ảnh thu nhỏ",
+  "Thumbnail cache folder changed; moved {n}": "Đã đổi thư mục bộ nhớ đệm ảnh thu nhỏ; đã chuyển {n}",
+  "Thumbnails are a cache: they are rebuilt when missing, so the folder can be cleared or moved safely. It can't be inside the library's Originals.": "Ảnh thu nhỏ là bộ nhớ đệm: ảnh bị thiếu sẽ được tạo lại, nên có thể xóa hoặc chuyển thư mục an toàn. Thư mục này không được nằm trong Originals của thư viện."
 }

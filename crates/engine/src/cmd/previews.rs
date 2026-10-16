@@ -472,6 +472,89 @@ fn smart_location(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(r)
 }
 
+/// The thumbnail cache folder of this library, as JSON: the folder in use, whether one was chosen,
+/// whether it can be used now (a chosen folder that is not there is `available: false`), and what it holds.
+#[cfg(not(target_arch = "wasm32"))]
+fn cache_location_json(s: &Session, lib_dir: &std::path::Path) -> Value {
+    let default = lib_dir.join("thumbs");
+    let originals = lib_dir.join("Originals");
+    let path = crate::cache_location::in_use(&default, s.cache_dir.as_deref(), &originals);
+    let bytes = lightcraft_preview::DiskCache::new(&path, 0).size();
+    json!({
+        "path": path.to_string_lossy(),
+        "default": default.to_string_lossy(),
+        "custom": s.cache_dir.is_some(),
+        "available": s.cache_dir.as_deref().is_none_or(|d| d == path.as_path()),
+        "bytes": bytes,
+    })
+}
+
+/// Show or change the folder of the thumbnail cache (per library). The cached thumbnails move with
+/// it (`existing`), and the new folder is used at once. Refused inside the library's originals.
+#[cfg(not(target_arch = "wasm32"))]
+fn cache_location(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "library.cacheLocation";
+    let lib_dir = s.library.as_ref().filter(|l| l.on_disk).map(|l| l.dir.clone()).ok_or_else(|| bad(C, "the thumbnail cache folder needs a library on disk"))?;
+    let reset = p.get("reset").and_then(Value::as_bool).unwrap_or(false);
+    let chosen = str_param(p, "path").filter(|x| !x.trim().is_empty());
+    if !reset && chosen.is_none() {
+        return Ok(cache_location_json(s, &lib_dir));
+    }
+    let default = lib_dir.join("thumbs");
+    let originals = lib_dir.join("Originals");
+    let (new_dir, custom) = match chosen {
+        Some(x) if !reset => {
+            let d = std::path::PathBuf::from(x.trim());
+            if !crate::cache_location::plain_absolute(&d) {
+                return Err(bad(C, "path must be an absolute folder path without .."));
+            }
+            (d.clone(), (d != default).then_some(d))
+        }
+        _ => (default.clone(), None),
+    };
+    if custom == s.cache_dir {
+        return Ok(cache_location_json(s, &lib_dir));
+    }
+    if let Some(d) = &custom {
+        crate::cache_location::check_outside_originals(d, &originals).map_err(|e| bad(C, e))?;
+    }
+    // the new place must work before anything moves; a missing drive is never recreated
+    crate::smart::check_writable(&new_dir).map_err(|e| bad(C, e))?;
+    let current = crate::cache_location::in_use(&default, s.cache_dir.as_deref(), &originals);
+    let same = current == new_dir;
+    let old = lightcraft_preview::DiskCache::new(&current, 0);
+    let held = old.size();
+    let existing = match str_param(p, "existing") {
+        Some(x) => Some(crate::smart::Existing::parse(x).ok_or_else(|| bad(C, "existing must be move, leave or discard"))?),
+        None if held == 0 || same => Some(crate::smart::Existing::Leave),
+        None => None,
+    };
+    let Some(existing) = existing else {
+        return Err(bad(C, format!("{held} bytes of thumbnails are in {}: pass existing = move, leave or discard", current.display())));
+    };
+    let (handled, failed) = if same {
+        (0, Vec::new())
+    } else {
+        match existing {
+            crate::smart::Existing::Move => old.move_to(&new_dir),
+            crate::smart::Existing::Discard => {
+                old.clear();
+                (0, Vec::new())
+            }
+            crate::smart::Existing::Leave => (0, Vec::new()),
+        }
+    };
+    s.cache_dir = custom;
+    let attach = crate::cache_location::at_open(&default, s.cache_dir.as_deref(), &originals);
+    let bytes = s.cache_bytes();
+    s.media.attach_disk_cache(&attach, bytes);
+    s.save_prefs()?;
+    let mut r = cache_location_json(s, &lib_dir);
+    r["handled"] = json!(handled);
+    r["failed"] = json!(failed);
+    Ok(r)
+}
+
 /// Whether photo `id` has a smart preview.
 pub fn has_smart_preview(s: &Session, id: lightcraft_catalog::PhotoId) -> bool {
     match (&s.media.smart_dir, s.catalog.photo(id)) {
@@ -501,6 +584,16 @@ pub fn specs() -> Vec<CommandSpec> {
             "{path?: absolute folder, reset?: bool, existing?: move|leave|discard} — without path/reset: where this library keeps its smart previews → {path, default, custom, available, count, bytes}. With path (or reset = back to `Smart Previews` in the library): use that folder instead (must exist or have an existing parent, and accept writes; never falls back to another drive). Smart previews already in the old folder need `existing`: move them, leave them (build again), or discard them → also {handled, failed}",
             always,
             smart_location
+        ),
+        #[cfg(not(target_arch = "wasm32"))]
+        cmd!(
+            "library.cacheLocation",
+            "Thumbnail Cache Location",
+            [],
+            None,
+            "{path?: absolute folder, reset?: bool, existing?: move|leave|discard} — without path/reset: where this library keeps its thumbnail cache → {path, default, custom, available, bytes}. With path (or reset = back to `thumbs` in the library): keep the cache there. The folder must not be inside, hold or be the library's Originals, and must exist or have an existing parent and accept writes; a chosen folder that is missing is not used until it is back. Thumbnails already in the old folder need `existing`: move them, leave them, or discard them (only cache files are touched) → also {handled, failed}",
+            always,
+            cache_location
         ),
         cmd!(query "photo.smartPreview", "Smart Preview Status", [], None, "{id?} → {smartPreview: bool, originalOnline: bool}", always, |s, p| {
             let id = s.targets(p)?.first().copied().ok_or_else(|| bad("photo.smartPreview", "no photo"))?;

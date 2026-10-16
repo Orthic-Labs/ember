@@ -290,22 +290,48 @@ fn module_source(m: &Module, consts: &str) -> String {
     s
 }
 
+/// The wgpu instance for `backends`: only these drivers are loaded (`crate::backend`).
+fn new_instance(backends: wgpu::Backends) -> wgpu::Instance {
+    let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
+    // only these drivers are loaded (`crate::backend`: never Vulkan on Windows unless asked)
+    desc.backends = backends;
+    // DX12 shaders compile with FXC (issue #471)
+    desc.backend_options = crate::backend::backend_options();
+    // no indirect-call validation pipeline: Intel Metal fails to compile it (#250)
+    desc.flags = crate::backend::instance_flags_from_env(desc.flags);
+    wgpu::Instance::new(desc)
+}
+
+/// The adapters of `instance` that can render (software ones left out), in the order wgpu lists them.
+fn usable_adapters(instance: &wgpu::Instance, backends: wgpu::Backends) -> Vec<wgpu::Adapter> {
+    instance.enumerate_adapters(backends).into_iter().filter(|a| a.get_info().device_type != wgpu::DeviceType::Cpu).collect()
+}
+
+/// The names of the usable adapters for `backends` (see [`crate::adapters`]).
+pub fn adapter_names(backends: wgpu::Backends) -> Vec<String> {
+    usable_adapters(&new_instance(backends), backends).iter().map(|a| a.get_info().name).collect()
+}
+
 impl Gpu {
-    /// Create a device on the best available adapter (no software fallback), or why there is none.
+    /// Create a device on the chosen adapter (by name when one is chosen and present, else the default
+    /// choice; no software fallback), or why there is none.
     pub fn new(backends: wgpu::Backends) -> Result<Gpu, String> {
-        let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
-        // only these drivers are loaded (`crate::backend`: never Vulkan on Windows unless asked)
-        desc.backends = backends;
-        // DX12 shaders compile with FXC (issue #471)
-        desc.backend_options = crate::backend::backend_options();
-        // no indirect-call validation pipeline: Intel Metal fails to compile it (#250)
-        desc.flags = crate::backend::instance_flags_from_env(desc.flags);
-        let instance = wgpu::Instance::new(desc);
+        let instance = new_instance(backends);
         let power_preference = if crate::low_power() { wgpu::PowerPreference::LowPower } else { wgpu::PowerPreference::HighPerformance };
-        let adapter = pollster::block_on(
-            instance.request_adapter(&wgpu::RequestAdapterOptions { power_preference, ..Default::default() }),
-        )
-        .map_err(|e| format!("no GPU adapter among {backends:?} ({e})"))?;
+        let by_name = crate::adapter_choice().and_then(|wanted| {
+            let found = usable_adapters(&instance, backends);
+            let names: Vec<String> = found.iter().map(|a| a.get_info().name).collect();
+            let index = crate::pick_adapter(&names, &wanted);
+            if index.is_none() {
+                log::warn!("gpu: no adapter named {wanted:?} among {names:?}; using the default choice");
+            }
+            index.and_then(|i| found.into_iter().nth(i))
+        });
+        let adapter = match by_name {
+            Some(adapter) => adapter,
+            None => pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions { power_preference, ..Default::default() }))
+                .map_err(|e| format!("no GPU adapter among {backends:?} ({e})"))?,
+        };
         let info = adapter.get_info();
         if info.device_type == wgpu::DeviceType::Cpu {
             log::info!("gpu: only a software adapter ({}), using the CPU pipeline", info.name);

@@ -176,6 +176,33 @@ impl DiskCache {
         }
         *self.total.lock().unwrap_or_else(|e| e.into_inner()) = Some(0);
     }
+
+    /// Move this cache's files into `to`, in the same layout: the thumbnails stay valid (they are
+    /// keyed by content). Only cache files are touched. Returns how many moved and what failed.
+    pub fn move_to(&self, to: &Path) -> (usize, Vec<String>) {
+        let (mut moved, mut failed) = (0, Vec::new());
+        for (p, _, _) in self.scan() {
+            let (Some(shard), Some(name)) = (p.parent().and_then(Path::file_name), p.file_name()) else { continue };
+            let dir = to.join(shard);
+            let dst = dir.join(name);
+            let done = std::fs::create_dir_all(&dir).and_then(|()| {
+                if dst.exists() {
+                    // the same key is there already (same content): the old copy is redundant
+                    std::fs::remove_file(&p)
+                } else if std::fs::rename(&p, &dst).is_ok() {
+                    Ok(())
+                } else {
+                    std::fs::copy(&p, &dst).and_then(|_| std::fs::remove_file(&p))
+                }
+            });
+            match done {
+                Ok(()) => moved += 1,
+                Err(e) => failed.push(format!("{}: {e}", p.display())),
+            }
+        }
+        *self.total.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        (moved, failed)
+    }
 }
 
 /// Whether `p` is a directory itself, not a symlink or Windows reparse point to one.

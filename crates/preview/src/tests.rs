@@ -124,6 +124,23 @@ fn disk_cache_roundtrip_and_prune() {
 }
 
 #[test]
+fn disk_cache_moves_its_files_and_leaves_the_rest_of_the_folder() {
+    let (a, b) = (temp_dir("move-from"), temp_dir("move-to"));
+    std::fs::create_dir_all(&a).unwrap();
+    let d = DiskCache::new(&a, 1 << 30);
+    let k = hash_bytes(b"moved thumbnail");
+    d.put(k, &gradient(16, 16, 3));
+    std::fs::write(a.join("notes.txt"), b"not a cache file").unwrap();
+    let (moved, failed) = d.move_to(&b);
+    assert_eq!((moved, failed.len()), (1, 0));
+    assert!(d.get(k).is_none());
+    assert!(DiskCache::new(&b, 1 << 30).get(k).is_some());
+    assert!(a.join("notes.txt").exists(), "a file that is not a cache file stays");
+    let _ = std::fs::remove_dir_all(&a);
+    let _ = std::fs::remove_dir_all(&b);
+}
+
+#[test]
 fn disk_cache_overwrite_accounts_for_replaced_jpeg_only_once() {
     let dir = temp_dir("overwrite");
     let cache = DiskCache::new(&dir, 1 << 20);

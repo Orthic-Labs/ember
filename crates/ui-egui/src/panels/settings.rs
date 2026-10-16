@@ -440,6 +440,21 @@ fn performance_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
         }
     });
     hint(ui, t, crate::i18n::tr("Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts."));
+    if app.ui.settings.gpu {
+        row(ui, t, crate::i18n::tr("GPU adapter"), |ui| {
+            // the adapters by name (listed once per run); index 0 is the default choice
+            let names = gpu::adapters();
+            let mut index = names.iter().position(|n| *n == app.ui.settings.gpu_adapter).map_or(0, |i| i + 1);
+            let auto = crate::i18n::tr("Automatic");
+            let opts: Vec<(usize, &str)> = std::iter::once((0, auto)).chain(names.iter().enumerate().map(|(i, n)| (i + 1, n.as_str()))).collect();
+            if choices(ui, "settingsGpuAdapter", &opts, &mut index) {
+                let name = index.checked_sub(1).and_then(|i| names.get(i)).cloned().unwrap_or_default();
+                app.ui.settings.gpu_adapter = name.clone();
+                let _ = app.run("app.gpu", json!({"adapter": name}));
+            }
+        });
+        hint(ui, t, crate::i18n::tr("Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts."));
+    }
     let status = if !gpu::available() {
         match gpu::unavailable_reason() {
             Some(why) => crate::i18n::tr_format!("Rendering on the CPU: {why}", why = why),
@@ -485,6 +500,8 @@ fn performance_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
             let _ = app.run("library.clearPreviews", json!({}));
         }
     });
+    #[cfg(not(target_arch = "wasm32"))]
+    cache_folder(app, ui, t);
     heading(ui, t, crate::i18n::tr("Local folders"));
     row(ui, t, crate::i18n::tr("Forget unchanged photos"), |ui| {
         let opts = [(0u32, "Never"), (7, "After 7 days"), (30, "After 30 days"), (90, "After 90 days"), (365, "After a year")];
@@ -502,6 +519,93 @@ fn performance_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
     );
     #[cfg(not(target_arch = "wasm32"))]
     smart_previews(app, ui, t);
+}
+
+/// Where this library keeps its thumbnail cache: the folder in use, whether it was chosen, how much it
+/// holds, and choosing another one (the cached thumbnails move with it, or are discarded).
+#[cfg(not(target_arch = "wasm32"))]
+fn cache_folder(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
+    // the size of a big folder is not listed every frame: refresh every 2 s and after a change
+    let cache = egui::Id::new("cache-location");
+    let now = ui.input(|i| i.time);
+    let loc: Value = match ui.data(|d| d.get_temp::<(f64, Value)>(cache)) {
+        Some((at, v)) if now - at < 2.0 => v,
+        _ => {
+            let v = app.run("library.cacheLocation", json!({})).unwrap_or(Value::Null);
+            ui.data_mut(|d| d.insert_temp(cache, (now, v.clone())));
+            v
+        }
+    };
+    if loc.is_null() {
+        return;
+    }
+    let path = loc["path"].as_str().unwrap_or_default().to_string();
+    let available = loc["available"].as_bool().unwrap_or(true);
+    let custom = loc["custom"].as_bool().unwrap_or(false);
+    let bytes = loc["bytes"].as_u64().unwrap_or(0);
+    row(ui, t, crate::i18n::tr("Folder"), |ui| {
+        let text = format!("{path}{}", if custom { "" } else { "  (library default)" });
+        ui.add(egui::Label::new(RichText::new(text.clone()).color(if available { t.text } else { t.reject })).truncate()).on_hover_text(text);
+    });
+    if !available {
+        hint(
+            ui,
+            t,
+            crate::i18n::tr(
+                "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.",
+            ),
+        );
+    }
+    // what happens to the thumbnails already cached when the folder changes
+    let mode_id = egui::Id::new("cache-existing");
+    let mut mode: u8 = ui.data(|d| d.get_temp(mode_id)).unwrap_or(0);
+    if bytes > 0 {
+        row(ui, t, crate::i18n::tr("Existing previews"), |ui| {
+            if choices(ui, "settingsCacheExisting", &[(0u8, "Move them"), (1, "Leave them"), (2, "Delete them")], &mut mode) {
+                ui.data_mut(|d| d.insert_temp(mode_id, mode));
+            }
+        });
+    }
+    let existing = ["move", "leave", "discard"][mode.min(2) as usize];
+    let mut result = None;
+    ui.horizontal(|ui| {
+        ui.add_space(LABEL_W);
+        if app.services.pick_folder.is_some() {
+            let r = ui.button(crate::i18n::tr("Choose Folder…"));
+            register(ui.ctx(), "button:settingsCacheChoose", r.rect);
+            if r.clicked()
+                && let Some(dir) = app.services.pick_folder.as_mut().and_then(|f| f())
+            {
+                result = Some(app.run("library.cacheLocation", json!({"path": dir, "existing": existing})));
+            }
+        }
+        let r = ui.add_enabled(custom, egui::Button::new(crate::i18n::tr("Use Library Folder")));
+        register(ui.ctx(), "button:settingsCacheReset", r.rect);
+        if r.clicked() {
+            result = Some(app.run("library.cacheLocation", json!({"reset": true, "existing": existing})));
+        }
+    });
+    if let Some(r) = result {
+        ui.data_mut(|d| d.remove::<(f64, Value)>(cache));
+        match r {
+            Ok(v) => {
+                let moved = v["handled"].as_u64().unwrap_or(0);
+                let failed = v["failed"].as_array().map_or(0, Vec::len);
+                let msg = if existing == "move" && moved > 0 {
+                    crate::i18n::tr_format!("Thumbnail cache folder changed; moved {n}", n = moved)
+                } else {
+                    crate::i18n::tr("Thumbnail cache folder changed").to_string()
+                };
+                app.toast(ui.ctx(), if failed > 0 { crate::i18n::tr_format!("{msg} ({failed} failed)", failed = failed, msg = msg) } else { msg });
+            }
+            Err(e) => app.toast(ui.ctx(), e),
+        }
+    }
+    hint(
+        ui,
+        t,
+        crate::i18n::tr("Thumbnails are a cache: they are rebuilt when missing, so the folder can be cleared or moved safely. It can't be inside the library's Originals."),
+    );
 }
 
 /// Where this library keeps its smart previews (the offline-editing proxies, which can be large):
@@ -1194,10 +1298,10 @@ pub fn display_profile(app: &mut LightcraftApp, p: &Value) -> Result<Value, Stri
 fn device_settings_have_defaults_and_survive_a_save() {
     use crate::state::AppSettings;
     let d = AppSettings::default();
-    assert!(d.gpu && !d.gpu_low_power && d.memory_mb == 0);
-    let saved = serde_json::to_string(&AppSettings { gpu_low_power: true, memory_mb: 2048, ..Default::default() }).unwrap();
+    assert!(d.gpu && !d.gpu_low_power && d.memory_mb == 0 && d.gpu_adapter.is_empty());
+    let saved = serde_json::to_string(&AppSettings { gpu_low_power: true, memory_mb: 2048, gpu_adapter: "AMD Radeon".into(), ..Default::default() }).unwrap();
     let back: AppSettings = serde_json::from_str(&saved).unwrap();
-    assert!(back.gpu_low_power && back.memory_mb == 2048 && back.gpu);
+    assert!(back.gpu_low_power && back.memory_mb == 2048 && back.gpu && back.gpu_adapter == "AMD Radeon");
     // a ui.json written before the GPU choice existed keeps the fast GPU
     let old: AppSettings = serde_json::from_str(r#"{"gpu":false}"#).unwrap();
     assert!(!old.gpu && !old.gpu_low_power);

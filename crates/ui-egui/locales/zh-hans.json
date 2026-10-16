@@ -2181,5 +2181,11 @@
   "Power saving": "节能",
   "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "节能会优先使用集成显卡（如果有）。更改将在下次启动 GPU 时生效。",
   "Look-alike groups": "相似面孔分组",
-  "Name this person": "为此人命名"
+  "Name this person": "为此人命名",
+  "GPU adapter": "GPU 适配器",
+  "Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts.": "如果这台机器有多块 GPU，按名称选择。更改将在下次启动 GPU 时生效。",
+  "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.": "此文件夹不可用（驱动器是否已断开？）。在它恢复或你选择其他文件夹之前，缩略图会缓存在资源库中。",
+  "Thumbnail cache folder changed": "缩略图缓存文件夹已更改",
+  "Thumbnail cache folder changed; moved {n}": "缩略图缓存文件夹已更改；已移动 {n} 个",
+  "Thumbnails are a cache: they are rebuilt when missing, so the folder can be cleared or moved safely. It can't be inside the library's Originals.": "缩略图只是缓存：缺失的会重新生成，因此可以安全地清空或移动该文件夹。它不能位于资源库的 Originals 内。"
 }

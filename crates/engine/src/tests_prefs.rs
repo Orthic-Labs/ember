@@ -266,6 +266,43 @@ fn curve_presets_save_apply_export_import_and_persist() {
 }
 
 #[test]
+fn the_thumbnail_cache_folder_moves_refuses_the_originals_and_falls_back_when_gone() {
+    let lib = temp_dir("cache-folder");
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    let thumbs = lib.join("thumbs");
+    // inside the originals: refused, and nothing is created
+    let inside = lib.join("Originals").join("cache");
+    assert!(s.execute("library.cacheLocation", &json!({"path": inside.display().to_string()})).is_err());
+    assert!(!inside.exists());
+    // under a folder that is not there (a drive not connected): an error, and no tree is made
+    let gone = lib.join("no-drive").join("cache");
+    assert!(s.execute("library.cacheLocation", &json!({"path": gone.display().to_string()})).is_err());
+    assert!(!lib.join("no-drive").exists());
+    // a thumbnail is cached in the library; a usable folder takes it over, and the choice is kept
+    let other = temp_dir("cache-folder-other");
+    let key = lightcraft_preview::hash_bytes(b"cache-folder thumbnail");
+    let img = lightcraft_raster::Rgba8 { width: 4, height: 4, data: vec![[10, 20, 30, 255]; 16] };
+    lightcraft_preview::DiskCache::new(&thumbs, 1 << 30).put(key, &img);
+    let r = s.execute("library.cacheLocation", &json!({"path": other.display().to_string(), "existing": "move"})).unwrap();
+    assert_eq!((r["custom"].as_bool(), r["handled"].as_u64()), (Some(true), Some(1)));
+    assert_eq!(s.media.rendered.disk().unwrap().dir(), other.as_path());
+    assert!(lightcraft_preview::DiskCache::new(&other, 0).get(key).is_some());
+    assert_eq!(lightcraft_preview::DiskCache::new(&thumbs, 0).size(), 0);
+    drop(s);
+    let mut again = Session::new().with_fs();
+    again.open_library(&lib, false).unwrap();
+    assert_eq!(again.media.rendered.disk().unwrap().dir(), other.as_path());
+    // a folder that went away is replaced by the library's own folder; the choice waits for it
+    std::fs::remove_dir_all(&other).unwrap();
+    again.open_library(&lib, false).unwrap();
+    assert_eq!(again.media.rendered.disk().unwrap().dir(), thumbs.as_path());
+    assert_eq!(again.cache_dir.as_deref(), Some(other.as_path()));
+    let _ = std::fs::remove_dir_all(&lib);
+    let _ = std::fs::remove_dir_all(&other);
+}
+
+#[test]
 fn resizing_the_disk_cache_keeps_the_cache_and_its_thumbnails() {
     let lib = temp_dir("resize");
     let mut s = Session::new().with_fs();

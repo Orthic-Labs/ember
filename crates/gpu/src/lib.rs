@@ -52,6 +52,8 @@ pub use render::GpuStages;
 static ENABLED: AtomicBool = AtomicBool::new(true);
 /// The power-saving GPU is preferred (`set_low_power`); read when the device is created.
 static LOW_POWER: AtomicBool = AtomicBool::new(false);
+/// The adapter wanted by name (`set_adapter`); `None` picks by `set_low_power`.
+static ADAPTER: Mutex<Option<String>> = Mutex::new(None);
 /// Set when a GPU render failed: the process stays on the CPU from then on.
 static BROKEN: AtomicBool = AtomicBool::new(false);
 
@@ -216,6 +218,38 @@ pub fn set_low_power(on: bool) {
 /// Whether the power-saving GPU is preferred (see [`set_low_power`]).
 pub fn low_power() -> bool {
     LOW_POWER.load(Ordering::Relaxed)
+}
+
+/// The adapter to use, by the name [`adapters`] lists it (`None`, or an empty name: the one the power
+/// choice picks). A name no adapter has falls back to that choice. Like the power choice, it takes
+/// effect when the GPU next starts.
+pub fn set_adapter(name: Option<String>) {
+    *ADAPTER.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = name.filter(|n| !n.trim().is_empty());
+}
+
+/// The adapter chosen by name ([`set_adapter`]).
+pub fn adapter_choice() -> Option<String> {
+    ADAPTER.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
+}
+
+/// The index of the adapter called `wanted` in `names` (the first with that name), or `None` when
+/// there is none, so the default choice is used.
+pub fn pick_adapter(names: &[String], wanted: &str) -> Option<usize> {
+    names.iter().position(|n| n == wanted)
+}
+
+/// The names of the GPU adapters this machine has, software ones left out, in the order wgpu lists
+/// them. Listed once per run; the device itself is not created.
+pub fn adapters() -> Vec<String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        static LISTED: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+        LISTED.get_or_init(|| backend::compute_backends().map(ctx::adapter_names).unwrap_or_default()).clone()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        Vec::new()
+    }
 }
 
 /// Whether GPU rendering is allowed (environment, preference, no earlier failure — real, or
@@ -572,5 +606,18 @@ pub fn try_render(
     {
         let _ = (src, info, s, req, stages);
         Err(Fallback::NotTried)
+    }
+}
+
+#[cfg(test)]
+mod adapter_choice_tests {
+    use super::pick_adapter;
+
+    #[test]
+    fn a_named_adapter_is_picked_and_a_missing_one_falls_back() {
+        let names = ["Apple M4 Pro".to_string(), "AMD Radeon RX 7900".to_string()];
+        assert_eq!(pick_adapter(&names, "AMD Radeon RX 7900"), Some(1));
+        assert_eq!(pick_adapter(&names, "Intel UHD"), None, "a missing adapter falls back to the default choice");
+        assert_eq!(pick_adapter(&[], "Apple M4 Pro"), None);
     }
 }

@@ -2182,5 +2182,11 @@
   "Power saving": "省電力",
   "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "省電力では、内蔵 GPU がある場合はそれを優先します。変更は次回 GPU の起動時に反映されます。",
   "Look-alike groups": "よく似た顔のグループ",
-  "Name this person": "この人物に名前を付ける"
+  "Name this person": "この人物に名前を付ける",
+  "GPU adapter": "GPUアダプター",
+  "Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts.": "このマシンに複数のGPUがある場合は、名前で選択します。変更は次回GPUの起動時に反映されます。",
+  "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.": "このフォルダーは利用できません（ドライブの接続が切れていませんか？）。サムネイルは、このフォルダーが戻るか別のフォルダーを選ぶまでライブラリ内にキャッシュされます。",
+  "Thumbnail cache folder changed": "サムネイルキャッシュのフォルダーを変更しました",
+  "Thumbnail cache folder changed; moved {n}": "サムネイルキャッシュのフォルダーを変更しました。{n} 件移動",
+  "Thumbnails are a cache: they are rebuilt when missing, so the folder can be cleared or moved safely. It can't be inside the library's Originals.": "サムネイルはキャッシュです。足りないものは作り直されるため、フォルダーは安全に消去・移動できます。ライブラリの Originals の中には置けません。"
 }

@@ -240,6 +240,8 @@ struct PrefsFile {
     cache_mb: u32,
     /// Folder for smart previews (default: `Smart Previews` in the library).
     smart_previews_dir: Option<String>,
+    /// Folder for the thumbnail cache (missing = the library's `thumbs`).
+    cache_dir: Option<String>,
     /// Days after which untouched Local records of unbrowsed folders are forgotten (missing =
     /// the default, 0 = never).
     forget_local_days: Option<u32>,
@@ -471,6 +473,7 @@ impl Session {
         if let Some(d) = &self.smart_previews_dir {
             self.media.smart_dir = Some(d.clone());
         }
+        self.cache_dir = prefs.cache_dir.filter(|_| on_disk).map(PathBuf::from);
         // presets
         if let Some(f) = settings.read::<PresetsFile>(files.as_mut(), "presets.json") {
             for p in &mut self.presets {
@@ -515,7 +518,8 @@ impl Session {
         // photo ids are per library: drop decoded sources of the previous one
         self.media.clear_sources();
         if on_disk {
-            self.media.attach_disk_cache(&dir.join("thumbs"), self.cache_bytes());
+            let thumbs = crate::cache_location::at_open(&dir.join("thumbs"), self.cache_dir.as_deref(), &dir.join("Originals"));
+            self.media.attach_disk_cache(&thumbs, self.cache_bytes());
         }
         let view_written = self.view_json();
         self.library = Some(Library {
@@ -711,6 +715,7 @@ impl Session {
             import: self.import_defaults.clone(),
             cache_mb: self.cache_mb,
             smart_previews_dir: self.smart_previews_dir.as_ref().map(|d| d.to_string_lossy().to_string()),
+            cache_dir: self.cache_dir.as_ref().map(|d| d.to_string_lossy().to_string()),
             forget_local_days: Some(self.forget_local_days),
         })
         .unwrap_or_default();
@@ -743,7 +748,7 @@ impl Session {
     pub fn set_cache_mb(&mut self, mb: u32) -> Result<()> {
         self.cache_mb = mb;
         if let Some(lib) = self.library.as_ref().filter(|l| l.on_disk) {
-            let dir = lib.thumbs_dir();
+            let dir = crate::cache_location::at_open(&lib.thumbs_dir(), self.cache_dir.as_deref(), &lib.originals_dir());
             self.media.set_disk_cache_bytes(&dir, self.cache_bytes());
         }
         self.save_prefs()

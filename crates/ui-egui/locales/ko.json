@@ -2180,5 +2180,11 @@
   "Power saving": "절전",
   "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "절전은 내장 GPU가 있으면 그것을 우선합니다. 변경 사항은 다음에 GPU가 시작될 때 적용됩니다.",
   "Look-alike groups": "비슷한 얼굴 그룹",
-  "Name this person": "이 사람 이름 짓기"
+  "Name this person": "이 사람 이름 짓기",
+  "GPU adapter": "GPU 어댑터",
+  "Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts.": "이 컴퓨터에 GPU가 여러 개 있으면 이름으로 고르세요. 변경은 다음에 GPU가 시작될 때 적용됩니다.",
+  "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.": "이 폴더를 사용할 수 없습니다(드라이브 연결이 끊겼나요?). 폴더가 다시 연결되거나 다른 폴더를 고를 때까지 섬네일은 라이브러리에 캐시됩니다.",
+  "Thumbnail cache folder changed": "섬네일 캐시 폴더를 변경했습니다",
+  "Thumbnail cache folder changed; moved {n}": "섬네일 캐시 폴더를 변경했습니다. {n}개 이동",
+  "Thumbnails are a cache: they are rebuilt when missing, so the folder can be cleared or moved safely. It can't be inside the library's Originals.": "섬네일은 캐시입니다. 없는 섬네일은 다시 만들어지므로 폴더를 안전하게 비우거나 옮길 수 있습니다. 라이브러리의 Originals 안에는 둘 수 없습니다."
 }

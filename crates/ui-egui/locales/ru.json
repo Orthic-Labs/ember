@@ -2180,5 +2180,11 @@
   "Power saving": "Экономия энергии",
   "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Экономия энергии предпочитает встроенный GPU, если он есть. Изменение действует при следующем запуске GPU.",
   "Look-alike groups": "Группы похожих лиц",
-  "Name this person": "Назвать этого человека"
+  "Name this person": "Назвать этого человека",
+  "GPU adapter": "Адаптер GPU",
+  "Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts.": "Выберите GPU по имени, если в этой системе их несколько. Изменение вступит в силу при следующем запуске GPU.",
+  "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.": "Эта папка недоступна (диск отключён?). Миниатюры кэшируются в библиотеке, пока папка не вернётся или вы не выберете другую.",
+  "Thumbnail cache folder changed": "Папка кэша миниатюр изменена",
+  "Thumbnail cache folder changed; moved {n}": "Папка кэша миниатюр изменена; перенесено: {n}",
+  "Thumbnails are a cache: they are rebuilt when missing, so the folder can be cleared or moved safely. It can't be inside the library's Originals.": "Миниатюры — это кэш: недостающие пересоздаются, поэтому папку можно безопасно очистить или перенести. Она не может находиться внутри Originals библиотеки."
 }

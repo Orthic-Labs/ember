@@ -2180,5 +2180,11 @@
   "Power saving": "Hemat daya",
   "Power saving prefers the integrated GPU where there is one. A change takes effect the next time the GPU starts.": "Hemat daya memilih GPU terintegrasi jika ada. Perubahan berlaku saat GPU dimulai berikutnya.",
   "Look-alike groups": "Grup wajah yang mirip",
-  "Name this person": "Beri nama orang ini"
+  "Name this person": "Beri nama orang ini",
+  "GPU adapter": "Adapter GPU",
+  "Choose the GPU by name when this machine has more than one. A change takes effect the next time the GPU starts.": "Pilih GPU berdasarkan nama jika komputer ini memiliki lebih dari satu. Perubahan berlaku saat GPU berikutnya dimulai.",
+  "This folder is not available (drive disconnected?). Thumbnails are cached in the library until it is back or you choose another folder.": "Folder ini tidak tersedia (drive terputus?). Thumbnail disimpan di pustaka sampai folder ini kembali atau Anda memilih folder lain.",
+  "Thumbnail cache folder changed": "Folder cache thumbnail diubah",
+  "Thumbnail cache folder changed; moved {n}": "Folder cache thumbnail diubah; {n} dipindahkan",
+  "Thumbnails are a cache: they are rebuilt when missing, so the folder can be cleared or moved safely. It can't be inside the library's Originals.": "Thumbnail adalah cache: yang hilang dibuat ulang, jadi folder ini aman dikosongkan atau dipindahkan. Folder ini tidak boleh berada di dalam Originals pustaka."
 }

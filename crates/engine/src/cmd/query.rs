@@ -224,7 +224,8 @@ pub fn specs() -> Vec<CommandSpec> {
                 "versions": ph.versions.iter().map(|v| json!({"name": v.name, "created": v.created})).collect::<Vec<_>>(),
             }))
         }),
-        cmd!(query "app.gpu", "GPU Rendering", [], None, "{enabled?: bool, power?: high | low} — allow/forbid GPU rendering (CPU fallback; LIGHTCRAFT_GPU=0 forbids it for the process) and choose the GPU: high (the fast one, the default) or low (power saving, where there is one; it takes effect when the GPU next starts); returns {enabled, power, available, adapter, reason (why the GPU is off), lastFallback (latest render redone on the CPU, and why)}", always, |_, p| {
+        cmd!(query "app.gpuAdapters", "GPU Adapters", [], None, "{} — the GPU adapters this machine has, by name (choose one with app.gpu {adapter}) → {adapters: [name]}", always, |_, _| Ok(json!({"adapters": lightcraft_gpu::adapters()}))),
+        cmd!(query "app.gpu", "GPU Rendering", [], None, "{enabled?: bool, power?: high | low, adapter?: name (\"\" = the default choice; see app.gpuAdapters)} — allow/forbid GPU rendering (CPU fallback; LIGHTCRAFT_GPU=0 forbids it for the process) and choose the GPU: high (the fast one, the default) or low (power saving, where there is one; it takes effect when the GPU next starts); returns {enabled, power, adapterChoice (the adapter chosen by name, null = the default choice), available, adapter, reason (why the GPU is off), lastFallback (latest render redone on the CPU, and why)}", always, |_, p| {
             if let Some(on) = p.get("enabled").and_then(Value::as_bool) {
                 lightcraft_gpu::set_enabled(on);
             }
@@ -235,10 +236,17 @@ pub fn specs() -> Vec<CommandSpec> {
                     _ => return Err(bad("app.gpu", "power must be high or low")),
                 }
             }
+            if let Some(name) = p.get("adapter") {
+                match name.as_str() {
+                    Some(n) => lightcraft_gpu::set_adapter(Some(n.to_string())),
+                    None => return Err(bad("app.gpu", "adapter must be a GPU name (\"\" = the default choice)")),
+                }
+            }
             let power = if lightcraft_gpu::low_power() { "low" } else { "high" };
             Ok(json!({
                 "enabled": lightcraft_gpu::enabled(),
                 "power": power,
+                "adapterChoice": lightcraft_gpu::adapter_choice(),
                 "available": lightcraft_gpu::available(),
                 "adapter": lightcraft_gpu::adapter_name(),
                 "reason": lightcraft_gpu::unavailable_reason(),
@@ -280,6 +288,15 @@ mod gpu_power_tests {
         assert!(lightcraft_gpu::low_power(), "a refused value changes nothing");
         assert_eq!(s.execute("app.gpu", &json!({"power": "high"})).unwrap()["power"], "high");
         assert!(!lightcraft_gpu::low_power());
+    }
+
+    #[test]
+    fn the_adapter_choice_is_stored_and_an_empty_name_clears_it() {
+        let mut s = Session::with_demo();
+        assert_eq!(s.execute("app.gpu", &json!({"adapter": "No Such GPU"})).unwrap()["adapterChoice"], "No Such GPU");
+        assert!(s.execute("app.gpu", &json!({"adapter": 3})).is_err(), "a name must be a string");
+        assert_eq!(s.execute("app.gpu", &json!({"adapter": ""})).unwrap()["adapterChoice"], serde_json::Value::Null);
+        assert!(lightcraft_gpu::adapter_choice().is_none());
     }
 }
 
