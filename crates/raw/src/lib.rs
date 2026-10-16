@@ -621,6 +621,12 @@ pub struct ColorData {
     /// 1). Read and written back by DNG export; rendering doesn't use it yet.
     #[serde(default)]
     pub baseline_sharpness: Option<f64>,
+    /// `DefaultBlackRender` (DNG 1.6, per profile): `Some(0)` auto (a reader may deepen the blacks of the render),
+    /// `Some(1)` none (the image's blacks are left as the profile's tone curve makes them); `None` when the tag is
+    /// absent or holds another value. The render already leaves the blacks alone, which both values allow.
+    /// Read and written back by DNG export.
+    #[serde(default)]
+    pub default_black_render: Option<u8>,
     /// The file's own camera-profile look (`ProfileHueSatMap*`, `ProfileLookTable*`,
     /// `ProfileToneCurve`), applied by [`color`]'s users at render time, and its
     /// `ProfileGainTableMap*`, kept (a DNG export writes it back) and rendered only when a photo's

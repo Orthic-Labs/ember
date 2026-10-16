@@ -3,7 +3,7 @@
 //! Parsed: every opcode (unknown ones are kept as [`Opcode::Unknown`]). Applied: `WarpRectilinear`,
 //! `WarpRectilinear2` (opcode 14, DNG 1.6; see [`Opcode::WarpRectilinear2`]), `FixVignetteRadial`,
 //! `FixBadPixelsConstant`, `FixBadPixelsList`, `MapTable`, `MapPolynomial`, `GainMap`, `DeltaPerRow/Column`,
-//! `ScalePerRow/Column`. `TrimBounds` and `WarpFisheye` are recorded but not applied.
+//! `ScalePerRow/Column`. `TrimBounds` and `WarpFisheye` are recorded but not applied. Hostile values (non-finite or oversized floats, counts past the data, a centre outside a few image sizes) make an opcode [`Opcode::Unknown`].
 //!
 //! Opcodes run in list order, except for the DNG 1.6 skip rule ([`applied_ops`]): a `WarpRectilinear` or
 //! `WarpFisheye` that immediately follows an *optional* `WarpRectilinear2` is skipped (the older opcode is the
@@ -277,7 +277,12 @@ impl Rd<'_> {
 
 fn parse_one(id: u32, flags: u32, params: &[u8]) -> Option<Opcode> {
     let mut r = Rd { d: params, p: 0 };
-    let f = |r: &mut Rd| r.f64().filter(|v| v.is_finite());
+    // every coefficient is finite and bounded (a real lens or vignette fit is far below the bound); a centre is
+    // relative to the image, a few image sizes at most
+    let f = |r: &mut Rd| r.f64().filter(|v| v.is_finite() && v.abs() <= WR2_MAX_COEF);
+    let ctr = |r: &mut Rd| r.f64().filter(|v| v.abs() <= 4.0);
+    // a list of single-precision values (gains, deltas, scales) must be finite
+    let finite32 = |v: &[f32]| v.iter().all(|x| x.is_finite());
     Some(match id {
         1 => {
             let n = r.u32()? as usize;
@@ -288,7 +293,7 @@ fn parse_one(id: u32, flags: u32, params: &[u8]) -> Option<Opcode> {
             for _ in 0..n {
                 planes.push([f(&mut r)?, f(&mut r)?, f(&mut r)?, f(&mut r)?, f(&mut r)?, f(&mut r)?]);
             }
-            Opcode::WarpRectilinear { planes, center: [f(&mut r)?, f(&mut r)?] }
+            Opcode::WarpRectilinear { planes, center: [ctr(&mut r)?, ctr(&mut r)?] }
         }
         2 => {
             let n = r.u32()? as usize;
@@ -299,7 +304,7 @@ fn parse_one(id: u32, flags: u32, params: &[u8]) -> Option<Opcode> {
             for _ in 0..n {
                 planes.push([f(&mut r)?, f(&mut r)?, f(&mut r)?, f(&mut r)?]);
             }
-            Opcode::WarpFisheye { planes, center: [f(&mut r)?, f(&mut r)?] }
+            Opcode::WarpFisheye { planes, center: [ctr(&mut r)?, ctr(&mut r)?] }
         }
         14 => {
             let n = r.u32()? as usize;
@@ -322,7 +327,7 @@ fn parse_one(id: u32, flags: u32, params: &[u8]) -> Option<Opcode> {
             let center = [f(&mut r).filter(|v| v.abs() <= 4.0)?, f(&mut r).filter(|v| v.abs() <= 4.0)?];
             Opcode::WarpRectilinear2 { planes, center, reciprocal: r.u32()? != 0, optional: flags & 1 != 0 }
         }
-        3 => Opcode::FixVignetteRadial { k: [f(&mut r)?, f(&mut r)?, f(&mut r)?, f(&mut r)?, f(&mut r)?], center: [f(&mut r)?, f(&mut r)?] },
+        3 => Opcode::FixVignetteRadial { k: [f(&mut r)?, f(&mut r)?, f(&mut r)?, f(&mut r)?, f(&mut r)?], center: [ctr(&mut r)?, ctr(&mut r)?] },
         4 => Opcode::FixBadPixelsConstant { constant: r.u32()?, bayer_phase: r.u32()? },
         5 => {
             let bayer_phase = r.u32()?;
@@ -338,7 +343,7 @@ fn parse_one(id: u32, flags: u32, params: &[u8]) -> Option<Opcode> {
         7 => {
             let area = r.area()?;
             let n = r.u32()? as usize;
-            if n == 0 || n > 65536 || n * 2 > r.remaining() {
+            if n == 0 || n > 65536 || n.saturating_mul(2) > r.remaining() {
                 return None;
             }
             Opcode::MapTable { area, table: (0..n).map(|_| r.u16()).collect::<Option<_>>()? }
@@ -357,20 +362,30 @@ fn parse_one(id: u32, flags: u32, params: &[u8]) -> Option<Opcode> {
             let spacing = [f(&mut r)?, f(&mut r)?];
             let origin = [f(&mut r)?, f(&mut r)?];
             let mp = r.u32()?;
-            let n = (pv as usize).checked_mul(ph as usize)?.checked_mul(mp as usize)?;
-            if n == 0 || n * 4 > r.remaining() {
+            // a gain map has at most 64 planes (one per colour plane), and its spacing is not negative
+            if mp > 64 || spacing.iter().any(|v| *v < 0.0) {
                 return None;
             }
-            let gains = (0..n).map(|_| r.f32()).collect::<Option<_>>()?;
+            let n = (pv as usize).checked_mul(ph as usize)?.checked_mul(mp as usize)?;
+            if n == 0 || n.saturating_mul(4) > r.remaining() {
+                return None;
+            }
+            let gains: Vec<f32> = (0..n).map(|_| r.f32()).collect::<Option<_>>()?;
+            if !finite32(&gains) {
+                return None;
+            }
             Opcode::GainMap { area, points_v: pv, points_h: ph, spacing, origin, map_planes: mp, gains }
         }
         10..=13 => {
             let area = r.area()?;
             let n = r.u32()? as usize;
-            if n * 4 > r.remaining() {
+            if n.saturating_mul(4) > r.remaining() {
                 return None;
             }
             let v: Vec<f32> = (0..n).map(|_| r.f32()).collect::<Option<_>>()?;
+            if !finite32(&v) {
+                return None;
+            }
             match id {
                 10 => Opcode::DeltaPerRow { area, deltas: v },
                 11 => Opcode::DeltaPerColumn { area, deltas: v },
@@ -537,6 +552,9 @@ const MAX_BAD_PIXELS: usize = 1 << 22;
 /// bad-pixel opcodes. `scale` is the value of 1.0 in the buffer: 65535 for list 1 (raw 16-bit values), 1 for
 /// lists 2 and 3 (normalised values).
 pub fn apply_list(list: &[Opcode], buf: &mut [f32], w: usize, h: usize, cpp: usize, cfa: Option<&Cfa>, scale: f32) {
+    if list.is_empty() {
+        return;
+    }
     for op in list {
         match op {
             Opcode::MapTable { area, table } => {
@@ -551,8 +569,11 @@ pub fn apply_list(list: &[Opcode], buf: &mut [f32], w: usize, h: usize, cpp: usi
                 for (x, y, p) in area_iter(area, w, h, cpp) {
                     let v = &mut buf[(y * w + x) * cpp + p];
                     let t = (*v / scale) as f64;
-                    let r = coefficients.iter().rev().fold(0.0, |acc, &c| acc * t + c);
-                    *v = r as f32 * scale;
+                    let r = coefficients.iter().rev().fold(0.0, |acc, &c| acc * t + c) as f32 * scale;
+                    // a polynomial that overflows leaves the sample as it was
+                    if r.is_finite() {
+                        *v = r;
+                    }
                 }
             }
             Opcode::GainMap { area, points_v, points_h, spacing, origin, map_planes, gains } => {
@@ -590,8 +611,9 @@ pub fn apply_list(list: &[Opcode], buf: &mut [f32], w: usize, h: usize, cpp: usi
                     for x in 0..w {
                         let r2 = ((x as f64 + 0.5 - cx).powi(2) + (y as f64 + 0.5 - cy).powi(2)) / (m * m);
                         let g = 1.0 + r2 * (k[0] + r2 * (k[1] + r2 * (k[2] + r2 * (k[3] + r2 * k[4]))));
+                        let g = if g.is_finite() { g as f32 } else { 1.0 };
                         for p in 0..cpp {
-                            buf[(y * w + x) * cpp + p] *= g as f32;
+                            buf[(y * w + x) * cpp + p] *= g;
                         }
                     }
                 }
@@ -620,6 +642,10 @@ pub fn apply_list(list: &[Opcode], buf: &mut [f32], w: usize, h: usize, cpp: usi
             }
             _ => {}
         }
+    }
+    // gains and scales are finite floats, but chained they can still overflow: a sample that did reads as black
+    for v in buf.iter_mut().filter(|v| !v.is_finite()) {
+        *v = 0.0;
     }
 }
 
@@ -675,6 +701,9 @@ pub fn apply_list3(list: &[Opcode], img: &mut Rgb32f) {
                 }
             }
         }
+    }
+    for v in img.data.iter_mut().flatten().filter(|v| !v.is_finite()) {
+        *v = 0.0;
     }
 }
 
@@ -1157,5 +1186,197 @@ pub(crate) mod tests {
         assert!(warps[0].cropped(1, h, crate::Rect::new(0, 0, 1, h)).is_none());
         assert!(warps[0].cropped(w, h, crate::Rect::new(30, 0, 70, 50)).is_none());
         assert!(warps[0].cropped(w, h, crate::Rect::new(usize::MAX, 0, 70, 50)).is_none());
+    }
+
+    fn gain_map_params(spacing: [f64; 2], planes: u32, gains: &[f32]) -> Vec<u8> {
+        let mut p = area([0, 0, 4, 4, 0, 1, 1, 1]);
+        for v in [2u32, 2] {
+            p.extend_from_slice(&v.to_be_bytes());
+        }
+        p.extend(be(&[spacing[0], spacing[1], 0.0, 0.0]));
+        p.extend_from_slice(&planes.to_be_bytes());
+        for g in gains {
+            p.extend_from_slice(&g.to_be_bytes());
+        }
+        p
+    }
+
+    /// A phone DNG's `OpcodeList2` is mostly gain maps (one per Bayer phase, `row_pitch = col_pitch = 2`): each
+    /// phase gets its own map, applied to its own pixels only.
+    #[test]
+    fn gain_maps_per_bayer_phase() {
+        let (w, h) = (4usize, 4usize);
+        let mut blob = ListWriter::new();
+        for (i, (dy, dx)) in [(0u32, 0u32), (0, 1), (1, 0), (1, 1)].into_iter().enumerate() {
+            let mut p = area([dy, dx, 4, 4, 0, 1, 2, 2]);
+            for v in [1u32, 1] {
+                p.extend_from_slice(&v.to_be_bytes());
+            }
+            p.extend(be(&[1.0, 1.0, 0.0, 0.0]));
+            p.extend_from_slice(&1u32.to_be_bytes());
+            p.extend_from_slice(&(1.0f32 + i as f32).to_be_bytes());
+            blob.op(9, &p);
+        }
+        let list = parse_list(&blob.finish());
+        assert_eq!(list.len(), 4);
+        assert!(list.iter().all(|o| matches!(o, Opcode::GainMap { .. })));
+        let mut buf = vec![0.1f32; w * h];
+        apply_list(&list, &mut buf, w, h, 1, None, 1.0);
+        for y in 0..h {
+            for x in 0..w {
+                let want = 0.1 * (1.0 + ((y % 2) * 2 + x % 2) as f32);
+                assert!((buf[y * w + x] - want).abs() < 1e-6, "({x}, {y}): {} vs {want}", buf[y * w + x]);
+            }
+        }
+    }
+
+    /// Opcodes with a count, a size, a float or a centre a file can make hostile are refused (kept as
+    /// [`Opcode::Unknown`], which nothing applies), never read past their data and never non-finite.
+    #[test]
+    fn malformed_opcodes_are_refused() {
+        let good = gain_map_params([1.0, 1.0], 1, &[1.0, 1.0, 1.0, 1.0]);
+        assert!(matches!(parse_list(&ListWriter::new().op(9, &good).finish())[0], Opcode::GainMap { .. }));
+        let unknown = |id: u32, p: &[u8]| {
+            let l = parse_list(&ListWriter::new().op(id, p).finish());
+            assert_eq!(l.len(), 1);
+            matches!(l[0], Opcode::Unknown { .. })
+        };
+        // gain map: NaN or infinite gain, negative or NaN spacing, too many planes, a point count the data cannot
+        // hold, counts that overflow
+        assert!(unknown(9, &gain_map_params([1.0, 1.0], 1, &[1.0, f32::NAN, 1.0, 1.0])));
+        assert!(unknown(9, &gain_map_params([1.0, 1.0], 1, &[1.0, f32::INFINITY, 1.0, 1.0])));
+        assert!(unknown(9, &gain_map_params([-1.0, 1.0], 1, &[1.0; 4])));
+        assert!(unknown(9, &gain_map_params([1.0, f64::NAN], 1, &[1.0; 4])));
+        assert!(unknown(9, &gain_map_params([1.0, 1.0], 65, &[1.0; 4])));
+        assert!(unknown(9, &gain_map_params([1.0, 1.0], 2, &[1.0; 4])));
+        assert!(unknown(9, &gain_map_params([1.0, 1.0], 0, &[])));
+        let mut huge = area([0, 0, 4, 4, 0, 1, 1, 1]);
+        for v in [u32::MAX, u32::MAX] {
+            huge.extend_from_slice(&v.to_be_bytes());
+        }
+        huge.extend(be(&[1.0, 1.0, 0.0, 0.0]));
+        huge.extend_from_slice(&u32::MAX.to_be_bytes());
+        assert!(unknown(9, &huge));
+        // per-row / per-column lists: a count past the data, a NaN value
+        for id in 10..=13u32 {
+            let mut p = area([0, 0, 4, 4, 0, 1, 1, 1]);
+            p.extend_from_slice(&u32::MAX.to_be_bytes());
+            assert!(unknown(id, &p), "opcode {id}: count past the data");
+            let mut p = area([0, 0, 4, 4, 0, 1, 1, 1]);
+            p.extend_from_slice(&2u32.to_be_bytes());
+            p.extend_from_slice(&f32::NAN.to_be_bytes());
+            p.extend_from_slice(&1.0f32.to_be_bytes());
+            assert!(unknown(id, &p), "opcode {id}: NaN value");
+        }
+        // map table: count past the data or zero; polynomial: degree past the cap, NaN or absurd coefficient
+        let mut t = area([0, 0, 4, 4, 0, 1, 1, 1]);
+        t.extend_from_slice(&65536u32.to_be_bytes());
+        assert!(unknown(7, &t));
+        let mut t = area([0, 0, 4, 4, 0, 1, 1, 1]);
+        t.extend_from_slice(&0u32.to_be_bytes());
+        assert!(unknown(7, &t));
+        for coefs in [&[0.0, f64::NAN][..], &[0.0, 1e300][..], &[0.0; 10][..]] {
+            let mut p = area([0, 0, 4, 4, 0, 1, 1, 1]);
+            p.extend_from_slice(&(coefs.len() as u32 - 1).to_be_bytes());
+            p.extend(be(coefs));
+            assert!(unknown(8, &p), "{coefs:?}");
+        }
+        // warps and the vignette: absurd or non-finite coefficient, a centre far outside the image, a short body,
+        // no planes, too many planes
+        let warp = |n: u32, k: f64, c: f64| {
+            let mut p = n.to_be_bytes().to_vec();
+            for _ in 0..n.min(4) {
+                p.extend(be(&[1.0, 0.0, 0.0, 0.0, 0.0, k]));
+            }
+            p.extend(be(&[c, 0.5]));
+            p
+        };
+        assert!(!unknown(1, &warp(1, 0.0, 0.5)));
+        assert!(unknown(1, &warp(1, 1e300, 0.5)));
+        assert!(unknown(1, &warp(1, f64::INFINITY, 0.5)));
+        assert!(unknown(1, &warp(1, 0.0, 1e9)));
+        assert!(unknown(1, &warp(1, 0.0, f64::NAN)));
+        assert!(unknown(1, &warp(0, 0.0, 0.5)));
+        assert!(unknown(1, &warp(5, 0.0, 0.5)));
+        assert!(unknown(1, &warp(1, 0.0, 0.5)[..20]));
+        assert!(unknown(3, &be(&[0.0, 0.0, 0.0, 0.0, f64::NAN, 0.5, 0.5])));
+        assert!(unknown(3, &be(&[0.0, 0.0, 0.0, 0.0, 0.0, 1e12, 0.5])));
+        // WarpRectilinear2: size must match its plane count exactly; an inverted valid radius range is refused
+        let wr2 = |min: f64, max: f64| {
+            let mut p = 1u32.to_be_bytes().to_vec();
+            let mut k = [0.0; WR2_LEN];
+            k[0] = 1.0;
+            k[17] = min;
+            k[18] = max;
+            p.extend(be(&k));
+            p.extend(be(&[0.5, 0.5]));
+            p.extend_from_slice(&0u32.to_be_bytes());
+            p
+        };
+        assert!(!unknown(14, &wr2(0.0, 1.0)));
+        assert!(unknown(14, &wr2(0.9, 0.1)));
+        assert!(unknown(14, &wr2(0.0, 2.0)));
+        assert!(unknown(14, &wr2(0.0, 1.0)[..40]));
+        // bad pixel list: counts past the data
+        let mut b = 0u32.to_be_bytes().to_vec();
+        for v in [u32::MAX, u32::MAX] {
+            b.extend_from_slice(&v.to_be_bytes());
+        }
+        assert!(unknown(5, &b));
+    }
+
+    /// Whatever a list's bytes are (cut short anywhere, or with any byte changed), parsing and applying it
+    /// neither panics nor leaves a non-finite value in a finite buffer.
+    #[test]
+    fn corrupted_lists_parse_and_apply_without_panicking() {
+        let gm = gain_map_params([1.0, 1.0], 1, &[1.0, 2.0, 1.5, 0.5]);
+        let mut poly = area([0, 0, 4, 4, 0, 1, 1, 2]);
+        poly.extend_from_slice(&1u32.to_be_bytes());
+        poly.extend(be(&[0.0, 2.0]));
+        let mut dpc = area([0, 0, 4, 4, 0, 1, 1, 1]);
+        dpc.extend_from_slice(&2u32.to_be_bytes());
+        for d in [0.1f32, 0.2] {
+            dpc.extend_from_slice(&d.to_be_bytes());
+        }
+        let mut warp = 1u32.to_be_bytes().to_vec();
+        warp.extend(be(&[1.0, 0.01, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5]));
+        let blob = ListWriter::new().op(9, &gm).op(8, &poly).op(11, &dpc).op(3, &be(&[0.1, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5])).op(1, &warp).finish();
+        let run = |bytes: &[u8]| {
+            let list = parse_list(bytes);
+            let mut buf = vec![0.3f32; 16];
+            apply_list(&list, &mut buf, 4, 4, 1, None, 1.0);
+            assert!(buf.iter().all(|v| v.is_finite()), "{bytes:?}");
+            let mut img = Rgb32f::from_fn(4, 4, |x, y| [x as f32 * 0.1, y as f32 * 0.1, 0.2]);
+            apply_list3(&list, &mut img);
+            assert!(img.data.iter().flatten().all(|v| v.is_finite()), "{bytes:?}");
+        };
+        run(&blob);
+        for cut in 0..blob.len() {
+            run(&blob[..cut]);
+        }
+        let mut seed = 0x2545_f491u32;
+        for _ in 0..600 {
+            let mut b = blob.clone();
+            for _ in 0..3 {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let i = (seed >> 8) as usize % b.len();
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                b[i] = (seed >> 24) as u8;
+            }
+            run(&b);
+        }
+    }
+
+    /// A polynomial that overflows leaves the sample as it was, not infinite.
+    #[test]
+    fn overflowing_polynomial_leaves_samples_finite() {
+        let mut p = area([0, 0, 2, 2, 0, 1, 1, 1]);
+        p.extend_from_slice(&8u32.to_be_bytes());
+        p.extend(be(&[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1e9]));
+        let list = parse_list(&ListWriter::new().op(8, &p).finish());
+        assert!(matches!(list[0], Opcode::MapPolynomial { .. }));
+        let mut buf = vec![1e12f32; 4];
+        apply_list(&list, &mut buf, 2, 2, 1, None, 1.0);
+        assert!(buf.iter().all(|v| *v == 1e12));
     }
 }

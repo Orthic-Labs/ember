@@ -140,7 +140,7 @@ checked, and Canon, the largest bucket, is the weakest of the big four.
 | DNG | uncompressed, LJ92, lossy JPEG / Smart Preview, Deflate incl. float, LinearRaw, tiles / strips, row / column interleave | ✅ | 6 corpus DNGs; 4 ILCE-6400 JXL DNGs |
 | DNG | JPEG XL (DNG 1.7, lossless and lossy) | ✅ | synthetic bit-exact; real lossless and lossy files |
 | DNG | Apple ProRAW (incl. semantic mattes) | ✅ | iPhone 12 Pro corpus; ProfileGainTableMap read but off (ΔE00 19 against reference editor with it on) |
-| DNG | phone DNGs (Pixel, Galaxy, Xiaomi…) | 🟡 | Pixel 2 XL only; white-level pile-up fix #548 [#169](https://github.com/Orthic-Labs/ember/issues/169) |
+| DNG | phone DNGs (Pixel, Galaxy, Xiaomi…) | 🟡 | Pixel 2 XL is the only real file. Synthetic tests cover the opcode lists a phone writes (per-Bayer-phase `GainMap`, `FixVignetteRadial`, `WarpRectilinear`/`2`, `MapTable`/`MapPolynomial`, per-row/column deltas and scales), hostile-list rejection (counts, sizes, non-finite floats, fuzzed bytes), `DefaultBlackRender` read and written back, LinearRaw and JPEG XL. Open: `WarpFisheye` and `TrimBounds` are parsed but not applied (formula unverified against the spec text); `DefaultBlackRender` is carried, not rendered; no Pixel 6+, Galaxy or Xiaomi file to compare; white-level pile-up fix #548 [#169](https://github.com/Orthic-Labs/ember/issues/169) |
 | DNG | GoPro GPR (VC-5) | ⬜ | refused [#170](https://github.com/Orthic-Labs/ember/issues/170) |
 | 3FR / FFF | DNG-like layouts | 🟡 | decoded when uncompressed or LJ92 [#171](https://github.com/Orthic-Labs/ember/issues/171) |
 | 3FR / FFF | Hasselblad compression | ⬜ | preview [#172](https://github.com/Orthic-Labs/ember/issues/172) |

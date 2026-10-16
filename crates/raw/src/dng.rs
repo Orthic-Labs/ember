@@ -120,6 +120,11 @@ pub(crate) fn color_data(ifd0: &Ifd, raw: &Ifd, order: ByteOrder) -> ColorData {
             + get(t::BASELINE_EXPOSURE_OFFSET).and_then(|v| v.first().copied()).filter(|v| v.is_finite()).unwrap_or(0.0),
         // DNG 1.7 BaselineSharpness (IFD 0 or the enhanced IFD); implausible values are ignored
         baseline_sharpness: get(t::BASELINE_SHARPNESS).and_then(|v| v.first().copied()).filter(|v| v.is_finite() && *v > 0.0 && *v <= 16.0),
+        default_black_render: raw.u64s(t::DEFAULT_BLACK_RENDER).or_else(|| ifd0.u64s(t::DEFAULT_BLACK_RENDER)).and_then(|v| match v.as_slice() {
+            [0] => Some(0),
+            [1] => Some(1),
+            _ => None,
+        }),
         profile: profile_look(ifd0, raw, order),
         kelvin_presets: None,
     }

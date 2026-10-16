@@ -299,6 +299,9 @@ pub fn write_dng_with_preview(raw: &RawImage, opts: &DngWriteOptions, preview: O
     if let Some(v) = c.baseline_sharpness {
         ifd.set(t::BASELINE_SHARPNESS, rat_vec(&[v]));
     }
+    if let Some(v) = c.default_black_render {
+        ifd.set(t::DEFAULT_BLACK_RENDER, Value::Long(vec![u32::from(v)]));
+    }
     // the source's own profile look travels with its data (conversions, smart previews, merges)
     let p = &c.profile;
     let table_tags = |ifd: &mut IfdBuilder, table: &crate::profile::HsvTable, dims: u16, enc: u16| {

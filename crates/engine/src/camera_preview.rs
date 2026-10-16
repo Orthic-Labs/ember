@@ -161,6 +161,7 @@ fn dng_colour(tags: &ColorData, t: &CameraTransform, look: Option<&CameraLook>) 
         as_shot_white_xy: None,
         baseline_exposure: t.baseline_exposure + k.log2(),
         baseline_sharpness: tags.baseline_sharpness,
+        default_black_render: None,
         // this matrix model is complete; Kelvin presets only scale raws without colour matrices
         kelvin_presets: None,
         profile: ProfileLook {

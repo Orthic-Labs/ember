@@ -1171,3 +1171,43 @@ fn embedded_preview_is_a_reduced_resolution_jpeg_subifd() {
         assert!(write_dng_with_preview(&raw, &DngWriteOptions::default(), Some(&bad)).is_err());
     }
 }
+
+/// `DefaultBlackRender` is read from IFD 0 (0 auto, 1 none; another value is ignored) and written back by DNG export.
+#[test]
+fn default_black_render_is_read_and_written() {
+    for (value, want) in [(0u32, Some(0u8)), (1, Some(1)), (2, None), (u32::MAX, None)] {
+        let bytes = profile_dng(ByteOrder::Little, |ifd0| {
+            ifd0.set(t::DEFAULT_BLACK_RENDER, Value::Long(vec![value]));
+        });
+        assert_eq!(decode(&bytes).unwrap().color.default_black_render, want, "{value}");
+    }
+    assert_eq!(decode(&profile_dng(ByteOrder::Little, |_| {})).unwrap().color.default_black_render, None);
+    for want in [None, Some(0), Some(1)] {
+        let mut raw = synthetic(24, 16, Some(Cfa::bayer("RGGB").unwrap()), 1);
+        raw.color.default_black_render = want;
+        let back = decode(&write_dng(&raw, &DngWriteOptions::default()).unwrap()).unwrap();
+        assert_eq!(back.color.default_black_render, want);
+    }
+}
+
+/// A DNG whose opcode lists are garbage still decodes, the lists reduced to what parses, and develops without a
+/// panic (a phone file's lists are the likeliest place for a hostile count).
+#[test]
+fn garbage_opcode_lists_do_not_stop_a_dng() {
+    let mut list = 3u32.to_be_bytes().to_vec();
+    for (id, size) in [(9u32, 12u32), (7, 12), (1, 12)] {
+        for v in [id, 0x0103_0000, 0, size] {
+            list.extend_from_slice(&v.to_be_bytes());
+        }
+        list.extend_from_slice(&[0xff; 12]);
+    }
+    for tag in [t::OPCODE_LIST_1, t::OPCODE_LIST_2, t::OPCODE_LIST_3] {
+        let (w, h) = (8, 6);
+        let mut raw = base_ifd(w, h, 16, 3, false);
+        raw.set(t::COMPRESSION, Value::Short(vec![1]));
+        raw.set(tag, Value::Undefined(list.clone()));
+        raw.set_image(ImageData::Strips { rows_per_strip: h as u32, strips: vec![u16_bytes(&pattern(w, h, 3, 16), ByteOrder::Big)] });
+        let img = decode(&dng(raw, ByteOrder::Big)).unwrap();
+        assert!(img.develop(Method::Bilinear).is_ok());
+    }
+}
