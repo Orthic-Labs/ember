@@ -344,7 +344,8 @@ pub fn show_module(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::
         if let Some(text) = text_setting(ui, &mut next.drafts, "slideshowIdentity", crate::i18n::tr("Identity plate"), &m.overlays.identity_plate) {
             m.overlays.identity_plate = text;
         }
-        if let Some(text) = text_setting(ui, &mut next.drafts, "slideshowText", crate::i18n::tr("Overlay text (metadata fields in braces)"), &m.overlays.text) {
+        let overlay_label = crate::i18n::tr("Overlay text (metadata fields in braces)");
+        if let Some(text) = text_setting(ui, &mut next.drafts, "slideshowText", overlay_label, &m.overlays.text) {
             m.overlays.text = text;
         }
         ui.checkbox(&mut m.overlays.rating_stars, crate::i18n::tr("Rating stars"));
