@@ -572,6 +572,17 @@ pub fn write_xmp(meta: &Metadata, lc_settings: Option<&str>) -> String {
 
 /// Like [`write_xmp`], with any number of simple `lc:<name>` properties (e.g. `settings`, `flag`).
 pub fn write_xmp_lc(meta: &Metadata, lc: &[(&str, &str)]) -> String {
+    write_packet(meta, lc, false)
+}
+
+/// Like [`write_xmp_lc`], and with the photo's regions as `mwg-rs:Regions` (see [`regions_block`]). Nothing writes this
+/// into a sidecar yet: `docs/xmp-interop.md` still says Ember never writes regions. [`parse_xmp`] reads back the same
+/// boxes, kinds, names and descriptions.
+pub fn write_xmp_lc_with_regions(meta: &Metadata, lc: &[(&str, &str)]) -> String {
+    write_packet(meta, lc, true)
+}
+
+fn write_packet(meta: &Metadata, lc: &[(&str, &str)], with_regions: bool) -> String {
     let mut simple: Vec<(&str, String)> = Vec::new();
     let mut push = |k: &'static str, v: Option<String>| {
         if let Some(v) = v {
@@ -673,8 +684,68 @@ pub fn write_xmp_lc(meta: &Metadata, lc: &[(&str, &str)]) -> String {
             tf(r & 0x40 != 0)
         ));
     }
+    if with_regions {
+        regions_block(&mut x, meta);
+    }
     x.push_str("  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>");
     x
+}
+
+/// The `mwg-rs:Regions` block for `meta.regions` (nothing for an empty list). Regions are stored upright. A photo with
+/// Exif orientation 6, 8 or 3 gets each box in the sensor's frame with `mwg-rs:Rotation`, the way Lightroom writes it:
+/// that is the exact inverse of what [`parse_one_region`] undoes. `AppliedToDimensions` names the upright size when known.
+fn regions_block(x: &mut String, meta: &Metadata) {
+    if meta.regions.is_empty() {
+        return;
+    }
+    let quarter = std::f64::consts::FRAC_PI_2;
+    let turn = match meta.orientation.map(Orientation::to_exif) {
+        Some(v @ (3 | 6 | 8)) => v,
+        _ => 0,
+    };
+    x.push_str("   <mwg-rs:Regions rdf:parseType=\"Resource\">\n");
+    if let (Some(w), Some(h)) = (meta.width, meta.height) {
+        x.push_str(&format!(
+            "    <mwg-rs:AppliedToDimensions rdf:parseType=\"Resource\" stDim:w=\"{w}\" stDim:h=\"{h}\" stDim:unit=\"pixel\"/>\n"
+        ));
+    }
+    x.push_str("    <mwg-rs:RegionList>\n     <rdf:Bag>\n");
+    for region in &meta.regions {
+        let r = region.rect;
+        // the upright box, as centre and size
+        let (cx, cy, w, h) = ((r.x0 + r.x1) / 2.0, (r.y0 + r.y1) / 2.0, r.x1 - r.x0, r.y1 - r.y0);
+        // the box in the frame the reader turns back into the upright one (6: −π/2, 8: +π/2, 3: π)
+        let (sx, sy, sw, sh, rotation) = match turn {
+            6 => (cy, 1.0 - cx, h, w, Some(-quarter)),
+            8 => (1.0 - cy, cx, h, w, Some(quarter)),
+            3 => (1.0 - cx, 1.0 - cy, w, h, Some(std::f64::consts::PI)),
+            _ => (cx, cy, w, h, None),
+        };
+        x.push_str("     <rdf:li rdf:parseType=\"Resource\">\n");
+        x.push_str(&format!(
+            "      <mwg-rs:Area rdf:parseType=\"Resource\" stArea:x=\"{sx}\" stArea:y=\"{sy}\" stArea:w=\"{sw}\" stArea:h=\"{sh}\" stArea:unit=\"normalized\"/>\n"
+        ));
+        if let Some(rotation) = rotation {
+            x.push_str(&format!("      <mwg-rs:Rotation>{rotation}</mwg-rs:Rotation>\n"));
+        }
+        let kind = match &region.kind {
+            RegionKind::Face => "Face",
+            RegionKind::Pet => "Pet",
+            RegionKind::Focus => "Focus",
+            RegionKind::BarCode => "BarCode",
+            RegionKind::Other(t) => t.as_str(),
+        };
+        if !kind.is_empty() {
+            x.push_str(&format!("      <mwg-rs:Type>{}</mwg-rs:Type>\n", escape(kind)));
+        }
+        for (tag, text) in [("Name", region.name.as_deref()), ("Description", region.description.as_deref())] {
+            if let Some(text) = text.filter(|t| !t.is_empty()) {
+                x.push_str(&format!("      <mwg-rs:{tag}>{}</mwg-rs:{tag}>\n", escape(text)));
+            }
+        }
+        x.push_str("     </rdf:li>\n");
+    }
+    x.push_str("     </rdf:Bag>\n    </mwg-rs:RegionList>\n   </mwg-rs:Regions>\n");
 }
 
 #[cfg(test)]
@@ -1025,6 +1096,35 @@ mod tests {
         assert_eq!(regions[0].rect, Rect::UNIT);
         let c = regions[1].rect;
         assert!((c.x0 - 0.85).abs() < 1e-9 && c.x1 == 1.0 && c.y0 == 0.0 && (c.y1 - 0.15).abs() < 1e-9, "{c:?}");
+    }
+
+    /// What the writer's `mwg-rs:Regions` reads back as: the same boxes, kinds, names and descriptions, in the plain
+    /// frame and in each orientation that has a Rotation (3, 6, 8), where the box is written in the sensor's frame.
+    /// Nothing is written for no regions.
+    #[test]
+    fn regions_written_by_the_writer_read_back_in_the_same_frame() {
+        let same = |a: Rect, b: Rect| [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().all(|d| d.abs() < 1e-9);
+        let boxes = [Rect { x0: 0.1, y0: 0.2, x1: 0.4, y1: 0.7 }, Rect { x0: 0.6, y0: 0.05, x1: 0.95, y1: 0.3 }];
+        for exif in [1, 3, 6, 8] {
+            let meta = Metadata {
+                width: Some(4000),
+                height: Some(3000),
+                orientation: Some(Orientation::from_exif(exif)),
+                regions: vec![
+                    Region { rect: boxes[0], kind: RegionKind::Face, name: Some("Jane & Joe".into()), description: None },
+                    Region { rect: boxes[1], kind: RegionKind::Pet, name: None, description: Some("Good <boy>".into()) },
+                ],
+                ..Default::default()
+            };
+            let packet = write_xmp_lc_with_regions(&meta, &[]);
+            let back = parse_xmp(&packet).unwrap().metadata.regions;
+            assert_eq!(back.len(), 2, "orientation {exif}: {back:?}\n{packet}");
+            for (want, got) in meta.regions.iter().zip(&back) {
+                assert_eq!((&want.kind, &want.name, &want.description), (&got.kind, &got.name, &got.description), "orientation {exif}");
+                assert!(same(want.rect, got.rect), "orientation {exif}: {:?} came back as {:?}", want.rect, got.rect);
+            }
+        }
+        assert!(!write_xmp_lc_with_regions(&Metadata::default(), &[]).contains("mwg-rs:Regions"));
     }
 
     /// `extract()`'s precedence (EXIF/IPTC never carry regions; XMP is read and filled in like keywords).

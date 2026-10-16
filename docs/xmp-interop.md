@@ -81,8 +81,9 @@ Ember reads face, pet, focus and barcode regions in the Metadata Working Group's
 write them, from sidecars and from XMP embedded in the file. Named faces become people in the People view
 (LR-LIB-PEOPLE in [`parity-checklist.md`](parity-checklist.md)), and every region is drawn as a box in the loupe.
 
-- **Read only.** Ember never writes `mwg-rs:Regions`; saving a sidecar keeps another application's regions byte
-  for byte. Removing or resizing a box in the loupe changes the library only.
+- **Read only in sidecars.** Ember never writes `mwg-rs:Regions` into a sidecar; saving one keeps another application's
+  regions byte for byte. The writer `write_xmp_lc_with_regions` can emit them (mirroring the reader, including the
+  orientation turns) and reads back the same boxes; nothing calls it for sidecars yet. Removing or resizing a box in the loupe changes the library only.
 - **Areas**: `stArea:x`/`y` are the box's centre, `w`/`h` its size, normalized to the photo (`stArea:unit="pixel"`
   areas are divided by `mwg-rs:AppliedToDimensions`, and dropped without it). Boxes are clipped to the photo; one
   that misses it entirely, or has a non-finite, zero or negative size, is skipped (the rest of the list is kept).
