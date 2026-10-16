@@ -18,7 +18,7 @@ use crate::backend::Backend;
 use crate::backup::{ACTIVE_LIBRARY, DEFAULT_LIBRARY_DIR, PREVIOUS_LIBRARY, valid_library_dir};
 use crate::bench::Bench;
 use crate::exports::ExportHost;
-use crate::files::{Files, FlushOp, LIBRARY_FILES};
+use crate::files::{Durability, Files, FlushOp, LIBRARY_FILES};
 use crate::safety::{self, notice};
 use crate::store::{Originals, content_hash, download_name, storage_key};
 use crate::wire::ThumbIndex;
@@ -296,7 +296,7 @@ fn services(originals: Originals, backend: Option<Backend>, files: Files, frozen
 /// Write dirty library files to storage, in order, until none are left. A failure (quota,
 /// storage cleared) is recorded in `files` — the catalog then reports changes as unsaved instead
 /// of accepting them silently — and retried after [`SAVE_RETRY_MS`].
-async fn flush(files: Files, backend: Backend, dir: String, flushing: Rc<Cell<bool>>, failed_at: Rc<Cell<f64>>) {
+async fn flush(files: Files, backend: Backend, dir: String, failed_at: Rc<Cell<f64>>) {
     'outer: loop {
         let ops = files.take_dirty();
         if ops.is_empty() {
@@ -320,7 +320,51 @@ async fn flush(files: Files, backend: Backend, dir: String, flushing: Rc<Cell<bo
             }
         }
     }
-    flushing.set(false);
+    files.end_flush();
+}
+
+/// Start a flush task now if something is dirty and none is running (the frame loop's `save` and
+/// the unload handlers both come through here).
+fn start_flush(files: &Files, backend: &Backend, dir: &str, failed_at: &Rc<Cell<f64>>) {
+    if files.begin_flush() {
+        wasm_bindgen_futures::spawn_local(flush(files.clone(), backend.clone(), dir.to_string(), failed_at.clone()));
+    }
+}
+
+/// Flush at once when the page is being left or hidden, and ask the browser to confirm leaving
+/// while writes are pending or refused (the prompt gives the in-flight write time to finish).
+/// Writes are asynchronous, so no handler can wait for them: this narrows the window, it does not
+/// make a tab kill safe. Does nothing without storage or once saving is frozen (a restore reloads).
+fn install_unload_guard(files: Files, backend: Backend, dir: String, failed_at: Rc<Cell<f64>>, frozen: Rc<Cell<bool>>) {
+    let Some(w) = window() else { return };
+    let on_unload = {
+        let (files, backend, dir, failed_at, frozen) = (files.clone(), backend.clone(), dir.clone(), failed_at.clone(), frozen.clone());
+        Closure::<dyn FnMut(web_sys::Event)>::new(move |e: web_sys::Event| {
+            if frozen.get() {
+                return;
+            }
+            start_flush(&files, &backend, &dir, &failed_at);
+            if files.is_pending() {
+                e.prevent_default();
+                // older browsers read the prompt trigger from `returnValue`
+                let _ = js_sys::Reflect::set(&e, &"returnValue".into(), &"".into());
+            }
+        })
+    };
+    let _ = w.add_event_listener_with_callback("beforeunload", on_unload.as_ref().unchecked_ref());
+    on_unload.forget();
+    // `pagehide` and a hidden tab (mobile browsers may never send `beforeunload`): flush, no prompt
+    let on_hide = Closure::<dyn FnMut(web_sys::Event)>::new(move |_e: web_sys::Event| {
+        let hidden = window().and_then(|w| w.document()).is_some_and(|d| d.visibility_state() == web_sys::VisibilityState::Hidden);
+        if !frozen.get() && hidden {
+            start_flush(&files, &backend, &dir, &failed_at);
+        }
+    });
+    let _ = w.add_event_listener_with_callback("pagehide", on_hide.as_ref().unchecked_ref());
+    if let Some(d) = w.document() {
+        let _ = d.add_event_listener_with_callback("visibilitychange", on_hide.as_ref().unchecked_ref());
+    }
+    on_hide.forget();
 }
 
 /// Read a stored library folder's files into `refs` (the originals they name). `Err`: a file
@@ -517,7 +561,6 @@ struct WebApp {
     files: Files,
     backend: Option<Backend>,
     workers: Option<Workers>,
-    flushing: Rc<Cell<bool>>,
     /// When the last save to storage failed (ms; 0 = never).
     flush_failed_at: Rc<Cell<f64>>,
     /// Saving stopped (a restored backup is about to replace this library: the page reloads).
@@ -622,14 +665,17 @@ impl WebApp {
         log::info!("lightcraft: {n} render workers");
         CTX.with(|c| *c.borrow_mut() = Some(cc.egui_ctx.clone()));
         let origin = lightcraft_ui_egui::now_ms() - perf_now();
+        let flush_failed_at = Rc::new(Cell::new(0.0));
+        if let Some(b) = &backend {
+            install_unload_guard(files.clone(), b.clone(), lib_dir.clone(), flush_failed_at.clone(), frozen.clone());
+        }
         WebApp {
             app,
             originals,
             files,
             backend,
             workers,
-            flushing: Rc::new(Cell::new(false)),
-            flush_failed_at: Rc::new(Cell::new(0.0)),
+            flush_failed_at,
             frozen,
             lib_dir,
             bench: opts.bench.then(|| Bench::new(origin)),
@@ -722,12 +768,9 @@ impl WebApp {
         let backing_off = self.files.error().is_some() && now - self.flush_failed_at.get() < SAVE_RETRY_MS;
         if let Some(b) = &self.backend
             && self.files.is_dirty()
-            && !self.flushing.get()
             && !backing_off
         {
-            self.flushing.set(true);
-            let (files, dir, flushing, failed_at) = (self.files.clone(), self.lib_dir.clone(), self.flushing.clone(), self.flush_failed_at.clone());
-            wasm_bindgen_futures::spawn_local(flush(files, b.clone(), dir, flushing, failed_at));
+            start_flush(&self.files, b, &self.lib_dir, &self.flush_failed_at);
         }
     }
 }
@@ -761,7 +804,13 @@ impl WebApp {
             "storage": self.backend.as_ref().map_or("memory", |b| b.kind()),
             "library": self.lib_dir,
             "dirty": self.files.is_dirty(),
-            "flushing": self.flushing.get(),
+            "flushing": self.files.is_flushing(),
+            // "durable" | "pending" (written in memory, on its way to storage) | "failed" (see saveError)
+            "durability": match self.files.durability() {
+                Durability::Durable => "durable",
+                Durability::Pending => "pending",
+                Durability::Failed(_) => "failed",
+            },
             "saveError": self.files.error(),
             "workers": {"alive": alive, "ready": ready, "remoteJobs": remote, "inlineJobs": inline},
             "originalsInMemory": orig_n,
@@ -820,7 +869,7 @@ impl WebApp {
     /// Whether a command's reply has to wait for its writes: there is storage to write to, the
     /// library is not frozen, and something is dirty or being flushed.
     fn must_wait_for_storage(&self) -> bool {
-        self.backend.is_some() && !self.frozen.get() && (self.files.is_dirty() || self.flushing.get())
+        self.backend.is_some() && !self.frozen.get() && (self.files.is_dirty() || self.files.is_flushing())
     }
 
     /// Resolve the held [`command`] replies once their writes are flushed; reject them if browser
@@ -829,7 +878,7 @@ impl WebApp {
         if self.held.is_empty() {
             return;
         }
-        if self.flushing.get() || (self.files.error().is_none() && self.files.is_dirty()) {
+        if self.files.is_flushing() || (self.files.error().is_none() && self.files.is_dirty()) {
             // a flush is running, or the next one starts in `save` this frame
             ctx.request_repaint_after(std::time::Duration::from_millis(16));
             return;

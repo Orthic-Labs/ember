@@ -7,7 +7,12 @@
 //! about once per frame while anything is dirty).
 //!
 //! Durability: a write is in browser storage a few milliseconds after the command that made it
-//! (one flush), not before the command returns as on the desktop. Each flushed file is replaced
+//! (one flush), not before the command returns as on the desktop (the engine's `Store` is
+//! synchronous, browser storage is not, so it cannot be). The weaker guarantee is explicit instead:
+//! [`Files::durability`] says whether everything written so far has reached storage
+//! ([`Durability`]), `web.stats` reports it, the automation API waits for it, and the page's
+//! `beforeunload` / `pagehide` handlers start a flush at once and ask the browser to confirm
+//! leaving while one is pending. Each flushed file is replaced
 //! atomically (OPFS swap file / one IndexedDB transaction), and files are flushed in the order they
 //! were last modified, so the journal's recovery rules still hold: e.g. a new `catalog.snap` always
 //! lands before the `catalog.log` reset that follows it.
@@ -51,6 +56,19 @@ struct Mirror {
     dirty: Vec<(String, Dirty)>,
     /// Why the last flush to browser storage failed (quota, eviction…), until one succeeds.
     error: Option<String>,
+    /// A flush task is running ([`Files::begin_flush`] … [`Files::end_flush`]).
+    flushing: bool,
+}
+
+/// Whether what was written has reached browser storage.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Durability {
+    /// Everything written is in storage.
+    Durable,
+    /// Written in memory; a flush is queued or running.
+    Pending,
+    /// The last flush failed (quota, eviction…); the changes are in memory only.
+    Failed(String),
 }
 
 impl Mirror {
@@ -109,6 +127,42 @@ impl Files {
 
     pub fn is_dirty(&self) -> bool {
         !self.lock().dirty.is_empty()
+    }
+
+    /// Whether the written files are in browser storage, still on their way, or refused.
+    pub fn durability(&self) -> Durability {
+        let m = self.lock();
+        let pending = !m.dirty.is_empty() || m.flushing;
+        match (&m.error, pending) {
+            (Some(e), true) => Durability::Failed(e.clone()),
+            (_, true) => Durability::Pending,
+            (_, false) => Durability::Durable,
+        }
+    }
+
+    /// Anything written that is not yet in storage (pending or failed).
+    pub fn is_pending(&self) -> bool {
+        self.durability() != Durability::Durable
+    }
+
+    /// Claim the flush slot: `true` when the caller must now run the flush (something is dirty
+    /// and no flush is running). Pair with [`Files::end_flush`].
+    pub fn begin_flush(&self) -> bool {
+        let mut m = self.lock();
+        if m.dirty.is_empty() || m.flushing {
+            return false;
+        }
+        m.flushing = true;
+        true
+    }
+
+    /// The flush task finished (everything written, or stopped on a failure).
+    pub fn end_flush(&self) {
+        self.lock().flushing = false;
+    }
+
+    pub fn is_flushing(&self) -> bool {
+        self.lock().flushing
     }
 
     /// Everything to write, in modification order; the files count as clean afterwards (call
@@ -239,6 +293,40 @@ mod tests {
         );
         f.failed(&ops);
         assert_eq!(f.take_dirty().len(), 2);
+    }
+
+    /// The pending/flush state machine behind `web.stats.durability` and the unload guard.
+    #[test]
+    fn durability_tracks_pending_flushing_and_failure() {
+        let f = Files::default();
+        assert_eq!(f.durability(), Durability::Durable);
+        assert!(!f.begin_flush(), "nothing to flush");
+        f.append("catalog.log", b"1
+");
+        assert_eq!(f.durability(), Durability::Pending);
+        assert!(f.is_pending());
+        assert!(f.begin_flush());
+        assert!(!f.begin_flush(), "one flush task at a time");
+        // the flush took the ops: still pending until it ends
+        let ops = f.take_dirty();
+        assert_eq!(f.durability(), Durability::Pending);
+        // a write made while flushing needs another round
+        f.append("catalog.log", b"2
+");
+        f.end_flush();
+        assert!(f.begin_flush(), "dirty again, so a new flush may start");
+        f.failed(&ops);
+        f.set_error(Some("QuotaExceededError".into()));
+        f.end_flush();
+        assert_eq!(f.durability(), Durability::Failed("QuotaExceededError".into()));
+        assert!(f.is_pending(), "failed writes still block a clean unload");
+        // storage works again: flush everything
+        f.set_error(None);
+        assert!(f.begin_flush());
+        let _ = f.take_dirty();
+        f.end_flush();
+        assert_eq!(f.durability(), Durability::Durable);
+        assert!(!f.is_pending() && !f.is_flushing());
     }
 
     #[test]

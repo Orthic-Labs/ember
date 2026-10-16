@@ -201,11 +201,24 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
   "still loading" and works a moment later. Exports no longer do (see *Exports run in the render
   workers*), except the *Original*/DNG and Denoise cases above, which still read the original on
   the main thread. [#192](https://github.com/Orthic-Labs/ember/issues/192)
-- **Durability is "a frame later" for user actions:** a click or key command is written to browser
-  storage a few milliseconds after it runs (one flush), so a crash or tab kill in that window loses
-  it. The automation API is durable before it returns: `command()` (see *Automation*) resolves only
-  once its writes reached storage, and rejects, saying the change is not saved, if storage refused
-  them. A kill check for the user path is still to do (issue #193 stays open for it). [#193](https://github.com/Orthic-Labs/ember/issues/193)
+- **Durability is "a frame later" for user actions, by design** ([#193](https://github.com/Orthic-Labs/ember/issues/193)):
+  the catalog's `Store` is synchronous and browser storage is not (OPFS writable streams,
+  IndexedDB), so a click or key command can't be written before it returns. It is written by the
+  flush that starts in the same frame, a few milliseconds later; a crash or tab kill inside that
+  window loses it. What the page does about it:
+  - `web.stats` → `durability` is `durable` (everything written is in storage), `pending` (written in
+    memory, a flush is queued or running) or `failed` (storage refused it; see `saveError`).
+    `Files::durability` (`apps/lightcraft-web/src/files.rs`) is the state machine, covered by a
+    native unit test.
+  - The automation API is durable before it returns: `command()` (see *Automation*) resolves only once
+    its writes reached storage, and rejects, saying the change is not saved, if storage refused them.
+  - On `beforeunload`, `pagehide` and when the tab becomes hidden, the page starts the flush at once
+    (not on the next frame, which a hidden tab may never run). While writes are pending or refused,
+    `beforeunload` also asks the browser to confirm leaving, which gives the in-flight write time to
+    finish. No handler can wait for an asynchronous write, so a forced kill (task manager, crash) in
+    the window is still lost. This is the documented weaker guarantee.
+  - Not run yet: a browser kill check (headless Chrome: run a command, kill the tab, reload,
+    compare). Only the state machine is covered by tests.
 - **Data safety: what is left** (issue #107): a panic in a decoder still ends the page, since a
   wasm32 panic aborts and can't be caught (a photo that panics while its thumbnail renders can do
   so again after a reload: use the `?safe` start above). Nothing else is open. [#194](https://github.com/Orthic-Labs/ember/issues/194)
