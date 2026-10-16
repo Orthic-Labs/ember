@@ -34,15 +34,24 @@ pub enum DngCompression {
     },
 }
 
-/// Butteraugli distance of a 1..=100 quality (the libjxl scale), recorded in `JXLDistance`.
+/// Butteraugli distance of a 1..=100 quality, recorded in `JXLDistance`. With the encoder built in this is
+/// jixel's own mapping (what `with_quality` encodes at); without it no JPEG XL tile is written, so the tag
+/// is never emitted and the libjxl scale is returned for callers that only want the number.
 pub fn jxl_distance_from_quality(quality: u8) -> f32 {
     let q = f32::from(quality.clamp(1, 100));
-    if q >= 100.0 {
-        0.0
-    } else if q >= 30.0 {
-        0.1 + (100.0 - q) * 0.09
-    } else {
-        53.0 / 3000.0 * q * q - 23.0 / 20.0 * q + 25.0
+    #[cfg(all(feature = "jxl-encode", not(target_arch = "wasm32")))]
+    {
+        jixel::distance_from_quality(q)
+    }
+    #[cfg(not(all(feature = "jxl-encode", not(target_arch = "wasm32"))))]
+    {
+        if q >= 100.0 {
+            0.0
+        } else if q >= 30.0 {
+            0.1 + (100.0 - q) * 0.09
+        } else {
+            53.0 / 3000.0 * q * q - 23.0 / 20.0 * q + 25.0
+        }
     }
 }
 
@@ -51,7 +60,7 @@ pub fn jxl_distance_from_quality(quality: u8) -> f32 {
 fn jxl_tile(px: &[f32], w: usize, h: usize, quality: u8) -> Result<Vec<u8>> {
     use jixel::{ColorEncoding, EncodeConfig, Speed};
     let c = EncodeConfig::default()
-        .with_quality(f32::from(quality.clamp(1, 100)))
+        .with_distance(jxl_distance_from_quality(quality))
         .with_color_encoding(ColorEncoding::srgb_linear())
         .with_speed(Speed::Fast)
         // the decoder here refuses a lossy tile whose intensity target is above 255 nits
