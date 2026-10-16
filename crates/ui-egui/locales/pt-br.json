@@ -2258,5 +2258,21 @@
   "photos placed on the map": "fotos colocadas no mapa",
   "Backdrop photo": "Foto de fundo",
   "Export JPEGs…": "Exportar JPEGs…",
-  "Slideshow JPEG folder": "Pasta dos JPEGs da apresentação"
+  "Slideshow JPEG folder": "Pasta dos JPEGs da apresentação",
+  "Load Tracklog": "Carregar registro GPS",
+  "Load Tracklog…": "Carregar registro GPS…",
+  "Show Track": "Mostrar trajeto",
+  "Map Style": "Estilo do mapa",
+  "Offline grid": "Grade offline",
+  "OpenStreetMap standard": "OpenStreetMap padrão",
+  "Custom URL…": "URL personalizada…",
+  "Search places or lat, lon": "Pesquisar lugares ou latitude, longitude",
+  "Saved Location": "Local salvo",
+  "Place": "Lugar",
+  "Centre": "Centro",
+  "New Saved Location Here": "Novo local salvo aqui",
+  "Edit Saved Location…": "Editar local salvo…",
+  "Delete Saved Location": "Excluir local salvo",
+  "Radius (metres)": "Raio (metros)",
+  "The radius must be a number of metres": "O raio deve ser um número de metros"
 }

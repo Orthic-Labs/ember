@@ -2260,5 +2260,21 @@
   "photos placed on the map": "张照片已放到地图上",
   "Backdrop photo": "背景照片",
   "Export JPEGs…": "导出 JPEG…",
-  "Slideshow JPEG folder": "幻灯片 JPEG 文件夹"
+  "Slideshow JPEG folder": "幻灯片 JPEG 文件夹",
+  "Load Tracklog": "加载轨迹日志",
+  "Load Tracklog…": "加载轨迹日志…",
+  "Show Track": "显示轨迹",
+  "Map Style": "地图样式",
+  "Offline grid": "离线网格",
+  "OpenStreetMap standard": "OpenStreetMap 标准",
+  "Custom URL…": "自定义 URL…",
+  "Search places or lat, lon": "搜索地点或纬度, 经度",
+  "Saved Location": "已保存的位置",
+  "Place": "地点",
+  "Centre": "中心",
+  "New Saved Location Here": "在此新建已保存的位置",
+  "Edit Saved Location…": "编辑已保存的位置…",
+  "Delete Saved Location": "删除已保存的位置",
+  "Radius (metres)": "半径（米）",
+  "The radius must be a number of metres": "半径必须是以米为单位的数字"
 }

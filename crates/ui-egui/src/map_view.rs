@@ -2,7 +2,10 @@
 //! pan (drag) and zoom (wheel, pinch, + / −, double-click), with the saved locations drawn as circles. Markers
 //! merge into one numbered cluster at low zoom; a click selects the photos of a marker. A strip of thumbnails
 //! under the map is where photos are dragged from onto the map to give them a GPS position (`photo.setLocation`,
-//! one undo step).
+//! one undo step). A GPX track loaded with Load Tracklog is drawn as a line (`map.loadTrack`, `map.showTrack`); the
+//! place search centres the map (`map.search`); a saved location is added on the map's context menu, moved by dragging its
+//! centre, and edited or deleted in its window (`location.setCircle`, `location.delete`, one undo step each); the map style
+//! is the offline grid, OpenStreetMap's standard layer or a custom address (`map.style`).
 //!
 //! The map is offline by default: a plain latitude / longitude grid, and no network request of any kind. Tiles
 //! come only when the user turned **Online map** on in Settings (`map.online`); they are fetched by
@@ -14,12 +17,13 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use egui::{Align2, Color32, Pos2, Rect, Sense, Stroke, StrokeKind, pos2, vec2};
-use lightcraft_catalog::PhotoId;
+use lightcraft_catalog::{LocationId, PhotoId};
 use lightcraft_engine::map::{self, Cluster, TileKey, View};
 use serde_json::{Value, json};
 
 use crate::LightcraftApp;
 use crate::state::AppSettings;
+use crate::text_field::TextField;
 use crate::theme::Tokens;
 use crate::widgets::register;
 
@@ -122,6 +126,17 @@ pub struct Run {
     only_untagged: bool,
     /// The photos being dragged from the strip, until the pointer is let go.
     drag: Option<Vec<PhotoId>>,
+    /// The place search: the text typed, its results and the text they were found for.
+    search: String,
+    search_hits: Vec<Value>,
+    search_for: String,
+    /// A saved location's centre being dragged: its id and where the pointer has taken it.
+    moving: Option<(u64, f64, f64)>,
+    /// The saved location window, when open.
+    editor: Option<Editor>,
+    /// The saved location under the pointer when the context menu opened, and the place it opened at.
+    menu_hit: Option<(u64, f64, f64)>,
+    menu_at: (f64, f64),
 }
 
 impl Run {
@@ -129,6 +144,27 @@ impl Run {
     pub fn photos(&self) -> usize {
         self.points.len()
     }
+}
+
+/// Search results shown under the toolbar.
+const SEARCH_SHOWN: usize = 8;
+
+/// A saved location open in the window: `id` is `None` for one to be added at `lat`, `lon`.
+#[derive(Clone, Debug)]
+struct Editor {
+    id: Option<u64>,
+    name: String,
+    radius: String,
+    lat: f64,
+    lon: f64,
+}
+
+/// What the map's context menu chose.
+#[derive(Clone, Copy, Debug)]
+enum MapMenu {
+    New,
+    Edit(u64),
+    Delete(u64),
 }
 
 /// Opens the map view (`map.view`).
@@ -188,6 +224,142 @@ pub fn marker_at(view: &View, clusters: &[Cluster], pointer: (f64, f64), radius:
         .map(|(i, _)| i)
 }
 
+/// The map style in use, by its `map.style` name: `grid` (offline), `osm` (OpenStreetMap's standard layer) or `custom`.
+pub fn style_name(settings: &AppSettings) -> &'static str {
+    if !settings.online_map {
+        "grid"
+    } else if template(settings) == map::DEFAULT_TILE_URL {
+        "osm"
+    } else {
+        "custom"
+    }
+}
+
+/// The label of a map style in the style menu.
+fn style_label(style: &str) -> &'static str {
+    match style {
+        "osm" => crate::i18n::tr("OpenStreetMap standard"),
+        "custom" => crate::i18n::tr("Custom URL…"),
+        _ => crate::i18n::tr("Offline grid"),
+    }
+}
+
+/// `map.style {style: grid | osm | custom, url?}`: the map's tiles. `grid` makes no request and is the default; `osm` is
+/// OpenStreetMap's standard layer; `custom` uses `url`, a tile address with `{z}`, `{x}` and `{y}`.
+pub fn set_style(app: &mut LightcraftApp, p: &Value) -> Result<Value, String> {
+    let style = p.get("style").and_then(Value::as_str).unwrap_or("");
+    let url = p.get("url").and_then(Value::as_str).unwrap_or("");
+    let tiles = map::style_tile_url(style, url)?;
+    app.ui.settings.online_map = tiles.is_some();
+    match style {
+        "custom" => app.ui.settings.map_tile_url = tiles.unwrap_or_default(),
+        "osm" => app.ui.settings.map_tile_url.clear(),
+        _ => {}
+    }
+    Ok(json!({"style": style_name(&app.ui.settings), "online": app.ui.settings.online_map, "tileUrl": template(&app.ui.settings)}))
+}
+
+/// The saved location whose centre is within [`HIT_R`] points of `pointer` (on a map whose centre is `centre`): its id
+/// and position, the nearest when several are.
+fn centre_at(app: &LightcraftApp, view: &View, centre: Pos2, pointer: Pos2) -> Option<(u64, f64, f64)> {
+    let (ox, oy) = (f64::from(pointer.x - centre.x), f64::from(pointer.y - centre.y));
+    app.session
+        .catalog
+        .saved_locations()
+        .map(|(id, l)| {
+            let (dx, dy) = view.offset(l.lat, l.lon);
+            (id.0, l.lat, l.lon, (dx - ox).hypot(dy - oy))
+        })
+        .filter(|h| h.3 <= HIT_R)
+        .min_by(|a, b| a.3.total_cmp(&b.3))
+        .map(|h| (h.0, h.1, h.2))
+}
+
+/// Runs the place search again when its text has changed (`map.search`, offline).
+fn refresh_search(app: &mut LightcraftApp, run: &mut Run) {
+    if run.search == run.search_for {
+        return;
+    }
+    run.search_for = run.search.clone();
+    run.search_hits = match app.run("map.search", json!({"query": run.search})) {
+        Ok(v) => v["results"].as_array().cloned().unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
+}
+
+/// Opens the saved location window on the location `id`.
+fn open_editor(app: &LightcraftApp, run: &mut Run, id: u64) {
+    if let Some(l) = app.session.catalog.saved_location(LocationId(id)) {
+        run.editor = Some(Editor { id: Some(id), name: l.name.clone(), radius: format!("{:.0}", l.radius_m), lat: l.lat, lon: l.lon });
+    }
+}
+
+/// The saved location window: a name, a radius in metres and the centre, with Save, Delete (for a saved one) and Cancel.
+/// Returns whether it stays open.
+fn edit_window(app: &mut LightcraftApp, ctx: &egui::Context, editor: &mut Editor) -> bool {
+    let tr = crate::i18n::tr;
+    let mut open = true;
+    let mut action: Option<&'static str> = None;
+    egui::Window::new(tr("Saved Location")).id(egui::Id::new("map-location-editor")).collapsible(false).resizable(false).open(&mut open).show(ctx, |ui| {
+        egui::Grid::new("map-location-grid").num_columns(2).show(ui, |ui| {
+            ui.label(tr("Name"));
+            if TextField::singleline("field:mapLocationName", &mut editor.name).width(220.0).show(ui).committed() {
+                action = Some("save");
+            }
+            ui.end_row();
+            ui.label(tr("Radius (metres)"));
+            if TextField::singleline("field:mapLocationRadius", &mut editor.radius).width(220.0).show(ui).committed() {
+                action = Some("save");
+            }
+            ui.end_row();
+            ui.label(tr("Centre"));
+            ui.label(format!("{:.5}, {:.5}", editor.lat, editor.lon));
+            ui.end_row();
+        });
+        ui.horizontal(|ui| {
+            if ui.button(tr("Save")).clicked() {
+                action = Some("save");
+            }
+            if editor.id.is_some() && ui.button(tr("Delete")).clicked() {
+                action = Some("delete");
+            }
+            if ui.button(tr("Cancel")).clicked() {
+                action = Some("cancel");
+            }
+        });
+    });
+    let mut keep = open;
+    match action {
+        Some("save") => {
+            let name = editor.name.trim().to_string();
+            match editor.radius.trim().parse::<f64>() {
+                Ok(radius_m) => {
+                    let result = match editor.id {
+                        Some(id) => app.run("location.setCircle", json!({"id": id, "name": name, "lat": editor.lat, "lon": editor.lon, "radiusM": radius_m})),
+                        None => app.run("location.add", json!({"name": name, "lat": editor.lat, "lon": editor.lon, "radiusM": radius_m})),
+                    };
+                    match result {
+                        Ok(_) => keep = false,
+                        Err(e) => app.toast_error(ctx, e),
+                    }
+                }
+                Err(_) => app.toast_error(ctx, tr("The radius must be a number of metres")),
+            }
+        }
+        Some("delete") => {
+            if let Some(id) = editor.id {
+                match app.run("location.delete", json!({"id": id})) {
+                    Ok(_) => keep = false,
+                    Err(e) => app.toast_error(ctx, e),
+                }
+            }
+        }
+        Some(_) => keep = false,
+        None => {}
+    }
+    keep
+}
+
 /// Rebuild the list of photos with a position when the library, the filter or an edit changed it.
 fn refresh_points(app: &mut LightcraftApp, run: &mut Run) {
     let (generation, _) = app.session.visible_shared();
@@ -236,6 +408,11 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     refresh_points(app, &mut run);
     let (mut close, mut fit) = (false, false);
     let mut zoom = 0.0;
+    let tr = crate::i18n::tr;
+    let style_now = style_name(&app.ui.settings);
+    let custom_url = app.ui.settings.map_tile_url.trim().to_string();
+    let mut show_track = app.session.map_show_track;
+    let (mut track_toggled, mut load_track, mut style_chosen) = (false, false, None::<&'static str>);
     ui.horizontal(|ui| {
         let r = ui.button(crate::i18n::tr("Close"));
         register(ctx, "button:mapClose", r.rect);
@@ -253,10 +430,47 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         if r.clicked() {
             zoom += 1.0;
         }
+        let r = egui::ComboBox::from_id_salt("map-style").selected_text(style_label(style_now)).show_ui(ui, |ui| {
+            for (style, label) in [("grid", tr("Offline grid")), ("osm", tr("OpenStreetMap standard")), ("custom", tr("Custom URL…"))] {
+                if ui.selectable_label(style == style_now, label).clicked() {
+                    style_chosen = Some(style);
+                }
+            }
+        });
+        let _ = r.response.on_hover_text(tr("Map Style"));
+        let _ = TextField::singleline("field:mapSearch", &mut run.search).width(200.0).hint(tr("Search places or lat, lon")).show(ui);
+        let r = ui.button(tr("Load Tracklog…"));
+        register(ctx, "button:mapLoadTrack", r.rect);
+        load_track = r.clicked();
+        track_toggled = ui.checkbox(&mut show_track, tr("Show Track")).changed();
         let n = run.points.len();
         let what = crate::i18n::tr(if n == 1 { "photo on the map" } else { "photos on the map" });
         ui.label(egui::RichText::new(format!("{n} {what}")).color(t.text_dim));
     });
+    refresh_search(app, &mut run);
+    if !run.search_hits.is_empty() {
+        ui.horizontal_wrapped(|ui| {
+            let mut picked = None;
+            for hit in run.search_hits.iter().take(SEARCH_SHOWN) {
+                let (Some(name), Some(lat), Some(lon), Some(zoom)) = (hit["name"].as_str(), hit["lat"].as_f64(), hit["lon"].as_f64(), hit["zoom"].as_f64())
+                else {
+                    continue;
+                };
+                let kind = match hit["kind"].as_str() {
+                    Some("position") => crate::i18n::tr("Position"),
+                    Some("location") => crate::i18n::tr("Saved Location"),
+                    _ => crate::i18n::tr("Place"),
+                };
+                if ui.small_button(format!("{name} · {kind}")).clicked() {
+                    picked = Some((lat, lon, zoom));
+                }
+            }
+            if let Some((lat, lon, zoom)) = picked {
+                run.view = View::new(lat, lon, zoom);
+                run.search.clear();
+            }
+        });
+    }
     ui.add_space(4.0);
     let total = ui.available_size();
     let (rect, response) = ui.allocate_exact_size(vec2(total.x, (total.y - STRIP_H - 6.0).max(0.0)), Sense::click_and_drag());
@@ -275,10 +489,28 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     }
     let centre = rect.center();
     let pointer_offset = |p: Pos2| (f64::from(p.x - centre.x), f64::from(p.y - centre.y));
-    // pan, wheel and pinch zoom about the pointer, double-click zooms in
+    // a drag that starts on a saved location's centre moves it; any other drag pans; wheel and pinch zoom about the pointer
+    if response.drag_started() {
+        run.moving = ui.input(|i| i.pointer.press_origin()).and_then(|p| centre_at(app, &run.view, centre, p));
+    }
     if response.dragged() {
-        let d = response.drag_delta();
-        run.view.pan(f64::from(d.x), f64::from(d.y));
+        match (run.moving, response.interact_pointer_pos()) {
+            (Some((id, _, _)), Some(p)) => {
+                let (lat, lon) = run.view.locate(f64::from(p.x - centre.x), f64::from(p.y - centre.y));
+                run.moving = Some((id, lat, lon));
+            }
+            _ => {
+                let d = response.drag_delta();
+                run.view.pan(f64::from(d.x), f64::from(d.y));
+            }
+        }
+    }
+    if response.drag_stopped()
+        && let Some((id, lat, lon)) = run.moving.take()
+        && app.session.catalog.saved_location(LocationId(id)).is_some_and(|l| l.lat != lat || l.lon != lon)
+        && let Err(e) = app.run("location.setCircle", json!({"id": id, "lat": lat, "lon": lon}))
+    {
+        app.toast_error(ctx, e);
     }
     if response.hovered() {
         let (scroll, pinch) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta()));
@@ -298,6 +530,46 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         run.view.zoom_at(1.0, ox, oy);
     }
     refresh_clusters(&mut run);
+    // the context menu: a saved location under the pointer can be edited or deleted; anywhere, a new one can be added
+    if response.secondary_clicked()
+        && let Some(p) = response.interact_pointer_pos()
+    {
+        let (ox, oy) = pointer_offset(p);
+        run.menu_at = run.view.locate(ox, oy);
+        run.menu_hit = centre_at(app, &run.view, centre, p);
+    }
+    let hit = run.menu_hit;
+    let mut menu: Option<MapMenu> = None;
+    response.context_menu(|ui| {
+        if let Some((id, _, _)) = hit {
+            if ui.button(tr("Edit Saved Location…")).clicked() {
+                menu = Some(MapMenu::Edit(id));
+                ui.close();
+            }
+            if ui.button(tr("Delete Saved Location")).clicked() {
+                menu = Some(MapMenu::Delete(id));
+                ui.close();
+            }
+            ui.separator();
+        }
+        if ui.button(tr("New Saved Location Here")).clicked() {
+            menu = Some(MapMenu::New);
+            ui.close();
+        }
+    });
+    match menu {
+        Some(MapMenu::New) => {
+            let (lat, lon) = run.menu_at;
+            run.editor = Some(Editor { id: None, name: String::new(), radius: "500".into(), lat, lon });
+        }
+        Some(MapMenu::Edit(id)) => open_editor(app, &mut run, id),
+        Some(MapMenu::Delete(id)) => {
+            if let Err(e) = app.run("location.delete", json!({"id": id})) {
+                app.toast_error(ctx, e);
+            }
+        }
+        None => {}
+    }
     // a click on a marker selects its photos
     if response.clicked()
         && let Some(p) = response.interact_pointer_pos()
@@ -321,6 +593,28 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     }
     strip(app, ctx, ui, &t, &mut run, strip_rect);
     drag(app, ctx, &mut run, rect, &t);
+    if let Some(mut editor) = run.editor.take()
+        && edit_window(app, ctx, &mut editor)
+    {
+        run.editor = Some(editor);
+    }
+    if let Some(style) = style_chosen {
+        // Custom URL… uses the address in Settings when there is one, else opens Settings to enter it
+        let result = match style {
+            "custom" if custom_url.is_empty() => app.run("app.settings", json!({})),
+            "custom" => app.run("map.style", json!({"style": "custom", "url": custom_url})),
+            _ => app.run("map.style", json!({"style": style})),
+        };
+        if let Err(e) = result {
+            app.toast_error(ctx, e);
+        }
+    }
+    if track_toggled && let Err(e) = app.run("map.showTrack", json!({"enabled": show_track})) {
+        app.toast_error(ctx, e);
+    }
+    if load_track && let Err(e) = app.run("map.loadTrack", json!({})) {
+        app.toast_error(ctx, e);
+    }
     if !close {
         app.ui.classic_map = Some(run);
     }
@@ -519,10 +813,25 @@ fn paint(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui, t: &To
         ctx.request_repaint_after(Duration::from_millis(120));
     }
 
-    // saved locations: circles of their radius
-    for (_, location) in app.session.catalog.saved_locations() {
-        let (dx, dy) = run.view.offset(location.lat, location.lon);
-        let radius = (location.radius_m / map::metres_per_pixel(location.lat, run.view.zoom)).max(4.0) as f32;
+    // the GPX track, when it is shown
+    if app.session.map_show_track
+        && let Some(track) = app.session.map_track.as_ref()
+    {
+        let stroke = Stroke::new(3.0, t.accent.gamma_multiply(0.85));
+        for line in map::track_lines(&run.view, &track.segments, map::MAX_TRACK_POINTS) {
+            let points: Vec<Pos2> = line.iter().map(|(dx, dy)| place(*dx, *dy)).collect();
+            painter.add(egui::Shape::line(points, stroke));
+        }
+    }
+
+    // saved locations: circles of their radius; a centre being dragged is drawn where the pointer has taken it
+    for (id, location) in app.session.catalog.saved_locations() {
+        let (lat, lon) = match run.moving {
+            Some((moving, lat, lon)) if moving == id.0 => (lat, lon),
+            _ => (location.lat, location.lon),
+        };
+        let (dx, dy) = run.view.offset(lat, lon);
+        let radius = (location.radius_m / map::metres_per_pixel(lat, run.view.zoom)).max(4.0) as f32;
         let centre = place(dx, dy);
         if !rect.expand(radius).contains(centre) {
             continue;
@@ -764,7 +1073,32 @@ mod tests {
     }
 
     #[test]
-    fn the_online_map_command_sets_and_toggles_the_setting() {
+    fn the_style_menu_sets_the_grid_openstreetmap_or_a_custom_address() {
+        let mut a = app();
+        assert_eq!(style_name(&a.ui.settings), "grid", "the offline grid is the default");
+        assert_eq!(a.run("map.style", json!({"style": "osm"})).unwrap()["online"], true);
+        assert_eq!(style_name(&a.ui.settings), "osm");
+        assert_eq!(template(&a.ui.settings), map::DEFAULT_TILE_URL);
+        let custom = "https://tiles.example.org/{z}/{x}/{y}.png";
+        assert_eq!(a.run("map.style", json!({"style": "custom", "url": custom})).unwrap()["tileUrl"], custom);
+        assert_eq!(style_name(&a.ui.settings), "custom");
+        assert!(a.run("map.style", json!({"style": "custom"})).is_err(), "custom needs an address");
+        assert!(a.run("map.style", json!({"style": "satellite"})).is_err(), "no other preset is offered");
+        assert_eq!(a.run("map.style", json!({"style": "grid"})).unwrap()["online"], false);
+        assert!(!a.ui.settings.online_map, "the grid asks for no tiles");
+    }
+
+    #[test]
+    fn a_saved_location_is_found_under_the_pointer_by_its_centre_only() {
+        let mut a = app();
+        let id = a.run("location.add", json!({"name": "Home", "lat": 48.0, "lon": 2.0, "radiusM": 500.0})).unwrap()["id"].as_u64().unwrap();
+        let view = View::new(48.0, 2.0, 12.0);
+        let centre = pos2(400.0, 300.0);
+        assert_eq!(centre_at(&a, &view, centre, pos2(405.0, 302.0)), Some((id, 48.0, 2.0)));
+        assert_eq!(centre_at(&a, &view, centre, pos2(460.0, 300.0)), None, "a point well off the centre is not the location");
+    }
+
+
         let mut a = app();
         assert_eq!(a.run("map.online", json!({"enabled": true})).unwrap()["online"], true);
         assert!(a.ui.settings.online_map);

@@ -266,6 +266,7 @@ fn services(originals: Originals, backend: Option<Backend>, files: Files, frozen
             Vec::new()
         })),
         pick_tracklog: None,
+        pick_map_track: None,
         pick_lightroom_catalog: None,
         // Face models need a folder to live in; the web has none.
         pick_model_file: None,

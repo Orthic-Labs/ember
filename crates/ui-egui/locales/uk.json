@@ -2259,5 +2259,21 @@
   "photos placed on the map": "фото розміщено на карті",
   "Backdrop photo": "Фото фону",
   "Export JPEGs…": "Експорт JPEG…",
-  "Slideshow JPEG folder": "Папка для JPEG слайд-шоу"
+  "Slideshow JPEG folder": "Папка для JPEG слайд-шоу",
+  "Load Tracklog": "Завантажити трек GPS",
+  "Load Tracklog…": "Завантажити трек GPS…",
+  "Show Track": "Показати трек",
+  "Map Style": "Стиль карти",
+  "Offline grid": "Офлайн-сітка",
+  "OpenStreetMap standard": "OpenStreetMap, стандартний",
+  "Custom URL…": "Власна URL…",
+  "Search places or lat, lon": "Пошук місця або широта, довгота",
+  "Saved Location": "Збережене місце",
+  "Place": "Місце",
+  "Centre": "Центр",
+  "New Saved Location Here": "Нове збережене місце тут",
+  "Edit Saved Location…": "Змінити збережене місце…",
+  "Delete Saved Location": "Видалити збережене місце",
+  "Radius (metres)": "Радіус (метри)",
+  "The radius must be a number of metres": "Радіус має бути числом у метрах"
 }

@@ -2261,5 +2261,21 @@
   "photos placed on the map": "枚の写真を地図に配置しました",
   "Backdrop photo": "背景の写真",
   "Export JPEGs…": "JPEG を書き出す…",
-  "Slideshow JPEG folder": "スライドショーの JPEG フォルダ"
+  "Slideshow JPEG folder": "スライドショーの JPEG フォルダ",
+  "Load Tracklog": "GPS トラックログを読み込む",
+  "Load Tracklog…": "GPS トラックログを読み込む…",
+  "Show Track": "トラックを表示",
+  "Map Style": "地図のスタイル",
+  "Offline grid": "オフラインのグリッド",
+  "OpenStreetMap standard": "OpenStreetMap 標準",
+  "Custom URL…": "カスタム URL…",
+  "Search places or lat, lon": "場所または緯度、経度を検索",
+  "Saved Location": "保存した場所",
+  "Place": "場所",
+  "Centre": "中心",
+  "New Saved Location Here": "ここに保存した場所を追加",
+  "Edit Saved Location…": "保存した場所を編集…",
+  "Delete Saved Location": "保存した場所を削除",
+  "Radius (metres)": "半径（メートル）",
+  "The radius must be a number of metres": "半径はメートルで入力してください"
 }

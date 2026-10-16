@@ -2259,5 +2259,21 @@
   "photos placed on the map": "foto ditempatkan di peta",
   "Backdrop photo": "Foto latar belakang",
   "Export JPEGs…": "Ekspor JPEG…",
-  "Slideshow JPEG folder": "Folder JPEG tayangan slide"
+  "Slideshow JPEG folder": "Folder JPEG tayangan slide",
+  "Load Tracklog": "Muat log jejak",
+  "Load Tracklog…": "Muat log jejak…",
+  "Show Track": "Tampilkan jejak",
+  "Map Style": "Gaya peta",
+  "Offline grid": "Kisi luring",
+  "OpenStreetMap standard": "OpenStreetMap standar",
+  "Custom URL…": "URL kustom…",
+  "Search places or lat, lon": "Cari tempat atau lintang, bujur",
+  "Saved Location": "Lokasi tersimpan",
+  "Place": "Tempat",
+  "Centre": "Pusat",
+  "New Saved Location Here": "Lokasi tersimpan baru di sini",
+  "Edit Saved Location…": "Edit lokasi tersimpan…",
+  "Delete Saved Location": "Hapus lokasi tersimpan",
+  "Radius (metres)": "Radius (meter)",
+  "The radius must be a number of metres": "Radius harus berupa angka dalam meter"
 }

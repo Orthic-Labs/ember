@@ -2258,5 +2258,21 @@
   "photos placed on the map": "張照片已放到地圖上",
   "Backdrop photo": "背景照片",
   "Export JPEGs…": "匯出 JPEG…",
-  "Slideshow JPEG folder": "投影片 JPEG 資料夾"
+  "Slideshow JPEG folder": "投影片 JPEG 資料夾",
+  "Load Tracklog": "載入軌跡紀錄",
+  "Load Tracklog…": "載入軌跡紀錄…",
+  "Show Track": "顯示軌跡",
+  "Map Style": "地圖樣式",
+  "Offline grid": "離線網格",
+  "OpenStreetMap standard": "OpenStreetMap 標準",
+  "Custom URL…": "自訂 URL…",
+  "Search places or lat, lon": "搜尋地點或緯度, 經度",
+  "Saved Location": "已儲存的位置",
+  "Place": "地點",
+  "Centre": "中心",
+  "New Saved Location Here": "在此新增已儲存的位置",
+  "Edit Saved Location…": "編輯已儲存的位置…",
+  "Delete Saved Location": "刪除已儲存的位置",
+  "Radius (metres)": "半徑（公尺）",
+  "The radius must be a number of metres": "半徑必須是以公尺為單位的數字"
 }

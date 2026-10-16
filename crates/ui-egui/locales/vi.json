@@ -2259,5 +2259,21 @@
   "photos placed on the map": "ảnh đã được đặt trên bản đồ",
   "Backdrop photo": "Ảnh nền",
   "Export JPEGs…": "Xuất JPEG…",
-  "Slideshow JPEG folder": "Thư mục JPEG của trình chiếu"
+  "Slideshow JPEG folder": "Thư mục JPEG của trình chiếu",
+  "Load Tracklog": "Tải nhật ký lộ trình GPS",
+  "Load Tracklog…": "Tải nhật ký lộ trình GPS…",
+  "Show Track": "Hiện lộ trình",
+  "Map Style": "Kiểu bản đồ",
+  "Offline grid": "Lưới ngoại tuyến",
+  "OpenStreetMap standard": "OpenStreetMap tiêu chuẩn",
+  "Custom URL…": "URL tùy chỉnh…",
+  "Search places or lat, lon": "Tìm địa điểm hoặc vĩ độ, kinh độ",
+  "Saved Location": "Vị trí đã lưu",
+  "Place": "Địa điểm",
+  "Centre": "Tâm",
+  "New Saved Location Here": "Thêm vị trí đã lưu tại đây",
+  "Edit Saved Location…": "Sửa vị trí đã lưu…",
+  "Delete Saved Location": "Xóa vị trí đã lưu",
+  "Radius (metres)": "Bán kính (mét)",
+  "The radius must be a number of metres": "Bán kính phải là một số tính bằng mét"
 }

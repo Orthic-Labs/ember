@@ -209,6 +209,8 @@ pub struct Services {
     pub pick_preset_files: Option<PickFiles>,
     /// Open dialog for a GPS track log (`.gpx`; Photo ▸ Auto-Tag from Tracklog…).
     pub pick_tracklog: Option<PickFiles>,
+    /// Open dialog for a GPS track log to draw on the Classic Map (`.gpx`; Map ▸ Load Tracklog…).
+    pub pick_map_track: Option<PickFiles>,
     /// Open dialog for a monitor ICC profile (`.icc` / `.icm`; Settings ▸ Display; desktop only).
     pub pick_display_profile: Option<PickFiles>,
     /// The profile of the screen showing the window, used while none is chosen in Settings ▸

@@ -2259,5 +2259,21 @@
   "photos placed on the map": "장의 사진을 지도에 배치했습니다",
   "Backdrop photo": "배경 사진",
   "Export JPEGs…": "JPEG 내보내기…",
-  "Slideshow JPEG folder": "슬라이드쇼 JPEG 폴더"
+  "Slideshow JPEG folder": "슬라이드쇼 JPEG 폴더",
+  "Load Tracklog": "GPS 트랙 로그 불러오기",
+  "Load Tracklog…": "GPS 트랙 로그 불러오기…",
+  "Show Track": "트랙 표시",
+  "Map Style": "지도 스타일",
+  "Offline grid": "오프라인 격자",
+  "OpenStreetMap standard": "OpenStreetMap 표준",
+  "Custom URL…": "사용자 지정 URL…",
+  "Search places or lat, lon": "장소 또는 위도, 경도 검색",
+  "Saved Location": "저장된 위치",
+  "Place": "장소",
+  "Centre": "중심",
+  "New Saved Location Here": "여기에 저장된 위치 추가",
+  "Edit Saved Location…": "저장된 위치 편집…",
+  "Delete Saved Location": "저장된 위치 삭제",
+  "Radius (metres)": "반경(미터)",
+  "The radius must be a number of metres": "반경은 미터 단위의 숫자여야 합니다"
 }

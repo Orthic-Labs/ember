@@ -172,6 +172,9 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("map.view", "Classic Map", None, "View"),
     ("map.online", "Online Map", None, ""),
     ("map.tileUrl", "Map Tile Address", None, ""),
+    ("map.style", "Map Style", None, ""),
+    ("map.loadTrack", "Load Tracklog…", None, "View"),
+    ("map.showTrack", "Show Track", None, "View"),
     ("view.secondWindow", "Second Window", Some("Cmd+F11"), "Window"),
     ("tool.keywordPainter", "Keyword Painter", None, ""),
     ("view.gridInfo", "Grid Info", None, ""),
@@ -623,6 +626,22 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         "map.view" => crate::map_view::open(app),
         "map.online" => crate::map_view::set_online(app, p),
         "map.tileUrl" => crate::map_view::set_tile_url(app, p),
+        "map.style" => crate::map_view::set_style(app, p),
+        "map.loadTrack" if p.get("path").is_none() && p.get("gpx").is_none() && p.get("clear").is_none() => {
+            // a GPX track log for the Map: picked from a dialog, then loaded by the engine (map.loadTrack)
+            let req = PickRequest::file(crate::i18n::tr("Load Tracklog"), crate::i18n::tr("GPS Track Log"), &["gpx"]);
+            match crate::pick::ask(app, id, p, "path", req, |s| s.pick_map_track.as_mut().map(|f| f())) {
+                Picked::Now(v) => match v.into_iter().next() {
+                    Some(path) => {
+                        let mut params = p.as_object().cloned().unwrap_or_default();
+                        params.insert("path".into(), json!(path));
+                        app.run("map.loadTrack", Value::Object(params))
+                    }
+                    None => Ok(Value::Null),
+                },
+                Picked::Later | Picked::Unavailable => Ok(Value::Null),
+            }
+        }
         "view.back" => {
             if app.ui.classic_slideshow.is_some() {
                 app.ui.classic_slideshow = None;
@@ -2084,6 +2103,7 @@ pub fn ui_enabled(app: &LightcraftApp, id: &str) -> bool {
         | "dialog.copySettings"
         | "dialog.enhance" => app.session.active().is_some(),
         "photo.tagFromTracklog" => app.session.active().is_some() && app.services.pick_tracklog.is_some(),
+        "map.loadTrack" => app.services.pick_map_track.is_some(),
         "photo.editInPhotoCraft" | "photo.editInExternal" => app.session.active().is_some() && app.services.open_with.is_some(),
         "app.exportPrevious" => app.session.active().is_some() && app.session.last_export.is_some(),
         "dialog.pasteSettings" => app.session.active().is_some() && app.session.clipboard.is_some(),
