@@ -797,6 +797,27 @@ mod tests {
     }
 
     #[test]
+    fn layout_guides_never_reach_a_slide_or_an_export() {
+        // the guides are the module view's overlay (#131): switching them on changes no pixel or byte
+        let mut s = Session::with_demo();
+        let ids: Vec<PhotoId> = s.catalog.photos().take(2).map(|p| p.id).collect();
+        let plain = Model::default();
+        let guided = Model { layout: Layout { guides: true, ..Layout::default() }, ..Model::default() };
+        assert!(!plain.layout.guides && guided.layout.guides, "the two settings differ in the guides only");
+        assert_eq!(plain.layout.margin, guided.layout.margin);
+        let off = render_slide(&mut s, &plain, Slide::Photo(ids[0]), 480, 270).unwrap();
+        let on = render_slide(&mut s, &guided, Slide::Photo(ids[0]), 480, 270).unwrap();
+        assert_eq!(off, on, "a slide renders the same with the guides on");
+        let timeline = Timeline::new(&plain, &ids);
+        let pdf_off = export_pdf(&mut s, &plain, &timeline, 256).unwrap();
+        let pdf_on = export_pdf(&mut s, &guided, &timeline, 256).unwrap();
+        assert_eq!(pdf_off, pdf_on, "the PDF is the same bytes");
+        let jpegs_off = export_jpegs(&mut s, &plain, &timeline, 256).unwrap();
+        let jpegs_on = export_jpegs(&mut s, &guided, &timeline, 256).unwrap();
+        assert_eq!(jpegs_off, jpegs_on, "the JPEGs are the same bytes");
+    }
+
+    #[test]
     fn cover_crops_the_overflow_from_both_sides() {
         // left half red, right half blue, cover a square: the sides are cropped, the halves survive
         let mut src = Rgba8::filled(4, 2, [0, 0, 0, 255]);
