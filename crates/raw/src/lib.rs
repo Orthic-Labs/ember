@@ -43,6 +43,7 @@ pub mod opcodes;
 pub mod plane;
 mod preview;
 pub mod profile;
+pub mod rawdenoise;
 mod saturation;
 pub mod semantic;
 pub mod sparse;
@@ -804,6 +805,16 @@ impl RawImage {
     /// The result is camera RGB (not white balanced), white level = 1.0, not oriented.
     pub fn develop(&self, method: Method) -> Result<Rgb32f> {
         let n = self.normalized()?;
+        let rgb = demosaic(&n, method);
+        drop(n);
+        Ok(self.finish_demosaiced(rgb))
+    }
+
+    /// [`Self::develop`] with the classical raw-domain denoise ([`rawdenoise`]) applied to the mosaic first. `strength` is
+    /// `0..=100`; zero (off), a non-Bayer image or one too small to filter develop exactly as [`Self::develop`] does.
+    pub fn develop_denoised(&self, method: Method, strength: f64) -> Result<Rgb32f> {
+        let mut n = self.normalized()?;
+        rawdenoise::denoise_in_place(&mut n, strength);
         let rgb = demosaic(&n, method);
         drop(n);
         Ok(self.finish_demosaiced(rgb))

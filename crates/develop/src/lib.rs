@@ -325,6 +325,20 @@ mod tests {
     }
 
     #[test]
+    fn raw_denoise_is_off_and_unwritten_for_settings_that_never_had_it() {
+        assert_eq!(DevelopSettings::default().enhance.raw_denoise, 0.0);
+        assert!(!DevelopSettings::default().enhance.raw_denoise_enabled());
+        let old: DevelopSettings = serde_json::from_str(r#"{"enhance": {"denoise": 30.0}}"#).unwrap();
+        assert!(!old.enhance.raw_denoise_enabled());
+        // off adds no field: saved files and `hash64` cache keys stay as they were
+        assert!(serde_json::to_value(&old).unwrap()["enhance"].get("raw_denoise").is_none());
+        let on: DevelopSettings = serde_json::from_str(r#"{"enhance": {"raw_denoise": 50.0}}"#).unwrap();
+        assert!(on.enhance.raw_denoise_enabled());
+        assert_ne!(on.hash64(), DevelopSettings::default().hash64());
+        assert!(serde_json::to_value(&on).unwrap()["enhance"].get("raw_denoise").is_some());
+    }
+
+    #[test]
     fn raw_details_is_off_for_settings_that_never_had_it() {
         assert!(!DevelopSettings::default().enhance.raw_details);
         let old: DevelopSettings = serde_json::from_str(r#"{"enhance": {"denoise": 30.0}}"#).unwrap();

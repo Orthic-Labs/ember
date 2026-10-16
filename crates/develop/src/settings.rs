@@ -1313,11 +1313,20 @@ pub struct Enhance {
     pub denoise_on: Option<bool>,
     pub raw_details: bool,
     pub super_resolution: bool,
+    /// Strength (0..=100) of the classical raw-domain denoise before demosaic (`lightcraft_raw::rawdenoise`); 0 is off.
+    /// Not written while off, so settings and cache keys of every existing edit are unchanged.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub raw_denoise: f64,
 }
 
 impl Enhance {
     pub fn denoise_enabled(&self) -> bool {
         self.denoise_on.unwrap_or(self.denoise > 0.0)
+    }
+
+    /// Whether the raw-domain denoise runs: a finite strength above zero.
+    pub fn raw_denoise_enabled(&self) -> bool {
+        self.raw_denoise.is_finite() && self.raw_denoise > 0.0
     }
 }
 
