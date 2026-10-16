@@ -3,7 +3,7 @@
 //! Parsed: every opcode (unknown ones are kept as [`Opcode::Unknown`]). Applied: `WarpRectilinear`,
 //! `WarpRectilinear2` (opcode 14, DNG 1.6; see [`Opcode::WarpRectilinear2`]), `FixVignetteRadial`,
 //! `FixBadPixelsConstant`, `FixBadPixelsList`, `MapTable`, `MapPolynomial`, `GainMap`, `DeltaPerRow/Column`,
-//! `ScalePerRow/Column`. `TrimBounds` and `WarpFisheye` are recorded but not applied. Hostile values (non-finite or oversized floats, counts past the data, a centre outside a few image sizes) make an opcode [`Opcode::Unknown`].
+//! `ScalePerRow/Column`; in `OpcodeList3`, also `WarpFisheye` ([`warp_fisheye`]) and `TrimBounds` ([`apply_list3`]). In lists 1 and 2 (mosaics) the two are recorded but not applied. Hostile values (non-finite or oversized floats, counts past the data, a centre outside a few image sizes) make an opcode [`Opcode::Unknown`].
 //!
 //! Opcodes run in list order, except for the DNG 1.6 skip rule ([`applied_ops`]): a `WarpRectilinear` or
 //! `WarpFisheye` that immediately follows an *optional* `WarpRectilinear2` is skipped (the older opcode is the
@@ -118,9 +118,9 @@ pub enum Opcode {
 }
 
 impl Opcode {
-    /// Whether [`apply_list`] / [`apply_list3`] implement this opcode.
+    /// Whether [`apply_list`] / [`apply_list3`] implement this opcode (`WarpFisheye` and `TrimBounds` only in `apply_list3`).
     pub fn is_applied(&self) -> bool {
-        !matches!(self, Opcode::Unknown { .. } | Opcode::TrimBounds { .. } | Opcode::WarpFisheye { .. })
+        !matches!(self, Opcode::Unknown { .. })
     }
 
     /// Whether this is a lens correction (`WarpRectilinear`, `WarpRectilinear2`, `FixVignetteRadial`): from a DNG, or
@@ -302,7 +302,12 @@ fn parse_one(id: u32, flags: u32, params: &[u8]) -> Option<Opcode> {
             }
             let mut planes = Vec::with_capacity(n);
             for _ in 0..n {
-                planes.push([f(&mut r)?, f(&mut r)?, f(&mut r)?, f(&mut r)?]);
+                let k = [f(&mut r)?, f(&mut r)?, f(&mut r)?, f(&mut r)?];
+                // the spec's restriction (1.6.0.0, WarpFisheye, "Notes and Restrictions"): the radial function must increase
+                if !fisheye_increasing(&k) {
+                    return None;
+                }
+                planes.push(k);
             }
             Opcode::WarpFisheye { planes, center: [ctr(&mut r)?, ctr(&mut r)?] }
         }
@@ -339,7 +344,14 @@ fn parse_one(id: u32, flags: u32, params: &[u8]) -> Option<Opcode> {
             let rects = (0..nr).map(|_| Some([r.u32()?, r.u32()?, r.u32()?, r.u32()?])).collect::<Option<_>>()?;
             Opcode::FixBadPixelsList { bayer_phase, points, rects }
         }
-        6 => Opcode::TrimBounds { top: r.u32()?, left: r.u32()?, bottom: r.u32()?, right: r.u32()? },
+        6 => {
+            let (top, left, bottom, right) = (r.u32()?, r.u32()?, r.u32()?, r.u32()?);
+            // an empty or inverted rectangle trims to nothing: refused
+            if top >= bottom || left >= right {
+                return None;
+            }
+            Opcode::TrimBounds { top, left, bottom, right }
+        }
         7 => {
             let area = r.area()?;
             let n = r.u32()? as usize;
@@ -682,17 +694,34 @@ fn fix_pixels(buf: &mut [f32], w: usize, h: usize, cpp: usize, cfa: Option<&Cfa>
     }
 }
 
-/// Apply `OpcodeList3` (on the demosaiced RGB image, values normalised to [0, 1]).
-pub fn apply_list3(list: &[Opcode], img: &mut Rgb32f) {
+/// Apply `OpcodeList3` (on the demosaiced RGB image, values normalised to [0, 1]). Returns where the resulting image
+/// starts in the image the list was given (the summed `TrimBounds` offsets, `(0, 0)` when nothing was trimmed): the
+/// default crop is expressed in the untrimmed active area and moves by it (see `RawImage::finish_demosaiced`).
+///
+/// `TrimBounds` (DNG specification 1.6.0.0, chapter 7, p. 97): "This opcode trims the image to the rectangle
+/// specified by Top, Left, Bottom, and Right." The specification gives no more; `Bottom` and `Right` are exclusive,
+/// as in every other rectangle of the opcode chapter (`Area`, `BadRect`). A rectangle that is empty or reaches past
+/// the image it meets is ignored.
+pub fn apply_list3(list: &[Opcode], img: &mut Rgb32f) -> (usize, usize) {
+    let mut origin = (0usize, 0usize);
     if list.is_empty() {
-        return;
+        return origin;
     }
-    let (w, h) = (img.width, img.height);
     for op in applied_ops(list) {
+        let (w, h) = (img.width, img.height);
         match op {
             Opcode::WarpRectilinear { planes, center } => *img = warp_rectilinear(img, planes, *center),
             Opcode::WarpRectilinear2 { planes, center, reciprocal, .. } => *img = warp_rectilinear2(img, planes, *center, *reciprocal),
-            Opcode::WarpFisheye { .. } | Opcode::TrimBounds { .. } | Opcode::Unknown { .. } => {}
+            Opcode::WarpFisheye { planes, center } => *img = warp_fisheye(img, planes, *center),
+            Opcode::TrimBounds { top, left, bottom, right } => {
+                let (top, left, bottom, right) = (*top as usize, *left as usize, *bottom as usize, *right as usize);
+                if top < bottom && left < right && bottom <= h && right <= w {
+                    let whole = std::mem::replace(img, Rgb32f::new(0, 0));
+                    *img = whole.into_crop(left, top, right - left, bottom - top);
+                    origin = (origin.0 + left, origin.1 + top);
+                }
+            }
+            Opcode::Unknown { .. } => {}
             other => {
                 let mut flat: Vec<f32> = img.data.iter().flat_map(|p| *p).collect();
                 apply_list(std::slice::from_ref(other), &mut flat, w, h, 3, None, 1.0);
@@ -705,6 +734,62 @@ pub fn apply_list3(list: &[Opcode], img: &mut Rgb32f) {
     for v in img.data.iter_mut().flatten().filter(|v| !v.is_finite()) {
         *v = 0.0;
     }
+    origin
+}
+
+/// The `WarpFisheye` restriction (specification 1.6.0.0, p. 94): with `θ = arctan(r)`, `f(θ) = k0 θ + k1 θ³ + k2 θ⁵ +
+/// k3 θ⁷` "must be an increasing function of r for all r ∈ [0, 1], i.e., f'(θ) > 0". `θ` grows with `r`, so
+/// `f'(θ) = k0 + 3 k1 θ² + 5 k2 θ⁴ + 7 k3 θ⁶` is checked over `θ ∈ [0, arctan 1]`.
+fn fisheye_increasing(k: &[f64; 4]) -> bool {
+    (0..=64).all(|i| {
+        let t2 = (i as f64 / 64.0 * std::f64::consts::FRAC_PI_4).powi(2);
+        k[0] + t2 * (3.0 * k[1] + t2 * (5.0 * k[2] + t2 * 7.0 * k[3])) > 0.0
+    })
+}
+
+/// DNG `WarpFisheye` (specification 1.6.0.0, chapter 7, "WarpFisheye", pp. 92-94; opcode 2). Per plane `i` (one set
+/// for all planes when there is one), for each pixel `(x, y)` of the warped image the spec computes the source
+/// position `(x', y')`:
+///
+/// ```text
+/// x' = c_x + (m · f · Δx)          y' = c_y + (m · f · Δy)
+/// c_x = x0 + ĉ_x (x1 − x0)         c_y = y0 + ĉ_y (y1 − y0)
+/// m_x = max(|x0 − c_x|, |x1 − c_x|)   m_y = max(|y0 − c_y|, |y1 − c_y|)
+/// m = √(m_x² + m_y²)               r = √(Δx² + Δy²)             θ = arctan(r)
+/// f = (1/r) (k0,i θ + k1,i θ³ + k2,i θ⁵ + k3,i θ⁷)
+/// Δx = (x − c_x) / m               Δy = (y − c_y) / m
+/// ```
+///
+/// with `(x0, y0) = (0, 0)` the top-left and `(x1, y1)` the bottom-right pixel of the warped image, `(ĉ_x, ĉ_y)` the
+/// normalised optical centre, `m` the distance in pixels from the centre to the farthest pixel and `r` the
+/// normalised distance. The pixel at `(x', y')` of the original is "effectively moved" to `(x, y)`: this samples the
+/// source there (bilinear, as in [`warp_rectilinear`]; the spec recommends a kernel "such as a cubic spline"). At
+/// `r = 0`, `f = k0` (the limit). The coefficient set `[1, 0, 0, 0]` is therefore the equidistant fisheye to perspective
+/// map (`r' = arctan r`), not the identity; no polynomial in `θ` is, since the identity is `tan θ`.
+pub fn warp_fisheye(img: &Rgb32f, planes: &[[f64; 4]], center: [f64; 2]) -> Rgb32f {
+    let (w, h) = (img.width, img.height);
+    let Some(last) = planes.len().checked_sub(1) else { return img.clone() };
+    let mut out = Rgb32f::new(w, h);
+    let (cx, cy) = (center[0] * (w as f64 - 1.0), center[1] * (h as f64 - 1.0));
+    let m = max_radius(cx, cy, w as f64 - 1.0, h as f64 - 1.0);
+    lightcraft_raster::par_rows(&mut out.data, w, |y, row| {
+        for (x, px) in row.iter_mut().enumerate() {
+            for (c, v) in px.iter_mut().enumerate() {
+                let Some(k) = planes.get(c.min(last)) else { continue };
+                let dx = (x as f64 - cx) / m;
+                let dy = (y as f64 - cy) / m;
+                let r = dx.hypot(dy);
+                let theta = r.atan();
+                let t2 = theta * theta;
+                let f = if r < 1e-12 { k[0] } else { theta * (k[0] + t2 * (k[1] + t2 * (k[2] + t2 * k[3]))) / r };
+                // a pixel whose factor is not finite stays put
+                let f = if f.is_finite() { f } else { 1.0 };
+                let (fx, fy) = (cx + m * f * dx, cy + m * f * dy);
+                *v = img.sample_bilinear(fx as f32 + 0.5, fy as f32 + 0.5)[c];
+            }
+        }
+    });
+    out
 }
 
 /// DNG `WarpRectilinear`: for each output pixel, the source position is the radial + tangential model around the
@@ -919,6 +1004,132 @@ pub(crate) mod tests {
         let out = warp_rectilinear(&img, &[[1.0, -0.6, 0.0, 0.0, 0.0, 0.0]], [0.5, 0.5]);
         let (bx, _) = (0..31).map(|x| (x, out.get(x, 15)[0])).fold((0, 0.0), |a, b| if b.1 > a.1 { b } else { a });
         assert!(bx >= 25, "{bx}");
+    }
+
+    /// The `WarpFisheye` mapping, hand-computed from the specification's formulas (1.6.0.0, p. 93).
+    #[test]
+    fn warp_fisheye_matches_the_spec_formula() {
+        // 9 x 9, centre (0.5, 0.5): c = (4, 4), m_x = m_y = 4, m = sqrt(32) = 5.656854. A ramp in x makes a bilinear sample of the
+        // source exact, so the output value at (x, y) is the source x' (y' = 4 on the row y = 4).
+        let img = Rgb32f::from_fn(9, 9, |x, _| [x as f32; 3]);
+        // k = [1, 0, 0, 0]. Pixel (8, 4): dx = 4 / m = 0.707107, dy = 0, r = 0.707107, theta = arctan(0.707107) = 0.615480,
+        // f = theta / r = 0.870420, x' = 4 + m * f * dx = 4 + 4 * 0.870420 = 7.48168.
+        let out = warp_fisheye(&img, &[[1.0, 0.0, 0.0, 0.0]], [0.5, 0.5]);
+        assert!((out.get(8, 4)[0] - 7.48168).abs() < 2e-3, "{}", out.get(8, 4)[0]);
+        // the optical centre does not move, and the mapping is symmetric about it
+        assert!((out.get(4, 4)[0] - 4.0).abs() < 1e-5);
+        assert!((out.get(0, 4)[0] - (8.0 - 7.48168)).abs() < 2e-3);
+        // k = [0.8, 0.2, 0, 0]: f(theta) = 0.8 theta + 0.2 theta^3 = 0.492384 + 0.046631 = 0.539014 at theta = 0.615480, so
+        // f = 0.539014 / 0.707107 = 0.762279 and x' = 4 + 4 * 0.762279 = 7.04912.
+        let out = warp_fisheye(&img, &[[0.8, 0.2, 0.0, 0.0]], [0.5, 0.5]);
+        assert!((out.get(8, 4)[0] - 7.04912).abs() < 2e-3, "{}", out.get(8, 4)[0]);
+        // a coefficient set per plane: plane 1 takes the second set, the others the first
+        let out = warp_fisheye(&img, &[[1.0, 0.0, 0.0, 0.0], [0.8, 0.2, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]], [0.5, 0.5]);
+        assert!((out.get(8, 4)[0] - 7.48168).abs() < 2e-3 && (out.get(8, 4)[1] - 7.04912).abs() < 2e-3);
+        // an off-centre optical centre: (0.25, 0.5) gives c_x = 2, m_x = max(2, 6) = 6, m = sqrt(36 + 16) = 7.211103; pixel (8, 4) has
+        // dx = 6 / m = 0.832050, r = 0.832050, theta = arctan(0.832050) = 0.694738, f = theta / r = 0.834950, x' = 2 + 6 * 0.834950 = 7.00970
+        let out = warp_fisheye(&img, &[[1.0, 0.0, 0.0, 0.0]], [0.25, 0.5]);
+        assert!((out.get(8, 4)[0] - 7.00970).abs() < 2e-3, "{}", out.get(8, 4)[0]);
+    }
+
+    /// No polynomial in theta is the identity (that is tan theta), but its series 1, 1/3, 2/15, 17/315 is, to far below a
+    /// pixel, over the image: the warp then leaves the picture as it is.
+    #[test]
+    fn warp_fisheye_with_the_tangent_series_is_the_identity() {
+        let img = Rgb32f::from_fn(9, 7, |x, y| [x as f32 / 8.0, y as f32 / 6.0, 0.5]);
+        let out = warp_fisheye(&img, &[[1.0, 1.0 / 3.0, 2.0 / 15.0, 17.0 / 315.0]], [0.5, 0.5]);
+        for (a, b) in out.data.iter().zip(&img.data) {
+            for c in 0..3 {
+                assert!((a[c] - b[c]).abs() < 5e-3, "{a:?} {b:?}");
+            }
+        }
+        // through the list: bytes, parse, apply, with the layout of the spec (N, k0..k3 per set, centre)
+        let mut p = 1u32.to_be_bytes().to_vec();
+        p.extend(be(&[1.0, 1.0 / 3.0, 2.0 / 15.0, 17.0 / 315.0, 0.5, 0.5]));
+        let list = parse_list(&ListWriter::new().op(2, &p).finish());
+        assert!(matches!(list[0], Opcode::WarpFisheye { .. }) && list[0].is_applied());
+        let mut via = img.clone();
+        assert_eq!(apply_list3(&list, &mut via), (0, 0));
+        assert_eq!(via, out);
+    }
+
+    #[test]
+    fn trim_bounds_crops_and_reports_the_offset() {
+        let img = Rgb32f::from_fn(6, 5, |x, y| [x as f32, y as f32, 7.0]);
+        let trim = |t: u32, l: u32, b: u32, r: u32| Opcode::TrimBounds { top: t, left: l, bottom: b, right: r };
+        // rows 1..4, columns 2..5 (bottom and right exclusive): 3 x 3, starting at source (2, 1)
+        let mut out = img.clone();
+        assert_eq!(apply_list3(&[trim(1, 2, 4, 5)], &mut out), (2, 1));
+        assert_eq!((out.width, out.height), (3, 3));
+        assert_eq!(out.get(0, 0), [2.0, 1.0, 7.0]);
+        assert_eq!(out.get(2, 2), [4.0, 3.0, 7.0]);
+        // a second trim is relative to the first, and the offsets add up: 1 x 2 starting at source (3, 2)
+        let mut out = img.clone();
+        assert_eq!(apply_list3(&[trim(1, 2, 4, 5), trim(1, 1, 3, 2)], &mut out), (3, 2));
+        assert_eq!((out.width, out.height), (1, 2));
+        assert_eq!(out.get(0, 1), [3.0, 3.0, 7.0]);
+        // the whole image is a valid trim and changes nothing
+        let mut out = img.clone();
+        assert_eq!(apply_list3(&[trim(0, 0, 5, 6)], &mut out), (0, 0));
+        assert_eq!(out, img);
+        // an empty, inverted or too large rectangle is ignored
+        for t in [trim(2, 0, 2, 6), trim(3, 0, 1, 6), trim(0, 3, 5, 3), trim(0, 0, 6, 6), trim(0, 0, 5, 7), trim(0, 0, u32::MAX, u32::MAX)] {
+            let mut out = img.clone();
+            assert_eq!(apply_list3(&[t], &mut out), (0, 0));
+            assert_eq!(out, img);
+        }
+        // from bytes: a rectangle that trims to nothing is refused when parsing
+        let rect = |v: [u32; 4]| v.iter().flat_map(|x| x.to_be_bytes()).collect::<Vec<u8>>();
+        let ok = parse_list(&ListWriter::new().op(6, &rect([1, 2, 4, 5])).finish());
+        assert_eq!(ok, vec![trim(1, 2, 4, 5)]);
+        for bad in [[2, 0, 2, 6], [3, 0, 1, 6], [0, 3, 5, 3]] {
+            assert!(matches!(parse_list(&ListWriter::new().op(6, &rect(bad)).finish())[0], Opcode::Unknown { id: 6, .. }));
+        }
+        assert!(matches!(parse_list(&ListWriter::new().op(6, &[0; 12]).finish())[0], Opcode::Unknown { id: 6, .. }));
+        // trim, then warp: the warp runs on the trimmed picture (and the order matters)
+        let fish = Opcode::WarpFisheye { planes: vec![[1.0, 0.0, 0.0, 0.0]], center: [0.5, 0.5] };
+        let (mut a, mut b) = (img.clone(), img.clone());
+        apply_list3(&[trim(1, 2, 4, 5), fish.clone()], &mut a);
+        apply_list3(&[fish, trim(1, 2, 4, 5)], &mut b);
+        assert_eq!((a.width, a.height, b.width, b.height), (3, 3, 3, 3));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn malformed_warp_fisheye_is_unknown_not_a_panic() {
+        let one = |k: [f64; 4], c: [f64; 2]| {
+            let mut p = 1u32.to_be_bytes().to_vec();
+            p.extend(be(&k));
+            p.extend(be(&c));
+            p
+        };
+        let unknown = |p: &[u8]| matches!(parse_list(&ListWriter::new().op(2, p).finish())[0], Opcode::Unknown { id: 2, .. });
+        assert!(!unknown(&one([1.0, 0.1, 0.0, 0.0], [0.5, 0.5])));
+        // not finite, past the bound, a centre far outside the image
+        assert!(unknown(&one([f64::NAN, 0.0, 0.0, 0.0], [0.5, 0.5])));
+        assert!(unknown(&one([1.0, f64::INFINITY, 0.0, 0.0], [0.5, 0.5])));
+        assert!(unknown(&one([1e12, 0.0, 0.0, 0.0], [0.5, 0.5])));
+        assert!(unknown(&one([1.0, 0.0, 0.0, 0.0], [50.0, 0.5])));
+        // not increasing over r in [0, 1]: f' = 1 - 3 theta^2 < 0 from theta = 0.577; a zero or negative slope at the centre
+        assert!(unknown(&one([1.0, -1.0, 0.0, 0.0], [0.5, 0.5])));
+        assert!(unknown(&one([0.0, 0.0, 0.0, 0.0], [0.5, 0.5])));
+        assert!(unknown(&one([-1.0, 0.0, 0.0, 0.0], [0.5, 0.5])));
+        // a set count of 0 or past 4, and data cut short
+        assert!(unknown(&0u32.to_be_bytes()));
+        assert!(unknown(&5u32.to_be_bytes()));
+        let ok = one([1.0, 0.1, 0.0, 0.0], [0.5, 0.5]);
+        for cut in 0..ok.len() {
+            assert!(unknown(&ok[..cut]), "{cut}");
+        }
+        // applied directly, an empty set list leaves the picture
+        let img = Rgb32f::from_fn(4, 4, |x, y| [x as f32, y as f32, 0.0]);
+        assert_eq!(warp_fisheye(&img, &[], [0.5, 0.5]), img);
+        // and a degenerate 1 x 1, 2 x 1 or 1 x 3 picture stays finite
+        for (w, h) in [(1, 1), (2, 1), (1, 3)] {
+            let tiny = Rgb32f::filled(w, h, [0.4; 3]);
+            let out = warp_fisheye(&tiny, &[[1.0, 0.0, 0.0, 0.0]], [0.5, 0.5]);
+            assert!(out.data.iter().flatten().all(|v| v.is_finite()));
+        }
     }
 
     #[test]

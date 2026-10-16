@@ -829,12 +829,27 @@ impl RawImage {
     /// The last steps of [`Self::develop`] for camera RGB made some other way (a denoiser that demosaics too) from
     /// [`Self::normalized`]'s mosaic: apply `OpcodeList3`, then the default crop.
     pub fn finish_demosaiced(&self, mut rgb: Rgb32f) -> Rgb32f {
-        opcodes::apply_list3(&self.opcodes.list3, &mut rgb);
-        let c = self.develop_crop(rgb.width, rgb.height);
+        let full = (rgb.width, rgb.height);
+        let origin = opcodes::apply_list3(&self.opcodes.list3, &mut rgb);
+        let c = if origin == (0, 0) && (rgb.width, rgb.height) == full {
+            self.develop_crop(rgb.width, rgb.height)
+        } else {
+            self.trimmed_crop(full, origin, (rgb.width, rgb.height))
+        };
         if c.x == 0 && c.y == 0 && c.width == rgb.width && c.height == rgb.height {
             return rgb;
         }
         rgb.into_crop(c.x, c.y, c.width, c.height)
+    }
+
+    /// The default crop (DefaultCropOrigin/Size, relative to the active area; DNG specification 1.6.0.0, p. 28) for a
+    /// picture that `TrimBounds` of `OpcodeList3` cut down to `size`, starting at `origin` in the `full` active area:
+    /// the crop moved into the trimmed picture's coordinates and cut to it, or all of it when nothing of the crop is left.
+    fn trimmed_crop(&self, full: (usize, usize), origin: (usize, usize), size: (usize, usize)) -> Rect {
+        let c = self.develop_crop(full.0, full.1);
+        let (x0, y0) = (c.x.max(origin.0), c.y.max(origin.1));
+        let (x1, y1) = ((c.x + c.width).min(origin.0 + size.0), (c.y + c.height).min(origin.1 + size.1));
+        if x1 <= x0 || y1 <= y0 { Rect::new(0, 0, size.0, size.1) } else { Rect::new(x0 - origin.0, y0 - origin.1, x1 - x0, y1 - y0) }
     }
 
     /// The part of a `width × height` demosaiced picture (the active area) that [`Self::develop`] keeps: the default
@@ -909,6 +924,49 @@ mod tests {
         // a crop that pokes out is clipped to the picture
         whole.crop = Rect::new(6, 4, 10, 10);
         assert_eq!(whole.develop_crop(8, 6), Rect::new(6, 4, 2, 2));
+    }
+
+    /// `TrimBounds` in `OpcodeList3` runs before the default crop, which is relative to the untrimmed active area and so
+    /// moves with the trim (DNG specification 1.6.0.0, chapter 7 and DefaultCropOrigin).
+    #[test]
+    fn trim_bounds_moves_the_default_crop() {
+        let (w, h) = (12usize, 10usize);
+        let mut raw = RawImage {
+            format: RawFormat::Dng,
+            width: w,
+            height: h,
+            cpp: 1,
+            data: RawData::U16((0..w * h).map(|i| (100 + (i * 37) % 900) as u16).collect()),
+            cfa: Cfa::bayer("RGGB"),
+            bits: 12,
+            black: BlackLevel::uniform(64.0),
+            white: vec![1023.0],
+            active_area: Rect::new(2, 2, 8, 6),
+            crop: Rect::new(1, 1, 5, 4),
+            orientation: Orientation::Normal,
+            color: ColorData::default(),
+            wb_multipliers: None,
+            linearized: false,
+            opcodes: OpcodeLists::default(),
+            metadata: Metadata::default(),
+        };
+        let untrimmed = raw.develop(Method::Bilinear).unwrap();
+        assert_eq!((untrimmed.width, untrimmed.height), (5, 4));
+        // trim the 8 x 6 active area to columns 2..8, rows 1..5 (6 x 4): the crop (columns 1..6, rows 1..5) keeps columns 2..6,
+        // rows 1..5, which are columns 0..4, rows 0..4 of the trimmed picture
+        raw.opcodes.list3 = vec![Opcode::TrimBounds { top: 1, left: 2, bottom: 5, right: 8 }];
+        let trimmed = raw.develop(Method::Bilinear).unwrap();
+        assert_eq!((trimmed.width, trimmed.height), (4, 4));
+        assert_eq!(trimmed, untrimmed.clone().into_crop(1, 0, 4, 4));
+        // a trim that leaves none of the crop keeps the whole trimmed picture
+        raw.opcodes.list3 = vec![Opcode::TrimBounds { top: 5, left: 6, bottom: 6, right: 8 }];
+        let rest = raw.develop(Method::Bilinear).unwrap();
+        assert_eq!((rest.width, rest.height), (2, 1));
+        // no crop: all of the trimmed picture
+        raw.crop = Rect::default();
+        raw.opcodes.list3 = vec![Opcode::TrimBounds { top: 1, left: 2, bottom: 5, right: 8 }];
+        let whole = raw.develop(Method::Bilinear).unwrap();
+        assert_eq!((whole.width, whole.height), (6, 4));
     }
 
     /// A maker-note crop (`PEF` AOC / `ORF` ImageProcessing) with an origin of `u64::MAX` used to
