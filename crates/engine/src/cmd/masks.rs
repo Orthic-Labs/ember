@@ -244,7 +244,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Brush Stroke",
             [],
             None,
-            "{id?: maskId, points: [[x,y],…] normalized, size?: fraction of long edge (0.03), feather?, flow?, density?, erase?: bool, autoMask?: bool}",
+            "{id?: maskId, points: [[x,y],…] normalized, size?: fraction of long edge (0.03), feather?, flow?, density?, erase?: bool, autoMask?: bool, pressure?: [0..1] per point, pressureSize?: bool, pressureFlow?: bool}",
             has_active,
             |s, p| {
                 let pts: Vec<Point> = p
@@ -255,6 +255,13 @@ pub fn specs() -> Vec<CommandSpec> {
                     .filter_map(|q| Some(Point::new(q.get(0)?.as_f64()?, q.get(1)?.as_f64()?)))
                     .collect();
                 let d = BrushStroke::default();
+                // pen pressure (#63), kept only with one value per point
+                let pressure: Vec<f64> = p
+                    .get("pressure")
+                    .and_then(Value::as_array)
+                    .map(|a| a.iter().map(|v| v.as_f64().unwrap_or(1.0).clamp(0.0, 1.0)).collect::<Vec<f64>>())
+                    .filter(|v: &Vec<f64>| v.len() == pts.len())
+                    .unwrap_or_default();
                 let stroke = BrushStroke {
                     points: pts,
                     size: f64_or(p, "size", d.size),
@@ -263,6 +270,9 @@ pub fn specs() -> Vec<CommandSpec> {
                     density: f64_or(p, "density", d.density),
                     erase: bool_or(p, "erase", false),
                     auto_mask: bool_or(p, "autoMask", false),
+                    pressure,
+                    pressure_size: bool_or(p, "pressureSize", true),
+                    pressure_flow: bool_or(p, "pressureFlow", true),
                 };
                 let next = s.active().and_then(|id| s.develop_of(id)).map(|d| d.next_mask_id()).unwrap_or(1);
                 let want = p.get("id").and_then(Value::as_u64).map(|v| v as u32).or(s.active_mask);

@@ -921,11 +921,34 @@ pub struct BrushStroke {
     pub density: f64,
     pub erase: bool,
     pub auto_mask: bool,
+    /// Pen pressure per point (0..1), parallel to `points`. Empty means uniform pressure: the stroke
+    /// as drawn (#63). With pressure, `pressure_size` and `pressure_flow` say what it scales.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pressure: Vec<f64>,
+    #[serde(skip_serializing_if = "is_true")]
+    pub pressure_size: bool,
+    #[serde(skip_serializing_if = "is_true")]
+    pub pressure_flow: bool,
+}
+
+fn is_true(b: &bool) -> bool {
+    *b
 }
 
 impl Default for BrushStroke {
     fn default() -> Self {
-        Self { points: Vec::new(), size: 0.03, feather: 50.0, flow: 100.0, density: 100.0, erase: false, auto_mask: false }
+        Self {
+            points: Vec::new(),
+            size: 0.03,
+            feather: 50.0,
+            flow: 100.0,
+            density: 100.0,
+            erase: false,
+            auto_mask: false,
+            pressure: Vec::new(),
+            pressure_size: true,
+            pressure_flow: true,
+        }
     }
 }
 
@@ -1364,5 +1387,39 @@ impl DevelopSettings {
         s.light.whites = add(s.light.whites, h.sdr_whites);
         s.effects.clarity = add(s.effects.clarity, h.sdr_clarity);
         std::borrow::Cow::Owned(s)
+    }
+}
+#[cfg(test)]
+mod brush_pressure_tests {
+    use super::*;
+
+    /// A stroke without pressure saves without the pressure keys, and reads back as it was: strokes
+    /// saved before pen pressure existed read as uniform pressure, and today's uniform strokes are
+    /// unchanged on disk.
+    #[test]
+    fn a_stroke_without_pressure_saves_and_reads_as_before() {
+        let stroke = BrushStroke { points: vec![Point::new(0.1, 0.2)], ..Default::default() };
+        let json = serde_json::to_value(&stroke).expect("serialize");
+        assert!(json.get("pressure").is_none() && json.get("pressure_size").is_none() && json.get("pressure_flow").is_none(), "{json}");
+        let back: BrushStroke = serde_json::from_value(json).expect("a stroke without pressure keys");
+        assert!(back.pressure.is_empty() && back.pressure_size && back.pressure_flow);
+        assert_eq!(back, stroke);
+    }
+
+    /// Pressure round-trips with its flags, and a default flag is not written.
+    #[test]
+    fn pressure_round_trips_with_its_flags() {
+        let stroke = BrushStroke {
+            points: vec![Point::new(0.1, 0.2), Point::new(0.5, 0.2)],
+            pressure: vec![1.0, 0.25],
+            pressure_flow: false,
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&stroke).expect("serialize");
+        assert_eq!(json["pressure"], serde_json::json!([1.0, 0.25]));
+        assert_eq!(json["pressure_flow"], serde_json::json!(false));
+        assert!(json.get("pressure_size").is_none());
+        let back: BrushStroke = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back, stroke);
     }
 }

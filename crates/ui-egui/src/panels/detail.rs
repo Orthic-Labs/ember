@@ -19,6 +19,8 @@ use crate::widgets::register;
 pub enum Gesture {
     Brush {
         points: Vec<Point>,
+        /// Pen pressure per point, parallel to `points`; empty when the input gave none (#63).
+        pressure: Vec<f32>,
     },
     Spot {
         points: Vec<Point>,
@@ -1919,20 +1921,35 @@ fn mask_overlay(app: &mut LightcraftApp, ui: &mut egui::Ui, resp: &egui::Respons
             p.circle_stroke(h, r, Stroke::new(1.0, Color32::WHITE));
             p.circle_stroke(h, r * (1.0 - app.ui.brush_feather / 100.0).max(0.05), Stroke::new(1.0, Color32::from_white_alpha(120)));
         }
+        // the pen's pressure, when the input reports it (a touch force; a mouse reports none)
+        let force = ui.ctx().input(|i| {
+            i.events.iter().rev().find_map(|e| match e {
+                egui::Event::Touch { force, .. } => *force,
+                _ => None,
+            })
+        });
         if let Some(q) = resp.interact_pointer_pos()
             && (resp.drag_started() || resp.dragged() || resp.clicked())
         {
             let n = map.norm(q);
             match &mut app.gesture {
                 // a held, unmoving pointer records nothing: coverage builds by passes, not time (#518)
-                Some(Gesture::Brush { points }) if points.last() == Some(&n) => {}
-                Some(Gesture::Brush { points }) => points.push(n),
-                _ => app.gesture = Some(Gesture::Brush { points: vec![n] }),
+                Some(Gesture::Brush { points, .. }) if points.last() == Some(&n) => {}
+                Some(Gesture::Brush { points, pressure }) => {
+                    points.push(n);
+                    if let Some(f) = force {
+                        pressure.resize(points.len() - 1, 1.0);
+                        pressure.push(f);
+                    } else if !pressure.is_empty() {
+                        pressure.push(1.0);
+                    }
+                }
+                _ => app.gesture = Some(Gesture::Brush { points: vec![n], pressure: force.into_iter().collect() }),
             }
         }
         // the stroke being painted (the render shows it once it's committed), with the committed
         // stroke's dab spacing, feather and flow (issue #517)
-        if let Some(Gesture::Brush { points }) = &app.gesture {
+        if let Some(Gesture::Brush { points, pressure }) = &app.gesture {
             let screen: Vec<Pos2> = points.iter().map(|q| map.screen(*q)).collect();
             let opacity = if app.ui.mask_overlay && app.ui.mask_overlay_opacity > 0.0 { app.ui.mask_overlay_opacity / 100.0 } else { 110.0 / 255.0 };
             let params = crate::brush_live::LiveParams {
@@ -1944,23 +1961,29 @@ fn mask_overlay(app: &mut LightcraftApp, ui: &mut egui::Ui, resp: &egui::Respons
                 density: (app.ui.brush_density / 100.0).clamp(0.0, 1.0),
                 color: app.ui.mask_overlay_color,
                 opacity: opacity.clamp(0.0, 1.0),
+                pressure_size: app.ui.brush_pressure_size,
+                pressure_flow: app.ui.brush_pressure_flow,
             };
-            crate::brush_live::paint(&mut app.brush_live, ui.ctx(), p, params, &screen);
+            crate::brush_live::paint(&mut app.brush_live, ui.ctx(), p, params, &screen, pressure);
         } else {
             app.brush_live = None;
         }
         if (resp.drag_stopped() || resp.clicked())
-            && let Some(Gesture::Brush { points }) = app.gesture.take()
+            && let Some(Gesture::Brush { points, pressure }) = app.gesture.take()
         {
             app.brush_live = None;
             let pts: Vec<[f64; 2]> = points.iter().map(|q| [q.x, q.y]).collect();
             // holding ⌥ (Alt) paints with the other mode: Erase while adding, Add while erasing
             let erase = app.ui.brush_erase != resp.ctx.input(|i| i.modifiers.alt);
-            let _ = app.run(
-                "mask.brushStroke",
-                json!({"points": pts, "size": app.ui.brush_size, "feather": app.ui.brush_feather, "flow": app.ui.brush_flow, "density": app.ui.brush_density,
-                       "erase": erase, "autoMask": app.ui.brush_auto_mask}),
-            );
+            let mut args = json!({"points": pts, "size": app.ui.brush_size, "feather": app.ui.brush_feather, "flow": app.ui.brush_flow, "density": app.ui.brush_density,
+                       "erase": erase, "autoMask": app.ui.brush_auto_mask});
+            // pen pressure travels only when the stroke has it, one value per point
+            if !pressure.is_empty() {
+                args["pressure"] = json!(pressure);
+                args["pressureSize"] = json!(app.ui.brush_pressure_size);
+                args["pressureFlow"] = json!(app.ui.brush_pressure_flow);
+            }
+            let _ = app.run("mask.brushStroke", args);
         }
         return;
     }

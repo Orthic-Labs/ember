@@ -451,6 +451,9 @@ pub struct BrushDabs {
     pub erase: bool,
     /// Auto Mask: paint only pixels like the one under each dab, then snap to edges.
     pub auto: bool,
+    /// Per dab: the radius and flow factors its pen pressure gives (#63). Empty when the stroke has
+    /// no pressure; a dab past the end of the list takes the brush as set.
+    pub factors: Vec<(f64, f32)>,
 }
 
 /// Output pixels a brush sample must move from the last dab to count as movement: below this the
@@ -472,13 +475,20 @@ pub fn brush_dabs(s: &BrushStroke, frame: &Frame, w: usize, h: usize) -> BrushDa
     // long the button is held: a sample where the pointer hasn't moved (a stationary hold records
     // one per frame) lays no dab, so waiting in place adds nothing (#518).
     let mut dabs: Vec<Point> = Vec::new();
+    let mut pressure: Vec<f64> = Vec::new();
     let mut prev = None;
-    for p in &s.points {
+    for (i, p) in s.points.iter().enumerate() {
         let q = to_out.apply(*p);
-        if push_dabs(&mut dabs, prev, q, r) {
-            prev = Some(q);
+        let pen = s.pressure.get(i).copied().unwrap_or(1.0);
+        if push_pressed_dabs(&mut dabs, &mut pressure, prev, q, pen, r) {
+            prev = Some((q, pen));
         }
     }
+    let factors = if s.pressure.is_empty() {
+        Vec::new()
+    } else {
+        pressure.iter().map(|&p| pressure_factors(p, s.pressure_size, s.pressure_flow)).collect()
+    };
     BrushDabs {
         dabs,
         r,
@@ -487,6 +497,7 @@ pub fn brush_dabs(s: &BrushStroke, frame: &Frame, w: usize, h: usize) -> BrushDa
         density: (s.density / 100.0).clamp(0.0, 1.0) as f32,
         erase: s.erase,
         auto: s.auto_mask,
+        factors,
     }
 }
 
@@ -525,6 +536,40 @@ pub fn push_dabs(dabs: &mut Vec<Point>, prev: Option<Point>, q: Point, r: f64) -
         }
     }
     dabs.push(q);
+    true
+}
+
+/// Pen pressure below which a dab is no smaller or fainter: the lightest pen keeps this share of the
+/// brush's size and flow.
+pub const PRESSURE_MIN: f64 = 0.1;
+
+/// The radius and flow factors pen pressure `p` (0..1) gives a dab: with `size` the radius scales,
+/// with `flow` the flow does. Full pressure (or none) is the brush as set, exactly.
+pub fn pressure_factors(p: f64, size: bool, flow: bool) -> (f64, f32) {
+    let p = if p.is_finite() { p.clamp(0.0, 1.0) } else { 1.0 };
+    if p >= 1.0 {
+        return (1.0, 1.0);
+    }
+    let f = PRESSURE_MIN + (1.0 - PRESSURE_MIN) * p;
+    (if size { f } else { 1.0 }, if flow { f as f32 } else { 1.0 })
+}
+
+/// [`push_dabs`] for a sample at pen pressure `pen`, after the stamped sample `prev` (with its own
+/// pressure): the dabs it appends get a pressure ramped linearly from `prev`'s to `pen`, pushed into
+/// `pressure` alongside `dabs`, so the two stay parallel.
+pub fn push_pressed_dabs(dabs: &mut Vec<Point>, pressure: &mut Vec<f64>, prev: Option<(Point, f64)>, q: Point, pen: f64, r: f64) -> bool {
+    let before = dabs.len();
+    let (last, from) = match prev {
+        Some((p, pp)) => (Some(p), pp),
+        None => (None, pen),
+    };
+    if !push_dabs(dabs, last, q, r) {
+        return false;
+    }
+    let added = dabs.len() - before;
+    for k in 1..=added {
+        pressure.push(from + (pen - from) * k as f64 / added as f64);
+    }
     true
 }
 
@@ -615,29 +660,32 @@ fn rasterize_brush(strokes: &[BrushStroke], frame: &Frame, w: usize, h: usize, i
         return;
     }
     for s in strokes {
-        let BrushDabs { dabs, r, hard, flow, density: dens, erase, auto } = brush_dabs(s, frame, w, h);
+        let BrushDabs { dabs, r, hard, flow, density: dens, erase, auto, factors } = brush_dabs(s, frame, w, h);
         let mut stroke_alpha = Plane::new(w, h);
-        for d in &dabs {
+        for (k, d) in dabs.iter().enumerate() {
+            // pen pressure: this dab's radius, hard core and flow (the brush's own without pressure)
+            let (rf, ff) = factors.get(k).copied().unwrap_or((1.0, 1.0));
+            let (rd, hd, fd) = (r * rf, hard * rf, flow * ff);
             let refc = auto.then(|| {
                 let j = dab_pixel(*d, w, h);
                 (log_l.data[j], chromaticity(img.data[j]))
             });
-            let (x0, x1) = (((d.x - r).floor().max(0.0)) as usize, ((d.x + r).ceil().max(0.0) as usize).min(w));
-            let (y0, y1) = (((d.y - r).floor().max(0.0)) as usize, ((d.y + r).ceil().max(0.0) as usize).min(h));
+            let (x0, x1) = (((d.x - rd).floor().max(0.0)) as usize, ((d.x + rd).ceil().max(0.0) as usize).min(w));
+            let (y0, y1) = (((d.y - rd).floor().max(0.0)) as usize, ((d.y + rd).ceil().max(0.0) as usize).min(h));
             for y in y0..y1 {
                 for x in x0..x1 {
                     let dd = Point::new(x as f64 + 0.5, y as f64 + 0.5).dist(*d);
-                    if dd > r {
+                    if dd > rd {
                         continue;
                     }
-                    let mut a = dab_alpha(dd, r, hard);
+                    let mut a = dab_alpha(dd, rd, hd);
                     let i = y * w + x;
                     if let Some((rl, rch)) = refc {
                         a *= auto_similarity(log_l.data[i], chromaticity(img.data[i]), rl, rch);
                     }
                     let v = &mut stroke_alpha.data[i];
                     // flow accumulates within a stroke up to density
-                    *v = accumulate(*v, a, flow, dens);
+                    *v = accumulate(*v, a, fd, dens);
                 }
             }
         }
@@ -992,6 +1040,39 @@ mod tests {
         let (o, t, th) = (once.get(100, 50), twice.get(100, 50), thrice.get(100, 50));
         assert!(o > 0.05 && o < 0.99, "one pass {o}");
         assert!(t > o + 0.02 && th > t + 0.01, "passes build up: {o} → {t} → {th}");
+    }
+
+    /// Pen pressure of 1 everywhere, or no pressure at all, paints the stroke as drawn.
+    #[test]
+    fn uniform_pressure_paints_the_stroke_as_drawn() {
+        let (w, h) = (200, 100);
+        let f = frame(w, h);
+        let img = Rgb32f::new(w, h);
+        let l = Plane::new(w, h);
+        let points = vec![Point::new(0.2, 0.5), Point::new(0.8, 0.4)];
+        let paint = |pressure: Vec<f64>| {
+            let s = BrushStroke { points: points.clone(), size: 0.05, flow: 30.0, pressure, ..Default::default() };
+            shape_alpha(&MaskShape::Brush { strokes: vec![s] }, &f, w, h, &img, &l, 0.0, None)
+        };
+        let plain = paint(Vec::new());
+        assert!(plain.get(100, 50) > 0.05, "the stroke paints: {}", plain.get(100, 50));
+        assert!(plain.data == paint(vec![1.0, 1.0]).data, "full pressure is the brush as set");
+    }
+
+    /// A pen going from firm to light narrows the stroke where it is light.
+    #[test]
+    fn a_pressure_ramp_narrows_the_stroke() {
+        let (w, h) = (200, 100);
+        let f = frame(w, h);
+        let img = Rgb32f::new(w, h);
+        let l = Plane::new(w, h);
+        let points = vec![Point::new(0.1, 0.5), Point::new(0.9, 0.5)];
+        let stroke = BrushStroke { points, size: 0.06, feather: 0.0, flow: 100.0, pressure: vec![1.0, 0.1], ..Default::default() };
+        let a = shape_alpha(&MaskShape::Brush { strokes: vec![stroke] }, &f, w, h, &img, &l, 0.0, None);
+        let height = |x: usize| (0..h).filter(|&y| a.get(x, y) > 0.5).count();
+        let (firm, light) = (height(30), height(170));
+        assert!(firm > 0 && light > 0, "both ends paint: {firm} and {light}");
+        assert!(light * 2 < firm, "the light end is narrower: {light} against {firm}");
     }
 
     #[test]
