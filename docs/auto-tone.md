@@ -33,6 +33,13 @@ Regression `a_dark_subject_on_a_washed_out_background_gets_two_treatments`: subj
 
 `auto::scene_population` (the proxy's sorted scene EVs, percentiles & chroma), `SceneKey`, `auto::fit::Targets` / `auto_targets` / `fit_with`, `encode` & `tone_map` are public: look targets ([`look-targets.md`](look-targets.md)) feed measured statistics into the same fit; Personal Auto adds a learned residual on top of the result.
 
+## Commands
+
+- `develop.auto` (Shift+A, Edit ▸ Auto): the whole Auto, regions on by default; `dryRun` measures only.
+- `develop.autoControl {control}`: one of the eight sliders (`light.exposure`, `light.contrast`, `light.highlights`, `light.shadows`, `light.whites`, `light.blacks`, `color.vibrance`, `color.saturation`) set to Auto's value for the active photo; the other settings and masks stay. Shift+double-click a slider's name in the Edit panel runs it.
+- `develop.autoBatch {ids?, regions?}`: Auto on each target photo (`ids`, else the selection) as one undo step. Each photo is measured with its own source, settings and process version, so an older-process photo keeps its process and gets the Auto it would get alone.
+- Presets with the `auto` flag (`preset.create {auto: true}`, stored as `Preset.auto`) run Auto on the photo first and lay the preset's own settings on top (`preset.apply`, one undo step). Presets without it are unchanged.
+
 ## Contract for offline work
 
 `auto::REVISION` names the rules (`lightcraft.deterministic-auto.v5`: v2 added the closed-loop fit & continuous keys, v3 the centre-weighted key, v4 process-version-aware baseline preparation & camera-space Auto WB, v5 the −0.5 EV ordinary key & the no-lift blacks range with the 10th-percentile guard, #28: on the corpus Auto moved the 10th percentile the user's way on only 46 % of photos and the median 2.4 times too far); Personal Auto receipts bind to it & reject stale baselines. Changing any constant above is a new revision.
