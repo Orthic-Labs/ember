@@ -3726,7 +3726,7 @@ mod tests {
         // Paint the edited template before locating the Tags button in the resized dialog.
         assert!(h.settle(SETTLE), "Copy dialog layout should settle before locating Tags");
         // the cursor sits after "Trip-"
-        let id = egui::Id::new("import-rename");
+        let id = crate::text_field::id("field:importRename");
         let mut st = egui::text_edit::TextEditState::default();
         st.cursor.set_char_range(Some(egui::text::CCursorRange::one(egui::text::CCursor::new(5))));
         st.store(&h.view.ctx, id);

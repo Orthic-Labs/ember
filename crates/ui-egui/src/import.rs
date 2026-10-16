@@ -1154,12 +1154,11 @@ pub fn body(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &mut ImportDialog) {
             register(ui.ctx(), "combo:importOrganize", combo.response.rect);
         });
         if d.organize == "custom" {
-            let folders_id = egui::Id::new("import-folder-template");
+            let folders_id = crate::text_field::id("field:importFolderTemplate");
             let tags_open = field(ui, "Template", |ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 let w = tag_field_width(ui);
-                let r = ui.add(egui::TextEdit::singleline(&mut d.folder_template).id(folders_id).hint_text(DEFAULT_FOLDER_TEMPLATE).desired_width(w));
-                register(ui.ctx(), "field:importFolderTemplate", r.rect);
+                crate::text_field::TextField::singleline("field:importFolderTemplate", &mut d.folder_template).hint(DEFAULT_FOLDER_TEMPLATE).width(w).show(ui);
                 tag_toggle(ui, "importFolders")
             });
             if tags_open {
@@ -1186,17 +1185,14 @@ pub fn body(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &mut ImportDialog) {
                 register(ui.ctx(), "check:importDng", r.rect);
             });
         }
-        let rename_id = egui::Id::new("import-rename");
+        let rename_id = crate::text_field::id("field:importRename");
         let tags_open = field(ui, "Rename", |ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             let w = tag_field_width(ui);
-            let r = ui.add(
-                egui::TextEdit::singleline(&mut d.rename)
-                    .id(rename_id)
-                    .hint_text(crate::i18n::tr("keep names — or e.g. {date}_{seq:3}"))
-                    .desired_width(w),
-            );
-            register(ui.ctx(), "field:importRename", r.rect);
+            crate::text_field::TextField::singleline("field:importRename", &mut d.rename)
+                .hint(crate::i18n::tr("keep names — or e.g. {date}_{seq:3}"))
+                .width(w)
+                .show(ui);
             tag_toggle(ui, "importRename")
         });
         if tags_open {
@@ -1271,8 +1267,7 @@ pub fn body(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &mut ImportDialog) {
             }
         });
         if d.album.is_none() && !d.new_album.is_empty() {
-            let r = ui.add(egui::TextEdit::singleline(&mut d.new_album).desired_width(f32::INFINITY));
-            register(ui.ctx(), "field:importAlbumName", r.rect);
+            crate::text_field::TextField::singleline("field:importAlbumName", &mut d.new_album).width(f32::INFINITY).show(ui);
         }
     });
     field(ui, "Preset", |ui| {
@@ -1309,8 +1304,7 @@ pub fn body(app: &mut LightcraftApp, ui: &mut egui::Ui, d: &mut ImportDialog) {
         });
     }
     field(ui, "Keywords", |ui| {
-        let r = ui.add(egui::TextEdit::singleline(&mut d.keywords).hint_text(crate::i18n::tr("comma, separated")).desired_width(f32::INFINITY));
-        register(ui.ctx(), "field:importKeywords", r.rect);
+        crate::text_field::TextField::singleline("field:importKeywords", &mut d.keywords).hint(crate::i18n::tr("comma, separated")).width(f32::INFINITY).show(ui);
     });
 }
 
