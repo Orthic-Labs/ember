@@ -493,6 +493,32 @@ pub fn specs() -> Vec<CommandSpec> {
                 Ok(json!({"control": ctl, "value": value}))
             }
         ),
+        // Auto Settings on every target photo, one undo step; each photo is measured with its own settings.
+        cmd!(
+            "develop.autoBatch",
+            "Auto Settings to Selection",
+            [],
+            None,
+            "{ids?, regions?: bool (default true)} — Auto Settings on each target photo (`ids`, else the selection) as one undo step; each photo is measured with its own settings and process version → {changed}",
+            has_selection,
+            |s, p| {
+                let c = "develop.autoBatch";
+                let regions = bool_or(p, "regions", true);
+                let ids: Vec<PhotoId> = s.targets(p)?.into_iter().filter(|id| s.catalog.photo(*id).is_some()).collect();
+                let mut ops = Vec::new();
+                for id in ids {
+                    let r = auto_values(s, c, id, regions)?;
+                    let mut d = (*s.develop_of(id).unwrap_or_default()).clone();
+                    apply_auto(c, &mut d, &r)?;
+                    ops.extend(s.develop_op(id, d, "Auto Settings"));
+                }
+                let n = ops.len();
+                if n > 0 {
+                    s.commit("Auto Settings", Op::Batch { ops })?;
+                }
+                Ok(json!({"changed": n}))
+            }
+        ),
         // Thin wrappers (Classic ⌘U / ⇧⌘U): the same runs as Auto Settings and White Balance ▸ Auto.
         cmd!(
             "develop.autoTone",
@@ -643,6 +669,20 @@ pub fn specs() -> Vec<CommandSpec> {
                 Ok(())
             })
         }),
+        cmd!(
+            "develop.rawDetails",
+            "Raw Details",
+            [],
+            None,
+            "{enabled?: bool} (toggles when omitted) — develop a raw photo's sensor data with the higher-quality Bayer demosaic; off for every existing edit",
+            has_active,
+            |s, p| {
+                edit(s, "develop.rawDetails", "Raw Details", |d| {
+                    d.enhance.raw_details = p.get("enabled").and_then(Value::as_bool).unwrap_or(!d.enhance.raw_details);
+                    Ok(())
+                })
+            }
+        ),
         cmd!("develop.profile", "Set Profile", [], None, "{id: profile id (see profiles.list), amount?: 0..200}", has_active, |s, p| {
             let id = str_param(p, "id").ok_or_else(|| bad("develop.profile", "missing id"))?.to_string();
             if !crate::presets::PROFILES.iter().any(|x| x.id == id) && !s.lut_profiles.iter().any(|x| x.id == id) {

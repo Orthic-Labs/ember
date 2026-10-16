@@ -279,3 +279,25 @@ fn update_to_current_process_moves_v1_and_v2_to_v3_and_never_runs_by_itself() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!([process(&s, ids[0]), process(&s, ids[1])], [ProcessVersion(1), ProcessVersion(2)]);
 }
+
+/// Auto Settings keeps each photo's own process: a batch on photos of two processes leaves both
+/// on their process, and each photo gets the Auto it would get alone (its own baseline preparation).
+#[test]
+fn auto_batch_keeps_each_photos_process_and_its_own_auto() {
+    let mut s = Session::with_demo();
+    let ids: Vec<PhotoId> = s.visible_cloned().into_iter().take(2).collect();
+    put(&mut s, ids[0], OLDER, 0.7);
+    put(&mut s, ids[1], ProcessVersion::LATEST, 0.7);
+    let mut alone = Vec::new();
+    for id in &ids {
+        select(&mut s, &[*id]);
+        alone.push(s.execute("develop.auto", &json!({"dryRun": true, "regions": false})).unwrap());
+    }
+    select(&mut s, &ids);
+    s.execute("develop.autoBatch", &json!({"regions": false})).unwrap();
+    assert_eq!(process(&s, ids[0]), OLDER, "an older photo stays on its process");
+    assert_eq!(process(&s, ids[1]), ProcessVersion::LATEST);
+    for (id, auto) in ids.iter().zip(&alone) {
+        assert_eq!(s.develop_of(*id).unwrap().light.exposure, auto["exposure"].as_f64().unwrap(), "{id:?}");
+    }
+}

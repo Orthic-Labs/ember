@@ -1777,3 +1777,63 @@ fn auto_slider_covers_each_of_auto_s_eight_values() {
         assert_eq!(lightcraft_develop::controls::get(&d, control), auto[key].as_f64(), "{control} is set");
     }
 }
+
+#[test]
+fn auto_batch_sets_each_selected_photo_to_its_own_auto_in_one_undo_step() {
+    use lightcraft_catalog::PhotoId;
+    let mut s = demo();
+    let ids: Vec<PhotoId> = s.visible_cloned().into_iter().take(3).collect();
+    s.execute("library.select", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let before: Vec<_> = ids.iter().map(|id| (*s.develop_of(*id).unwrap()).clone()).collect();
+    // what Auto gives each photo on its own, measured before the batch
+    let mut autos = Vec::new();
+    for id in &ids {
+        s.execute("library.select", &json!({"ids": [id.0]})).unwrap();
+        autos.push(s.execute("develop.auto", &json!({"dryRun": true, "regions": false})).unwrap());
+    }
+    s.execute("library.select", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let r = s.execute("develop.autoBatch", &json!({"regions": false})).unwrap();
+    assert_eq!(r["changed"], 3);
+    for ((id, b), auto) in ids.iter().zip(&before).zip(&autos) {
+        let d = (*s.develop_of(*id).unwrap()).clone();
+        assert_eq!(d.light.exposure, auto["exposure"].as_f64().unwrap(), "exposure of {id:?}");
+        assert_eq!(d.light.blacks, auto["blacks"].as_f64().unwrap(), "blacks of {id:?}");
+        assert_eq!(d.color.saturation, auto["saturation"].as_f64().unwrap(), "saturation of {id:?}");
+        assert_eq!(d.masks, b.masks, "no region masks with regions off");
+    }
+    // one undo step restores the whole selection
+    s.execute("edit.undo", &json!({})).unwrap();
+    for (id, b) in ids.iter().zip(&before) {
+        assert_eq!(*s.develop_of(*id).unwrap(), *b);
+    }
+}
+
+#[test]
+fn auto_batch_with_regions_replaces_its_masks_and_keeps_the_users() {
+    let mut s = demo();
+    let ids: Vec<_> = s.visible_cloned().into_iter().take(2).collect();
+    s.execute("library.select", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    s.execute("mask.add", &json!({"kind": "radial", "center": [0.3, 0.3], "name": "mine"})).unwrap();
+    let auto_masks = |s: &Session, id| {
+        s.develop_of(id).unwrap().masks.iter().filter(|m| lightcraft_pipeline::auto::regions::is_auto_mask(m)).count()
+    };
+    s.execute("develop.autoBatch", &json!({})).unwrap();
+    let first: Vec<usize> = ids.iter().map(|id| auto_masks(&s, *id)).collect();
+    s.execute("develop.autoBatch", &json!({})).unwrap();
+    let second: Vec<usize> = ids.iter().map(|id| auto_masks(&s, *id)).collect();
+    assert_eq!(first, second, "running the batch again replaces, never stacks");
+    for id in &ids {
+        assert!(s.develop_of(*id).unwrap().masks.iter().any(|m| m.name == "mine"), "the user's mask stays on every photo");
+    }
+}
+
+#[test]
+fn auto_batch_changes_only_the_photos_it_names() {
+    use lightcraft_catalog::PhotoId;
+    let mut s = demo();
+    let ids: Vec<PhotoId> = s.visible_cloned().into_iter().take(2).collect();
+    let other = (*s.develop_of(ids[1]).unwrap()).clone();
+    let r = s.execute("develop.autoBatch", &json!({"ids": [ids[0].0], "regions": false})).unwrap();
+    assert_eq!(r["changed"], 1);
+    assert_eq!(*s.develop_of(ids[1]).unwrap(), other, "a photo that was not named stays as it was");
+}
