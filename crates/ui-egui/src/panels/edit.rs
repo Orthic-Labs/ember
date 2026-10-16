@@ -830,6 +830,14 @@ fn soft_proofing(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
             if r.changed() {
                 let _ = app.run("view.softProof", json!({"paperInk": paper}));
             }
+            // black-point compensation belongs to relative colorimetric without simulated paper
+            let mut bpc = app.ui.proof_black_point;
+            let applies = app.ui.proof_intent == lightcraft_engine::proof::ProofIntent::Relative && !app.ui.proof_paper_ink;
+            let r = ui.add_enabled(applies, egui::Checkbox::new(&mut bpc, crate::i18n::tr("Black Point Compensation")));
+            register(ui.ctx(), "button:proofBlackPoint", r.rect);
+            if r.changed() {
+                let _ = app.run("view.softProof", json!({"blackPoint": bpc}));
+            }
         }
         let r = ui.button(crate::i18n::tr("Create Proof Copy"));
         register(ui.ctx(), "button:createProofCopy", r.rect);

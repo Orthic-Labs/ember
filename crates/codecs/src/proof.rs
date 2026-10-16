@@ -9,6 +9,9 @@
 //!   darkest the device tables give (no black-point compensation). The white is applied as a
 //!   per-channel scale in linear Rec.2020 (a von Kries adaptation in RGB, close enough for the
 //!   near-neutral whites of papers).
+//! - **Black-point compensation** (relative colorimetric only, never with Simulate Paper & Ink):
+//!   the device's darkest colour is mapped to the screen's black and the rest is scaled linearly in
+//!   XYZ with the white held fixed (the ICC / ISO 18619 method).
 //! - Each entry carries a gamut flag: how far the relative-colorimetric round trip moved the colour.
 //!
 //! Sources: ICC.1:2022 (rendering intents, media white point, absolute colorimetric scaling);
@@ -63,7 +66,11 @@ fn guarded<T>(f: impl FnOnce() -> Option<T>) -> Option<T> {
 
 /// Build the proof table for an output profile. Errors say what's wrong with the file; nothing here
 /// panics on a hostile profile.
-pub fn proof_table(bytes: &[u8], intent: ProofIntent, paper_ink: bool) -> Result<ProofTable, String> {
+///
+/// `black_point` turns on black-point compensation; it applies to the relative colorimetric intent
+/// when the paper and ink are not simulated (perceptual tables map their own black, and absolute
+/// colorimetric keeps the ink's black by definition).
+pub fn proof_table(bytes: &[u8], intent: ProofIntent, paper_ink: bool, black_point: bool) -> Result<ProofTable, String> {
     if bytes.len() > MAX_PROFILE_BYTES {
         return Err("the profile is too large".into());
     }
@@ -96,7 +103,13 @@ pub fn proof_table(bytes: &[u8], intent: ProofIntent, paper_ink: bool) -> Result
         back.transform(&device, &mut out).ok()?;
         Some(out)
     };
-    let sim = guarded(|| round_trip(fwd.as_ref())).ok_or("the profile's tables can't be applied")?;
+    let mut sim = guarded(|| round_trip(fwd.as_ref())).ok_or("the profile's tables can't be applied")?;
+    if black_point && !paper_ink && intent == ProofIntent::Relative {
+        // grid entry 0 is (0, 0, 0): the darkest colour the device gives back
+        if let Some(black) = sim.get(..3).and_then(|b| <[f32; 3]>::try_from(b).ok()) {
+            compensate_black(&mut sim, black);
+        }
+    }
     let colorimetric = guarded(|| round_trip(fwd_rel.as_ref())).ok_or("the profile's tables can't be applied")?;
     let paper = if paper_ink { paper_white(&dev) } else { [1.0; 3] };
     let enc = |v: f32| lightcraft_color::transfer::linear_to_srgb(v.clamp(0.0, 1.0));
@@ -109,6 +122,28 @@ pub fn proof_table(bytes: &[u8], intent: ProofIntent, paper_ink: bool) -> Result
         .collect();
     let description = crate::icc::parse(bytes).and_then(|i| i.description);
     Ok(ProofTable { n, data, description })
+}
+
+/// Black-point compensation of linear Rec.2020 colours `rgb` (three floats per colour): `black` (the
+/// device's black, in the same space) goes to 0 and every colour is scaled linearly in XYZ so white
+/// stays put (`X' = Xw (X - Xb) / (Xw - Xb)` per component). A black that is not clearly darker than
+/// white (any component past half of it, negative or not finite) leaves the colours as they are.
+fn compensate_black(rgb: &mut [f32], black: [f32; 3]) {
+    let to_xyz = bradford(D65, D50).mul(&REC2020.to_xyz());
+    let Some(from_xyz) = to_xyz.inverse() else { return };
+    let white = to_xyz.apply([1.0; 3]);
+    let bk = to_xyz.apply(black.map(f64::from));
+    if !(0..3).all(|k| bk[k].is_finite() && bk[k] >= 0.0 && bk[k] < 0.5 * white[k]) {
+        return;
+    }
+    for px in rgb.chunks_exact_mut(3) {
+        let xyz = to_xyz.apply([f64::from(px[0]), f64::from(px[1]), f64::from(px[2])]);
+        let scaled = [0, 1, 2].map(|k| white[k] * (xyz[k] - bk[k]) / (white[k] - bk[k]));
+        let out = from_xyz.apply(scaled);
+        if out.iter().all(|v| v.is_finite()) {
+            px.copy_from_slice(&out.map(|v| v as f32));
+        }
+    }
 }
 
 /// The paper's white in linear Rec.2020 (screen white = (1, 1, 1)), from the media white point.
@@ -134,7 +169,7 @@ mod tests {
 
     #[test]
     fn srgb_proof_flags_wide_colours_and_keeps_grey() {
-        let t = proof_table(&crate::icc::write_named(NamedSpace::Srgb), ProofIntent::Relative, false).unwrap();
+        let t = proof_table(&crate::icc::write_named(NamedSpace::Srgb), ProofIntent::Relative, false, true).unwrap();
         let top = t.n - 1;
         // Rec.2020 pure green is far outside sRGB; mid grey and white are inside and unchanged
         assert!(at(&t, [0, top, 0])[3] > 0.05, "{:?}", at(&t, [0, top, 0]));
@@ -147,14 +182,48 @@ mod tests {
     }
 
     #[test]
+    fn in_gamut_colours_pass_relative_colorimetric_unchanged() {
+        let t = proof_table(&crate::icc::write_named(NamedSpace::Srgb), ProofIntent::Relative, false, false).unwrap();
+        let lin = |k: usize| lightcraft_color::transfer::srgb_to_linear(k as f32 / (t.n - 1) as f32);
+        // a muted orange: inside sRGB, so it comes back as it went in and is not flagged
+        let c = at(&t, [20, 14, 10]);
+        assert!(c[3] < 0.01, "{c:?}");
+        assert!((0..3).all(|k| (c[k] - lin([20, 14, 10][k])).abs() < 0.01), "{c:?}");
+        // Rec.2020 pure red is far outside sRGB: flagged, and mapped into the device gamut
+        let red = at(&t, [t.n - 1, 0, 0]);
+        assert!(red[3] > 0.05, "{red:?}");
+        assert!(red[0] < 0.99 || red[1] > 0.01 || red[2] > 0.01, "{red:?}");
+    }
+
+    #[test]
+    fn black_point_compensation_maps_the_device_black_to_zero() {
+        // a lifted black (0.05, 0.06, 0.05) and two colours: white, and a mid grey
+        let mut px = vec![0.05, 0.06, 0.05, 1.0, 1.0, 1.0, 0.5, 0.5, 0.5];
+        compensate_black(&mut px, [0.05, 0.06, 0.05]);
+        assert!(px[..3].iter().all(|v| v.abs() < 1e-4), "{px:?}");
+        assert!(px[3..6].iter().all(|v| (v - 1.0).abs() < 1e-4), "{px:?}");
+        assert!(px[6] < 0.5 && px[6] > 0.4, "mid grey is scaled down a little: {px:?}");
+        // a black that is not darker than white is ignored
+        let mut same = vec![0.3, 0.3, 0.3];
+        compensate_black(&mut same, [0.9, 0.9, 0.9]);
+        assert_eq!(same, vec![0.3, 0.3, 0.3]);
+        // an ordinary profile (black = 0) is untouched
+        let on = proof_table(&crate::icc::write_named(NamedSpace::DisplayP3), ProofIntent::Relative, false, true).unwrap();
+        let off = proof_table(&crate::icc::write_named(NamedSpace::DisplayP3), ProofIntent::Relative, false, false).unwrap();
+        for (a, b) in on.data.iter().zip(&off.data) {
+            assert!((0..3).all(|k| (a[k] - b[k]).abs() < 0.002), "{a:?} {b:?}");
+        }
+    }
+
+    #[test]
     fn paper_white_dims_and_tints_white() {
         let mut p = ColorProfile::new_from_slice(&crate::icc::write_named(NamedSpace::AdobeRgb)).unwrap();
         // a warm, slightly dull paper
         p.media_white_point = Some(moxcms::Xyzd { x: 0.9642 * 0.92, y: 0.90, z: 0.8249 * 0.80 });
         let bytes = p.encode().unwrap();
         let top = PROOF_GRID - 1;
-        let plain = proof_table(&bytes, ProofIntent::Perceptual, false).unwrap();
-        let paper = proof_table(&bytes, ProofIntent::Perceptual, true).unwrap();
+        let plain = proof_table(&bytes, ProofIntent::Perceptual, false, false).unwrap();
+        let paper = proof_table(&bytes, ProofIntent::Perceptual, true, false).unwrap();
         let (w0, w1) = (at(&plain, [top; 3]), at(&paper, [top; 3]));
         assert!((0..3).all(|k| (w0[k] - 1.0).abs() < 0.01), "{w0:?}");
         assert!(w1[1] < 0.95 && w1[2] < w1[0], "paper white is dimmer and warmer: {w1:?}");
@@ -162,13 +231,13 @@ mod tests {
 
     #[test]
     fn hostile_profiles_are_errors() {
-        assert!(proof_table(&[], ProofIntent::Perceptual, false).is_err());
-        assert!(proof_table(&[0u8; 400], ProofIntent::Relative, true).is_err());
+        assert!(proof_table(&[], ProofIntent::Perceptual, false, true).is_err());
+        assert!(proof_table(&[0u8; 400], ProofIntent::Relative, true, true).is_err());
         let good = crate::icc::write_named(NamedSpace::DisplayP3);
         for i in (0..good.len()).step_by(11) {
             let mut b = good.clone();
             b[i] ^= 0x5a;
-            let _ = proof_table(&b, ProofIntent::Perceptual, true);
+            let _ = proof_table(&b, ProofIntent::Perceptual, true, true);
         }
     }
 }

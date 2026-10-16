@@ -872,7 +872,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         }
         "view.softProof" => {
             // {on?, space?, profile?: ICC path | null, intent?: perceptual|relative, paperInk?,
-            // destWarning?, displayWarning?}; no params toggles
+            // blackPoint?, destWarning?, displayWarning?}; no params toggles
             let has = |k: &str| p.get(k).is_some();
             if let Some(s) = p.get("space").and_then(Value::as_str) {
                 match lightcraft_engine::pipeline::OutputSpace::parse(s) {
@@ -893,6 +893,9 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             if let Some(b) = p.get("paperInk").and_then(Value::as_bool) {
                 app.ui.proof_paper_ink = b;
             }
+            if let Some(b) = p.get("blackPoint").and_then(Value::as_bool) {
+                app.ui.proof_black_point = b;
+            }
             let path = match p.get("profile") {
                 Some(Value::String(s)) => Some(s.clone()),
                 Some(Value::Null) => {
@@ -903,7 +906,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 None => app.ui.proof_profile.as_ref().map(|(f, _)| f.clone()),
             };
             match path {
-                Some(path) => match lightcraft_engine::proof::load(&path, app.ui.proof_intent, app.ui.proof_paper_ink) {
+                Some(path) => match lightcraft_engine::proof::load(&path, app.ui.proof_intent, app.ui.proof_paper_ink, app.ui.proof_black_point) {
                     Ok(pp) => {
                         app.ui.proof.profile = pp.id;
                         app.ui.proof_profile = Some((path, pp.name));
@@ -920,7 +923,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             }
             app.ui.soft_proof = match p.get("on").and_then(Value::as_bool) {
                 Some(b) => b,
-                None if ["space", "destWarning", "displayWarning", "profile", "intent", "paperInk"].iter().any(|k| has(k)) => app.ui.soft_proof,
+                None if ["space", "destWarning", "displayWarning", "profile", "intent", "paperInk", "blackPoint"].iter().any(|k| has(k)) => app.ui.soft_proof,
                 None => !app.ui.soft_proof,
             };
             if app.ui.soft_proof && !matches!(app.ui.view, ViewMode::Detail | ViewMode::Reference) {
@@ -929,7 +932,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             let pr = app.ui.proof;
             let profile = app.ui.proof_profile.as_ref().map(|(f, n)| json!({"path": f, "name": n}));
             Ok(json!({"on": app.ui.soft_proof, "space": pr.space, "profile": profile, "intent": app.ui.proof_intent.name(),
-                "paperInk": app.ui.proof_paper_ink, "destWarning": pr.dest_warning, "displayWarning": pr.display_warning}))
+                "paperInk": app.ui.proof_paper_ink, "blackPoint": app.ui.proof_black_point, "destWarning": pr.dest_warning, "displayWarning": pr.display_warning}))
         }
         "view.histogram" => {
             app.ui.histogram = !app.ui.histogram;

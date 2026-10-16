@@ -439,7 +439,7 @@ fn proof_id(job: &Job) -> Result<Option<u64>, String> {
         return Ok(None);
     }
     let intent = ProofIntent::parse(&job.intent).ok_or("job.intent must be perceptual or relative")?;
-    Ok(Some(proof::load(path, intent, false)?.id))
+    Ok(Some(proof::load(path, intent, false, false)?.id))
 }
 
 /// Turns `img` by 90° clockwise.

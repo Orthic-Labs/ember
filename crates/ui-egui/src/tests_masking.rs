@@ -1249,7 +1249,7 @@ fn soft_proofing_flags_out_of_gamut_colours_and_makes_proof_copies() {
     let st = exec(&mut h, "view.softProof", json!({"space": "srgb", "destWarning": true}));
     assert_eq!(
         st,
-        json!({"on": true, "space": "srgb", "profile": null, "intent": "perceptual", "paperInk": false, "destWarning": true, "displayWarning": false})
+        json!({"on": true, "space": "srgb", "profile": null, "intent": "perceptual", "paperInk": false, "blackPoint": true, "destWarning": true, "displayWarning": false})
     );
     h.settle(SETTLE);
     assert!(red(&h) > before, "out-of-gamut colours are painted red");
