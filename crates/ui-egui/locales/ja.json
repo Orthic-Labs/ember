@@ -2258,5 +2258,8 @@
   "Only photos without a position": "位置情報のない写真のみ",
   "Drag photos onto the map to give them a GPS position.": "写真を地図にドラッグすると、GPS位置情報が設定されます。",
   "photo placed on the map": "枚の写真を地図に配置しました",
-  "photos placed on the map": "枚の写真を地図に配置しました"
+  "photos placed on the map": "枚の写真を地図に配置しました",
+  "Backdrop photo": "背景の写真",
+  "Export JPEGs…": "JPEG を書き出す…",
+  "Slideshow JPEG folder": "スライドショーの JPEG フォルダ"
 }

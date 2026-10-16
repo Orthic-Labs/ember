@@ -2256,5 +2256,8 @@
   "Only photos without a position": "Только фото без позиции",
   "Drag photos onto the map to give them a GPS position.": "Перетащите фото на карту, чтобы задать им GPS-позицию.",
   "photo placed on the map": "фото размещено на карте",
-  "photos placed on the map": "фото размещено на карте"
+  "photos placed on the map": "фото размещено на карте",
+  "Backdrop photo": "Фото фона",
+  "Export JPEGs…": "Экспорт JPEG…",
+  "Slideshow JPEG folder": "Папка для JPEG слайд-шоу"
 }

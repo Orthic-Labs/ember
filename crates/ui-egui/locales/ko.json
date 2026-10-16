@@ -2256,5 +2256,8 @@
   "Only photos without a position": "위치가 없는 사진만",
   "Drag photos onto the map to give them a GPS position.": "사진을 지도로 끌어다 놓으면 GPS 위치가 지정됩니다.",
   "photo placed on the map": "장의 사진을 지도에 배치했습니다",
-  "photos placed on the map": "장의 사진을 지도에 배치했습니다"
+  "photos placed on the map": "장의 사진을 지도에 배치했습니다",
+  "Backdrop photo": "배경 사진",
+  "Export JPEGs…": "JPEG 내보내기…",
+  "Slideshow JPEG folder": "슬라이드쇼 JPEG 폴더"
 }

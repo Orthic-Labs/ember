@@ -2255,5 +2255,8 @@
   "Only photos without a position": "僅顯示無位置的照片",
   "Drag photos onto the map to give them a GPS position.": "將照片拖到地圖上，即可為其設定 GPS 位置。",
   "photo placed on the map": "張照片已放到地圖上",
-  "photos placed on the map": "張照片已放到地圖上"
+  "photos placed on the map": "張照片已放到地圖上",
+  "Backdrop photo": "背景照片",
+  "Export JPEGs…": "匯出 JPEG…",
+  "Slideshow JPEG folder": "投影片 JPEG 資料夾"
 }

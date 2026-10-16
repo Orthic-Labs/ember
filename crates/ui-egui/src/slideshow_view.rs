@@ -232,11 +232,13 @@ pub struct Module {
     pub music_seconds: f64,
     /// The name typed for a template to save.
     pub template_name: String,
+    /// The template picked in the list, until it is applied again or deleted.
+    pub template: Option<String>,
 }
 
 impl Default for Module {
     fn default() -> Self {
-        Self { slide: 0, shown: None, drafts: Vec::new(), music_seconds: 180.0, template_name: String::new() }
+        Self { slide: 0, shown: None, drafts: Vec::new(), music_seconds: 180.0, template_name: String::new(), template: None }
     }
 }
 
@@ -284,11 +286,15 @@ pub fn show_module(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::
     next.slide = slide;
     let mut m = model.clone();
     let mut templates: Vec<String> = slideshow::builtin_templates().into_iter().map(|t| t.name).collect();
-    templates.extend(app.session.slideshow_templates.iter().map(|t| t.name.clone()));
-    let (mut close, mut export, mut play, mut fit, mut save) = (false, false, false, false, false);
-    let mut chosen: Option<String> = None;
+    let user: Vec<String> = app.session.slideshow_templates.iter().map(|t| t.name.clone()).collect();
+    templates.extend(user.iter().cloned());
+    // the backdrop photo is one of the photos shown; its name comes from the catalog
+    let picks: Vec<(u64, String)> = ids.iter().filter_map(|id| app.session.catalog.photo(*id).map(|p| (id.0, p.file_name.clone()))).collect();
+    let backdrop_name = model.backdrop.image.and_then(|id| app.session.catalog.photo(lightcraft_catalog::PhotoId(id)).map(|p| p.file_name.clone()));
+    let (mut close, mut export, mut export_jpeg, mut play, mut fit, mut save) = (false, false, false, false, false, false);
+    let (mut chosen, mut delete): (Option<String>, Option<String>) = (None, None);
     egui::SidePanel::left("classicSlideshowSettings").resizable(false).default_width(290.0).show_inside(ui, |ui| {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if ui.button(crate::i18n::tr("Close")).clicked() {
                 close = true;
             }
@@ -298,13 +304,25 @@ pub fn show_module(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::
             if ui.add_enabled(slides > 0, egui::Button::new(crate::i18n::tr("Export PDF…"))).clicked() {
                 export = true;
             }
+            if ui.add_enabled(slides > 0, egui::Button::new(crate::i18n::tr("Export JPEGs…"))).clicked() {
+                export_jpeg = true;
+            }
         });
         ui.separator();
-        egui::ComboBox::from_id_salt("slideshowTemplate").selected_text(crate::i18n::tr("Apply template")).show_ui(ui, |ui| {
-            for name in &templates {
-                if ui.selectable_label(false, name.as_str()).clicked() {
-                    chosen = Some(name.clone());
+        ui.horizontal(|ui| {
+            let picked = run.template.clone();
+            let shown = picked.clone().unwrap_or_else(|| crate::i18n::tr("Apply template").to_string());
+            egui::ComboBox::from_id_salt("slideshowTemplate").selected_text(shown).show_ui(ui, |ui| {
+                for name in &templates {
+                    if ui.selectable_label(picked.as_deref() == Some(name.as_str()), name.as_str()).clicked() {
+                        chosen = Some(name.clone());
+                    }
                 }
+            });
+            // a user template can be deleted; the built-in ones stay
+            let user_pick = run.template.clone().filter(|name| user.contains(name));
+            if ui.add_enabled(user_pick.is_some(), egui::Button::new(crate::i18n::tr("Delete template"))).clicked() {
+                delete = user_pick;
             }
         });
         ui.horizontal(|ui| {
@@ -340,6 +358,21 @@ pub fn show_module(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::
         {
             m.backdrop.gradient_to = Some(to);
         }
+        // a photo covers the backdrop instead of the colour; it is chosen from the photos shown
+        ui.label(crate::i18n::tr("Backdrop photo"));
+        ui.horizontal(|ui| {
+            let shown = backdrop_name.clone().unwrap_or_else(|| crate::i18n::tr("None").to_string());
+            egui::ComboBox::from_id_salt("slideshowBackdropPhoto").selected_text(shown).show_ui(ui, |ui| {
+                for (id, name) in &picks {
+                    if ui.selectable_label(m.backdrop.image == Some(*id), name.as_str()).clicked() {
+                        m.backdrop.image = Some(*id);
+                    }
+                }
+            });
+            if ui.add_enabled(m.backdrop.image.is_some(), egui::Button::new(crate::i18n::tr("Clear"))).clicked() {
+                m.backdrop.image = None;
+            }
+        });
         ui.separator();
         if let Some(text) = text_setting(ui, &mut next.drafts, "slideshowIdentity", crate::i18n::tr("Identity plate"), &m.overlays.identity_plate) {
             m.overlays.identity_plate = text;
@@ -379,10 +412,20 @@ pub fn show_module(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::
     {
         app.toast_error(ctx, e);
     }
-    if let Some(name) = chosen
-        && let Err(e) = app.run("slideshow.applyTemplate", json!({"name": name}))
-    {
-        app.toast_error(ctx, e);
+    if let Some(name) = chosen {
+        match app.run("slideshow.applyTemplate", json!({"name": name.clone()})) {
+            Ok(_) => next.template = Some(name),
+            Err(e) => app.toast_error(ctx, e),
+        }
+    }
+    if let Some(name) = delete {
+        match app.run("slideshow.deleteTemplate", json!({"name": name.clone()})) {
+            Ok(_) => {
+                app.toast(ctx, format!("Deleted template {name}"));
+                next.template = None;
+            }
+            Err(e) => app.toast_error(ctx, e),
+        }
     }
     if save {
         let name = next.template_name.trim().to_string();
@@ -453,7 +496,10 @@ pub fn show_module(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::
         }
     }
     if export {
-        export_pdf(app, ctx);
+        export_file(app, ctx, false);
+    }
+    if export_jpeg {
+        export_file(app, ctx, true);
     }
     if close {
         app.ui.classic_slideshow_view = None;
@@ -462,22 +508,30 @@ pub fn show_module(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::
     }
 }
 
-/// Asks for a PDF path, then writes the show there (`slideshow.export`).
-fn export_pdf(app: &mut LightcraftApp, ctx: &egui::Context) {
-    let params = json!({"format": "pdf"});
-    let request = PickRequest::save("Slideshow PDF", "PDF", &["pdf"], "Slideshow.pdf");
-    match crate::pick::ask(app, "slideshow.export", &params, "path", request, |_| None) {
+/// Asks for a PDF path, or a folder for the JPEGs, then writes the show there (`slideshow.export`).
+fn export_file(app: &mut LightcraftApp, ctx: &egui::Context, jpeg: bool) {
+    let format = if jpeg { "jpeg" } else { "pdf" };
+    let params = json!({"format": format});
+    let (key, request) = if jpeg {
+        ("dir", PickRequest::folder(crate::i18n::tr("Slideshow JPEG folder")))
+    } else {
+        ("path", PickRequest::save("Slideshow PDF", "PDF", &["pdf"], "Slideshow.pdf"))
+    };
+    match crate::pick::ask(app, "slideshow.export", &params, key, request, |_| None) {
         Picked::Now(paths) => {
             let Some(path) = paths.first() else { return };
             let mut params = params;
-            params["path"] = json!(path);
+            params[key] = json!(path);
             match app.run("slideshow.export", params) {
-                Ok(done) => app.toast(ctx, format!("Exported {} slides to {}", done["slides"], path)),
+                Ok(done) => {
+                    let slides = if jpeg { json!(done["files"].as_array().map_or(0, Vec::len)) } else { done["slides"].clone() };
+                    app.toast(ctx, format!("Exported {slides} slides to {path}"));
+                }
                 Err(e) => app.toast_error(ctx, e),
             }
         }
         Picked::Later => {}
-        Picked::Unavailable => app.toast_error(ctx, "no save dialog on this platform; slideshow.export needs a path"),
+        Picked::Unavailable => app.toast_error(ctx, format!("no file dialog on this platform; slideshow.export needs a {key}")),
     }
 }
 

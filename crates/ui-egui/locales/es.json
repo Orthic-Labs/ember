@@ -2255,5 +2255,8 @@
   "Only photos without a position": "Solo fotos sin posición",
   "Drag photos onto the map to give them a GPS position.": "Arrastra fotos al mapa para darles una posición GPS.",
   "photo placed on the map": "foto colocada en el mapa",
-  "photos placed on the map": "fotos colocadas en el mapa"
+  "photos placed on the map": "fotos colocadas en el mapa",
+  "Backdrop photo": "Foto de fondo",
+  "Export JPEGs…": "Exportar JPEG…",
+  "Slideshow JPEG folder": "Carpeta de los JPEG de la presentación"
 }

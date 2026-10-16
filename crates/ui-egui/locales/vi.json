@@ -2256,5 +2256,8 @@
   "Only photos without a position": "Chỉ ảnh chưa có vị trí",
   "Drag photos onto the map to give them a GPS position.": "Kéo ảnh vào bản đồ để gán vị trí GPS cho ảnh.",
   "photo placed on the map": "ảnh đã được đặt trên bản đồ",
-  "photos placed on the map": "ảnh đã được đặt trên bản đồ"
+  "photos placed on the map": "ảnh đã được đặt trên bản đồ",
+  "Backdrop photo": "Ảnh nền",
+  "Export JPEGs…": "Xuất JPEG…",
+  "Slideshow JPEG folder": "Thư mục JPEG của trình chiếu"
 }

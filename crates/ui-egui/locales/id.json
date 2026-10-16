@@ -2256,5 +2256,8 @@
   "Only photos without a position": "Hanya foto tanpa posisi",
   "Drag photos onto the map to give them a GPS position.": "Seret foto ke peta untuk memberi mereka posisi GPS.",
   "photo placed on the map": "foto ditempatkan di peta",
-  "photos placed on the map": "foto ditempatkan di peta"
+  "photos placed on the map": "foto ditempatkan di peta",
+  "Backdrop photo": "Foto latar belakang",
+  "Export JPEGs…": "Ekspor JPEG…",
+  "Slideshow JPEG folder": "Folder JPEG tayangan slide"
 }
