@@ -55,7 +55,7 @@ that is promising but is not recorded as review, so the column says `no (communi
 | 8 | Indonesian | `id` | 2,162 keys present (machine-drafted, see #185 note) | as zh-hans | Latin (Inter covers it) | no | complete, machine-drafted (native review pending) | 10–16 h |
 | 9 | Japanese | `ja` | 2,164 keys present (machine-drafted, see #185 note) | as zh-hans; vertical export watermarks | Jpan via craft-fonts (BIZ UDPGothic / UDMincho); IME through winit | no (community edits) | complete, machine-drafted (native review pending) | 6–10 h |
 | 10 | German | `de` | 2,162 keys present (machine-drafted for the 40 keys added in #185) | as zh-hans; What's New translated line by line | Latin | no (community edits) | complete, machine-drafted (native review pending) | 4–8 h |
-| 11 | Korean | `ko` | 2,162 keys present (machine-drafted, see #185 note) | as zh-hans; Hangul | `Kore`. No Hangul face of its own (Inter has none): Hangul falls back to the Noto Sans CJK SC face, which the 2026-10-07 exception covers for Chinese only (decision open) | no | complete, machine-drafted (native review pending); Hangul licence decision and web rendering unverified | 14–22 h |
+| 11 | Korean | `ko` | 2,162 keys present (machine-drafted, see #185 note) | as zh-hans; Hangul | `Kore`. No Hangul face of its own (Inter has none): Hangul falls back to the Noto Sans CJK SC face, allowed for Korean by the 2026-10-16 maintainer decision | no | complete, machine-drafted (native review pending); web rendering unverified | 14–22 h |
 | 12 | Vietnamese | `vi` | 2,162 keys present (machine-drafted, see #185 note) | as zh-hans | Latin with stacked diacritics (Inter covers every Vietnamese letter, checked against its cmap) | no | complete, machine-drafted (native review pending) | 10–16 h |
 
 ## Other languages Ember ships (3)
@@ -103,7 +103,7 @@ Chinese 198, Japanese 199, Spanish 162, French 204, Brazilian Portuguese 160.
   review together.
 - The catalogs contain English-looking values that equal their key (see the per-language notes); those are
   not part of this batch and were not changed.
-- Indonesian (`id`) was added once the partial catalogs were complete, as the #185 decision orders: a machine draft of the full key set, native review pending. Vietnamese (`vi`) was added second, with the same machine-draft status and the same plural-suffix gap. Korean (`ko`) was added last, with the same machine-draft status. Hangul glyph coverage and the Noto CJK licence scope are open (see docs/web.md). #185 stays open for native review. Known gap in the Indonesian catalog: plural suffixes (`photo{}`) are filled by callers with English "s", so the plural slot needs a call-site fix before it ships. Hindi and Arabic stay deferred until shaping and RTL exist.
+- Indonesian (`id`) was added once the partial catalogs were complete, as the #185 decision orders: a machine draft of the full key set, native review pending. Vietnamese (`vi`) was added second, with the same machine-draft status and the same plural-suffix gap. Korean (`ko`) was added last, with the same machine-draft status. Noto CJK for Hangul is allowed (maintainer decision, 2026-10-16); glyph coverage on the web is unverified (see docs/web.md). #185 stays open for native review. Plural slots (`photo{}`) take their suffix from the locale (54c867f5), so the no-inflection languages get none. Hindi and Arabic stay deferred until shaping and RTL exist.
 
 ## Revision history
 

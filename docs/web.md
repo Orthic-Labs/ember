@@ -59,7 +59,7 @@ input (`CRAFT_FONTS_DIR=../craft-fonts cargo xtask web`; release builds always s
 bundle also ships Noto Sans CJK SC Regular as `lightcraft_zh_hans.otf` and loads it before the UI
 starts. Keeping the 16 MB Chinese face separate leaves the module under Cloudflare's 25 MiB
 per-file limit (the older Japanese-only module measured 21.8 MB). Without `CRAFT_FONTS_DIR`, the
-web build still works, but Chinese and Japanese text lack glyphs. **Korean (Hangul).** BIZ UDPGothic has no Hangul, so on the web Hangul falls through to the Noto Sans CJK SC face that the bundle loads for Chinese, appended after the UI faces. Whether that face carries the Hangul syllables is not verified in this repository (no craft-fonts checkout here), and the 2026-10-07 maintainer exception covers Noto CJK for Chinese text only, so Korean on the web needs that decision before release.
+web build still works, but Chinese and Japanese text lack glyphs. **Korean (Hangul).** BIZ UDPGothic has no Hangul, so on the web Hangul falls through to the Noto Sans CJK SC face that the bundle loads for Chinese, appended after the UI faces. Whether that face carries the Hangul syllables is not verified in this repository (no craft-fonts checkout here) Noto CJK for Korean is allowed (maintainer decision, 2026-10-16).
 
 ## Deploying: headers
 

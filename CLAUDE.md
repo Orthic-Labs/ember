@@ -75,7 +75,8 @@ of it. Full standard: `../craftrules/standards/never-crash.md`
   publisher-supplied icon sets, sample photos, colour profiles or LUTs — even when OFL/MIT. The UI font is Inter (OFL);
   Japanese and Chinese fonts come from craft-fonts (below). **One exception (maintainer decision, 2026-10-07): Noto
   Sans/Serif CJK** (Google-branded, OFL, related to Source Han) is allowed via craft-fonts for Chinese
-  text, because nearly every OFL Chinese face derives from it. Use it unmodified under its OFL; this does not open the
+  text, because nearly every OFL Chinese face derives from it, and for Korean (Hangul) text (maintainer decision,
+  2026-10-16). Use it unmodified under its OFL; this does not open the
   door to Source Han or to any other asset from the excluded publisher.
 - Every asset in the repository must be one of: **our own original work** (e.g. icons drawn in code as vectors, procedurally generated demo photos), **public domain / CC0**, **Creative Commons** (CC-BY / CC-BY-SA with attribution honoured), **OFL** (fonts), or **permissive open-source** (MIT/Apache-2.0/BSD/ISC) — or contributed by a person who created the asset and licenses it openly.
 - **Fork branding:** Ember uses original Orthic Labs artwork. ArtCraft marks are removed; `docs/brand/LICENSE-brand.txt` is retained as upstream legal provenance. Preserve plain-text attribution, copyrights & licences; do not present Ember as an ArtCraft product.
