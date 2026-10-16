@@ -67,6 +67,8 @@ fn fallback(frame: &Frame, w: usize, h: usize) -> Plane {
         }
     });
     smooth_plane(&mut out, 0.015 * frame_px(frame, w));
+    // the box blur's running sums leave rounding residue (about -1e-8 where the plane is 0)
+    out.data.iter_mut().for_each(|v| *v = if v.is_finite() { v.clamp(0.0, 0.5) } else { 0.0 });
     out
 }
 

@@ -26,6 +26,11 @@
 //! 5. The region is softened (Gaussian), upsampled and snapped to the photo's edges by the same
 //!    guided filter as Subject's (`subject::refine`).
 //!
+//! Warm skies also need the frame to hold something darker ([`CONTRAST`]), and the neutral term
+//! allows only a hair of chroma ([`NEUTRAL_CHROMA`]; a beige wall has about 0.03), so a smooth warm
+//! wall that fills the frame is no sky: its colour score stays at the 0.4 floor, below the alpha
+//! ramp ([`COLOUR_LO`]).
+//!
 //! Warm skies qualify only when bright (absolute and relative to the frame's bright end), very smooth
 //! and connected to the top; a warm wall that touches the top is darker or textured, and what passes the
 //! colour term still needs the top connection and the horizon cut.
@@ -48,7 +53,7 @@ const BLUE_B: (f32, f32) = (0.01, 0.06);
 const BLUE_A: (f32, f32) = (0.03, 0.08);
 /// A bright (EV) low-chroma (OkLab) pixel counts as overcast white sky.
 const NEUTRAL_L: (f32, f32) = (-2.5, -0.5);
-const NEUTRAL_CHROMA: (f32, f32) = (0.03, 0.08);
+const NEUTRAL_CHROMA: (f32, f32) = (0.012, 0.032);
 /// Warm sky (sunset, dusk): OkLab hue 0..[`WARM_HUE_HI`]° (red through orange to yellow, fading out over
 /// 15°) or from [`WARM_HUE_MAGENTA`]° (pink-magenta dusk, fading in over 20°), with chroma of at least
 /// 0.02 to 0.05 (grey is the neutral term's).
@@ -65,6 +70,10 @@ const WARM_REL: (f32, f32) = (1.5, 2.5);
 /// ... and very smooth: texture (EV) over which the warm term falls (stricter than [`TEX_LO`]..[`TEX_HI`];
 /// a warm sky is a clean gradient, plaster, skin, sand and wood are not).
 const WARM_TEX: (f32, f32) = (0.05, 0.2);
+/// Warm sky needs company: a pixel counts as one only when it is brighter than the frame's
+/// 10th-percentile luminance by this many EV (fading in over the range), because a sky stands above
+/// something darker. A uniform warm wall fills its frame and has none.
+const CONTRAST: (f32, f32) = (0.5, 1.5);
 /// Texture (EV) at the work scale over which smoothness falls from 1 to 0, and the Gaussian sigma (at
 /// `WORK_LONG`) it is measured under.
 const TEX_LO: f32 = 0.15;
@@ -81,7 +90,7 @@ const STEP_AB: f32 = 0.05;
 /// Enclosed non-sky holes up to 1 / this of the work plane are filled.
 const HOLE_DIV: usize = 8;
 /// The colour score over which the region's alpha rises from 0 to 1.
-const COLOUR_LO: f32 = 0.3;
+const COLOUR_LO: f32 = 0.42;
 const COLOUR_HI: f32 = 0.7;
 /// Output heights (fraction) over which the sky weight falls from 1 to 0: the horizon cut.
 const HORIZON_LO: f32 = 0.55;
@@ -104,6 +113,8 @@ pub(super) struct Scene {
     pub(super) k: f32,
     /// 90th percentile of `lum`, EV (the frame's bright end).
     pub(super) lum_p90: f32,
+    /// 10th percentile of `lum`, EV (the frame's dark end).
+    pub(super) lum_p10: f32,
 }
 
 impl Scene {
@@ -123,7 +134,8 @@ impl Scene {
         let mut sorted: Vec<f32> = lum.data.iter().copied().filter(|v| v.is_finite()).collect();
         sorted.sort_by(f32::total_cmp);
         let lum_p90 = sorted.get(sorted.len() * 9 / 10).copied().unwrap_or(0.0);
-        Scene { w, h, lum, a, b, tex, k, lum_p90 }
+        let lum_p10 = sorted.get(sorted.len() / 10).copied().unwrap_or(0.0);
+        Scene { w, h, lum, a, b, tex, k, lum_p90, lum_p10 }
     }
 
     pub(super) fn blur(&self, p: &Plane, sigma: f32) -> Plane {
@@ -219,7 +231,8 @@ fn sky_colour(sc: &Scene, i: usize) -> (f32, f32) {
         * smooth(WARM_L.0, WARM_L.1, lum)
         * smooth(-WARM_REL.1, -WARM_REL.0, lum - sc.lum_p90)
         * (1.0 - smooth(WARM_TEX.0, WARM_TEX.1, tex));
-    (bright, 0.4 + 0.6 * finite(blue.max(neutral).max(warm)))
+    let company = smooth(CONTRAST.0, CONTRAST.1, lum - sc.lum_p10);
+    (bright, 0.4 + 0.6 * finite(blue.max(neutral).max(warm * company)))
 }
 
 /// Candidates reachable from the top edge: an iterative (stack) 4-connected fill over `cand` that

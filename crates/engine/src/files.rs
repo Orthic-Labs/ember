@@ -2079,7 +2079,10 @@ mod tests {
         // without the matte the heuristic looks at the top of the frame instead
         let heuristic = SourceInfo { mattes: None, ..info.clone() };
         assert!(green(&s, &heuristic, 2) < green(&plain, &heuristic, 2));
-        assert_eq!(green(&s, &heuristic, 13), green(&plain, &heuristic, 13));
+        // (near the horizon cut the edge refinement smears the mask over a couple of rows, a large part of
+        // this 16-row frame: so the bottom is only far less darkened than the top, and than the matte's)
+        assert!(green(&s, &heuristic, 2) + 20 < green(&s, &heuristic, 13), "sky above, horizon cut below");
+        assert!(green(&s, &info, 13) < green(&s, &heuristic, 13), "the matte, not the heuristic, decides");
     }
 
     /// A DNG's white balance is re-evaluated through its own colour model: the decoder hands the
