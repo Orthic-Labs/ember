@@ -3912,6 +3912,22 @@ mod tests {
         // a screen without a profile: sRGB
         *screen.lock().unwrap() = None;
         assert!(h.step_until(SETTLE, |h| h.app.renderer.display_id().is_none()));
+
+        // an explicit sRGB beats the screen's profile, however it changes; automatic goes back
+        *screen.lock().unwrap() = Some(write_named(NamedSpace::DisplayP3));
+        assert!(h.step_until(SETTLE, |h| h.app.renderer.display_id() == Some(id(NamedSpace::DisplayP3))));
+        let r = h.request("engine.execute", json!({"command": "app.displayProfile", "params": {"path": "srgb"}}), t);
+        assert_eq!(r["ok"], true, "{r}");
+        assert_eq!(h.app.ui.settings.display_profile, "srgb");
+        assert_eq!(h.app.renderer.display_id(), None, "sRGB override");
+        *screen.lock().unwrap() = Some(write_named(NamedSpace::AdobeRgb));
+        for _ in 0..90 {
+            h.step();
+        }
+        assert_eq!(h.app.renderer.display_id(), None, "the screen's profile is ignored under the override");
+        let r = h.request("engine.execute", json!({"command": "app.displayProfile", "params": {"path": null}}), t);
+        assert_eq!(r["result"]["screen"], true, "{r}");
+        assert_eq!(h.app.renderer.display_id(), Some(id(NamedSpace::AdobeRgb)));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

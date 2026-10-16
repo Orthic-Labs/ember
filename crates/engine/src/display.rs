@@ -16,6 +16,35 @@ use std::sync::Arc;
 
 use crate::media::RenderResult;
 
+/// The `displayProfile` setting that means "treat the display as sRGB" even where the host can read
+/// the screen's own profile (Settings ▸ Display ▸ Use sRGB).
+pub const SRGB_SETTING: &str = "srgb";
+
+/// What the `displayProfile` setting asks for. The override precedence is: a chosen file, else an
+/// explicit sRGB, else automatic (the screen's profile where the host knows it, otherwise sRGB).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisplayChoice<'a> {
+    /// Nothing chosen: follow the screen's profile (sRGB when the host has none).
+    Auto,
+    /// sRGB, whatever the screen's profile is.
+    Srgb,
+    /// This `.icc` / `.icm` file.
+    File(&'a str),
+}
+
+impl<'a> DisplayChoice<'a> {
+    pub fn from_setting(setting: &'a str) -> DisplayChoice<'a> {
+        let s = setting.trim();
+        if s.is_empty() {
+            DisplayChoice::Auto
+        } else if s.eq_ignore_ascii_case(SRGB_SETTING) {
+            DisplayChoice::Srgb
+        } else {
+            DisplayChoice::File(s)
+        }
+    }
+}
+
 /// A loaded display profile: its transforms and the pipeline target.
 #[derive(Debug)]
 pub struct Display {
@@ -47,9 +76,14 @@ impl Display {
         self.profile.id
     }
 
-    /// Load the profile at `path` (`""`: none, the display is treated as sRGB).
+    /// Load the profile the `displayProfile` setting names: a file, or none for `""` (automatic,
+    /// which the caller resolves to the screen's profile) and for [`SRGB_SETTING`] (the display is
+    /// treated as sRGB).
     pub fn load_opt(path: &str) -> Result<Option<Arc<Display>>, String> {
-        if path.trim().is_empty() { Ok(None) } else { Display::load(path).map(|d| Some(Arc::new(d))) }
+        match DisplayChoice::from_setting(path) {
+            DisplayChoice::Auto | DisplayChoice::Srgb => Ok(None),
+            DisplayChoice::File(file) => Display::load(file).map(|d| Some(Arc::new(d))),
+        }
     }
 
     /// For `app.displayProfile` and Settings: path, description, kind, primaries (xy).
@@ -172,5 +206,45 @@ mod tests {
         assert!(e.contains("not a valid ICC profile"), "{e}");
         assert!(Display::load(&dir.join("missing.icc").to_string_lossy()).is_err());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A missing or invalid profile file is an error (the frontend then shows sRGB), never a panic.
+    #[test]
+    fn a_missing_or_invalid_profile_is_an_error_not_a_display() {
+        assert!(Display::load_opt("definitely-not-here.icc").is_err());
+        assert!(Display::from_bytes("x", &[]).is_err());
+        assert!(Display::from_bytes("x", b"not an icc profile at all, just some text that is long enough").is_err());
+        let mut truncated = lightcraft_codecs::icc::write_named(lightcraft_codecs::NamedSpace::DisplayP3);
+        truncated.truncate(100);
+        assert!(Display::from_bytes("x", &truncated).is_err());
+    }
+
+    /// The setting's precedence: a chosen file, else explicit sRGB, else automatic.
+    #[test]
+    fn the_display_setting_is_a_file_srgb_or_automatic() {
+        assert_eq!(DisplayChoice::from_setting(""), DisplayChoice::Auto);
+        assert_eq!(DisplayChoice::from_setting("   "), DisplayChoice::Auto);
+        assert_eq!(DisplayChoice::from_setting("srgb"), DisplayChoice::Srgb);
+        assert_eq!(DisplayChoice::from_setting(" sRGB "), DisplayChoice::Srgb);
+        assert_eq!(DisplayChoice::from_setting("/icc/mon.icc"), DisplayChoice::File("/icc/mon.icc"));
+        // sRGB and automatic both load no file; a file always loads (and fails loudly)
+        assert!(Display::load_opt(SRGB_SETTING).unwrap().is_none());
+        assert!(Display::load_opt("").unwrap().is_none());
+        assert!(Display::load_opt("/icc/mon.icc").is_err());
+    }
+
+    /// An sRGB monitor shows an sRGB image through its (moxcms) transform unchanged.
+    #[test]
+    fn an_srgb_display_leaves_srgb_pixels_alone() {
+        let d = Display::from_bytes("srgb.icc", &lightcraft_codecs::icc::write_named(lightcraft_codecs::NamedSpace::Srgb)).unwrap();
+        let px = [[0u8, 0, 0, 255], [255, 255, 255, 255], [200, 30, 90, 255], [17, 140, 251, 255], [128, 128, 128, 255]];
+        let mut img = Rgba8 { width: px.len(), height: 1, data: px.to_vec() };
+        d.profile.from_srgb(&mut img).unwrap();
+        for (got, want) in img.data.iter().zip(&px) {
+            assert!((0..4).all(|i| (i32::from(got[i]) - i32::from(want[i])).abs() <= 1), "{got:?} vs {want:?}");
+        }
+        let mut corrected = Rgba8 { width: px.len(), height: 1, data: px.to_vec() };
+        d.profile.correct(&mut corrected).unwrap();
+        assert_eq!(corrected.data, px, "no tone-curve correction for sRGB");
     }
 }

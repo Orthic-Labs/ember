@@ -616,12 +616,27 @@ fn display_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
         {
             app.ui.settings.display_profile = path;
         }
-        // with no profile chosen, previews follow the screen's own profile where the host knows it
-        let none = if app.services.screen_profile.is_some() { crate::i18n::tr("Use Screen Profile") } else { crate::i18n::tr("Use sRGB") };
-        let r = ui.add_enabled(!app.ui.settings.display_profile.is_empty(), egui::Button::new(none));
-        register(ui.ctx(), "button:settingsDisplayProfileNone", r.rect);
-        if r.clicked() {
-            app.ui.settings.display_profile.clear();
+        // Auto / sRGB / a file: with no profile chosen, previews follow the screen's own profile
+        // where the host knows it; "Use sRGB" overrides that
+        use lightcraft_engine::display::{DisplayChoice, SRGB_SETTING};
+        let choice = DisplayChoice::from_setting(&app.ui.settings.display_profile);
+        if app.services.screen_profile.is_some() {
+            let r = ui.add_enabled(choice != DisplayChoice::Auto, egui::Button::new(crate::i18n::tr("Use Screen Profile")));
+            register(ui.ctx(), "button:settingsDisplayProfileNone", r.rect);
+            if r.clicked() {
+                app.ui.settings.display_profile.clear();
+            }
+            let r = ui.add_enabled(choice != DisplayChoice::Srgb, egui::Button::new(crate::i18n::tr("Use sRGB")));
+            register(ui.ctx(), "button:settingsDisplayProfileSrgb", r.rect);
+            if r.clicked() {
+                app.ui.settings.display_profile = SRGB_SETTING.to_string();
+            }
+        } else {
+            let r = ui.add_enabled(choice != DisplayChoice::Auto, egui::Button::new(crate::i18n::tr("Use sRGB")));
+            register(ui.ctx(), "button:settingsDisplayProfileNone", r.rect);
+            if r.clicked() {
+                app.ui.settings.display_profile.clear();
+            }
         }
         if !can {
             hint(ui, t, crate::i18n::tr("not available here"));
@@ -1125,7 +1140,8 @@ pub fn recent_libraries(app: &mut LightcraftApp, p: &Value) -> Result<Value, Str
 
 /// `app.displayProfile {path?: string | null}`: show previews through this monitor ICC profile
 /// (`""` or `null`: none, the profile of the screen showing the window where the host knows it
-/// (macOS), else the display is treated as sRGB) and keep it as the setting; no `path`: report
+/// (macOS, Windows, Linux), else the display is treated as sRGB; `"srgb"`: sRGB even where the
+/// screen's profile is known) and keep it as the setting; no `path`: report
 /// only. A file that can't be used is an error and changes nothing. Returns the profile in use:
 /// `{path, description, kind (matrix|lut), primaries {red, green, blue: [x, y]}}`, with
 /// `path: null, screen: true` for the screen's profile.
@@ -1139,6 +1155,10 @@ pub fn display_profile(app: &mut LightcraftApp, p: &Value) -> Result<Value, Stri
     if let Some(path) = path {
         let d = lightcraft_engine::display::Display::load_opt(&path).map_err(|e| format!("app.displayProfile: {e}"))?;
         app.renderer.set_display(d);
+        let path = match lightcraft_engine::display::DisplayChoice::from_setting(&path) {
+            lightcraft_engine::display::DisplayChoice::Srgb => lightcraft_engine::display::SRGB_SETTING.to_string(),
+            _ => path,
+        };
         app.ui.settings.display_profile = path.clone();
         app.display_applied = Some(path);
         app.display_error = None;
