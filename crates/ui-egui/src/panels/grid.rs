@@ -612,6 +612,10 @@ fn cell(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId, r: Rect, square
             p.text(ph.center(), Align2::CENTER_CENTER, "!", t.semibold(18.0), t.text_dim);
         }
     }
+    // AI masks that need Update AI Settings: an amber dot at the image's top left
+    if app.session.develop_of(id).is_some_and(|d| lightcraft_develop::ai_stale_in(&d) > 0) {
+        p.circle_filled(pos2(img_rect.left() + 9.0, img_rect.top() + 9.0), 4.5, t.star);
+    }
     // labels and badges
     if square && app.ui.show_filenames {
         let m = &photo.meta;
