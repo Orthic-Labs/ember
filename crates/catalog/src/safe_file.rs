@@ -13,7 +13,9 @@
 //!   either the old or the complete new content is there — never a truncated mix. The content
 //!   goes to a new temp file in the same folder (unique name, `create_new`), is synced to disk and
 //!   renamed over the target; then the folder is synced (POSIX). Any failure removes the temp
-//!   file and leaves the target as it was.
+//!   file and leaves the target as it was. The replace itself is `rightkit-fs`
+//!   (`atomic_write_with`: temp naming, sync order, the Windows replace); only the new-file
+//!   writers below still make their own temp file.
 //! - [`write_atomic_nosync`] is the same temp file + rename without the two syncs, for
 //!   recreatable outputs only: a failed write still removes the temp file and leaves the target as
 //!   it was, but after a power cut the new file may be lost (on some file systems left empty) —
@@ -36,8 +38,9 @@ thread_local! {
     static SYNCS: Cell<u64> = const { Cell::new(0) };
 }
 
-/// How many file and folder syncs this module made **on the calling thread** (for tests: a
-/// durable write path syncs, a recreatable output doesn't).
+/// How many durable writes this module made **on the calling thread**: one per [`write_atomic`]
+/// call, plus each file and folder sync of the new-file writers (for tests: a durable write path
+/// asks for a sync, a recreatable output doesn't). The sync inside a replace is `rightkit-fs`'s.
 #[doc(hidden)]
 pub fn syncs_on_this_thread() -> u64 {
     SYNCS.with(Cell::get)
@@ -169,17 +172,68 @@ pub fn write_atomic_nosync(path: &Path, data: &[u8]) -> io::Result<()> {
     replace_with(path, false, &mut |w| w.write_all(data)).map(|_| ())
 }
 
-/// Temp file (synced when `sync`) renamed over `path`, then the folder synced when `sync`.
+/// Replace `path` with what `fill` writes: through [`atomic_replace`], with the fault injection
+/// of [`fail_writes_after`] in front of the writer.
 fn replace_with(path: &Path, sync: bool, fill: &mut dyn FnMut(&mut dyn Write) -> io::Result<()>) -> io::Result<u64> {
-    let (tmp, n) = write_temp(path, sync, fill)?;
-    if let Err(e) = fs::rename(&tmp, path) {
-        let _ = fs::remove_file(&tmp);
-        return Err(e);
-    }
+    let n = atomic_replace(path, sync, &mut |w| {
+        let limit = FAIL_AFTER.with(Cell::get);
+        fill(&mut Limited { inner: w, n: 0, limit })
+    })?;
     if sync {
-        sync_dir(parent_of(path));
+        SYNCS.with(|c| c.set(c.get() + 1));
     }
     Ok(n)
+}
+
+/// Counts the bytes written through it.
+#[cfg(not(target_arch = "wasm32"))]
+struct Counter<W> {
+    inner: W,
+    n: u64,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl<W: Write> Write for Counter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let k = self.inner.write(buf)?;
+        self.n += k as u64;
+        Ok(k)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+/// Replace (or create) `path` with what `fill` writes, through `rightkit-fs`: a temp file next to
+/// it, flushed to disk when `durable`, renamed over the target, then the folder synced when
+/// `durable`. A failure leaves the target as it was and removes the temp file. Returns the length
+/// written. When the new content is in place and only a step after the replace failed (the folder
+/// sync), the write counts as done and the step is logged, as it always was here.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn atomic_replace(path: &Path, durable: bool, fill: &mut dyn FnMut(&mut dyn Write) -> io::Result<()>) -> io::Result<u64> {
+    let mut written = 0u64;
+    let options = rightkit_fs::AtomicOptions { durable, ..rightkit_fs::AtomicOptions::default() };
+    let result = rightkit_fs::atomic_write_with(path, options, |file| {
+        let mut out = Counter { inner: io::BufWriter::with_capacity(1 << 20, file), n: 0 };
+        fill(&mut out)?;
+        out.flush()?;
+        written = out.n;
+        Ok(())
+    });
+    match result {
+        Ok(()) => Ok(written),
+        Err(e) if e.target_replaced() => {
+            log::warn!("{}: replaced, but a step after the replace failed: {e}", path.display());
+            Ok(written)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// A browser build has no file system to replace a file in (every `std::fs` call fails there).
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn atomic_replace(_path: &Path, _durable: bool, _fill: &mut dyn FnMut(&mut dyn Write) -> io::Result<()>) -> io::Result<u64> {
+    Err(io::Error::new(io::ErrorKind::Unsupported, "this build has no file system"))
 }
 
 /// Write `data` as the new file `path`: never replaces an existing file (`AlreadyExists`), and

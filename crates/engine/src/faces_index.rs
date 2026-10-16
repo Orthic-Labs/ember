@@ -197,9 +197,7 @@ impl Index {
             for (k, e) in &self.entries {
                 buf.extend(self.record(k, e));
             }
-            let part = path.with_extension("part");
-            std::fs::write(&part, &buf)?;
-            std::fs::rename(&part, &path)?;
+            lightcraft_catalog::safe_file::write_atomic(&path, &buf)?;
             self.file_matches = true;
         }
         self.unsaved.clear();
@@ -304,9 +302,7 @@ impl Scanned {
         } else {
             let mut buf = Self::header();
             buf.extend(self.set.iter().flat_map(|id| id.to_le_bytes()));
-            let part = path.with_extension("part");
-            std::fs::write(&part, &buf)?;
-            std::fs::rename(&part, &path)?;
+            lightcraft_catalog::safe_file::write_atomic(&path, &buf)?;
             self.file_matches = true;
         }
         self.unsaved.clear();

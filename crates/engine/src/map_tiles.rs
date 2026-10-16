@@ -490,11 +490,9 @@ fn read_cached(path: &Path) -> Option<(Vec<u8>, Duration)> {
 /// Written beside its place and renamed, so a half-written tile is never read. A full disk loses the cache, not the map.
 fn write_cached(path: &Path, bytes: &[u8]) {
     let Some(parent) = path.parent() else { return };
-    let tmp = path.with_extension("part");
-    let written = fs::create_dir_all(parent).and_then(|()| fs::write(&tmp, bytes)).and_then(|()| fs::rename(&tmp, path));
+    let written = fs::create_dir_all(parent).and_then(|()| lightcraft_catalog::safe_file::write_atomic_nosync(path, bytes));
     if let Err(e) = written {
         log::debug!("map tiles: cannot cache {}: {e}", path.display());
-        let _ = fs::remove_file(&tmp);
     }
 }
 

@@ -61,12 +61,7 @@ pub(super) fn read_settings(dir: &Path) -> FaceSettings {
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
-    let part = path.with_extension("part");
-    std::fs::write(&part, bytes).map_err(|e| fail(&format!("could not write {}", path.display()), e))?;
-    std::fs::rename(&part, path).map_err(|e| {
-        let _ = std::fs::remove_file(&part);
-        fail(&format!("could not write {}", path.display()), e)
-    })
+    lightcraft_catalog::safe_file::write_atomic(path, bytes).map_err(|e| fail(&format!("could not write {}", path.display()), e))
 }
 
 pub(super) fn write_settings(dir: &Path, st: &FaceSettings) -> Result<()> {

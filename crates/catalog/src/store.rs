@@ -56,6 +56,9 @@ impl FsStore {
     /// Use `dir` (created if missing).
     pub fn open(dir: impl AsRef<Path>) -> io::Result<FsStore> {
         std::fs::create_dir_all(dir.as_ref())?;
+        // temp files of a save a crash cut short (only those of writers confirmed dead)
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = rightkit_fs::sweep_stale_temps(dir.as_ref(), std::time::Duration::ZERO);
         Ok(FsStore { dir: dir.as_ref().to_path_buf(), appender: None })
     }
     pub fn dir(&self) -> &Path {
@@ -73,16 +76,6 @@ impl FsStore {
     }
 }
 
-/// A new staging file at `tmp`: whatever is already there (a leftover from a crashed save, or a link) is removed first
-/// (a link itself, never what it points to), then the file is created exclusively, so a write never follows a link
-/// planted at that name into another file (issue #1502).
-fn create_staging(tmp: &std::path::Path) -> io::Result<std::fs::File> {
-    if std::fs::symlink_metadata(tmp).is_ok() {
-        std::fs::remove_file(tmp)?;
-    }
-    std::fs::OpenOptions::new().write(true).create_new(true).open(tmp)
-}
-
 impl Store for FsStore {
     fn read(&mut self, name: &str) -> io::Result<Option<Vec<u8>>> {
         match std::fs::read(self.path(name)) {
@@ -93,45 +86,14 @@ impl Store for FsStore {
     }
 
     fn write_atomic(&mut self, name: &str, data: &[u8]) -> io::Result<()> {
-        use std::io::Write;
-        if self.appender.as_ref().is_some_and(|(n, _)| n == name) {
-            self.appender = None;
-        }
-        let tmp = self.path(&format!("{name}.tmp"));
-        {
-            let mut f = create_staging(&tmp)?;
-            f.write_all(data)?;
-            f.sync_all()?;
-        }
-        std::fs::rename(&tmp, self.path(name))?;
-        self.sync_dir();
-        Ok(())
+        self.write_atomic_with(name, &mut |w| w.write_all(data)).map(|_| ())
     }
 
     fn write_atomic_with(&mut self, name: &str, fill: &mut dyn FnMut(&mut dyn io::Write) -> io::Result<()>) -> io::Result<u64> {
-        use std::io::Write;
         if self.appender.as_ref().is_some_and(|(n, _)| n == name) {
             self.appender = None;
         }
-        let tmp = self.path(&format!("{name}.tmp"));
-        let written = (|| {
-            let mut w = Counter { inner: io::BufWriter::with_capacity(1 << 20, create_staging(&tmp)?), n: 0 };
-            fill(&mut w)?;
-            w.flush()?;
-            let f = w.inner.into_inner().map_err(|e| e.into_error())?;
-            f.sync_all()?;
-            Ok(w.n)
-        })();
-        let n = match written {
-            Ok(n) => n,
-            Err(e) => {
-                let _ = std::fs::remove_file(&tmp);
-                return Err(e);
-            }
-        };
-        std::fs::rename(&tmp, self.path(name))?;
-        self.sync_dir();
-        Ok(n)
+        crate::safe_file::atomic_replace(&self.path(name), true, fill)
     }
 
     fn append(&mut self, name: &str, data: &[u8]) -> io::Result<()> {
@@ -176,23 +138,6 @@ impl Store for FsStore {
     #[cfg(not(target_arch = "wasm32"))]
     fn background_writer(&self) -> Option<Box<dyn Store>> {
         Some(Box::new(FsStore { dir: self.dir.clone(), appender: None }))
-    }
-}
-
-/// Counts the bytes written through it.
-struct Counter<W> {
-    inner: W,
-    n: u64,
-}
-
-impl<W: io::Write> io::Write for Counter<W> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let k = self.inner.write(buf)?;
-        self.n += k as u64;
-        Ok(k)
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
     }
 }
 
@@ -246,8 +191,8 @@ impl Store for MemStore {
 mod tests_staging {
     use super::*;
 
-    /// A link planted at a staging name (`<name>.tmp`) is removed, never followed: the file it points to keeps its
-    /// bytes and the save still lands (issue #1502).
+    /// A link planted at the old staging name (`<name>.tmp`) is never written through: the file it points to keeps its
+    /// bytes and the save still lands (issue #1502; the temp name is now `rightkit-fs`'s, created exclusively).
     #[test]
     fn a_link_at_the_staging_name_is_never_written_through() {
         let dir = std::env::temp_dir().join(format!("lc-staging-link-{}", std::process::id()));
@@ -263,6 +208,31 @@ mod tests_staging {
         store.write_atomic_with("catalog.log", &mut |w| w.write_all(b"[1]")).unwrap();
         assert_eq!(std::fs::read(&victim).unwrap(), b"keep");
         assert_eq!(std::fs::read(dir.join("catalog.log")).unwrap(), b"[1]");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests_replace {
+    use super::*;
+
+    #[test]
+    fn atomic_writes_replace_the_file_and_leave_no_temp_file() {
+        let dir = std::env::temp_dir().join(format!("lc-store-replace-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut store = FsStore::open(&dir).unwrap();
+        store.write_atomic("catalog.snap", b"one").unwrap();
+        let n = store.write_atomic_with("catalog.snap", &mut |w| w.write_all(b"two two")).unwrap();
+        assert_eq!(n, 7);
+        assert_eq!(store.read("catalog.snap").unwrap().as_deref(), Some(&b"two two"[..]));
+        let failed = store.write_atomic_with("catalog.snap", &mut |w| {
+            w.write_all(b"half")?;
+            Err(io::Error::other("encoder failed"))
+        });
+        assert!(failed.is_err());
+        assert_eq!(store.read("catalog.snap").unwrap().as_deref(), Some(&b"two two"[..]), "the old file survives a failed save");
+        let names: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+        assert_eq!(names, vec!["catalog.snap"], "no temp file left");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

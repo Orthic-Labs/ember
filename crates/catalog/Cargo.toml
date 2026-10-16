@@ -19,6 +19,10 @@ crc32fast = { workspace = true }
 log = { workspace = true }
 web-time = { workspace = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# atomic file replacement and temp-file sweeping (RightKit safe-filesystem owner)
+rightkit-fs = { version = "=0.4.0", default-features = false, features = ["fs"] }
+
 [dev-dependencies]
 lightcraft-geom = { workspace = true }
 proptest = { workspace = true }

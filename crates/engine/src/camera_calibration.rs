@@ -191,9 +191,7 @@ pub fn save(profile: ChartProfile) -> Result<PathBuf, String> {
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let path = dir.join(file_name(&profile.model));
     let json = serde_json::to_vec_pretty(&profile).map_err(|e| e.to_string())?;
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, json).map_err(|e| format!("{}: {e}", tmp.display()))?;
-    std::fs::rename(&tmp, &path).map_err(|e| format!("{}: {e}", path.display()))?;
+    lightcraft_catalog::safe_file::write_atomic(&path, &json).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut cache = cache().lock().unwrap_or_else(PoisonError::into_inner);
     cache.insert(profile.model.clone(), Some(Arc::new(profile)));
     GENERATION.fetch_add(1, Ordering::Relaxed);
