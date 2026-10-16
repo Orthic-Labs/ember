@@ -228,6 +228,9 @@ pub struct Session {
     pub face_downloads: face_download::Downloads,
     /// Reverse geocoding: the parsed place names and their download (`metadata.*PlaceNames`).
     pub place_names: cmd::geocode::PlaceNames,
+    /// The GPS track drawn on the Classic Map (`map.loadTrack`) and whether it is shown (`map.showTrack`); not saved.
+    pub map_track: Option<map::MapTrack>,
+    pub map_show_track: bool,
     /// The user's own list of models to download (`catalog.json` in the models folder), as last read.
     pub(crate) face_catalog: lightcraft_faces::catalog::Catalog,
     /// The loaded recognition model and the face embeddings made with it.
@@ -383,6 +386,8 @@ impl Session {
             face_models_dir: None,
             face_downloads: Default::default(),
             place_names: Default::default(),
+            map_track: None,
+            map_show_track: false,
             face_catalog: Default::default(),
             #[cfg(not(target_arch = "wasm32"))]
             faces: Default::default(),

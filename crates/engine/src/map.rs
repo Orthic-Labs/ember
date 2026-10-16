@@ -288,6 +288,133 @@ pub fn user_agent() -> String {
     format!("Ember/{} (+{CONTACT_URL}; photo library, map view)", env!("CARGO_PKG_VERSION"))
 }
 
+/// Most points drawn per track segment: a longer one is thinned evenly (its first and last points kept).
+pub const MAX_TRACK_POINTS: usize = 4000;
+/// Most named places a search returns (a typed position is always first and not counted).
+pub const MAX_SEARCH_HITS: usize = 20;
+/// The zoom a search result centres the map at: a typed position, a saved location, a place name.
+pub const ZOOM_POSITION: f64 = 15.0;
+pub const ZOOM_LOCATION: f64 = 13.0;
+pub const ZOOM_PLACE: f64 = 11.0;
+
+/// A GPS track log loaded to draw on the map (`map.loadTrack`): its segments as runs of (latitude, longitude),
+/// each in time order. A segment is a span of continuous logging, so lines are never drawn across two of them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MapTrack {
+    pub name: String,
+    pub segments: Vec<Vec<(f64, f64)>>,
+}
+
+impl MapTrack {
+    /// Every point of the track.
+    pub fn points(&self) -> usize {
+        self.segments.iter().map(Vec::len).sum()
+    }
+}
+
+/// The lines a track draws under `view`, as screen offsets (points) from the map's centre: one line per segment.
+/// Positions that are not on Earth are left out, a segment left with fewer than two points draws nothing, and a
+/// longer line is thinned evenly to at most `max` points.
+pub fn track_lines(view: &View, segments: &[Vec<(f64, f64)>], max: usize) -> Vec<Vec<(f64, f64)>> {
+    let max = max.max(2);
+    segments
+        .iter()
+        .map(|segment| {
+            segment.iter().filter(|(lat, lon)| is_position(*lat, *lon)).map(|(lat, lon)| view.offset(*lat, *lon)).collect::<Vec<_>>()
+        })
+        .filter(|line| line.len() >= 2)
+        .map(|line| thin(&line, max))
+        .collect()
+}
+
+/// `points` reduced to `max` (at least 2) of them, spread evenly, the first and the last among them.
+fn thin(points: &[(f64, f64)], max: usize) -> Vec<(f64, f64)> {
+    if points.len() <= max {
+        return points.to_vec();
+    }
+    let last = points.len() - 1;
+    (0..max).map(|i| points[(i * last + (max - 1) / 2) / (max - 1)]).collect()
+}
+
+/// A position typed as `lat, lon` (a comma, a semicolon or a space between the two numbers), when it is on Earth.
+pub fn parse_position(text: &str) -> Option<(f64, f64)> {
+    let mut parts = text.split(|c: char| c == ',' || c == ';' || c.is_whitespace()).filter(|s| !s.is_empty());
+    let (a, b) = (parts.next()?, parts.next()?);
+    if parts.next().is_some() {
+        return None;
+    }
+    let (lat, lon) = (a.parse::<f64>().ok()?, b.parse::<f64>().ok()?);
+    is_position(lat, lon).then_some((lat, lon))
+}
+
+/// One result of a place search: where it is, its kind (`position`, `location` or `place`) and how close to look.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlaceHit {
+    pub kind: &'static str,
+    pub name: String,
+    pub lat: f64,
+    pub lon: f64,
+    pub zoom: f64,
+}
+
+/// How well `name` matches the lower-case `query`: 0 exact, 1 starts with it, 2 contains it, none otherwise.
+fn rank(name: &str, query: &str) -> Option<u8> {
+    let name = name.trim().to_lowercase();
+    if name == query {
+        Some(0)
+    } else if name.starts_with(query) {
+        Some(1)
+    } else if name.contains(query) {
+        Some(2)
+    } else {
+        None
+    }
+}
+
+/// An offline place search. `query` is a typed `lat, lon` (first in the result), else the saved locations and the
+/// place names (`places`: a name with the centre of the photos that carry it) whose name matches it, case-insensitively,
+/// best match first. Nothing is looked up online.
+pub fn search_places(query: &str, locations: &[(String, f64, f64)], places: &[(String, f64, f64)]) -> Vec<PlaceHit> {
+    let query = query.trim().to_lowercase();
+    if query.is_empty() {
+        return Vec::new();
+    }
+    let mut hits = Vec::new();
+    if let Some((lat, lon)) = parse_position(&query) {
+        hits.push(PlaceHit { kind: "position", name: format!("{lat}, {lon}"), lat, lon, zoom: ZOOM_POSITION });
+    }
+    let mut named: Vec<(u8, PlaceHit)> = Vec::new();
+    for (kind, zoom, list) in [("location", ZOOM_LOCATION, locations), ("place", ZOOM_PLACE, places)] {
+        for (name, lat, lon) in list {
+            if let Some(r) = rank(name, &query).filter(|_| is_position(*lat, *lon)) {
+                named.push((r, PlaceHit { kind, name: name.clone(), lat: *lat, lon: *lon, zoom }));
+            }
+        }
+    }
+    named.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.name.cmp(&b.1.name)));
+    hits.extend(named.into_iter().map(|(_, h)| h).take(MAX_SEARCH_HITS));
+    hits
+}
+
+/// The tile address a map style asks for: `grid` (no tiles, so no request at all: `Ok(None)`), `osm` (OpenStreetMap's
+/// standard layer) or `custom` (the address given, checked by [`check_template`]). Other providers are not offered:
+/// none was verified to allow keyless use by a desktop application, so they are reached through `custom`.
+pub fn style_tile_url(style: &str, custom: &str) -> Result<Option<String>, String> {
+    match style {
+        "grid" => Ok(None),
+        "osm" => Ok(Some(DEFAULT_TILE_URL.to_string())),
+        "custom" => {
+            let url = custom.trim();
+            if url.is_empty() {
+                return Err("give the tile address with `url` (https://…/{z}/{x}/{y}.png)".into());
+            }
+            check_template(url)?;
+            Ok(Some(url.to_string()))
+        }
+        other => Err(format!("unknown map style `{other}` (grid, osm or custom)")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -451,6 +578,85 @@ mod tests {
         assert!(check_template(&format!("https://x.test/{}/{{z}}/{{x}}/{{y}}", "a".repeat(600))).is_err());
         assert_eq!(tile_url(DEFAULT_TILE_URL, TileKey { z: 10, x: 518, y: 352 }), "https://tile.openstreetmap.org/10/518/352.png");
         assert_eq!(tile_host("https://User@Tiles.Example:8443/{z}/{x}/{y}.png").as_deref(), Some("tiles.example"));
+    }
+
+    #[test]
+    fn a_track_is_drawn_per_segment_under_the_view_and_gaps_are_not_bridged() {
+        let view = View::new(0.0, 0.0, 3.0);
+        let segments = vec![
+            vec![(0.0, 0.0), (0.0, 10.0)],
+            vec![(0.0, 0.0), (91.0, 0.0), (0.0, 20.0)],
+            vec![(0.0, 5.0)],
+            vec![(f64::NAN, 1.0), (0.0, 1.0)],
+        ];
+        let lines = track_lines(&view, &segments, MAX_TRACK_POINTS);
+        assert_eq!(lines.len(), 2, "a one-point segment and one left with a single point draw nothing");
+        let (x, y) = lines[0][1];
+        assert!(x > 0.0 && y.abs() < 1e-9, "east of the centre, on its row: {x}, {y}");
+        assert_eq!(lines[1].len(), 2, "the point off Earth is left out, the rest of the segment is kept");
+        assert_eq!(lines[0][0], view.offset(0.0, 0.0));
+    }
+
+    #[test]
+    fn a_long_track_is_thinned_evenly_keeping_its_ends() {
+        let view = View::new(10.0, 10.0, 8.0);
+        let long: Vec<(f64, f64)> = (0..1000).map(|i| (10.0 + f64::from(i) * 1e-4, 10.0)).collect();
+        let lines = track_lines(&view, &[long.clone()], 50);
+        assert_eq!(lines[0].len(), 50);
+        assert_eq!(lines[0][0], view.offset(long[0].0, long[0].1));
+        assert_eq!(lines[0][49], view.offset(long[999].0, long[999].1));
+        assert_eq!(track_lines(&view, &[long], 0)[0].len(), 2, "at least two points are kept");
+    }
+
+    #[test]
+    fn a_typed_position_is_read_in_the_common_forms_and_only_when_it_is_on_earth() {
+        assert_eq!(parse_position("48.8566, 2.3522"), Some((48.8566, 2.3522)));
+        assert_eq!(parse_position("48.8566 2.3522"), Some((48.8566, 2.3522)));
+        assert_eq!(parse_position(" -33.8688;151.2093 "), Some((-33.8688, 151.2093)));
+        for text in ["91, 0", "0, 181", "1 2 3", "abc", "", "1,", "nan, 1", "inf, 1", "paris, france"] {
+            assert_eq!(parse_position(text), None, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn a_search_matches_names_best_first_and_a_typed_position_comes_first() {
+        let locations = vec![
+            ("Old home".to_string(), 49.0, 3.0),
+            ("Home".to_string(), 48.0, 2.0),
+            ("Homestead".to_string(), 50.0, 4.0),
+            ("Nowhere".to_string(), f64::NAN, 0.0),
+        ];
+        let places = vec![("Paris".to_string(), 48.85, 2.35), ("Paris Plage".to_string(), 48.0, 1.0)];
+        let names = |q: &str| search_places(q, &locations, &places).into_iter().map(|h| (h.kind, h.name)).collect::<Vec<_>>();
+        assert_eq!(
+            names("home"),
+            vec![
+                ("location", "Home".to_string()),
+                ("location", "Homestead".to_string()),
+                ("location", "Old home".to_string()),
+            ],
+            "exact, then starts with, then contains"
+        );
+        assert_eq!(names("  PARIS "), vec![("place", "Paris".to_string()), ("place", "Paris Plage".to_string())], "case and spaces do not matter");
+        assert!(names("nowhere").is_empty(), "a location with no position is not a result");
+        assert!(names("   ").is_empty());
+        assert!(names("zzz").is_empty());
+        let typed = search_places("48.85, 2.35", &locations, &places);
+        assert_eq!((typed[0].kind, typed[0].zoom), ("position", ZOOM_POSITION));
+        assert_eq!((typed[0].lat, typed[0].lon), (48.85, 2.35));
+    }
+
+    #[test]
+    fn the_style_picks_its_tile_address_and_only_a_checked_custom_one_is_used() {
+        assert_eq!(style_tile_url("grid", "").unwrap(), None, "the grid asks for no tiles");
+        assert_eq!(style_tile_url("osm", "https://example.org/{z}/{x}/{y}.png").unwrap().as_deref(), Some(DEFAULT_TILE_URL));
+        assert_eq!(
+            style_tile_url("custom", " https://tiles.example.org/{z}/{x}/{y}.png ").unwrap().as_deref(),
+            Some("https://tiles.example.org/{z}/{x}/{y}.png")
+        );
+        assert!(style_tile_url("custom", "").is_err(), "custom needs an address");
+        assert!(style_tile_url("custom", "http://example.org/{z}/{x}").is_err(), "{{y}} is missing");
+        assert!(style_tile_url("satellite", "").is_err(), "no other preset is offered");
     }
 
     #[test]
