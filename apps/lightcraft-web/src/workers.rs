@@ -11,6 +11,11 @@
 //! and transfers the file back. [`Workers::offer_export`] is the main side; `exports.rs` runs a
 //! batch on top of it.
 //!
+//! Auto Settings use them too (#192): the main thread posts a [`WireAuto`] (the photo's source,
+//! its settings and facts), the worker decodes the thumbnail-level source and measures with the
+//! engine's pure `measure_auto`, and the values come back as JSON for the main thread to apply as
+//! one undo step. [`Workers::offer_auto`] is the main side; `auto.rs` drives it.
+//!
 //! Main side: [`Workers`] implements the UI's [`RenderOffload`]: one job per worker at a time,
 //! with affinity (a photo goes back to the worker that already decoded it), the rendered-
 //! thumbnail memory cache checked before dispatch, and the thumbnail storage index
@@ -32,7 +37,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
 use crate::backend::Backend;
-use crate::wire::{CacheWatch, ThumbIndex, WireExport, WireJob, WorkerCore, WorkerSlots, thumb_storage_key};
+use crate::wire::{CacheWatch, ThumbIndex, WireAuto, WireExport, WireJob, WorkerCore, WorkerSlots, thumb_storage_key};
 
 /// Storage key of the thumbnail index.
 pub const THUMB_INDEX: &str = "thumbs/index.json";
@@ -125,10 +130,51 @@ async fn handle_export(scope: &web_sys::DedicatedWorkerGlobalScope, backend: Opt
     }
 }
 
+/// Run one Auto measure message and post the values (or the error) back.
+async fn handle_auto(scope: &web_sys::DedicatedWorkerGlobalScope, backend: Option<Backend>, msg: JsValue) {
+    let t0 = now();
+    let out = Object::new();
+    set(&out, "id", &get(&msg, "id"));
+    set(&out, "kind", &"auto".into());
+    let result: Result<String, String> = async {
+        let text = get(&msg, "auto").as_string().ok_or("no auto job")?;
+        let job: WireAuto = serde_json::from_str(&text).map_err(|e| format!("bad auto job: {e}"))?;
+        let sent = get(&msg, "original");
+        let original = if sent.is_undefined() || sent.is_null() {
+            match (CORE.with(|c| c.borrow_mut().needs_original(&job.job)), &backend) {
+                (Some(hash), Some(b)) => b.read(&crate::store::storage_key(&hash)).await?,
+                _ => None,
+            }
+        } else {
+            Some(Uint8Array::new(&sent).to_vec())
+        };
+        let values = CORE.with(|c| c.borrow_mut().measure(&job, original.as_deref()))?;
+        serde_json::to_string(&values).map_err(|e| format!("Auto values: {e}"))
+    }
+    .await;
+    match result {
+        Ok(values) => {
+            set(&out, "ok", &true.into());
+            set(&out, "values", &values.into());
+        }
+        Err(e) => {
+            set(&out, "ok", &false.into());
+            set(&out, "err", &e.into());
+        }
+    }
+    set(&out, "ms", &(now() - t0).into());
+    if let Err(e) = scope.post_message(&out) {
+        log::error!("render worker: post: {e:?}");
+    }
+}
+
 /// Run one job message and post the result.
 async fn handle(scope: &web_sys::DedicatedWorkerGlobalScope, backend: Option<Backend>, msg: JsValue) {
     if get(&msg, "export").is_string() {
         return handle_export(scope, backend, msg).await;
+    }
+    if get(&msg, "auto").is_string() {
+        return handle_auto(scope, backend, msg).await;
     }
     let id = get(&msg, "id");
     let t0 = now();
@@ -220,11 +266,13 @@ struct W {
     busy: Option<Busy>,
     /// The export this worker is making: its message id and who to tell.
     export: Option<(u32, ExportDone)>,
+    /// The Auto measure this worker is making: its message id and who to tell.
+    auto: Option<(u32, AutoDone)>,
 }
 
 impl W {
     fn free(&self) -> bool {
-        self.ready && !self.dead && self.busy.is_none() && self.export.is_none()
+        self.ready && !self.dead && self.busy.is_none() && self.export.is_none() && self.auto.is_none()
     }
 }
 
@@ -252,6 +300,25 @@ pub enum ExportOffer {
     Busy(ExportDone),
     /// No worker is left (none started, or all failed): make it on this thread.
     NoWorkers(ExportDone),
+}
+
+/// Why an Auto measure did not come back.
+pub struct AutoFailure {
+    pub message: String,
+    /// The worker itself failed (not this photo).
+    pub worker_lost: bool,
+}
+
+/// Told once, on the main thread, with the values (`RegionAuto` as JSON) or why there are none.
+pub type AutoDone = Box<dyn FnOnce(Result<String, AutoFailure>)>;
+
+/// The answer to [`Workers::offer_auto`]; `Busy` and `NoWorkers` hand `done` back.
+pub enum AutoOffer {
+    Started,
+    /// Every worker is busy for now: offer it again soon.
+    Busy(AutoDone),
+    /// No worker is left (none started, or all failed).
+    NoWorkers(AutoDone),
 }
 
 struct Inner {
@@ -358,7 +425,7 @@ impl Workers {
                 worker.terminate();
                 continue;
             }
-            w.0.borrow_mut().workers.push(W { worker, ready: false, dead: false, busy: None, export: None });
+            w.0.borrow_mut().workers.push(W { worker, ready: false, dead: false, busy: None, export: None, auto: None });
             slots.commit();
         }
         w
@@ -368,11 +435,13 @@ impl Workers {
         let msg = get(&e, "message").as_string().unwrap_or_else(|| format!("{e:?}"));
         log::error!("render worker {i} failed: {msg}");
         let mut lost = None;
+        let mut lost_auto = None;
         let mut g = self.0.borrow_mut();
         if let Some(w) = g.workers.get_mut(i) {
             w.dead = true;
             w.worker.terminate();
             lost = w.export.take();
+            lost_auto = w.auto.take();
             if let Some(b) = w.busy.take() {
                 let r = RenderResult {
                     request_id: b.request_id,
@@ -380,7 +449,7 @@ impl Workers {
                     photo: b.photo,
                     level: b.level,
                     key: b.key,
-                    rendered: Err(msg),
+                    rendered: Err(msg.clone()),
                     gpu_fallback: None,
                     loaded: None,
                     quick: None,
@@ -393,8 +462,60 @@ impl Workers {
         drop(g);
         // outside the borrow: the batch answers by offering its next photo
         if let Some((_, done)) = lost {
-            done(Err(ExportFailure { message: msg, worker_lost: true }));
+            done(Err(ExportFailure { message: msg.clone(), worker_lost: true }));
         }
+        if let Some((_, done)) = lost_auto {
+            done(Err(AutoFailure { message: msg, worker_lost: true }));
+        }
+    }
+
+    /// A worker's answer to an Auto measure.
+    fn on_auto_message(&self, i: usize, data: JsValue) {
+        let id = get(&data, "id").as_f64().unwrap_or(-1.0) as u32;
+        let pending = {
+            let mut g = self.0.borrow_mut();
+            g.ctx.request_repaint();
+            g.workers.get_mut(i).and_then(|w| w.auto.take_if(|(job, _)| *job == id))
+        };
+        let Some((_, done)) = pending else { return };
+        let result = if get(&data, "ok").is_truthy() {
+            Ok(get(&data, "values").as_string().unwrap_or_default())
+        } else {
+            let message = get(&data, "err").as_string().unwrap_or_else(|| "Auto failed in its worker".into());
+            Err(AutoFailure { message, worker_lost: false })
+        };
+        self.0.borrow_mut().remote_done += 1;
+        done(result);
+    }
+
+    /// Give a free worker one Auto measure: `text` is a [`WireAuto`] as JSON, `original` the file's
+    /// bytes when the worker has no storage to read them from. Any free worker will do: it is short
+    /// work on a thumbnail-sized source, and the user is waiting for it.
+    pub fn offer_auto(&self, text: &str, original: Option<&[u8]>, done: AutoDone) -> AutoOffer {
+        let mut g = self.0.borrow_mut();
+        let g = &mut *g;
+        if g.workers.iter().all(|w| w.dead) {
+            return AutoOffer::NoWorkers(done);
+        }
+        let Some(i) = g.workers.iter().position(W::free) else { return AutoOffer::Busy(done) };
+        g.next_id = g.next_id.wrapping_add(1);
+        let id = g.next_id;
+        let msg = Object::new();
+        set(&msg, "id", &id.into());
+        set(&msg, "auto", &text.into());
+        let transfer = Array::new();
+        if let Some(bytes) = original {
+            let arr = Uint8Array::from(bytes);
+            set(&msg, "original", &arr);
+            transfer.push(&arr.buffer());
+        }
+        let Some(w) = g.workers.get_mut(i) else { return AutoOffer::Busy(done) };
+        if let Err(e) = w.worker.post_message_with_transfer(&msg, &transfer) {
+            log::warn!("render worker {i}: {e:?}");
+            return AutoOffer::Busy(done);
+        }
+        w.auto = Some((id, done));
+        AutoOffer::Started
     }
 
     /// A worker's answer to an export job.
@@ -459,8 +580,10 @@ impl Workers {
     }
 
     fn on_message(&self, i: usize, data: JsValue) {
-        if get(&data, "kind").as_string().as_deref() == Some("export") {
-            return self.on_export_message(i, data);
+        match get(&data, "kind").as_string().as_deref() {
+            Some("export") => return self.on_export_message(i, data),
+            Some("auto") => return self.on_auto_message(i, data),
+            _ => {}
         }
         let mut g = self.0.borrow_mut();
         let g = &mut *g;

@@ -14,6 +14,7 @@ use serde_json::json;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
+use crate::auto::AutoHost;
 use crate::backend::Backend;
 use crate::backup::{ACTIVE_LIBRARY, DEFAULT_LIBRARY_DIR, PREVIOUS_LIBRARY, valid_library_dir};
 use crate::bench::Bench;
@@ -664,6 +665,9 @@ impl WebApp {
             // exports render and encode in the workers too (#192); the downloads stay here
             let host = ExportHost::new(w.clone(), originals.clone(), backend.is_some(), download, cc.egui_ctx.clone());
             app.export_offload = Some(host.offload());
+            // and so does measuring Auto Settings (#192); the values are applied here, as one undo step
+            let auto = AutoHost::new(w.clone(), originals.clone(), backend.is_some(), cc.egui_ctx.clone());
+            app.auto_offload = Some(auto.offload());
         }
         log::info!("lightcraft: {n} render workers");
         CTX.with(|c| *c.borrow_mut() = Some(cc.egui_ctx.clone()));

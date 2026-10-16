@@ -17,6 +17,7 @@ extern crate lightcraft_denoise_core as lightcraft_denoise;
 pub mod activity;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod apple_photos;
+pub mod auto_measure;
 pub mod availability;
 pub mod book;
 pub mod branding;
@@ -1075,6 +1076,8 @@ pub fn json_delta(old: &Value, new: &Value) -> Option<Value> {
 mod tests;
 #[cfg(test)]
 mod tests_ai_update;
+#[cfg(test)]
+mod tests_auto_apply;
 #[cfg(test)]
 mod tests_album_order;
 #[cfg(test)]

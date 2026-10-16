@@ -7,6 +7,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 pub mod album_picker;
+pub mod auto_task;
 pub mod brush_live;
 mod command_error;
 pub mod control;
@@ -409,6 +410,11 @@ pub struct LightcraftApp {
     /// Where the host renders and encodes exports instead of this thread (the web's workers,
     /// #192); `None`: in the foreground, or on a thread of [`Services::write_shared`].
     pub export_offload: Option<export_task::ExportOffload>,
+    /// Where the host measures Auto Settings instead of this thread (the web's workers, #192);
+    /// `None`: measured here, with the apply, inside the command.
+    pub auto_offload: Option<auto_task::AutoOffload>,
+    /// Measures that are away with the host, until their values come back to be applied.
+    pub auto_tasks: Vec<auto_task::AutoTask>,
     /// Assisted Culling's analysis and reviewed proposal, until it is applied or discarded (#44).
     pub cull_review: cull_review::CullReview,
     /// Background file-system work of other commands (Find Missing Photos, auto import…).
@@ -508,6 +514,8 @@ impl LightcraftApp {
             shown_library: None,
             export: None,
             export_offload: None,
+            auto_offload: None,
+            auto_tasks: Vec::new(),
             tasks: Default::default(),
             last_export_result: None,
             hover_preview: None,
@@ -555,6 +563,9 @@ impl LightcraftApp {
             return result.map_err(CommandError::from);
         }
         if let Some(result) = model_setup::intercept(self, id, &params) {
+            return result.map_err(CommandError::from);
+        }
+        if let Some(result) = auto_task::intercept(self, id, &params) {
             return result.map_err(CommandError::from);
         }
         if let Some(r) = menus::run_ui_command(self, id, &params) {
@@ -1434,6 +1445,7 @@ impl LightcraftApp {
         panels::dialogs::show(self, &ctx);
         panels::library_problem::show(self, &ctx);
         export_task::poll(self, &ctx);
+        auto_task::poll(self, &ctx);
         cull_review::poll(self, &ctx);
         cull_review::show(self, &ctx);
         panels::activity::show(self, &ctx);

@@ -13,10 +13,13 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
+use lightcraft_engine::auto_measure::{AutoInput, measure_auto, with_lens_pick};
 use lightcraft_engine::catalog::Source;
 use lightcraft_engine::develop::{DevelopSettings, EmbeddedLens};
 use lightcraft_engine::export::{ExportOptions, Exported, RenderParts, encode_gain_map_jpeg, encode_rendered};
 use lightcraft_engine::media::{DecodedSource, MediaCache, RenderJob, SourceLevel, SourceRef};
+use lightcraft_engine::pipeline::auto::FaceBox;
+use lightcraft_engine::pipeline::auto::regions::RegionAuto;
 use lightcraft_engine::pipeline::{OutputDepth, OutputSpace, Quality, RenderRequest, Rendered, SourceInfo, StageCache};
 use lightcraft_meta::Metadata;
 use lightcraft_preview::{Hash128, Lru, PreviewCache};
@@ -199,6 +202,66 @@ impl WireExport {
     }
 }
 
+/// One photo's Auto measure for a worker (#192): where the thumbnail-level source comes from and
+/// the settings and facts it is read against ([`WireJob`], no render), and what to measure. The
+/// worker answers with the values (`RegionAuto` as JSON); the main thread applies them.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WireAuto {
+    pub job: WireJob,
+    /// The subject, background and sky get their own masks too.
+    pub regions: bool,
+    /// Cached face boxes (x0, y0, x1, y1 as fractions of the frame) that meter the key.
+    #[serde(default)]
+    pub faces: Vec<[f32; 4]>,
+    /// The user picked a lens (`lens_pick`, which may be none) in place of the file's own.
+    #[serde(default)]
+    pub lens_picked: bool,
+    #[serde(default)]
+    pub lens_pick: Option<EmbeddedLens>,
+}
+
+impl WireAuto {
+    pub fn from_input(input: &AutoInput) -> WireAuto {
+        let info = &input.info;
+        let job = WireJob {
+            cache_generation: 0,
+            // the file's identity: a replaced file is not measured from the old decode
+            source_identity: Some(input.source_identity.to_string()),
+            level: SourceLevel::Thumb,
+            origin: input.origin.clone(),
+            max_edge: SourceLevel::Thumb.max_edge(),
+            raw: info.raw,
+            relative_wb: info.relative_wb,
+            legacy_relative_wb: info.legacy_relative_wb,
+            as_shot_temp: info.as_shot_temp,
+            as_shot_tint: info.as_shot_tint,
+            lens: info.lens,
+            settings: input.settings.clone(),
+            max_w: 0,
+            max_h: 0,
+            draft: false,
+            apply_crop: false,
+            thumb: None,
+            thumb_cached: false,
+            stages: None,
+            overlay: (0, 0.0),
+            window: None,
+        };
+        WireAuto {
+            job,
+            regions: input.regions,
+            // a box with a NaN or infinite side can't cross as JSON, and Auto ignores it anyway
+            faces: input.faces.iter().map(|f| [f.x0, f.y0, f.x1, f.y1]).filter(|b| b.iter().all(|v| v.is_finite())).collect(),
+            lens_picked: input.lens_pick.is_some(),
+            lens_pick: input.lens_pick.flatten(),
+        }
+    }
+
+    pub fn faces(&self) -> Vec<FaceBox> {
+        self.faces.iter().map(|[x0, y0, x1, y1]| FaceBox { x0: *x0, y0: *y0, x1: *x1, y1: *y1 }).collect()
+    }
+}
+
 pub fn thumb_storage_key(hex: &str) -> String {
     format!("thumbs/{hex}.jpg")
 }
@@ -232,25 +295,37 @@ impl WorkerCore {
         }
     }
 
+    /// The decoded source `job` needs: the one this worker holds, or decoded now from `original`
+    /// (the file's bytes, when [`WorkerCore::needs_original`] asked) or the demo scene.
+    fn source_for(&mut self, job: &WireJob, original: Option<&[u8]>) -> Result<DecodedSource, String> {
+        let key = job.source_key();
+        if let Some(s) = self.sources.get(&key).cloned() {
+            return Ok(s);
+        }
+        let src = match (&job.origin, original) {
+            (Source::File { .. }, Some(bytes)) => {
+                let (image, info) = lightcraft_engine::files::load_bytes(bytes, job.max_edge)?;
+                DecodedSource::new(Arc::new(image), Some(info))
+            }
+            (Source::File { path }, None) => return Err(format!("{path}: original not found in browser storage")),
+            (origin @ Source::Demo { .. }, _) => self.media.origin_ref(origin, job.max_edge).load_source()?,
+        };
+        let cost = src.image.width * src.image.height * 12 + 64;
+        self.sources.insert(key, src.clone(), cost);
+        Ok(src)
+    }
+
+    /// Measure Auto for `a` (#192): the same decode as a thumbnail's, then the engine's pure measure.
+    /// `original` holds the file's bytes when [`WorkerCore::needs_original`] asked.
+    pub fn measure(&mut self, a: &WireAuto, original: Option<&[u8]>) -> Result<RegionAuto, String> {
+        let src = self.source_for(&a.job, original)?;
+        let info = with_lens_pick(src.info_or(a.job.info()), a.lens_picked.then_some(a.lens_pick));
+        Ok(measure_auto(&src.image, &info, &a.job.settings, &a.faces(), a.regions))
+    }
+
     /// Render `job`; `original` holds the file's bytes when [`WorkerCore::needs_original`] asked.
     pub fn render(&mut self, job: &WireJob, original: Option<&[u8]>) -> Result<Rendered, String> {
-        let key = job.source_key();
-        let src = match self.sources.get(&key).cloned() {
-            Some(s) => s,
-            None => {
-                let src = match (&job.origin, original) {
-                    (Source::File { .. }, Some(bytes)) => {
-                        let (image, info) = lightcraft_engine::files::load_bytes(bytes, job.max_edge)?;
-                        DecodedSource::new(Arc::new(image), Some(info))
-                    }
-                    (Source::File { path }, None) => return Err(format!("{path}: original not found in browser storage")),
-                    (origin @ Source::Demo { .. }, _) => self.media.origin_ref(origin, job.max_edge).load_source()?,
-                };
-                let cost = src.image.width * src.image.height * 12 + 64;
-                self.sources.insert(key, src.clone(), cost);
-                src
-            }
-        };
+        let src = self.source_for(job, original)?;
         let info = src.info_or(job.info());
         let mut rendered = match &job.stages {
             Some(view) => {
@@ -548,6 +623,26 @@ mod tests {
         assert_eq!((a.image.width, a.image.height), (b.image.width, b.image.height));
         assert_eq!(a.image.data, b.image.data);
         assert_eq!(a.histogram, b.histogram);
+    }
+
+    // Issue #192: a worker measures Auto from the message alone, and the values apply on the session
+    #[test]
+    fn a_worker_measures_auto_like_the_session_and_its_values_apply() {
+        let mut s = Session::with_demo();
+        let id = s.visible_cloned()[0];
+        s.execute("library.select", &serde_json::json!({"ids": [id.0]})).unwrap();
+        let shown = s.execute("develop.auto", &serde_json::json!({"dryRun": true})).unwrap();
+        let input = lightcraft_engine::auto_measure::auto_input(&s, id, true, None).unwrap();
+        // through JSON, as it crosses the worker boundary
+        let wire: WireAuto = serde_json::from_str(&serde_json::to_string(&WireAuto::from_input(&input)).unwrap()).unwrap();
+        let mut core = WorkerCore::default();
+        assert_eq!(core.needs_original(&wire.job), None, "demo scenes are generated");
+        let values = core.measure(&wire, None).unwrap();
+        let values: RegionAuto = serde_json::from_str(&serde_json::to_string(&values).unwrap()).unwrap();
+        assert_eq!(serde_json::to_value(&values).unwrap(), shown, "the worker finds what the session finds");
+        s.execute("develop.applyAutoValues", &serde_json::json!({"values": values, "basis": input.basis})).unwrap();
+        s.execute("edit.undo", &serde_json::json!({})).unwrap();
+        assert!(core.measure(&wire, None).is_ok(), "the decoded source is kept for the next measure");
     }
 
     /// A prepared export of the first demo photo, as the main thread builds it for a worker.

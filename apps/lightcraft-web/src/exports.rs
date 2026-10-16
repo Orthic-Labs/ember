@@ -282,7 +282,7 @@ impl ExportHost {
 }
 
 /// Run `f` once after `ms` milliseconds. `false`: the browser would not schedule it.
-fn later(ms: i32, f: impl FnOnce() + 'static) -> bool {
+pub(crate) fn later(ms: i32, f: impl FnOnce() + 'static) -> bool {
     let Some(window) = web_sys::window() else { return false };
     let callback = Closure::once_into_js(f);
     window.set_timeout_with_callback_and_timeout_and_arguments_0(callback.unchecked_ref(), ms).is_ok()

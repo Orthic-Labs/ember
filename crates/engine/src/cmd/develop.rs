@@ -3,13 +3,13 @@
 use lightcraft_catalog::{Op, PhotoId, Version};
 use lightcraft_develop::{DevelopSettings, Preset, ProcessVersion, Section, SettingsGroup, Treatment, Upright, WbMode, controls};
 use lightcraft_geom::{CropGeometry, CropHandle, Point, Rect, crop_fit_angle, drag_crop};
-use lightcraft_pipeline::auto::regions::{RegionAuto, is_auto_mask, region_auto_with};
-use lightcraft_pipeline::auto::{AutoHints, AutoTone, auto_tone_with};
+use lightcraft_pipeline::auto::AutoTone;
+use lightcraft_pipeline::auto::regions::{RegionAuto, is_auto_mask};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
 use super::{CommandSpec, always, bad, bool_or, cmd, f64_or, f64_req, has_active, has_clipboard, has_selection, index_req, ok, str_param};
-use crate::{Result, Session, media::SourceLevel};
+use crate::{Result, Session, auto_measure, media::SourceLevel};
 
 fn active(s: &Session, c: &str) -> Result<PhotoId> {
     s.active().ok_or_else(|| bad(c, "no active photo"))
@@ -81,31 +81,46 @@ fn apply_look_batch(s: &mut Session, c: &str, ids: &Value, look: &lightcraft_pip
     Ok(json!({"dryRun": dry, "applied": applied, "photos": photos, "errors": errors}))
 }
 
-/// Auto's value for one control, `None` for a control Auto does not set.
-fn auto_control_value(a: &AutoTone, id: &str) -> Option<f64> {
-    Some(match id {
-        "light.exposure" => a.exposure,
-        "light.contrast" => a.contrast,
-        "light.highlights" => a.highlights,
-        "light.shadows" => a.shadows,
-        "light.whites" => a.whites,
-        "light.blacks" => a.blacks,
-        "color.vibrance" => a.vibrance,
-        "color.saturation" => a.saturation,
-        _ => return None,
-    })
-}
-
-/// What Auto finds for photo `id` from its source, its settings and its face regions (regions
-/// on: the subject, background and sky too). Reads only; nothing is written.
+/// Phase 1 of Auto on this thread: what Auto finds for photo `id` from its source, its settings and
+/// its face regions (regions on: the subject, background and sky too). Reads only; nothing is
+/// written. The measuring itself is [`auto_measure::measure_auto`], which a host can run elsewhere
+/// (the web's render workers, #192) and hand to `develop.applyAutoValues`.
 fn auto_values(s: &mut Session, c: &str, id: PhotoId, regions: bool) -> Result<RegionAuto> {
     let src = s.source_now(id, SourceLevel::Thumb).map_err(|e| bad(c, e))?;
     let info = s.source_info(id);
     let d = s.develop_of(id).unwrap_or_default();
     // cached face regions (a Detect Faces run, or the file's own) meter the key; none = as before
-    let faces = s.catalog.photo(id).map(|ph| super::face_detect::auto_face_boxes(&ph.meta.regions)).unwrap_or_default();
-    let hints = AutoHints { faces: &faces, clipped_share: None };
-    Ok(if regions { region_auto_with(&src, &info, &d, &hints) } else { RegionAuto::global_only(auto_tone_with(&src, &info, &d, &hints)) })
+    let faces = auto_measure::auto_faces(s, id);
+    Ok(auto_measure::measure_auto(&src, &info, &d, &faces, regions))
+}
+
+/// Phase 2 of Auto: write `r`, measured against `basis` ([`auto_measure::auto_basis`]), into photo
+/// `id`'s settings as one undo step: the eight global values and the region masks, or with
+/// `control` that one slider only. Refused when the photo's settings, face regions or source are
+/// no longer what the measure saw.
+fn apply_auto_values(s: &mut Session, c: &str, id: PhotoId, r: &RegionAuto, basis: &str, control: Option<&str>) -> Result<Value> {
+    if s.catalog.photo(id).is_none() {
+        return Err(bad(c, "no such photo"));
+    }
+    if auto_measure::auto_basis(s, id).as_deref() != Some(basis) {
+        return Err(bad(c, "the photo's settings or source changed since Auto measured it; run Auto again"));
+    }
+    let mut d = (*s.develop_of(id).unwrap_or_default()).clone();
+    if let Some(ctl) = control {
+        let value = auto_measure::control_value(&r.global, ctl).ok_or_else(|| bad(c, format!("Auto does not set `{ctl}`")))?;
+        let label = format!("Auto {}", controls::find(ctl).map_or(ctl, |spec| spec.label));
+        controls::set(&mut d, ctl, value);
+        s.set_develop(id, d, &label)?;
+        return Ok(json!({"control": ctl, "value": value}));
+    }
+    apply_auto(c, &mut d, r)?;
+    s.set_develop(id, d, "Auto")?;
+    if let Some(active) = s.active_mask
+        && !s.develop_of(id).is_some_and(|d| d.masks.iter().any(|m| m.id == active))
+    {
+        s.active_mask = None;
+    }
+    Ok(serde_json::to_value(r).unwrap_or_default())
 }
 
 /// Write Auto's result into `d`: the eight global values, and its region masks in place of the
@@ -541,16 +556,34 @@ pub fn specs() -> Vec<CommandSpec> {
             |s, p| {
                 let c = "develop.auto";
                 let id = active(s, c)?;
+                // measure, then apply what was measured (a host may run the first elsewhere: develop.applyAutoValues)
+                let basis = auto_measure::auto_basis(s, id).ok_or_else(|| bad(c, "no such photo"))?;
                 let r = auto_values(s, c, id, bool_or(p, "regions", true))?;
                 if !bool_or(p, "dryRun", false) {
-                    edit(s, c, "Auto", |d| apply_auto(c, d, &r))?;
-                    if let Some(active) = s.active_mask
-                        && !s.develop_of(id).is_some_and(|d| d.masks.iter().any(|m| m.id == active))
-                    {
-                        s.active_mask = None;
-                    }
+                    apply_auto_values(s, c, id, &r, &basis, None)?;
                 }
                 Ok(serde_json::to_value(&r).unwrap_or_default())
+            }
+        ),
+        // Phase 2 of Auto for a host that measured elsewhere (the web's render workers, #192): one undo step.
+        cmd!(
+            "develop.applyAutoValues",
+            "Apply Auto Values",
+            [],
+            None,
+            "{values: what Auto measured ({exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation, regions}), basis: string (the measure's `auto_basis`), id?: photo id (default the active photo), control?: develop control id (apply that one slider only)} — writes values measured outside the session into the photo as one undo step; refused when the photo's settings, face regions or source changed since the measure → what develop.auto returns",
+            always,
+            |s, p| {
+                let c = "develop.applyAutoValues";
+                let id = match p.get("id") {
+                    Some(v) => PhotoId(v.as_u64().ok_or_else(|| bad(c, "id must be a photo id (a whole number)"))?),
+                    None => active(s, c)?,
+                };
+                let basis = str_param(p, "basis").ok_or_else(|| bad(c, "missing basis"))?.to_string();
+                let values = p.get("values").cloned().ok_or_else(|| bad(c, "missing values"))?;
+                let r: RegionAuto = serde_json::from_value(values).map_err(|e| bad(c, format!("values: {e}")))?;
+                let control = str_param(p, "control").map(str::to_string);
+                apply_auto_values(s, c, id, &r, &basis, control.as_deref())
             }
         ),
         // One slider at Auto's value (Shift+double-click a slider name); the other settings and masks stay.
@@ -565,13 +598,9 @@ pub fn specs() -> Vec<CommandSpec> {
                 let c = "develop.autoControl";
                 let ctl = str_param(p, "control").ok_or_else(|| bad(c, "missing control"))?.to_string();
                 let id = active(s, c)?;
-                let a = auto_values(s, c, id, false)?.global;
-                let value = auto_control_value(&a, &ctl).ok_or_else(|| bad(c, format!("Auto does not set `{ctl}`")))?;
-                let label = format!("Auto {}", controls::find(&ctl).map_or(ctl.as_str(), |spec| spec.label));
-                let mut d = (*s.develop_of(id).unwrap_or_default()).clone();
-                controls::set(&mut d, &ctl, value);
-                s.set_develop(id, d, &label)?;
-                Ok(json!({"control": ctl, "value": value}))
+                let basis = auto_measure::auto_basis(s, id).ok_or_else(|| bad(c, "no such photo"))?;
+                let r = auto_values(s, c, id, false)?;
+                apply_auto_values(s, c, id, &r, &basis, Some(&ctl))
             }
         ),
         // Auto Settings on every target photo, one undo step; each photo is measured with its own settings.

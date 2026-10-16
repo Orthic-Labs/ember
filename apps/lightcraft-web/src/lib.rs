@@ -10,6 +10,8 @@
 //!   fall back to the main thread (one job per frame) if workers can't start;
 //! - exports render and encode in those workers too (`exports`) and download the file through the
 //!   browser from the main thread; without a worker they run on the main thread.
+//! - Auto Settings measure in a worker too (`auto`); the values are applied on the main thread as one
+//!   undo step.
 //!
 //! `?bench` in the URL runs a scripted first-paint / slider-latency measurement and logs it to the
 //! console (see [`bench`]); `?store=idb` forces the IndexedDB backend, `?store=memory` disables
@@ -25,6 +27,8 @@ pub mod retry;
 pub mod store;
 pub mod wire;
 
+#[cfg(target_arch = "wasm32")]
+mod auto;
 #[cfg(target_arch = "wasm32")]
 mod backend;
 #[cfg(target_arch = "wasm32")]
