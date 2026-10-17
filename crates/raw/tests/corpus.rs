@@ -799,6 +799,58 @@ fn corpus_orf_cfa_patterns() {
     eprintln!("ORF CFA layouts checked on {seen} files");
 }
 
+/// Olympus ORF colour matrix (`crates/raw/src/vendor/orf.rs`, `maker_colour`): the 3 x 3 signed 8.8 matrix the camera
+/// writes (ImageProcessing `0x0200`, or `0x1011` on the E-1 and E-400) takes the mosaic's white-balanced colours closer
+/// to the embedded JPEG's chromaticities than camera RGB read as linear sRGB does. Skips files that are absent.
+#[test]
+fn corpus_orf_maker_matrix_follows_the_jpeg() {
+    use lightcraft_color::{REC2020, SRGB};
+    use lightcraft_raw::color::{as_shot_white_of, camera_transform_of};
+    let dir = corpus_root().join("raw");
+    let cases = [("orf-olympus-e1.orf", "GRBG"), ("orf-olympus-e400.orf", "GRBG"), ("orf-olympus-xz2.orf", "RGGB")];
+    let mut seen = 0;
+    for (name, cfa) in cases {
+        let Ok(bytes) = std::fs::read(dir.join(name)) else {
+            eprintln!("skip: {name} absent");
+            continue;
+        };
+        let img = decode(&bytes).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert!(img.wb_multipliers.is_some(), "{name}: no as-shot gains");
+        assert!(!lightcraft_raw::color::has_matrix(&img.color), "{name}: the decoder leaves the colour to the engine");
+        let color = lightcraft_raw::maker_colour(&bytes, img.format, img.wb_multipliers).unwrap_or_else(|| panic!("{name}: no colour matrix"));
+        let wb = img.wb_multipliers.unwrap_or([1.0; 3]);
+        let t = camera_transform_of(&color, as_shot_white_of(&color, img.wb_multipliers));
+        let jpeg = embedded_preview(&bytes).unwrap_or_else(|| panic!("{name}: no embedded preview"));
+        let (gw, gh) = (24, 18);
+        let (sites, cells) = (raw_sites(&img, gw, gh), jpeg_cells(&jpeg, gw, gh));
+        let layout = lightcraft_raw::Cfa::bayer(cfa).unwrap().pattern;
+        let to_srgb = SRGB.from_xyz().mul(&REC2020.to_xyz());
+        let (mut own, mut plain, mut n) = (0.0f64, 0.0f64, 0usize);
+        for (s, j) in sites.iter().zip(&cells) {
+            let (mut rgb, mut k) = ([0f64; 3], [0f64; 3]);
+            for (site, &c) in layout.iter().enumerate() {
+                rgb[c as usize] += s[site];
+                k[c as usize] += 1.0;
+            }
+            let rgb = [rgb[0] / k[0], rgb[1] / k[1], rgb[2] / k[2]];
+            let balanced = [rgb[0] * f64::from(wb[0]), rgb[1] * f64::from(wb[1]), rgb[2] * f64::from(wb[2])];
+            let out = to_srgb.apply(t.matrix.apply(std::array::from_fn(|i| rgb[i] * f64::from(t.wb[i]))));
+            if rgb.iter().all(|v| *v > 1.0) && j.iter().all(|v| (0.002..0.9).contains(v)) && out.iter().all(|v| *v > 0.0) && balanced.iter().all(|v| *v > 0.0) {
+                let err = |c: [f64; 3]| ((c[0] / c[1]).ln() - (j[0] / j[1]).ln()).abs() + ((c[2] / c[1]).ln() - (j[2] / j[1]).ln()).abs();
+                own += err(out);
+                plain += err(balanced);
+                n += 1;
+            }
+        }
+        assert!(n >= 40, "{name}: only {n} usable cells");
+        let (own, plain) = (own / n as f64, plain / n as f64);
+        eprintln!("{name:24} log-chromaticity error vs the camera JPEG: camera matrix {own:.3}, camera RGB as sRGB {plain:.3} ({n} cells)");
+        assert!(own < plain, "{name}: the camera's matrix is no closer to its JPEG ({own} vs {plain})");
+        seen += 1;
+    }
+    eprintln!("ORF colour matrices checked on {seen} files");
+}
+
 /// Olympus high-resolution ORF of the E-M5 Mark II (`orf-olympus-em5m2-hires.orf`, #243): the camera merges eight
 /// shifted exposures into one larger Bayer mosaic and writes it uncompressed at 12.8 bits per pixel (16-byte blocks of ten
 /// samples), so the ordinary ORF path decodes it. Pins the size, framing, depth, black level and layout, and checks that the

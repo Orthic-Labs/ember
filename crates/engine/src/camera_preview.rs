@@ -68,14 +68,28 @@ pub(crate) fn file_local_look(format: RawFormat) -> bool {
 
 /// The colour a raw starts from, first available first: the file's own colour matrices (DNG); a look fitted to the
 /// file's JPEG ([`fit_preview`]: with the camera profile for its model when there is one, else with colour fitted to
-/// this photo alone); the model's colour matrices from measured spectral sensitivities (`lightcraft_raw::spectral`);
+/// this photo alone); the matrix the file carries in its maker note (an Olympus ORF's, [`maker_matrix`]); the model's
+/// colour matrices from measured spectral sensitivities (`lightcraft_raw::spectral`);
 /// the neutral fallback. The spectral matrices only stand in for the neutral fallback, so a photo whose JPEG fit is
 /// accepted renders as without them; when used they are written into `raw.color`. A photo whose JPEG is black and
 /// white (a monochrome picture style) has no colour to fit, but still gives its tone curve: with the camera profile's
 /// colour in [`fit_preview`], else on top of the spectral matrices or the fallback ([`monochrome_look`]). Returns the
 /// as-shot white, the camera transform at it and the fitted look.
 pub(crate) fn starting_colour(raw: &mut RawImage, bytes: &[u8]) -> (Xy, CameraTransform, Option<CameraLook>) {
-    starting_colour_with(raw, |raw, t| fit_preview(raw, bytes, t), |raw, t| monochrome_look(raw, bytes, t))
+    starting_colour_staged(raw, |raw, t| fit_preview(raw, bytes, t), |raw, t| monochrome_look(raw, bytes, t), |raw| maker_matrix(raw, bytes))
+}
+
+/// Step 4a: the colour matrix a file carries in its maker note (an Olympus ORF's), written into `raw.color` as DNG
+/// colour tags unless the raw has matrices already. Returns whether it did.
+fn maker_matrix(raw: &mut RawImage, bytes: &[u8]) -> bool {
+    if lightcraft_raw::color::has_matrix(&raw.color) {
+        return false;
+    }
+    let Some(own) = lightcraft_raw::maker_colour(bytes, raw.format, raw.wb_multipliers) else { return false };
+    raw.color.illuminant = own.illuminant;
+    raw.color.color_matrix = own.color_matrix;
+    raw.color.forward_matrix = own.forward_matrix;
+    true
 }
 
 /// [`starting_colour`] with the JPEG fit (the look, and whether the JPEG is black and white) and the black-and-white
@@ -84,6 +98,16 @@ fn starting_colour_with(
     raw: &mut RawImage,
     fit: impl FnOnce(&RawImage, &CameraTransform) -> (Option<CameraLook>, bool),
     monochrome: impl FnOnce(&RawImage, &CameraTransform) -> Option<CameraLook>,
+) -> (Xy, CameraTransform, Option<CameraLook>) {
+    starting_colour_staged(raw, fit, monochrome, |_| false)
+}
+
+/// [`starting_colour_with`] plus the maker-note matrix step (`maker` writes the colour tags and says whether it did).
+fn starting_colour_staged(
+    raw: &mut RawImage,
+    fit: impl FnOnce(&RawImage, &CameraTransform) -> (Option<CameraLook>, bool),
+    monochrome: impl FnOnce(&RawImage, &CameraTransform) -> Option<CameraLook>,
+    maker: impl FnOnce(&mut RawImage) -> bool,
 ) -> (Xy, CameraTransform, Option<CameraLook>) {
     // a chart calibration of this camera model (`camera.calibrate`) outranks every estimate below
     if let Some(profile) = raw.metadata.model.as_deref().and_then(crate::camera_calibration::get)
@@ -104,15 +128,22 @@ fn starting_colour_with(
     if let Some(look) = look {
         return (xy, t, Some(look));
     }
-    let (xy, t) = match raw.metadata.model.as_deref().and_then(|model| lightcraft_raw::spectral::find(raw.metadata.make.as_deref(), model)) {
-        Some(camera) => {
-            camera.fill(&mut raw.color);
-            if lightcraft_pipeline::profiling() {
-                eprintln!("[profile] {:?} camera colour from spectral sensitivities: {} {}", raw.format, camera.make, camera.model);
-            }
-            start(raw)
+    let (xy, t) = if maker(raw) {
+        if lightcraft_pipeline::profiling() {
+            eprintln!("[profile] {:?} camera colour from the file's own maker-note matrix", raw.format);
         }
-        None => (xy, t),
+        start(raw)
+    } else {
+        match raw.metadata.model.as_deref().and_then(|model| lightcraft_raw::spectral::find(raw.metadata.make.as_deref(), model)) {
+            Some(camera) => {
+                camera.fill(&mut raw.color);
+                if lightcraft_pipeline::profiling() {
+                    eprintln!("[profile] {:?} camera colour from spectral sensitivities: {} {}", raw.format, camera.make, camera.model);
+                }
+                start(raw)
+            }
+            None => (xy, t),
+        }
     };
     // only a black-and-white JPEG: a colour one that gave no look pays nothing more
     let look = if black_and_white { monochrome(raw, &t) } else { None };
@@ -2028,6 +2059,46 @@ mod tests {
         );
         assert_eq!(raw.color, color);
         assert!(!t.matrix_is_fallback && look.is_none());
+    }
+
+    /// Step 4a: a raw whose file carries its own maker-note matrix (an Olympus ORF) takes it when the JPEG fit fails,
+    /// ahead of the spectral matrices and the neutral fallback; an accepted fit is kept and the matrix is not written.
+    #[test]
+    fn a_failed_jpeg_fit_takes_the_maker_note_matrix_before_the_spectral_ones() {
+        let own = lightcraft_raw::ColorData {
+            illuminant: [21, 0],
+            color_matrix: [Some(Mat3([[0.9, 0.1, 0.0], [-0.2, 1.1, 0.1], [0.0, -0.3, 1.3]])), None],
+            forward_matrix: [Some(Mat3::IDENTITY), None],
+            ..Default::default()
+        };
+        let stage = |own: lightcraft_raw::ColorData| {
+            move |raw: &mut RawImage| {
+                raw.color.illuminant = own.illuminant;
+                raw.color.color_matrix = own.color_matrix;
+                raw.color.forward_matrix = own.forward_matrix;
+                true
+            }
+        };
+        let mut raw = raw_of(RawFormat::Orf, "OLYMPUS", "E-1", Default::default());
+        let (xy, t, look) = starting_colour_staged(&mut raw, |_, _| (None, false), |_, _| panic!("a colour JPEG"), stage(own.clone()));
+        assert!(look.is_none() && !t.matrix_is_fallback);
+        assert_eq!(raw.color.color_matrix, own.color_matrix);
+        assert_eq!(xy, lightcraft_raw::color::as_shot_white_xy(&raw));
+        // an accepted fit comes first: the step never runs
+        let mut raw = raw_of(RawFormat::Orf, "OLYMPUS", "E-1", Default::default());
+        let fitted = CameraLook {
+            matrix: Mat3::IDENTITY,
+            tone: dro_test_look(&std::array::from_fn(|i| 0.006 * 1.13f32.powi(i as i32)), &|x| x.sqrt()).tone,
+            hue_sat: None,
+        };
+        let (_, _, look) = starting_colour_staged(&mut raw, |_, _| (Some(fitted.clone()), false), |_, _| None, |_| panic!("the fit was accepted"));
+        assert!(look.is_some());
+        assert_eq!(raw.color, lightcraft_raw::ColorData::default());
+        // `maker_matrix` writes only into a raw without matrices of its own, and only for a file that has one
+        let mut raw = raw_of(RawFormat::Orf, "OLYMPUS", "E-1", Default::default());
+        assert!(!maker_matrix(&mut raw, &[]) && raw.color == lightcraft_raw::ColorData::default());
+        let mut raw = raw_of(RawFormat::Orf, "OLYMPUS", "E-1", own);
+        assert!(!maker_matrix(&mut raw, &[]));
     }
 
     /// Steps 2 and 3 before step 4: an accepted JPEG fit (with or without a camera profile) is kept for a model that

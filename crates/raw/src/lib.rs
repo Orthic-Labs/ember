@@ -420,6 +420,18 @@ fn decode_with(bytes: &[u8], mode: Mode) -> Result<RawImage> {
     }
 }
 
+/// Colour tags from the colour matrix a raw file carries in its maker note rather than in DNG tags: today the signed
+/// 8.8 matrix of an Olympus ORF (ImageProcessing `0x0200`, or `0x1011` on the oldest bodies), read from the user's own
+/// file. `wb_multipliers` are the file's as-shot gains the matrix is relative to; `None` for another format, a file
+/// without a plausible matrix, or without gains. Which colour a raw starts from is the engine's choice
+/// (`docs/camera-calibration.md`); the decoder leaves [`ColorData`] empty.
+pub fn maker_colour(bytes: &[u8], format: RawFormat, wb_multipliers: Option<[f32; 3]>) -> Option<ColorData> {
+    match format {
+        RawFormat::Orf => vendor::orf::own_colour(bytes, wb_multipliers?),
+        _ => None,
+    }
+}
+
 /// DNG writers state a white level the sensor may never reach; samples stuck at the real saturation point are
 /// raised to the white level so they count as clipped (see [`RawImage::lift_clipped_samples`]).
 fn lift_clipped(mut r: RawImage) -> RawImage {

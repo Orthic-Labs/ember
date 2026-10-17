@@ -205,7 +205,7 @@ Not decoded yet — preview only (no permissively licensed description; black-bo
 
 **Camera colour matrices:** ARW, NEF, RW2, RAF, CR3, CR2 and PEF files can use guarded, separate chromaticity and tone estimates from their own embedded JPEG (see `docs/camera-preview-colour.md`); this is a per-file camera-look estimate with relative WB, not measured calibration or absolute-Kelvin WB. Other non-DNG raws and rejected fits use the documented neutral fallback (camera RGB ≈ linear sRGB, flagged
 `matrix_is_fallback`) with the file's as-shot white-balance multipliers. Clean sources to evaluate next: manufacturer
-matrices stored in the files themselves (Olympus ImageProcessing `ColorMatrix`, Pentax equivalents; Panasonic RW2 files carry none) and our
+matrices stored in the files themselves (Olympus ImageProcessing `0x0200` / main note `0x1011`: read, used when the JPEG fit fails; Pentax equivalents not read; Panasonic RW2 files carry none) and our
 own chart-based calibration (M11.4). Reference-editor matrices are never used.
 
 ## reference editor Classic catalog migration

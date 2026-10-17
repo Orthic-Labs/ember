@@ -37,6 +37,9 @@
 //!   available to check.
 //! - Olympus's compressed ORF (most interchangeable-lens bodies since ~2008) is not decoded: no permissively
 //!   licensed description exists. It reports [`RawError::Unsupported`]; the embedded preview still works.
+//! - Colour matrix: ImageProcessing `0x0200` (or main note `0x1011` on the E-1 and E-400), nine signed 8.8 words, camera
+//!   after the as-shot gains to sRGB-like primaries ([`own_colour`]; analysis in `docs/camera-calibration.md`). The decoder
+//!   leaves `ColorData` empty; the engine decides when the matrix is used.
 //! - The colour-filter layout is the file's Exif `CFAPattern`: GRBG on the E-1 and E-400, RGGB on the XZ-2, where
 //!   the colours of the decoded mosaic follow the embedded JPEG best with exactly that layout
 //!   (`corpus_orf_cfa_patterns`). The samples' active areas start at even offsets, so they can't tell whether the
@@ -47,6 +50,7 @@ use super::{cfa_from_exif, white_from_data};
 use crate::tiffraw::{Packing, read_image};
 use crate::unpack::unpack_msb;
 use crate::{BlackLevel, Cfa, ColorData, Mode, OpcodeLists, RawData, RawError, RawFormat, RawImage, Rect, Result};
+use lightcraft_color::{D50, D65, Mat3, SRGB, bradford};
 use lightcraft_geom::Orientation;
 use lightcraft_tiff::image::chunk_bytes;
 use lightcraft_tiff::makernote::MakerNote;
@@ -62,6 +66,8 @@ const BLACK: u16 = 0x0600;
 const MN_WB_RED: u16 = 0x1017;
 const MN_WB_BLUE: u16 = 0x1018;
 const MN_BLACK: u16 = 0x1012;
+const IP_COLOR_MATRIX: u16 = 0x0200;
+const MN_COLOR_MATRIX: u16 = 0x1011;
 const MN_VALID_BITS: u16 = 0x102c;
 const CROP: [u16; 4] = [0x0612, 0x0613, 0x0614, 0x0615];
 
@@ -82,6 +88,73 @@ pub(crate) fn sub_ifd(bytes: &[u8], mn: &MakerNote, tag: u16) -> Option<Ifd> {
     };
     let opts = lightcraft_tiff::ParseOptions { max_ifds: 4, max_depth: 1, follow_children: false, ..Default::default() };
     lightcraft_tiff::parse_ifd_at(bytes, at, mn.order, mn.base, false, &opts).ok().map(|(i, _)| i)
+}
+
+/// The camera's own colour matrix as DNG colour tags, for a file whose decoder leaves its colour to the engine.
+///
+/// Olympus bodies write a 3 × 3 matrix of signed 8.8 fixed-point numbers (nine 16-bit words, two's complement,
+/// 256 = 1.0): ImageProcessing `0x0200` on the bodies with that directory (XZ-2, E-M1, E-M10 Mark III), the main
+/// note's `0x1011` on the older ones (E-1, E-400). Found by analysis of CC0 raw.pixls.us files (see
+/// `docs/camera-calibration.md`): every row sums to 1.00 (0.96 to 0.98 on the E-1), so it takes camera RGB after the
+/// as-shot red and blue gains to linear sRGB, white to white. Applied to the decoded mosaic it brings the
+/// chromaticities of the embedded JPEG closer than taking camera RGB as sRGB does (E-1, E-400, XZ-2), and its
+/// transpose is far worse, so this is the direction. `wb` is the file's as-shot gains (`wb_multipliers`), which the
+/// matrix is relative to.
+pub(crate) fn own_colour(bytes: &[u8], wb: [f32; 3]) -> Option<ColorData> {
+    let tiff = Tiff::parse(bytes).ok()?;
+    let mn = maker_note(bytes, &tiff)?;
+    let ip = sub_ifd(bytes, &mn, IMAGE_PROCESSING);
+    let words = ip.as_ref().and_then(|i| i.f64s(IP_COLOR_MATRIX)).or_else(|| mn.ifd.f64s(MN_COLOR_MATRIX))?;
+    colour_from_matrix(&matrix_from_words(&words)?, wb)
+}
+
+/// The nine signed 8.8 words of an Olympus colour matrix as rows that each sum to 1 (a white-balanced neutral stays
+/// neutral). `None` unless the words are a plausible matrix: nine finite 16-bit words, no entry beyond ±8, row sums
+/// between 0.8 and 1.25.
+fn matrix_from_words(words: &[f64]) -> Option<Mat3> {
+    if words.len() != 9 {
+        return None;
+    }
+    let mut rows = [[0.0f64; 3]; 3];
+    for (row, chunk) in rows.iter_mut().zip(words.chunks_exact(3)) {
+        for (out, w) in row.iter_mut().zip(chunk) {
+            // a SHORT entry holds the two's-complement word; a SSHORT one is already signed
+            let signed = if *w > 32767.0 { *w - 65536.0 } else { *w };
+            if !w.is_finite() || !(-32768.0..=65535.0).contains(w) || signed.abs() >= 8.0 * 256.0 {
+                return None;
+            }
+            *out = signed / 256.0;
+        }
+        let sum: f64 = row.iter().sum();
+        if !(0.8..=1.25).contains(&sum) {
+            return None;
+        }
+        row.iter_mut().for_each(|v| *v /= sum);
+    }
+    Some(Mat3(rows))
+}
+
+/// DNG colour tags for `m` (white-balanced camera → linear sRGB, rows summing to 1) at as-shot gains `wb`: one
+/// `ForwardMatrix` (camera white to D50), and the `ColorMatrix` for D65 that DNG chapter 6 pairs with it for the
+/// camera neutral `1 / wb` (as `calibrate::fit_chart` does), so the as-shot white renders through exactly `m`. The
+/// file states no light for its matrix, so the Kelvin scale is the approximate one of a single matrix at D65.
+fn colour_from_matrix(m: &Mat3, wb: [f32; 3]) -> Option<ColorData> {
+    if !wb.iter().all(|g| g.is_finite() && *g > 0.0) {
+        return None;
+    }
+    let forward = bradford(D65, D50).mul(&SRGB.to_xyz()).mul(m);
+    let neutral = wb.map(|g| 1.0 / f64::from(g));
+    let top = neutral.iter().cloned().fold(f64::MIN, f64::max);
+    let neutral = neutral.map(|v| v / top);
+    let to_xyz = bradford(D50, D65).mul(&forward).mul(&Mat3::diag(1.0 / neutral[0], 1.0 / neutral[1], 1.0 / neutral[2]));
+    let color_matrix = to_xyz.inverse()?;
+    let finite = |m: &Mat3| m.0.iter().flatten().all(|v| v.is_finite());
+    (finite(&forward) && finite(&color_matrix)).then(|| ColorData {
+        illuminant: [21, 0],
+        color_matrix: [Some(color_matrix), None],
+        forward_matrix: [Some(forward), None],
+        ..Default::default()
+    })
 }
 
 /// Black level of a body without ImageProcessing: the main note's `0x1012` BlackLevel (the mean of its four values)
@@ -429,15 +502,20 @@ mod tests {
         v.iter().flat_map(|x| x.to_le_bytes()).collect()
     }
 
-    /// A 16 × 4 ORF of 12-bit samples in 16-bit words with an [`olymp_note`] of `entries`, decoded.
-    fn decode_noted(entries: &[(u16, u16, Vec<u8>)]) -> RawImage {
+    /// A 16 × 4 ORF of 12-bit samples in 16-bit words with an [`olymp_note`] of `entries`.
+    fn noted_file(entries: &[(u16, u16, Vec<u8>)]) -> Vec<u8> {
         let (w, h) = (16u32, 4u32);
         let words: Vec<u8> = (0..w * h).flat_map(|i| (((200 + i * 37) % 4096) as u16).to_le_bytes()).collect();
         let file = |at| orf_with_note(w, h, 16, words.clone(), Some(RGGB), Some(olymp_note(at, entries)));
         let at = file(0).windows(6).position(|b| b == b"OLYMP\0").unwrap();
         let bytes = file(at);
         assert_eq!(bytes.windows(6).position(|b| b == b"OLYMP\0"), Some(at));
-        crate::decode(&bytes).unwrap()
+        bytes
+    }
+
+    /// [`noted_file`], decoded.
+    fn decode_noted(entries: &[(u16, u16, Vec<u8>)]) -> RawImage {
+        crate::decode(&noted_file(entries)).unwrap()
     }
 
     /// An ImageProcessing sub-directory stored inline (old-style note) with one unrelated entry and no levels.
@@ -791,5 +869,72 @@ mod tests {
         for cut in [bytes.len() - 1, bytes.len() - 40, bytes.len() / 2, 100] {
             let _ = crate::decode(&bytes[..cut]);
         }
+    }
+
+    /// The main-note colour matrix of the CC0 E-1 file (raw.pixls.us 1800): signed 8.8 words, two's complement.
+    const E1_MATRIX: [u16; 9] = [254, 54, 65478, 65508, 274, 0, 65532, 65360, 428];
+
+    #[test]
+    fn colour_matrix_words_are_signed_8_8_with_unit_rows() {
+        let words: Vec<f64> = E1_MATRIX.iter().map(|w| f64::from(*w)).collect();
+        let m = matrix_from_words(&words).unwrap();
+        // 254 / 256, 54 / 256, -58 / 256 over the row sum 250 / 256
+        assert!((m.0[0][0] - 254.0 / 250.0).abs() < 1e-12 && (m.0[0][2] + 58.0 / 250.0).abs() < 1e-12, "{m:?}");
+        assert!(m.0.iter().all(|r| (r.iter().sum::<f64>() - 1.0).abs() < 1e-12));
+        // a SSHORT file states the same numbers already signed
+        let signed: Vec<f64> = E1_MATRIX.iter().map(|w| f64::from(*w as i16)).collect();
+        assert_eq!(matrix_from_words(&signed), Some(m));
+        // not a matrix: wrong length, an entry beyond 8, rows that sum to nothing like 1
+        assert_eq!(matrix_from_words(&words[..8]), None);
+        assert_eq!(matrix_from_words(&[words.clone(), vec![0.0]].concat()), None);
+        let mut big = words.clone();
+        big[1] = 3000.0;
+        assert_eq!(matrix_from_words(&big), None);
+        assert_eq!(matrix_from_words(&[0.0; 9]), None);
+        let mut off = words.clone();
+        off[0] = 100.0;
+        assert_eq!(matrix_from_words(&off), None);
+        assert_eq!(matrix_from_words(&[f64::NAN; 9]), None);
+    }
+
+    /// The tags render a white-balanced camera pixel through the file's matrix to linear sRGB, and a neutral stays
+    /// neutral at the as-shot white.
+    #[test]
+    fn colour_tags_render_through_the_cameras_matrix() {
+        use crate::color::{as_shot_white_of, camera_transform_of};
+        use lightcraft_color::REC2020;
+        let words: Vec<f64> = E1_MATRIX.iter().map(|w| f64::from(*w)).collect();
+        let m = matrix_from_words(&words).unwrap();
+        let wb = [1.69f32, 1.0, 1.12];
+        let color = colour_from_matrix(&m, wb).unwrap();
+        assert!(crate::color::has_matrix(&color) && color.illuminant == [21, 0]);
+        let white = as_shot_white_of(&color, Some(wb));
+        assert!((white.x - D65.x).abs() < 1e-4 && (white.y - D65.y).abs() < 1e-4, "{white:?}");
+        let t = camera_transform_of(&color, white);
+        assert!(!t.matrix_is_fallback);
+        for cam in [[0.2f64, 0.5, 0.3], [0.6, 0.1, 0.05], [0.1, 0.1, 0.4]] {
+            let balanced = [cam[0] * f64::from(wb[0]), cam[1] * f64::from(wb[1]), cam[2] * f64::from(wb[2])];
+            let srgb = m.apply(balanced);
+            let expect = REC2020.from_xyz().mul(&SRGB.to_xyz()).apply(srgb);
+            let got = t.matrix.apply(std::array::from_fn(|i| cam[i] * f64::from(t.wb[i])));
+            assert!((0..3).all(|i| (got[i] - expect[i]).abs() < 1e-4), "{cam:?}: {got:?} vs {expect:?}");
+        }
+        // gains that are not positive numbers give no tags
+        assert!(colour_from_matrix(&m, [0.0, 1.0, 1.0]).is_none() && colour_from_matrix(&m, [f32::NAN, 1.0, 1.0]).is_none());
+    }
+
+    /// An old body keeps its matrix in the main note (`0x1011`); a file without it, or with nonsense, has none.
+    #[test]
+    fn colour_matrix_from_the_main_maker_note() {
+        let wb = [1.69f32, 1.0, 1.12];
+        let words: Vec<f64> = E1_MATRIX.iter().map(|w| f64::from(*w)).collect();
+        let expect = colour_from_matrix(&matrix_from_words(&words).unwrap(), wb);
+        assert!(expect.is_some());
+        assert_eq!(own_colour(&noted_file(&[(MN_COLOR_MATRIX, 3, shorts(&E1_MATRIX))]), wb), expect);
+        assert_eq!(own_colour(&noted_file(&[]), wb), None);
+        assert_eq!(own_colour(&noted_file(&[(MN_COLOR_MATRIX, 3, shorts(&E1_MATRIX[..8]))]), wb), None);
+        assert_eq!(own_colour(&noted_file(&[(MN_COLOR_MATRIX, 3, shorts(&[0; 9]))]), wb), None);
+        // the decoder itself leaves the colour to the engine
+        assert_eq!(decode_noted(&[(MN_COLOR_MATRIX, 3, shorts(&E1_MATRIX))]).color, ColorData::default());
     }
 }

@@ -207,8 +207,10 @@ doesn't pass, so a file can only stay as before or move closer to its camera JPE
 
 ### Olympus ORF
 
-The ORF decoder (uncompressed files) supplies the as-shot white balance (ImageProcessing `WB_RBLevels`) and no colour
-matrix, so ORF takes the same fit, gates and relative white balance. The reference is the camera's preview JPEG (on the
+The ORF decoder (uncompressed files) supplies the as-shot white balance (ImageProcessing `WB_RBLevels`) and leaves the
+colour to the engine, so ORF takes the same fit, gates and relative white balance. When the fit fails, the file's own
+colour matrix (ImageProcessing `0x0200`, main note `0x1011`; `docs/camera-calibration.md`) is used before the spectral
+matrices and the neutral fallback. The reference is the camera's preview JPEG (on the
 E-1 the 1280 × 960 one the maker note points to). All three decodable corpus files are accepted (held-out RMS against
 the neutral fallback): E-1 0.126 → 0.014, E-400 0.087 → 0.022, XZ-2 0.061 → 0.023. Compressed ORFs (E-M1, E-M10 III)
 still open from their embedded JPEG. Against reference catalog editor's render of a CC0 E-1 photo (2000 px, ΔE00 of the
