@@ -99,7 +99,7 @@ impl Warp {
             && let Some(c) = lens.and_then(|l| l.camera)
         {
             // only what the lens profile (embedded or database) does not already supply: no correction applied twice
-            if !(wp.lens_vig != 0.0 && wp.lens.is_some_and(|l| l.vignette.is_some())) {
+            if wp.lens_vig == 0.0 || wp.lens.is_none_or(|l| l.vignette.is_none()) {
                 wp.cam_vig = c.vignette;
             }
             let profile_ca = wp.lens_dist != 0.0
