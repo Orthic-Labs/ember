@@ -319,9 +319,7 @@ pub fn track_lines(view: &View, segments: &[Vec<(f64, f64)>], max: usize) -> Vec
     let max = max.max(2);
     segments
         .iter()
-        .map(|segment| {
-            segment.iter().filter(|(lat, lon)| is_position(*lat, *lon)).map(|(lat, lon)| view.offset(*lat, *lon)).collect::<Vec<_>>()
-        })
+        .map(|segment| segment.iter().filter(|(lat, lon)| is_position(*lat, *lon)).map(|(lat, lon)| view.offset(*lat, *lon)).collect::<Vec<_>>())
         .filter(|line| line.len() >= 2)
         .map(|line| thin(&line, max))
         .collect()
@@ -583,12 +581,8 @@ mod tests {
     #[test]
     fn a_track_is_drawn_per_segment_under_the_view_and_gaps_are_not_bridged() {
         let view = View::new(0.0, 0.0, 3.0);
-        let segments = vec![
-            vec![(0.0, 0.0), (0.0, 10.0)],
-            vec![(0.0, 0.0), (91.0, 0.0), (0.0, 20.0)],
-            vec![(0.0, 5.0)],
-            vec![(f64::NAN, 1.0), (0.0, 1.0)],
-        ];
+        let segments =
+            vec![vec![(0.0, 0.0), (0.0, 10.0)], vec![(0.0, 0.0), (91.0, 0.0), (0.0, 20.0)], vec![(0.0, 5.0)], vec![(f64::NAN, 1.0), (0.0, 1.0)]];
         let lines = track_lines(&view, &segments, MAX_TRACK_POINTS);
         assert_eq!(lines.len(), 2, "a one-point segment and one left with a single point draw nothing");
         let (x, y) = lines[0][1];
@@ -630,11 +624,7 @@ mod tests {
         let names = |q: &str| search_places(q, &locations, &places).into_iter().map(|h| (h.kind, h.name)).collect::<Vec<_>>();
         assert_eq!(
             names("home"),
-            vec![
-                ("location", "Home".to_string()),
-                ("location", "Homestead".to_string()),
-                ("location", "Old home".to_string()),
-            ],
+            vec![("location", "Home".to_string()), ("location", "Homestead".to_string()), ("location", "Old home".to_string()),],
             "exact, then starts with, then contains"
         );
         assert_eq!(names("  PARIS "), vec![("place", "Paris".to_string()), ("place", "Paris Plage".to_string())], "case and spaces do not matter");

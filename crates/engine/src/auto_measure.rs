@@ -74,7 +74,10 @@ pub enum AutoMeasured {
     BwMix([f64; 8]),
     /// `None`: no flat tiles to fit (the sliders then come from the ISO).
     Noise(Option<NoiseEstimate>),
-    WhiteBalance { temp: f64, tint: f64 },
+    WhiteBalance {
+        temp: f64,
+        tint: f64,
+    },
 }
 
 impl AutoMeasured {
@@ -112,16 +115,8 @@ pub fn with_lens_pick(mut info: SourceInfo, pick: Option<Option<EmbeddedLens>>) 
 }
 
 /// The controls Auto sets (`develop.autoControl`).
-pub const AUTO_CONTROLS: [&str; 8] = [
-    "light.exposure",
-    "light.contrast",
-    "light.highlights",
-    "light.shadows",
-    "light.whites",
-    "light.blacks",
-    "color.vibrance",
-    "color.saturation",
-];
+pub const AUTO_CONTROLS: [&str; 8] =
+    ["light.exposure", "light.contrast", "light.highlights", "light.shadows", "light.whites", "light.blacks", "color.vibrance", "color.saturation"];
 
 /// Whether Auto sets control `id` (`develop.autoControl`).
 pub fn is_auto_control(id: &str) -> bool {

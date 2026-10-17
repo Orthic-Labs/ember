@@ -229,9 +229,10 @@ pub fn is_semantic_mask(m: &Mask) -> bool {
 
 /// Whether the `masks` of a settings object include a semantic one.
 fn has_semantic_mask(settings: &Value) -> bool {
-    settings.get("masks").and_then(Value::as_array).is_some_and(|ms| {
-        ms.iter().any(|m| serde_json::from_value::<Mask>(m.clone()).is_ok_and(|m| is_semantic_mask(&m)))
-    })
+    settings
+        .get("masks")
+        .and_then(Value::as_array)
+        .is_some_and(|ms| ms.iter().any(|m| serde_json::from_value::<Mask>(m.clone()).is_ok_and(|m| is_semantic_mask(&m))))
 }
 
 /// Settle the masks of a preset's settings. A settings object with a semantic mask is an adaptive preset: only
@@ -257,16 +258,8 @@ impl Preset {
         let mut settings = extract_groups(s, groups);
         let dropped = settle_masks(&mut settings);
         let adaptive = has_semantic_mask(&settings);
-        let preset = Preset {
-            id: id.into(),
-            name: name.into(),
-            group: group.into(),
-            settings,
-            favorite: false,
-            builtin: false,
-            auto: false,
-            adaptive,
-        };
+        let preset =
+            Preset { id: id.into(), name: name.into(), group: group.into(), settings, favorite: false, builtin: false, auto: false, adaptive };
         (preset, dropped)
     }
 

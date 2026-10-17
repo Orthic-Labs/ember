@@ -1018,7 +1018,9 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             }
             app.ui.soft_proof = match p.get("on").and_then(Value::as_bool) {
                 Some(b) => b,
-                None if ["space", "destWarning", "displayWarning", "profile", "intent", "paperInk", "blackPoint"].iter().any(|k| has(k)) => app.ui.soft_proof,
+                None if ["space", "destWarning", "displayWarning", "profile", "intent", "paperInk", "blackPoint"].iter().any(|k| has(k)) => {
+                    app.ui.soft_proof
+                }
                 None => !app.ui.soft_proof,
             };
             if app.ui.soft_proof && !matches!(app.ui.view, ViewMode::Detail | ViewMode::Reference) {
@@ -1440,9 +1442,10 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 return Some(Err("an export is already running".into()));
             }
             // the photos the print view shows, as photo ids
-            let parsed = p.get("ids").and_then(Value::as_array).map(|a| {
-                a.iter().map(|v| v.as_u64().map(lightcraft_catalog::PhotoId)).collect::<Option<Vec<_>>>()
-            });
+            let parsed = p
+                .get("ids")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().map(|v| v.as_u64().map(lightcraft_catalog::PhotoId)).collect::<Option<Vec<_>>>());
             let ids = match parsed {
                 Some(Some(ids)) => ids,
                 _ => return Some(Err("ids must be an array of photo ids".into())),

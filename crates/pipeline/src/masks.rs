@@ -550,11 +550,8 @@ pub fn brush_dabs(s: &BrushStroke, frame: &Frame, w: usize, h: usize) -> BrushDa
             prev = Some((q, pen));
         }
     }
-    let factors = if s.pressure.is_empty() {
-        Vec::new()
-    } else {
-        pressure.iter().map(|&p| pressure_factors(p, s.pressure_size, s.pressure_flow)).collect()
-    };
+    let factors =
+        if s.pressure.is_empty() { Vec::new() } else { pressure.iter().map(|&p| pressure_factors(p, s.pressure_size, s.pressure_flow)).collect() };
     BrushDabs {
         dabs,
         r,

@@ -236,11 +236,8 @@ mod tests {
 
     #[test]
     fn hostile_nesting_and_size_are_bounded() {
-        let deep = format!(
-            "s = {}{{ criteria = \"rating\", operation = \"==\", value = 1 }}{}",
-            "{ combine = \"union\", ".repeat(12),
-            "}".repeat(12)
-        );
+        let deep =
+            format!("s = {}{{ criteria = \"rating\", operation = \"==\", value = 1 }}{}", "{ combine = \"union\", ".repeat(12), "}".repeat(12));
         assert!(translate(&deep).is_err());
         let many = format!("s = {{ {} }}", "{ criteria = \"rating\", operation = \"==\", value = 1 },".repeat(300));
         assert!(translate(&many).is_err());

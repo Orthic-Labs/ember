@@ -189,13 +189,8 @@ fn camera_vignette_table_flattens_a_synthetic_vignette() {
     // switched on, every pixel of the corrected render is the flat one within two 8-bit levels (rounding)
     s.optics.camera_corrections = true;
     let after = render(&vignetted, &info, &s, &request).image;
-    let worst = after
-        .data
-        .iter()
-        .zip(&reference.data)
-        .map(|(a, b)| (0..3).map(|i| (a[i] as i32 - b[i] as i32).abs()).max().unwrap_or(0))
-        .max()
-        .unwrap_or(0);
+    let worst =
+        after.data.iter().zip(&reference.data).map(|(a, b)| (0..3).map(|i| (a[i] as i32 - b[i] as i32).abs()).max().unwrap_or(0)).max().unwrap_or(0);
     assert!(worst <= 2, "flattened to within {worst} levels");
     // the same switch on a photo without tables, or with a lens profile only, changes nothing
     let plain = render(&vignetted, &none, &s, &request).image;

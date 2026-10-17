@@ -290,7 +290,9 @@ pub fn settings_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
     hint(
         ui,
         t,
-        crate::i18n::tr("Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay."),
+        crate::i18n::tr(
+            "Forgetting deletes every face embedding and the unnamed faces found automatically, and switches recognition off. Named faces stay.",
+        ),
     );
     let confirm = egui::Id::new("faces-forget-confirm");
     let asking = ui.data(|d| d.get_temp::<bool>(confirm)).unwrap_or(false);

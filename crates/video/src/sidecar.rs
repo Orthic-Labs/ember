@@ -3,9 +3,9 @@
 //! Windows and macOS only (`rightkit-ffmpeg` has approved catalog rows for no other platform). Elsewhere every call is
 //! [`VideoError::Unsupported`].
 
-pub(crate) use native::{available, ffprobe_json, frame_rgba, spawn_rawvideo};
 #[cfg(all(test, any(target_os = "windows", target_os = "macos")))]
 pub(crate) use native::resolve_in;
+pub(crate) use native::{available, ffprobe_json, frame_rgba, spawn_rawvideo};
 
 use std::io::Read;
 
@@ -58,8 +58,8 @@ mod native {
 
     use rightkit_ffmpeg::runner::{run_capture_with, spawn_streaming};
     use rightkit_ffmpeg::{
-        CancellationToken, DECODE_VARIANT, FfmpegCommand, MediaError, OwnedChild, RunError, RunOptions, StdioMode, StdioPolicy, Tool,
-        VerifiedFfmpeg, VerifiedFfprobe, verify_bundled_ffmpeg, verify_bundled_ffprobe,
+        CancellationToken, DECODE_VARIANT, FfmpegCommand, MediaError, OwnedChild, RunError, RunOptions, StdioMode, StdioPolicy, Tool, VerifiedFfmpeg,
+        VerifiedFfprobe, verify_bundled_ffmpeg, verify_bundled_ffprobe,
     };
 
     use super::Spawned;

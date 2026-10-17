@@ -107,7 +107,11 @@ enum Kind {
     Other,
     Rdf,
     Desc(usize),
-    Prop { desc: usize, start: usize, name: String },
+    Prop {
+        desc: usize,
+        start: usize,
+        name: String,
+    },
     /// An element inside `mwg-rs:Regions`: its index in [`Scan::inner`].
     Inner(usize),
 }
@@ -367,9 +371,9 @@ fn same_box(a: &Rect, b: &Rect) -> bool {
 fn region_bag(inner: &[Elem]) -> Option<(usize, Vec<usize>)> {
     let list = inner.iter().position(|e| e.name == "mwg-rs:RegionList" && e.depth <= 2)?;
     let (list_end, list_depth) = inner.get(list).map(|e| (e.end, e.depth))?;
-    let bag = (list + 1..inner.len()).take_while(|i| inner.get(*i).is_some_and(|e| e.start < list_end)).find(|i| {
-        inner.get(*i).is_some_and(|e| e.depth == list_depth + 1 && matches!(e.name.as_str(), "rdf:Bag" | "rdf:Seq" | "rdf:Alt"))
-    })?;
+    let bag = (list + 1..inner.len())
+        .take_while(|i| inner.get(*i).is_some_and(|e| e.start < list_end))
+        .find(|i| inner.get(*i).is_some_and(|e| e.depth == list_depth + 1 && matches!(e.name.as_str(), "rdf:Bag" | "rdf:Seq" | "rdf:Alt")))?;
     let (bag_end, bag_depth) = inner.get(bag).map(|e| (e.end, e.depth))?;
     let items = (bag + 1..inner.len())
         .take_while(|i| inner.get(*i).is_some_and(|e| e.start < bag_end))

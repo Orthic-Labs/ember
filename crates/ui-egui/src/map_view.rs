@@ -300,34 +300,37 @@ fn edit_window(app: &mut LightcraftApp, ctx: &egui::Context, editor: &mut Editor
     let tr = crate::i18n::tr;
     let mut open = true;
     let mut action: Option<&'static str> = None;
-    egui::Window::new(tr("Saved Location")).id(egui::Id::new("map-location-editor")).collapsible(false).resizable(false).open(&mut open).show(ctx, |ui| {
-        egui::Grid::new("map-location-grid").num_columns(2).show(ui, |ui| {
-            ui.label(tr("Name"));
-            if TextField::singleline("field:mapLocationName", &mut editor.name).width(220.0).show(ui).committed() {
-                action = Some("save");
-            }
-            ui.end_row();
-            ui.label(tr("Radius (metres)"));
-            if TextField::singleline("field:mapLocationRadius", &mut editor.radius).width(220.0).select_on_focus(true).show(ui).committed() {
-                action = Some("save");
-            }
-            ui.end_row();
-            ui.label(tr("Centre"));
-            ui.label(format!("{:.5}, {:.5}", editor.lat, editor.lon));
-            ui.end_row();
-        });
-        ui.horizontal(|ui| {
-            if ui.button(tr("Save")).clicked() {
-                action = Some("save");
-            }
-            if editor.id.is_some() && ui.button(tr("Delete")).clicked() {
-                action = Some("delete");
-            }
-            if ui.button(tr("Cancel")).clicked() {
-                action = Some("cancel");
-            }
-        });
-    });
+    egui::Window::new(tr("Saved Location")).id(egui::Id::new("map-location-editor")).collapsible(false).resizable(false).open(&mut open).show(
+        ctx,
+        |ui| {
+            egui::Grid::new("map-location-grid").num_columns(2).show(ui, |ui| {
+                ui.label(tr("Name"));
+                if TextField::singleline("field:mapLocationName", &mut editor.name).width(220.0).show(ui).committed() {
+                    action = Some("save");
+                }
+                ui.end_row();
+                ui.label(tr("Radius (metres)"));
+                if TextField::singleline("field:mapLocationRadius", &mut editor.radius).width(220.0).select_on_focus(true).show(ui).committed() {
+                    action = Some("save");
+                }
+                ui.end_row();
+                ui.label(tr("Centre"));
+                ui.label(format!("{:.5}, {:.5}", editor.lat, editor.lon));
+                ui.end_row();
+            });
+            ui.horizontal(|ui| {
+                if ui.button(tr("Save")).clicked() {
+                    action = Some("save");
+                }
+                if editor.id.is_some() && ui.button(tr("Delete")).clicked() {
+                    action = Some("delete");
+                }
+                if ui.button(tr("Cancel")).clicked() {
+                    action = Some("cancel");
+                }
+            });
+        },
+    );
     let mut keep = open;
     match action {
         Some("save") => {
@@ -335,7 +338,9 @@ fn edit_window(app: &mut LightcraftApp, ctx: &egui::Context, editor: &mut Editor
             match editor.radius.trim().parse::<f64>() {
                 Ok(radius_m) => {
                     let result = match editor.id {
-                        Some(id) => app.run("location.setCircle", json!({"id": id, "name": name, "lat": editor.lat, "lon": editor.lon, "radiusM": radius_m})),
+                        Some(id) => {
+                            app.run("location.setCircle", json!({"id": id, "name": name, "lat": editor.lat, "lon": editor.lon, "radiusM": radius_m}))
+                        }
                         None => app.run("location.add", json!({"name": name, "lat": editor.lat, "lon": editor.lon, "radiusM": radius_m})),
                     };
                     match result {
@@ -452,7 +457,8 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
             let mut picked = None;
             for hit in run.search_hits.iter().take(SEARCH_SHOWN) {
-                let (Some(name), Some(lat), Some(lon), Some(zoom)) = (hit["name"].as_str(), hit["lat"].as_f64(), hit["lon"].as_f64(), hit["zoom"].as_f64())
+                let (Some(name), Some(lat), Some(lon), Some(zoom)) =
+                    (hit["name"].as_str(), hit["lat"].as_f64(), hit["lon"].as_f64(), hit["zoom"].as_f64())
                 else {
                     continue;
                 };

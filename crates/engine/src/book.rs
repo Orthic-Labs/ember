@@ -536,12 +536,8 @@ pub fn render_page(session: &mut Session, model: &Model, index: usize, dpi: f64)
     let band_x = (w - band_w) / 2;
     if index == 0 && s.cover.enabled && !s.cover.title.trim().is_empty() {
         let size = t.size_pt * COVER_SCALE;
-        let cover = Setting {
-            size_px: font_px(size, dpi),
-            pitch: line_pitch(size, t.leading, dpi).min(margin_px.max(1)),
-            align: "center",
-            color: t.color,
-        };
+        let cover =
+            Setting { size_px: font_px(size, dpi), pitch: line_pitch(size, t.leading, dpi).min(margin_px.max(1)), align: "center", color: t.color };
         let y = margin_px.saturating_sub(cover.pitch) / 2;
         let strip = fitted_line(band_w, cover.pitch, base, &s.cover.title, &cover);
         blit(&mut img, &strip, band_x, y)?;

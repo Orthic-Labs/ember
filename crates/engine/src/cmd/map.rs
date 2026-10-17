@@ -176,7 +176,15 @@ pub fn specs() -> Vec<CommandSpec> {
             always,
             load_track
         ),
-        cmd!("map.showTrack", "Show Track", [], None, "{enabled?: bool} → {show, loaded} — draws the loaded track on the Map, or hides it (no `enabled`: toggles it)", always, show_track),
+        cmd!(
+            "map.showTrack",
+            "Show Track",
+            [],
+            None,
+            "{enabled?: bool} → {show, loaded} — draws the loaded track on the Map, or hides it (no `enabled`: toggles it)",
+            always,
+            show_track
+        ),
         cmd!(
             query "map.search",
             "Search Places",
@@ -345,12 +353,7 @@ mod tests {
     fn a_track_that_is_not_gpx_or_has_no_timed_points_is_refused_and_nothing_is_replaced() {
         let mut s = Session::with_demo();
         s.execute("map.loadTrack", &json!({"gpx": TRACK})).unwrap();
-        for bad in [
-            json!({}),
-            json!({"gpx": "<kml/>"}),
-            json!({"gpx": "<gpx><trk><trkseg/></trk></gpx>"}),
-            json!({"path": "D:/no/such/track.gpx"}),
-        ] {
+        for bad in [json!({}), json!({"gpx": "<kml/>"}), json!({"gpx": "<gpx><trk><trkseg/></trk></gpx>"}), json!({"path": "D:/no/such/track.gpx"})] {
             assert!(s.execute("map.loadTrack", &bad).is_err(), "{bad}");
         }
         assert_eq!(s.map_track.as_ref().map(|t| t.points()), Some(4), "the track loaded before is kept");

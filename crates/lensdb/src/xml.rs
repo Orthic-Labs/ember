@@ -85,12 +85,7 @@ pub(crate) fn parse(s: &str) -> Result<Node, Error> {
                 if count > MAX_NODES || stack.len() > MAX_DEPTH {
                     return Err(Error::TooLarge);
                 }
-                let attrs = e
-                    .attributes()
-                    .with_checks(false)
-                    .flatten()
-                    .map(|a| (a.key.0.to_owned(), unescape(&a.value)))
-                    .collect();
+                let attrs = e.attributes().with_checks(false).flatten().map(|a| (a.key.0.to_owned(), unescape(&a.value))).collect();
                 let node = Node { name: e.name().0.to_owned(), attrs, ..Default::default() };
                 if matches!(ev, Event::Empty(_)) {
                     if let Some(p) = stack.last_mut() {

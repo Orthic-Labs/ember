@@ -538,8 +538,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     // than 100 % (the GPU magnifies beyond that), for each side that is shown. Mask overlays use
     // the same window, and so does soft proofing; diagnostic overlays that need whole-frame
     // context do not.
-    let windowable_view =
-        hover_key.is_none() && overlay_supports_window(overlay) && crate::region::same_aspect(display_aspect, aspect);
+    let windowable_view = hover_key.is_none() && overlay_supports_window(overlay) && crate::region::same_aspect(display_aspect, aspect);
     let window_ctx = WindowCtx {
         id,
         overlay,

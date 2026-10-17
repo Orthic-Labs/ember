@@ -122,17 +122,8 @@ fn bool_param(params: &Value, key: &str, default: bool) -> bool {
 /// host's: the session runs it, and says why when it should refuse.
 fn plan(app: &LightcraftApp, id: &str, params: &Value) -> Option<Plan> {
     let session = &app.session;
-    let one = |kind, label| {
-        Some(Plan {
-            kind,
-            regions: false,
-            control: None,
-            photos: vec![session.active()?],
-            finish: Finish::Run,
-            answers: false,
-            label,
-        })
-    };
+    let one =
+        |kind, label| Some(Plan { kind, regions: false, control: None, photos: vec![session.active()?], finish: Finish::Run, answers: false, label });
     match id {
         "develop.auto" | "develop.autoTone" => {
             let dry = bool_param(params, "dryRun", false);

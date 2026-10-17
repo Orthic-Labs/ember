@@ -1890,9 +1890,8 @@ mod tests {
     fn history_replay_is_bounded_per_photo_and_by_the_import_budget() {
         let photo = |n: usize| {
             let mut p = sample().photos.remove(1);
-            p.history = (0..n)
-                .map(|i| row(json!({"id_local":i,"name":format!("step {i}"),"text":format!("s = {{ Exposure2012 = {} }}", i % 5)})))
-                .collect();
+            p.history =
+                (0..n).map(|i| row(json!({"id_local":i,"name":format!("step {i}"),"text":format!("s = {{ Exposure2012 = {} }}", i % 5)}))).collect();
             p.snapshots = Vec::new();
             p
         };

@@ -272,9 +272,8 @@ fn target_of(stats: &[Stats], grids: &[Grid]) -> Option<LookTarget> {
     let chroma_lo = median(&|s| s.chroma[0]);
     let chroma = [chroma_lo, median(&|s| s.chroma[1]).max(chroma_lo)];
     // each grid cell is the median across samples too
-    let cells = std::array::from_fn(|i| {
-        [median_of(grids.iter().map(|g| g.cells[i][0]).collect()), median_of(grids.iter().map(|g| g.cells[i][1]).collect())]
-    });
+    let cells =
+        std::array::from_fn(|i| [median_of(grids.iter().map(|g| g.cells[i][0]).collect()), median_of(grids.iter().map(|g| g.cells[i][1]).collect())]);
     let t = LookTarget {
         schema: SCHEMA.into(),
         samples: stats.len(),
@@ -510,7 +509,13 @@ mod tests {
     fn bands(n: usize, top: f32, bottom: f32) -> Rgb32f {
         Rgb32f::from_fn(n, n, |_, y| {
             let t = (y as f32 + 0.5) / n as f32;
-            let v = if t < 1.0 / 3.0 { top } else if t < 2.0 / 3.0 { 0.2 } else { bottom };
+            let v = if t < 1.0 / 3.0 {
+                top
+            } else if t < 2.0 / 3.0 {
+                0.2
+            } else {
+                bottom
+            };
             [v, v, v]
         })
     }

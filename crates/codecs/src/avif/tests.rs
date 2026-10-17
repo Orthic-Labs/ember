@@ -598,10 +598,8 @@ fn an_alpha_item_becomes_the_alpha_plane() {
     assert!((mean - 128.0 / 255.0).abs() < 0.06, "mean alpha {mean}");
     assert_eq!(header(&f).ok(), Some((16, 16, 1)));
     // an alpha plane of another size is malformed
-    let mut b = B::new(
-        1,
-        vec![it(1, b"av01", &colour, vec![ispe(16, 16)]), it(2, b"av01", &solid(32, 32, [128; 3]), vec![ispe(32, 32), aux_alpha()])],
-    );
+    let mut b =
+        B::new(1, vec![it(1, b"av01", &colour, vec![ispe(16, 16)]), it(2, b"av01", &solid(32, 32, [128; 3]), vec![ispe(32, 32), aux_alpha()])]);
     b.refs.push((*b"auxl", 2, vec![1]));
     assert!(decode(&b.build(), &opts()).is_err());
     // without the alpha URN the auxiliary item is not alpha

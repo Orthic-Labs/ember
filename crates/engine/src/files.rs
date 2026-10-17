@@ -1063,7 +1063,14 @@ fn fs_loader(detail: bool, strength: f64) -> FileLoader {
         }
         let len = std::fs::metadata(path).map(|m| usize::try_from(m.len()).unwrap_or(usize::MAX)).unwrap_or(0);
         // (the raw-domain denoise holds more planes of the mosaic at once)
-        let weight = len * if max_edge <= crate::media::SourceLevel::Thumb.max_edge() { 3 } else if strength > 0.0 { 8 } else { 6 };
+        let weight = len
+            * if max_edge <= crate::media::SourceLevel::Thumb.max_edge() {
+                3
+            } else if strength > 0.0 {
+                8
+            } else {
+                6
+            };
         let gate = crate::memory::work_gate();
         let _permit = if crate::memory::is_background() { gate.acquire(weight) } else { gate.acquire_urgent(weight) };
         let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;

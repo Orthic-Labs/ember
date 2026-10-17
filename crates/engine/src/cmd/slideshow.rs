@@ -122,18 +122,14 @@ fn frame(s: &mut Session, p: &Value) -> Result<Value> {
 /// One slide rendered in full, as RGBA8 bytes (base64), through the renderer playback and export use.
 fn render_slide_cmd(s: &mut Session, p: &Value) -> Result<Value> {
     const ID: &str = "slideshow.renderSlide";
-    let index = p
-        .get("index")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| bad(ID, "missing `index`: a slide number from slideshow.timeline, from 0"))? as usize;
+    let index =
+        p.get("index").and_then(Value::as_u64).ok_or_else(|| bad(ID, "missing `index`: a slide number from slideshow.timeline, from 0"))? as usize;
     let width = p.get("width").and_then(Value::as_u64).unwrap_or(960) as usize;
     let (w, h) = slideshow::frame_size(&s.slideshow, width).map_err(|e| bad(ID, e))?;
     let ids = s.targets(p)?;
     let model = s.slideshow.clone();
     let timeline = Timeline::new(&model, &ids);
-    let slide = timeline
-        .slide(index)
-        .ok_or_else(|| bad(ID, format!("no slide {index}; the show has {} slides", timeline.entries.len())))?;
+    let slide = timeline.slide(index).ok_or_else(|| bad(ID, format!("no slide {index}; the show has {} slides", timeline.entries.len())))?;
     let img = slideshow::render_slide(s, &model, slide, w, h).map_err(|e| bad(ID, e))?;
     Ok(json!({"index": index, "slide": slide_json(slide), "width": w, "height": h, "format": "rgba8", "rgba": STANDARD.encode(img.as_bytes())}))
 }

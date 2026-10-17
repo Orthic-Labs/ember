@@ -72,11 +72,8 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, canvas: Rect, photo: &Ph
     p.galley(pos2(x, r.center().y - times.size().y / 2.0), times.clone(), Color32::WHITE);
     x += times.size().x + gap;
     let at = |x: f32, w: f32| Rect::from_min_size(pos2(x, r.top() + 3.0), vec2(w, height - 6.0));
-    let now = if app.session.video.photo() == Some(photo.id) {
-        app.session.video_position_now()
-    } else {
-        lightcraft_engine::video::poster_secs_of(photo)
-    };
+    let now =
+        if app.session.video.photo() == Some(photo.id) { app.session.video_position_now() } else { lightcraft_engine::video::poster_secs_of(photo) };
     let mut set = None;
     let w_in = widths.first().copied().unwrap_or(60.0);
     if button(ui, &p, &t, at(x, w_in), "loupe:trimIn", &labels[0], crate::i18n::tr("Start the clip at the frame on screen")) {

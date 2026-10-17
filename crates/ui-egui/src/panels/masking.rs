@@ -361,9 +361,8 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
                 };
                 if let Some((_, _, name)) = app.ui.renaming_component.as_mut().filter(|(mid, k, _)| *mid == m.id && *k == i) {
                     // inline rename: Enter (or leaving the field) commits, Escape cancels
-                    let field = crate::text_field::TextField::singleline(&format!("componentRename:{i}"), name)
-                        .width(ui.available_width() - 30.0)
-                        .show(ui);
+                    let field =
+                        crate::text_field::TextField::singleline(&format!("componentRename:{i}"), name).width(ui.available_width() - 30.0).show(ui);
                     if !field.response.has_focus() && !field.response.lost_focus() {
                         field.response.request_focus();
                     }
@@ -565,10 +564,8 @@ fn range_bar(
     let n = 24;
     for k in 0..n {
         let a = k as f32 / n as f32;
-        let r = Rect::from_min_max(
-            pos2(rect.left() + a * w, rect.top() + 4.0),
-            pos2(rect.left() + (a + 1.0 / n as f32) * w + 0.5, rect.bottom() - 4.0),
-        );
+        let r =
+            Rect::from_min_max(pos2(rect.left() + a * w, rect.top() + 4.0), pos2(rect.left() + (a + 1.0 / n as f32) * w + 0.5, rect.bottom() - 4.0));
         let level = if bright_first { 1.0 - a } else { a };
         p.rect_filled(r, 0.0, egui::Color32::from_gray((level * 255.0) as u8));
     }

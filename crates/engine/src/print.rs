@@ -459,10 +459,7 @@ pub fn plan(m: &Model, photos: usize) -> Result<Vec<Vec<Option<usize>>>, String>
     let pages: Vec<Vec<Option<usize>>> = if m.image.repeat_one {
         (0..photos).map(|i| vec![Some(i); cells]).collect()
     } else {
-        (0..photos)
-            .step_by(cells)
-            .map(|start| (start..start + cells).map(|i| (i < photos).then_some(i)).collect::<Vec<Option<usize>>>())
-            .collect()
+        (0..photos).step_by(cells).map(|start| (start..start + cells).map(|i| (i < photos).then_some(i)).collect::<Vec<Option<usize>>>()).collect()
     };
     if pages.len() > MAX_PAGES {
         return Err(format!("a print holds at most {MAX_PAGES} pages; select fewer photos or use larger cells"));
@@ -628,11 +625,7 @@ fn prepare_cell(session: &mut Session, m: &Model, id: PhotoId, cell: Rect, proof
     let (bw, bh) = (cell.w.saturating_sub(2 * stroke), cell.h.saturating_sub(strip + 2 * stroke));
     let empty = cell.w == 0 || cell.h == 0;
     let photo = if !empty && bw > 0 && bh > 0 { Some(prepare_photo(session, m, id, bw, bh, proof)?) } else { None };
-    let caption = if !empty && strip > 0 {
-        Some(session.catalog.photo(id).map(|p| p.file_name.clone()).ok_or("no such photo")?)
-    } else {
-        None
-    };
+    let caption = if !empty && strip > 0 { Some(session.catalog.photo(id).map(|p| p.file_name.clone()).ok_or("no such photo")?) } else { None };
     Ok(PreparedCell { cell, strip, stroke, photo, caption })
 }
 

@@ -816,7 +816,9 @@ impl MediaCache {
         }
         // a video's source is its poster frame, cut by the ffmpeg sidecar: its own loader knows the poster time, and the
         // loaders of still images never read the clip
-        if p.kind == MediaKind::Video && let SourceRef::File { loader, .. } = &mut r {
+        if p.kind == MediaKind::Video
+            && let SourceRef::File { loader, .. } = &mut r
+        {
             *loader = Some(crate::video::poster_loader(p, self.activity.clone()));
         }
         r

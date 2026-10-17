@@ -1436,8 +1436,8 @@ mod tests {
     /// The default keymap (no saved changes): each key runs one command, and the keys this change moved are where it says.
     #[test]
     fn default_keymap_gives_each_key_one_command() {
-        use egui::{Key, Modifiers};
         use super::{CONTEXTUAL, Keymap, bindable, binding, parse, shortcut_of};
+        use egui::{Key, Modifiers};
         let keymap = Keymap::new();
         let mut seen: Vec<(Modifiers, Key, &'static str)> = Vec::new();
         for b in bindable() {

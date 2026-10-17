@@ -15,8 +15,10 @@ use rfd::{AsyncFileDialog, FileHandle};
 
 const MAX_PATHS: usize = 512;
 const MAX_PREFERENCES_BYTES: usize = 4 * 1024 * 1024;
-const PHOTO_EXTENSIONS: &[&str] =
-    &["jpg", "jpeg", "png", "tif", "tiff", "webp", "dng", "cr2", "cr3", "nef", "nrw", "arw", "raf", "orf", "rw2", "pef", "psd", "jxl", "avif", "gif", "bmp"];
+const PHOTO_EXTENSIONS: &[&str] = &[
+    "jpg", "jpeg", "png", "tif", "tiff", "webp", "dng", "cr2", "cr3", "nef", "nrw", "arw", "raf", "orf", "rw2", "pef", "psd", "jxl", "avif", "gif",
+    "bmp",
+];
 const PRESET_EXTENSIONS: &[&str] = &["lcpreset", "xmp", "lrtemplate", "zip", "dng", "lmp", "mplumpack", "cube"];
 
 /// Previous desktop IDs & egui settings, in precedence order. Sources stay unchanged.

@@ -1187,10 +1187,9 @@ impl LightcraftApp {
         if self.gpu_applied != Some(self.ui.settings.gpu) {
             self.gpu_applied = Some(self.ui.settings.gpu);
             let power = if self.ui.settings.gpu_low_power { "low" } else { "high" };
-            let _ = self.session.execute(
-                "app.gpu",
-                &serde_json::json!({"enabled": self.ui.settings.gpu, "power": power, "adapter": self.ui.settings.gpu_adapter}),
-            );
+            let _ = self
+                .session
+                .execute("app.gpu", &serde_json::json!({"enabled": self.ui.settings.gpu, "power": power, "adapter": self.ui.settings.gpu_adapter}));
             // GPU device + kernels off the UI thread, once the window is up and only when GPU
             // rendering is on: a broken driver must not keep the window from appearing (issue #136)
             if self.ui.settings.gpu {

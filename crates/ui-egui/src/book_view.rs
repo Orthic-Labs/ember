@@ -110,11 +110,7 @@ pub fn neighbour(view: View, page: usize, pages: usize, forward: bool) -> Option
         View::Page => page.checked_sub(1),
         View::Spread => {
             let spread = spread_of(page);
-            if forward {
-                (spread + 1 < spread_count(pages)).then(|| spread_start(spread + 1))
-            } else {
-                spread.checked_sub(1).map(spread_start)
-            }
+            if forward { (spread + 1 < spread_count(pages)).then(|| spread_start(spread + 1)) } else { spread.checked_sub(1).map(spread_start) }
         }
         View::Overview => None,
     }
@@ -168,7 +164,10 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     }
     let typing = ctx.memory(|m| m.focused().is_some());
     let (back, forward) = ctx.input(|i| {
-        (i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::PageUp), i.key_pressed(egui::Key::ArrowRight) || i.key_pressed(egui::Key::PageDown))
+        (
+            i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::PageUp),
+            i.key_pressed(egui::Key::ArrowRight) || i.key_pressed(egui::Key::PageDown),
+        )
     });
     let mut target: Option<usize> = None;
     if !typing && back {

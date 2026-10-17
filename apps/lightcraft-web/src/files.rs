@@ -301,8 +301,11 @@ mod tests {
         let f = Files::default();
         assert_eq!(f.durability(), Durability::Durable);
         assert!(!f.begin_flush(), "nothing to flush");
-        f.append("catalog.log", b"1
-");
+        f.append(
+            "catalog.log",
+            b"1
+",
+        );
         assert_eq!(f.durability(), Durability::Pending);
         assert!(f.is_pending());
         assert!(f.begin_flush());
@@ -311,8 +314,11 @@ mod tests {
         let ops = f.take_dirty();
         assert_eq!(f.durability(), Durability::Pending);
         // a write made while flushing needs another round
-        f.append("catalog.log", b"2
-");
+        f.append(
+            "catalog.log",
+            b"2
+",
+        );
         f.end_flush();
         assert!(f.begin_flush(), "dirty again, so a new flush may start");
         f.failed(&ops);

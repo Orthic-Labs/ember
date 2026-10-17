@@ -269,8 +269,9 @@ fn parse_prop<'a>(b: &Bx<'a>) -> Result<Prop<'a>> {
             let (_, _, x) = full(b.body)?;
             Prop::AuxC(Rd::new(x).cstr())
         }
-        b"av1C" | b"pixi" | b"pasp" | b"clli" | b"mdcv" | b"cclv" | b"a1op" | b"a1lx" | b"lsel" | b"altt" | b"cmin" | b"cmex"
-        | b"rloc" => Prop::Ignored,
+        b"av1C" | b"pixi" | b"pasp" | b"clli" | b"mdcv" | b"cclv" | b"a1op" | b"a1lx" | b"lsel" | b"altt" | b"cmin" | b"cmex" | b"rloc" => {
+            Prop::Ignored
+        }
         k => Prop::Other(*k),
     })
 }
@@ -648,9 +649,11 @@ impl<'a> Container<'a> {
     }
 
     fn alpha_of(&self, id: u32) -> Option<u32> {
-        self.refs.iter().filter(|r| &r.kind == b"auxl" && r.to.contains(&id)).map(|r| r.from).find(|&a| {
-            self.item(a).is_some_and(|it| self.props_of(it).iter().any(|(p, _)| matches!(p, Prop::AuxC(u) if u.ends_with(b":alpha"))))
-        })
+        self.refs
+            .iter()
+            .filter(|r| &r.kind == b"auxl" && r.to.contains(&id))
+            .map(|r| r.from)
+            .find(|&a| self.item(a).is_some_and(|it| self.props_of(it).iter().any(|(p, _)| matches!(p, Prop::AuxC(u) if u.ends_with(b":alpha")))))
     }
 
     /// Exif (TIFF structure) and XMP linked to the image by `cdsc`; unreadable blocks are skipped.

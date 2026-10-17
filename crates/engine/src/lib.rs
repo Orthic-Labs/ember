@@ -21,10 +21,10 @@ pub mod auto_measure;
 pub mod availability;
 pub mod book;
 pub mod branding;
+pub mod cache_location;
 pub mod camera_calibration;
 pub(crate) mod camera_preview;
 pub mod camera_profiles;
-pub mod cache_location;
 pub mod cmd;
 pub mod config;
 pub mod contact_sheet;
@@ -78,8 +78,8 @@ pub mod slideshow;
 pub mod smart;
 pub mod sync;
 pub mod video;
-pub mod video_player;
 mod video_capture;
+pub mod video_player;
 mod view;
 pub mod walk;
 
@@ -1091,11 +1091,11 @@ mod tests;
 #[cfg(test)]
 mod tests_ai_update;
 #[cfg(test)]
-mod tests_auto_apply;
-#[cfg(test)]
 mod tests_album_order;
 #[cfg(test)]
 mod tests_albums_local;
+#[cfg(test)]
+mod tests_auto_apply;
 #[cfg(test)]
 mod tests_color;
 #[cfg(test)]
@@ -1160,8 +1160,8 @@ mod tests_sync;
 #[cfg(test)]
 mod tests_video;
 #[cfg(test)]
-mod tests_video_player;
-#[cfg(test)]
 mod tests_video_capture;
+#[cfg(test)]
+mod tests_video_player;
 #[cfg(test)]
 mod tests_xmp;

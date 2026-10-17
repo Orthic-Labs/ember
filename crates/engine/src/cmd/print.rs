@@ -91,12 +91,7 @@ fn save_template(s: &mut Session, p: &Value) -> Result<Value> {
     const ID: &str = "print.saveTemplate";
     let name = name_key(p, "name", ID)?;
     check_user_name(ID, name)?;
-    let t = PrintTemplate {
-        name: name.to_string(),
-        layout: s.print.layout.clone(),
-        image: s.print.image.clone(),
-        package: s.print.package.clone(),
-    };
+    let t = PrintTemplate { name: name.to_string(), layout: s.print.layout.clone(), image: s.print.image.clone(), package: s.print.package.clone() };
     match s.print_templates.iter_mut().find(|x| x.name.eq_ignore_ascii_case(name)) {
         Some(x) => *x = t,
         None => s.print_templates.push(t),

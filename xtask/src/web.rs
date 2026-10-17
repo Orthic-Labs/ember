@@ -166,7 +166,9 @@ pub fn run(args: &[&str]) -> Result<(), String> {
     match serve {
         Some(port) => serve_dir(&out, port),
         None => {
-            println!("serve it with `cargo run -p xtask -- web --serve` (or any static HTTP server; see docs/web.md) and open http://127.0.0.1:8080/");
+            println!(
+                "serve it with `cargo run -p xtask -- web --serve` (or any static HTTP server; see docs/web.md) and open http://127.0.0.1:8080/"
+            );
             Ok(())
         }
     }

@@ -90,11 +90,8 @@ impl LiveStroke {
             }
         }
         // the dabs' factors (none without pressure: the brush as set), as the committed stroke has them
-        let factors: Vec<(f64, f32)> = if pressure.is_empty() {
-            Vec::new()
-        } else {
-            pen.iter().map(|&p| pressure_factors(p, pressure_size, pressure_flow)).collect()
-        };
+        let factors: Vec<(f64, f32)> =
+            if pressure.is_empty() { Vec::new() } else { pen.iter().map(|&p| pressure_factors(p, pressure_size, pressure_flow)).collect() };
         self.placed = points.len();
         for (k, d) in dabs.into_iter().enumerate() {
             if !(d.x.is_finite() && d.y.is_finite()) {

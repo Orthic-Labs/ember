@@ -294,7 +294,9 @@ mod tests {
     /// A Dynamic Depth file: the primary JPEG, then the confidence map and the depth map, appended.
     fn dynamic_file(items: &[(&str, &[u8], u64)], format: &str) -> Vec<u8> {
         let mut dir = String::from("><Device:Container><Container:Directory><rdf:Seq>");
-        dir.push_str("<rdf:li rdf:parseType=\"Resource\"><Container:Item Item:Mime=\"image/jpeg\" Item:Semantic=\"Primary\" Item:Length=\"0\"/></rdf:li>");
+        dir.push_str(
+            "<rdf:li rdf:parseType=\"Resource\"><Container:Item Item:Mime=\"image/jpeg\" Item:Semantic=\"Primary\" Item:Length=\"0\"/></rdf:li>",
+        );
         for (semantic, data, padding) in items {
             dir.push_str(&format!(
                 "<rdf:li rdf:parseType=\"Resource\"><Container:Item Item:Mime=\"image/png\" Item:Semantic=\"{semantic}\" Item:Length=\"{}\" Item:Padding=\"{padding}\"/></rdf:li>",

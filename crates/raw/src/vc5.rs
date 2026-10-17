@@ -968,14 +968,7 @@ mod tests {
     fn known_codewords_decode() {
         let book = Codebook::build().unwrap();
         // (bits, length, run, value) from codebook 17: m0, m1, m2, z12, z20 and the band-end marker c256
-        let known = [
-            (0x0u64, 1, 1, 0),
-            (0x2, 2, 1, 1),
-            (0x7, 3, 1, 2),
-            (0x69, 7, 12, 0),
-            (0xD1, 8, 20, 0),
-            (0x03114BA3, 26, 0, 1),
-        ];
+        let known = [(0x0u64, 1, 1, 0), (0x2, 2, 1, 1), (0x7, 3, 1, 2), (0x69, 7, 12, 0), (0xD1, 8, 20, 0), (0x03114BA3, 26, 0, 1)];
         for (bits, size, run, value) in known {
             let mut w = BitWriter::default();
             w.put(bits, size);

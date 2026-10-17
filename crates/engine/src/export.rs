@@ -464,11 +464,8 @@ fn watermark_coverage(
     }
     let fonts = watermark_fonts(craft);
     let Some(latin) = fonts.first() else { return };
-    let vertical_data: Vec<_> = if wm.vertical {
-        fonts.iter().map(|font| harfrust::Font::new(font.font_data().to_vec(), 0)).collect()
-    } else {
-        Vec::new()
-    };
+    let vertical_data: Vec<_> =
+        if wm.vertical { fonts.iter().map(|font| harfrust::Font::new(font.font_data().to_vec(), 0)).collect() } else { Vec::new() };
     let short = width.min(height) as f32;
     let px = (wm.size.clamp(0.005, 0.5) * short).max(6.0 * floor_scale);
     let mut glyphs = Vec::new();

@@ -48,7 +48,9 @@ fn shape_from(kind: &str, p: &Value, c: &str) -> Result<MaskShape> {
         other => {
             return Err(bad(
                 c,
-                format!("unknown mask kind `{other}` (brush|linear|radial|sky|subject|background|luminanceRange|depthRange|colorRange|object|prompt)"),
+                format!(
+                    "unknown mask kind `{other}` (brush|linear|radial|sky|subject|background|luminanceRange|depthRange|colorRange|object|prompt)"
+                ),
             ));
         }
     })
