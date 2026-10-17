@@ -4,6 +4,10 @@ mod menu;
 mod preferences;
 #[path = "services.rs"]
 mod services;
+#[path = "rk_device.rs"]
+mod rk_device;
+#[path = "rk_logs.rs"]
+mod rk_logs;
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
@@ -1075,9 +1079,17 @@ pub fn run() {
             tauri_commands::lc_merge_preview_cancel,
             tauri_commands::lc_preview_ack,
             tauri_commands::lc_native,
-            tauri_commands::lc_preferences
+            tauri_commands::lc_preferences,
+            rk_device::tauri_commands::secure_device_id_get_or_create,
+            rk_logs::rightkit_logs_write,
+            rk_logs::rightkit_logs_collect,
+            rk_logs::rightkit_logs_clear
         ])
         .setup(move |app| {
+            // Local event log (rightkit-logs, M15): before anything else logs.
+            if let Ok(dir) = app.handle().path().app_data_dir() {
+                rk_logs::install(&dir);
+            }
             let (options, _library, migration_warning) = startup_options(app.handle());
             let config = preferences_path(app.handle());
             let preferences = Preferences::load(config);
