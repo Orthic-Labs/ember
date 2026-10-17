@@ -125,7 +125,7 @@ checked, and Canon, the largest bucket, is the weakest of the big four.
 | ARW | packed 12-bit (A900) | ✅ | one CC0 file; A850 unmeasured |
 | ARW | ARW6 Compressed / HQ (compression 32766; ILCE-7RM6) | ✅ | 8 CC0 files; 12-bit mode unsupported; `docs/arw6-compression.md` |
 | ARW | 12-bit compressed of DSLR-A200…A390 | ⬜ | preview (#535) [#163](https://github.com/Orthic-Labs/ember/issues/163) |
-| ARW | A100 ARW; SRF (F828, V3) | ⬜ | refused (#702); SRF not imported [#164](https://github.com/Orthic-Labs/ember/issues/164) |
+| ARW | A100 ARW; SRF (F828, V3) | ⬜ | recognised as Sony raws since #702 (`probe` in `lib.rs`), so they import as preview only: `arw.rs` finds no CFA image IFD ("old ARW or SR2") and the raw data is not decoded; SRF V3 not looked at [#164](https://github.com/Orthic-Labs/ember/issues/164) |
 | ARW | ARQ pixel shift | ⬜ | no code [#165](https://github.com/Orthic-Labs/ember/issues/165) |
 | SR2 | DSC-R1 | ✅ | CC0 3221 sample |
 | RAF | uncompressed, lossless and lossy compressed; Bayer and X-Trans; GFX 14/16-bit | ✅ | 24 files from 13 bodies exact |
@@ -146,7 +146,7 @@ checked, and Canon, the largest bucket, is the weakest of the big four.
 | 3FR / FFF | Hasselblad compression | ✅ | lossless JPEG with scan selection value 8 (`ljpeg::decode_hasselblad`; every FFF, H3D, H4D, CFV-50c 3FR): 32-bit little-endian words, sample pairs coded as two categories then two differences; rule measured on 14 CC0 files, then the full frames of H3D, CFV-50c (3FR and FFF) and H4D-50 re-decoded by an independent re-implementation (green rank correlation with the preview 0.97 to 0.99, RGGB colour agreement 0.80 to 0.95, other layouts at most -0.04); pinned in `corpus_hasselblad_3fr_fff`. Per-model counts above not re-measured [#172](https://github.com/Orthic-Labs/ember/issues/172) |
 | IIQ, MOS, MRW, ERF, KDC, X3F | all | ⬜ | preview; an uncompressed MOS, whose IFD0 is the mosaic itself with no Make tag, is recognised by Leaf's data block `0x8606` (upstream #1275) [#173](https://github.com/Orthic-Labs/ember/issues/173) |
 | IIQ, MOS, MRW, ERF, KDC, X3F | all | ⬜ | preview [#174](https://github.com/Orthic-Labs/ember/issues/174) |
-| DCR, MEF, MFW, DXO, TIFF raws | all | ⬜ | not imported [#175](https://github.com/Orthic-Labs/ember/issues/175) |
+| DCR, MEF, MFW, DXO, TIFF raws | all | ⬜ | not imported; the TIFF raws that are decoded have their own rows (Hasselblad 3FR / FFF above, Kodak DCS520C `vendor/kodak.rs`, GoPro GPR) [#175](https://github.com/Orthic-Labs/ember/issues/175) |
 
 ### Compressed ORF: a clean-room starting point
 
@@ -268,6 +268,7 @@ Beyond decoding:
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | Audit of the open raw-parity rows against main: ARW A100 / SRF and the TIFF-raw row described as refused or not imported although they are recognised (preview only) or have decoded members; no decode status changed |
 | 2026-10-17 | minor | Hasselblad 3FR / FFF rows to ✅ (#171, #172): four CC0 files (X1D uncompressed, H3D and CFV-50c 3FR, H4D-50 FFF) pinned by sha256 in the corpus list and checked against the RGB preview in IFD0; the corpus test accepts an RGB-only preview for them. Per-model counts (Hasselblad row, medium-format bucket) not re-measured |
 | 2026-10-17 | minor | Vignetting / lateral CA from maker notes (#242): a maker-neutral radial table model, the opt-in "Use camera lens corrections" develop setting and the Fujifilm vignetting table (CA decoded, not applied; Sony, Panasonic and Olympus skipped: no documented table layout), `docs/camera-lens-tables.md`; lens score unchanged |
 | 2026-10-17 | minor | GoPro GPR decoded (#170): a DNG whose raw data is one VC-5 stream (SMPTE ST 2073, compression 9), in pure safe Rust ported from GoPro's reference decoder (Apache-2.0 OR MIT; NOTICE), RGGB 14-bit and GBRG 12-bit; the nine GoPro models move from unsupported to unverified (951 unverified, 27 unsupported, none of the 754 models added since 2017 unsupported); the algorithm was checked in a Python model on the five public GoPro samples (HERO5, 6, 7, 9 and Fusion) and the model's mosaic hashes are pinned in `crates/raw/tests/gpr_corpus.rs`, CI verification pending |
