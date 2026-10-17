@@ -446,6 +446,28 @@ fn auto_import_watched_folder() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A watcher event may fire several times for one arrival (duplicate hints): a repeated scan of the
+/// same listing reports the file as pending until its size holds, imports it once, and never again.
+#[test]
+fn auto_import_duplicate_scans_import_once_and_report_pending() {
+    let dir = temp_dir("watch-dup");
+    let mut s = Session::new().with_fs();
+    s.execute("library.autoImport", &json!({"folder": dir.to_string_lossy()})).unwrap();
+    write_png(&dir.join("dup.png"), 7);
+    let first = s.execute("library.autoImportScan", &json!({})).unwrap();
+    assert_eq!(first["pending"], json!(1), "{first}");
+    assert_eq!(first["imported"], json!([]));
+    let second = s.execute("library.autoImportScan", &json!({})).unwrap();
+    assert_eq!(second["imported"].as_array().unwrap().len(), 1, "{second}");
+    for _ in 0..3 {
+        let again = s.execute("library.autoImportScan", &json!({})).unwrap();
+        assert_eq!(again["imported"], json!([]), "{again}");
+        assert_eq!(again["pending"], json!(0), "{again}");
+    }
+    assert_eq!(s.catalog.len(), 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Smart previews: with the original offline the photo still renders (and edits apply) from
 /// its proxy; without the proxy it can't be opened.
 #[test]

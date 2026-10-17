@@ -1388,7 +1388,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Auto Import Settings",
             [],
             None,
-            "{folder?: path | null (off), copy?: bool (copy into the library's Originals, else add in place), album?: name | null} — a watched folder whose new photos are added as they arrive (library.autoImportScan; the app scans every few seconds) → the settings",
+            "{folder?: path | null (off), copy?: bool (copy into the library's Originals, else add in place), album?: name | null} — a watched folder whose new photos are added as they arrive (library.autoImportScan; the app scans when the folder changes, via rightkit-file-watch) → the settings",
             always,
             |s, p| {
                 if let Some(f) = p.get("folder") {
@@ -1414,7 +1414,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Auto Import Now",
             [],
             None,
-            "{listing?: [[path, size]] (the folder as listed by the caller, e.g. on a worker thread), start?: bool (false: return the `library.import` params as `import` instead of importing)} — add the watched folder's new photos (files the library doesn't have yet; partial / still-copying files wait for the next scan) → {imported, folder, warnings?: [{path, code, profile?, mode?, fields?}], import?}",
+            "{listing?: [[path, size]] (the folder as listed by the caller, e.g. on a worker thread), start?: bool (false: return the `library.import` params as `import` instead of importing)} — add the watched folder's new photos (files the library doesn't have yet; partial / still-copying files wait for the next scan) → {imported, folder, pending (files seen but not yet stable: scan again soon), warnings?: [{path, code, profile?, mode?, fields?}], import?}",
             always,
             |s, p| {
                 let Some(folder) = s.import_defaults.auto_folder.clone() else { return Ok(json!({"imported": [], "folder": null})) };
@@ -1433,6 +1433,7 @@ pub fn specs() -> Vec<CommandSpec> {
                     None => list_auto_import_folder(&folder).map_err(|e| bad("library.autoImportScan", e))?,
                 };
                 let mut fresh = Vec::new();
+                let mut pending = 0_u64;
                 for (ps, size) in listing {
                     if known.contains(&ps) {
                         continue;
@@ -1444,10 +1445,12 @@ pub fn specs() -> Vec<CommandSpec> {
                     let seen = s.auto_import_seen.insert(ps.clone(), size);
                     if size > 0 && seen == Some(size) {
                         fresh.push(ps);
+                    } else {
+                        pending = pending.saturating_add(1);
                     }
                 }
                 if fresh.is_empty() {
-                    return Ok(json!({"imported": [], "folder": folder}));
+                    return Ok(json!({"imported": [], "folder": folder, "pending": pending}));
                 }
                 let mode = if s.import_defaults.auto_copy { "copy" } else { "add" };
                 // a photo deleted from the library doesn't come back on its own because its file
@@ -1464,13 +1467,13 @@ pub fn specs() -> Vec<CommandSpec> {
                 }
                 if p.get("start").and_then(Value::as_bool) == Some(false) {
                     // the caller imports them (the app: on a worker thread)
-                    return Ok(json!({"imported": [], "folder": folder, "import": params}));
+                    return Ok(json!({"imported": [], "folder": folder, "import": params, "pending": pending}));
                 }
                 let sel = s.selection.clone();
                 let r = s.execute("library.import", &params)?;
                 // arriving photos don't take over the selection
                 s.selection = sel;
-                let mut result = json!({"imported": r["imported"], "folder": folder});
+                let mut result = json!({"imported": r["imported"], "folder": folder, "pending": pending});
                 if let Some(warnings) = r.get("warnings") {
                     result["warnings"] = warnings.clone();
                 }
