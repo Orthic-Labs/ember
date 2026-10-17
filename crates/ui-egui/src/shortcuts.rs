@@ -839,16 +839,6 @@ mod tests {
         assert!(h.app.ui.top_bar && h.app.ui.filmstrip);
     }
 
-    /// The first button or icon on screen (after a frame): a click focuses it.
-    fn first_control(h: &crate::headless::Headless) -> String {
-        h.app.widgets.iter().find(|(w, _)| w.starts_with("button:") || w.starts_with("icon:")).map(|(w, _)| w.clone()).expect("a control on screen")
-    }
-
-    fn click(h: &mut crate::headless::Headless, id: &str) {
-        let r = h.request("ui.clickWidget", json!({"id": id}), std::time::Duration::from_secs(20));
-        assert_eq!(r["ok"], true, "{r}");
-    }
-
     fn focused(h: &crate::headless::Headless) -> Option<egui::Id> {
         h.view.ctx.memory(|m| m.focused())
     }
@@ -857,11 +847,13 @@ mod tests {
     fn ctrl_tab_walks_focus_between_controls_and_plain_tab_keeps_the_panel_toggle() {
         let mut h = library();
         h.step();
-        let first = first_control(&h);
-        click(&mut h, &first);
-        let before = focused(&h);
-        assert!(before.is_some(), "clicking {first} gives it keyboard focus");
+        // egui does not focus a button on a mouse click, so the first Ctrl+Tab lands on the first control
+        assert!(focused(&h).is_none(), "nothing has keyboard focus yet");
         let (top, left) = (h.app.ui.top_bar, h.app.ui.left_panel);
+        let r = h.request("ui.key", json!({"key": "Tab", "ctrl": true}), std::time::Duration::from_secs(20));
+        assert_eq!(r["ok"], true, "{r}");
+        let before = focused(&h);
+        assert!(before.is_some(), "Ctrl+Tab gives the first control keyboard focus");
         let r = h.request("ui.key", json!({"key": "Tab", "ctrl": true}), std::time::Duration::from_secs(20));
         assert_eq!(r["ok"], true, "{r}");
         let after = focused(&h);

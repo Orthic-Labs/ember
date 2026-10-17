@@ -81,7 +81,7 @@ fn apply_sets_exactly_the_reviewed_flags_in_one_undo_step() {
     let before = flags(&app);
     let undo = app.session.undo.len();
     cull_review::apply(&mut app).expect("apply starts");
-    assert_eq!(settle(&mut app), None);
+    assert_eq!(settle(&mut app), Some("Applied 1 culling flags".to_string()), "a finished apply says how many flags it set");
     assert_eq!(app.session.undo.len(), undo + 1, "one undo step for the whole apply");
     for ((id, before_flag), (_, after_flag)) in before.iter().zip(flags(&app)) {
         let expected = if *id == kept_id { expected_flag } else { *before_flag };

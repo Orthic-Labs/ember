@@ -1013,8 +1013,9 @@ mod tests {
         h.request("engine.execute", json!({"command": "view.autoAdvance"}), t);
         assert!(h.app.ui.auto_advance);
         h.request("ui.key", json!({"key": "5"}), t);
-        h.request("ui.key", json!({"key": "p"}), t);
-        assert_eq!((rating(&h, vis[3]), flag(&h, vis[4])), (5, lightcraft_catalog::Flag::Pick));
+        // P is the Photos panel in the default keymap (Pick is Z in the grids), so the survey rejects with X
+        h.request("ui.key", json!({"key": "x"}), t);
+        assert_eq!((rating(&h, vis[3]), flag(&h, vis[4])), (5, lightcraft_catalog::Flag::Reject));
         assert_eq!(h.app.session.selection.active.map(|p| p.0), Some(vis[5]));
         assert_eq!(h.app.session.selection.ids.len(), 3, "the survey keeps its selection");
         let img = h.snapshot(SETTLE);
