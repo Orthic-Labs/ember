@@ -339,7 +339,7 @@ fn tiff_samples_narrower_than_a_byte() {
         assert!(d.grayscale);
         let clear_bit = 1.0 - set_bit;
         for x in 0..10 {
-            let want = (if x % 2 == 0 { set_bit } else { clear_bit }, if x == 9 { set_bit } else { clear_bit });
+            let want = (if x.is_multiple_of(2) { set_bit } else { clear_bit }, if x == 9 { set_bit } else { clear_bit });
             assert!((gray(&d, x, 0) - want.0).abs() < 1e-6, "row 0, x {x}, photometric {photometric}");
             assert!((gray(&d, x, 1) - want.1).abs() < 1e-6, "row 1, x {x}, photometric {photometric}");
         }

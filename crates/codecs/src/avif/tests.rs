@@ -286,7 +286,7 @@ fn every_prefix_and_every_flipped_byte_is_handled() {
     let f = fake(40, 24, vec![irot(1), nclx(1, 13, 6)]);
     for n in 0..f.len() {
         let _ = header(&f[..n]);
-        if n % 9 == 0 {
+        if n.is_multiple_of(9) {
             let _ = decode(&f[..n], &opts());
         }
     }
@@ -294,7 +294,7 @@ fn every_prefix_and_every_flipped_byte_is_handled() {
         let mut g = f.clone();
         g[at] ^= 0xFF;
         let _ = header(&g);
-        if at % 11 == 0 {
+        if at.is_multiple_of(11) {
             let _ = decode(&g, &opts());
         }
     }
@@ -622,13 +622,13 @@ fn colour_description_and_metadata_are_carried() {
     assert!(matches!(decode(&f, &opts()), Err(Error::Unsupported(Format::Avif, _))));
     // Exif (offset 0 to the TIFF header) and XMP, linked to the image by cdsc
     let mut exif = vec![0, 0, 0, 0];
-    exif.extend_from_slice(b"II*          ");
+    exif.extend_from_slice(b"II*\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00");
     let xmp = b"<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"/>";
     let mut b = B::new(1, vec![it(1, b"av01", &payload, vec![ispe(16, 16)]), it(2, b"Exif", &exif, vec![]), mime(3, "application/rdf+xml", xmp)]);
     b.refs.push((*b"cdsc", 2, vec![1]));
     b.refs.push((*b"cdsc", 3, vec![1]));
     let d = decode(&b.build(), &opts()).unwrap();
-    assert!(d.exif.as_deref().is_some_and(|e| e.starts_with(b"II* ")));
+    assert!(d.exif.as_deref().is_some_and(|e| e.starts_with(b"II*\x00")));
     assert!(d.xmp.as_deref().is_some_and(|x| x.contains("xmpmeta")));
     // a mime item of another type is not XMP
     let mut b = B::new(1, vec![it(1, b"av01", &payload, vec![ispe(16, 16)]), mime(3, "text/plain", xmp)]);
