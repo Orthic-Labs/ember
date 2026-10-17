@@ -5,6 +5,7 @@ import { acknowledgePreview, cancelMergePreview, convertFileSrc, requestMergePre
 import { useDesktop } from '../desktop';
 import { ImportCandidatePreview } from '../preview/ImportCandidatePreview';
 import { CullReviewDialog } from './CullReviewDialog';
+import { openLegalDocument } from '../legal';
 import type { DesktopContextValue, DialogState, JsonObject, MergePreviewDescriptor, UiState } from '../types';
 import './dialogs.css';
 
@@ -857,6 +858,7 @@ function InfoDialog({ kind, desktop, d }: { kind: string; desktop: DesktopContex
       <img className="lc-app-mark" src={APP_ICON_URL} alt="" /><h3>{APP_NAME}</h3><p>Native photo library & non-destructive developer.</p>
       <small>Ember, maintained by Orthic Labs & contributors.</small>
       <small>Open source · version {text(credits?.version, text(d.params?.version, '0.2.1'))}</small>
+      <div className="lc-dialog-toolbar" style={{ justifyContent: 'center' }}><Button onClick={() => openLegalDocument('ember-privacy-notice')}>Privacy Notice</Button><Button onClick={() => openLegalDocument('ember-licences')}>Licences and notices</Button></div>
       {credits ? <>
         <details className="lc-details" open><summary>Contributors ({contributors.length})</summary><ul>{contributors.map((value, i) => {
           const contributor = value && typeof value === 'object' ? value as AnyRecord : {};
