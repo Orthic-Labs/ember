@@ -5,8 +5,7 @@ use lightcraft_color::{D65, Mat3, Xy};
 use lightcraft_raw::opcodes::{Area, Opcode};
 use lightcraft_raw::{
     BlackLevel, Cfa, ColorData, DngCompression, DngWriteOptions, Method, OpcodeLists, Orientation, RawData, RawFormat, RawImage, Rect, decode,
-    embedded_preview, probe, write_dng,
-    write_dng_with_preview,
+    embedded_preview, probe, write_dng, write_dng_with_preview,
 };
 use lightcraft_tiff::tags::{self as t, compression, photometric};
 use lightcraft_tiff::{ByteOrder, IfdBuilder, ImageData, TiffWriter, Value};

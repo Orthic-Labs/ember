@@ -442,7 +442,7 @@ fn read_highpass(payload: &[u8], w: usize, h: usize, book: &Codebook) -> Result<
         pos = end;
     }
     let (count, value) = book.read(&mut bits)?;
-    if count != 0 && value != 1 {
+    if count != 0 || value != 1 {
         return Err(bad("a band lacks its end marker"));
     }
     Ok(band)

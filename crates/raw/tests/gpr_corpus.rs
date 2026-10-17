@@ -75,8 +75,10 @@ fn gopro_gpr_samples_decode_to_the_reference_mosaic() {
         assert_eq!(raw.info(), probe_info(&bytes).unwrap(), "{name}");
         let RawData::U16(samples) = &raw.data else { panic!("{name}: integer sensor data expected") };
         assert!(samples.iter().all(|&v| v <= 16383), "{name}: a sample above the 14-bit white level");
-        let actual =
-            samples.iter().flat_map(|v| v.to_le_bytes()).fold(0xcbf2_9ce4_8422_2325u64, |h, byte| (h ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3));
+        let actual = samples
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .fold(0xcbf2_9ce4_8422_2325u64, |h, byte| (h ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3));
         assert_eq!(actual, hash, "{name}: the decoded mosaic differs from the reference model");
     }
 }

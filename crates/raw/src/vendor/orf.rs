@@ -175,7 +175,7 @@ fn field_rows(strips: &[(u64, u64)], w: usize, h: usize, file_len: usize) -> Opt
     let mut gaps = 0;
     let mut end = None;
     for &(offset, len) in strips {
-        let next_end = offset.checked_add(len).filter(|e| len > 0 && len % rb as u64 == 0 && *e <= file_len as u64)?;
+        let next_end = offset.checked_add(len).filter(|e| len > 0 && len.is_multiple_of(rb as u64) && *e <= file_len as u64)?;
         match end {
             Some(e) if offset < e => return None,
             // the gap must be the field seam

@@ -243,7 +243,7 @@ fn tag2010_wb(model: &str, block: &[u8], order: lightcraft_tiff::ByteOrder) -> O
 /// DSLR-A900 sample this is the whole strip (36 917 760 = 6080 × 4048 × 1.5) and it ends at the end of the file.
 fn is_packed12(info: &ImageInfo, strip_count: usize, strip_len: u64) -> bool {
     let (w, h) = (info.width as u64, info.height as u64);
-    info.bits() == 12 && strip_count == 1 && w % 2 == 0 && w > 0 && h > 0 && strip_len == w * h * 3 / 2
+    info.bits() == 12 && strip_count == 1 && w.is_multiple_of(2) && w > 0 && h > 0 && strip_len == w * h * 3 / 2
 }
 
 /// Unpack plain 12-bit samples stored least-significant-bit first: two pixels per three bytes, the first being
@@ -515,7 +515,7 @@ fn sr2_kelvin_presets(sr2: &super::sr2::SubIfd) -> Option<crate::kelvin_presets:
 fn sr2_old_crop(sr2: &super::sr2::SubIfd, w: usize, h: usize) -> Option<Rect> {
     let v = sr2.shorts(SR2_OLD_CROP).filter(|v| v.len() == 4)?;
     let [x0, y0, x1, y1] = [v[0] as usize, v[1] as usize, v[2] as usize, v[3] as usize];
-    (x0 % 2 == 0 && y0 % 2 == 0 && x1 > x0 && y1 > y0 && x1 <= w && y1 <= h).then(|| Rect::new(x0, y0, x1 - x0, y1 - y0))
+    (x0.is_multiple_of(2) && y0.is_multiple_of(2) && x1 > x0 && y1 > y0 && x1 <= w && y1 <= h).then(|| Rect::new(x0, y0, x1 - x0, y1 - y0))
 }
 
 /// One black level from the four deciphered per-channel levels (their mean), when they are near-equal and plausible.
