@@ -9,7 +9,8 @@ Code: `tools/train-denoise/` (Python, PyTorch; tooling, not product code, never 
 | Piece | File | Mirrors |
 | --- | --- | --- |
 | Licence manifest and gate | `datasets.json`, `ember_denoise/manifest.py` | policy: CC0, CC-BY or similar only |
-| Raw to RGGB mosaic corpus, split | `ember_denoise/prepare.py`, `splits.py` | `split.rs` (same salt, same hash rule) |
+| Raw to RGGB mosaics with Ember's own decoder (Rust) | `denoise-train export-mosaics` (`crates/denoise-train/src/export_mosaics.rs`) | the product's `lightcraft-raw` decode |
+| Corpus index from the mosaics, split | `ember_denoise/prepare.py`, `splits.py` | `split.rs` (same salt, same hash rule) |
 | Noise `y = a·Poisson(x/a) + sqrt(b)·N(0,1)` on the mosaic | `ember_denoise/noise.py` | `noise.rs`, `pipeline::noise` (`var(Y)=a·Y+b`) |
 | Demosaic of noisy and clean mosaic (GPU) | `ember_denoise/demosaic.py` | `data.rs` (Rust uses PPG; see risks) |
 | Pairs, exposure, dihedral, loss weights | `ember_denoise/pairs.py` | `data.rs` |
@@ -44,7 +45,7 @@ Consequence: today the only accepted clean source is the pixls CC0 corpus. It ha
 
 1. **Calibrate the noise prior on real high-ISO raws.** Issue #200 requires this. The corpus tops out near ISO 1250, so the prior's upper half is untested. Fit `(a, b)` per ISO from real raws (rawNIND if its licence page is read and is CC0 or CC-BY, or own raws; `pipeline::noise` fits the same model) and write the ranges to a JSON file of `SensorPrior` fields (`iso_min`, `iso_max`, `base_iso`, `full_well_e`, `read_e`, `adc`). Pass it as `--prior`. Without it `contract.json` says `noise_prior_calibrated: false`, and that must be treated as a gate failure for shipping.
 2. **Decide the demosaic contract.** The product's learned-RGB colour contract is still open (`denoise-qualification.md` gate item 2). Training demosaics noisy mosaics with Malvar-He-Cutler on the GPU; the Rust trainer uses PPG; the product feeds whatever its pipeline demosaics. A mismatch still runs and still scores well on synthetic data, and denoises real data worse. Fix which demosaic the product uses before spending, or accept and record the gap.
-3. **Confirm the rawpy decision.** `prepare.py` reads raws with rawpy (LibRaw bindings) as an external training-machine decoder; nothing of LibRaw enters Ember. The workspace rule is "never copy GPL/LGPL code"; this is dependency use, not copying, but it is flagged for Adrian or Astra to confirm and log in `decisions.md`. The alternative is to export mosaics from `lightcraft-raw` in Rust.
+3. **Export the mosaics with Ember's decoder, no third-party raw decoder** (decision ember-4a: the trainer sees the same decode as the product, and the LGPL question does not arise). The owner builds `denoise-train` through the repo's Rust wrapper (dev profile, owner chat only) and runs `denoise-train export-mosaics --in corpus/raw --out D:\scratch\ember-denoise\mosaics`. Per raw it writes `<sha256>.npy` (uint16 `[h, w]`, black-subtracted, white-normalised, cropped to the RGGB phase) and `<sha256>.json` (CFA pattern before and after the crop, black and white levels, white balance, ISO, make, model); non-Bayer files and undecodable files are listed in `skipped.json`. Do this locally and rsync the mosaics (they are far smaller than building on the instance, which has no cargo); to run it on the instance instead, the binary must be built there by its owner and `--allow-outside-scratch` is needed for an output under `/workspace`.
 4. **Local checks, on the owner machine** (these were not run by the author): `cd tools/train-denoise && python -m pytest -q` (CPU torch is enough; the noise test draws 400 000 samples per case).
 5. **Pins.** `requirements.txt` pins are unverified against the Vast image; run `pip install --dry-run -r requirements.txt` on the instance first.
 
@@ -52,10 +53,10 @@ Consequence: today the only accepted clean source is the pixls CC0 corpus. It ha
 
 Follow `D:\Claude\docs\rules\paid-compute.md` and `vast-access.md`: the billing clock starts at create and ends at destroy; never end a turn with the instance idle; sync evidence off before destroy. Disk preflight: `latest.pt` + `ckpt` x3 are about 35 MB each (2.19 M parameters; weights, EMA and two optimiser moments), the prepared corpus is about 2 bytes per raw pixel (a 24 MP file is 48 MB), so reserve corpus size + 1 GB.
 
-On the owner machine, ship the CC0 corpus (the instance has no cargo and no reason to download):
+On the owner machine, ship the exported mosaics of the CC0 corpus (the instance has no cargo and no reason to download):
 
 ```text
-rsync -a corpus/raw/ <vast>:/workspace/raw/
+rsync -a /d/scratch/ember-denoise/mosaics/ <vast>:/workspace/mosaics/    # export-mosaics output, step 0.3
 rsync -a tools/train-denoise/ <vast>:/workspace/train-denoise/
 rsync -a /d/scratch/ember-denoise/prior.json <vast>:/workspace/prior.json     # step 0 output
 ```
@@ -66,7 +67,7 @@ On the instance, in order:
 cd /workspace/train-denoise
 pip install -r requirements.txt            # keep the image's CUDA torch
 python -m pytest -q
-python -m ember_denoise.prepare --source-id ember-corpus-pixls --raw-dir /workspace/raw --out /workspace/prepared
+python -m ember_denoise.prepare --source-id ember-corpus-pixls --mosaic-dir /workspace/mosaics --out /workspace/prepared
 ```
 
 Smoke (Rule 3 of paid-compute: it must cross the changed transition, here resume): the change is a new trainer, and this smoke crosses train, checkpoint, resume, validate and export because it runs 200 steps, stops, resumes to 400, and exports.

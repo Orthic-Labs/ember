@@ -1,9 +1,10 @@
-//! `denoise-train splits | train | eval`: see `docs/denoise-qualification.md`, "Own-trained denoiser".
+//! `denoise-train splits | train | eval | export-mosaics`: see `docs/denoise-qualification.md`, "Own-trained denoiser".
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 use lightcraft_denoise_train::error::{Error, Result};
 use lightcraft_denoise_train::eval::{EvalConfig, evaluate};
+use lightcraft_denoise_train::export_mosaics::export_dir;
 use lightcraft_denoise_train::model::{NafConfig, NafNet};
 use lightcraft_denoise_train::split::{Split, SplitConfig, SplitManifest, build_manifest};
 use lightcraft_denoise_train::train::{DeviceKind, TrainConfig, require_scratch, train};
@@ -20,6 +21,8 @@ const USAGE: &str = "usage:
                        [--val-permille N] [--heldout-permille N] [--resume] [--allow-outside-scratch]
   denoise-train eval   --weights FILE --out FILE [--corpus DIR] [--device cpu|cuda|metal] [--patch N]
                        [--windows-per-file N] [--allow-outside-scratch]
+  denoise-train export-mosaics --in DIR --out DIR [--allow-outside-scratch]
+                       (decode raws with Ember's decoder into RGGB .npy mosaics + JSON sidecars for tools/train-denoise)
 Outputs go under D:\\scratch (or /Volumes/D/scratch) unless --allow-outside-scratch is given.";
 
 struct Args {
@@ -202,6 +205,22 @@ fn run(tokens: &[String]) -> Result<()> {
             println!("status: {} (see `checks` in {})", report.status, out.display());
             for c in &report.checks {
                 println!("  [{}] {}: {:.5} (threshold {})", if c.pass { "pass" } else { "FAIL" }, c.name, c.value, c.threshold);
+            }
+            Ok(())
+        }
+        "export-mosaics" => {
+            let input = a.required_path("in")?;
+            let out = a.required_path("out")?;
+            require_scratch(&out, a.values.contains_key("allow-outside-scratch"))?;
+            a.flag("allow-outside-scratch");
+            a.finish()?;
+            let s = export_dir(&input, &out)?;
+            println!("wrote {} mosaics to {} ({} skipped, {} duplicates; see skipped.json)", s.written, out.display(), s.skipped.len(), s.duplicates.len());
+            for (p, why) in &s.skipped {
+                println!("  skipped {p}: {why}");
+            }
+            if s.written == 0 {
+                return Err(Error::Data("no usable Bayer raw under the input directory".into()));
             }
             Ok(())
         }

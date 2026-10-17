@@ -10,6 +10,7 @@
 pub mod data;
 pub mod error;
 pub mod eval;
+pub mod export_mosaics;
 pub mod metrics;
 pub mod model;
 pub mod noise;
