@@ -25,8 +25,8 @@ const TRACKED_BYTES_PER_PIXEL: u64 = 4 * 4 * 8;
 /// overhead (group buffers, entropy tables) whatever `max_pixels` is.
 const MIN_TRACKED_BYTES: u64 = 64 << 20;
 
-/// Bytes handed to the header stage at a time (the size `JxlImageBuilder::read` reads in).
-const HEADER_CHUNK: usize = 4096;
+/// Bytes handed to the decoder at a time (the size `JxlImageBuilder::read` reads in).
+const INPUT_CHUNK: usize = 4096;
 
 /// Parses the header, checks the image size against `opts`, and only then reads the frames, with
 /// an allocation budget, so a huge image is refused before any of its pixels are decoded
@@ -38,7 +38,7 @@ fn open(bytes: &[u8], opts: &DecodeOptions) -> Result<JxlImage> {
     // Small slices, as `read` does: whatever the header stage has buffered when it initializes is
     // parsed as frame data right away, so feeding the whole file here would skip the size check.
     let mut rest = bytes;
-    let mut window = HEADER_CHUNK;
+    let mut window = INPUT_CHUNK;
     let mut img = loop {
         let consumed = uninit.feed_bytes(rest.get(..window).unwrap_or(rest)).map_err(err)?;
         rest = rest.get(consumed..).unwrap_or_default();
@@ -55,8 +55,11 @@ fn open(bytes: &[u8], opts: &DecodeOptions) -> Result<JxlImage> {
         }
     };
     check_size(F, img.width() as u64, img.height() as u64, opts)?;
-    while !rest.is_empty() {
-        let consumed = img.feed_bytes(rest).map_err(err)?;
+    // Match `JxlImageBuilder::read`: bounded feeds until the final frame, not merely the first
+    // keyframe. `feed_bytes` copies codestream data into an untracked Vec, including any tail
+    // after the last frame; feeding the remaining file at once bypasses the allocation budget.
+    while !img.is_loading_done() && !rest.is_empty() {
+        let consumed = img.feed_bytes(rest.get(..INPUT_CHUNK).unwrap_or(rest)).map_err(err)?;
         if consumed == 0 {
             break;
         }
