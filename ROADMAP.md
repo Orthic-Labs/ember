@@ -50,7 +50,7 @@ duplicate Local entries #22, black GPU exports on an Intel iGPU #78).
 | Fujifilm raw shooter | ~65% | Uncompressed and lossless/lossy compressed RAF decoded; camera colour calibration remains missing. Verified on 13 bodies, including 14/16-bit GFX; see `docs/raf-compression.md` |
 | Canon CR3 / Olympus compressed-raw shooter | ~45% | CR3 lossless Bayer and version 0x100/0x200 C-RAW develop from sensor data (M50, R100, R8 verified pixel for pixel); other CRX variants and compressed ORF open as embedded JPEG previews. Camera colour and broader model verification remain |
 | Advanced catalog user | ~45% | Print, Book, Map, publish, tethering |
-| Relies on AI (masks, denoise) | ~25% | Object / Describe masks via optional SAM 3 (download not yet hosted); no learned denoise (classical NR with a measured noise model & Auto NR) |
+| Relies on AI (masks, denoise) | ~25% | Object masks via MobileSAM (40.6 MB, Apache-2.0, ungated download), Describe via optional SAM 3 until a grounding model lands (#221); no learned denoise (classical NR with a measured noise model & Auto NR) |
 
 ## Where we're going
 
@@ -75,9 +75,9 @@ Priorities, in order. Each points at tracker rows in [`docs/parity.md`](docs/par
    is in place to build on: closed-loop Auto with public fit targets (a DINOv2 scene head would blend them
    by class probability), a per-photo noise model (the synthetic-noise recipe for training our own denoiser),
    and look targets (the no-training answer to "make it look like these"); see
-   [docs/local-ai-delivery.md](docs/local-ai-delivery.md) → *Learned next steps*. Object / Describe masks now
-   run Meta's SAM 3 in pure Rust (optional, user-consented download under the non-OSI SAM License; CDN mirrors still
-   to be set up, docs/ai-masks.md); Subject / Sky / People and Enhance are still open.
+   [docs/local-ai-delivery.md](docs/local-ai-delivery.md) → *Learned next steps*. Object masks now
+   run MobileSAM in pure Rust (user-consented 40.6 MB download, Apache-2.0, ungated; Meta's SAM 3 stays an optional
+   backend and the only one with text for Describe, docs/ai-masks.md); Subject / Sky / People and Enhance are still open.
 7. **Then:** HDR (Q), the Classic output modules (Print first, then Map view, Book, Slideshow), video (R), localisation
    and accessibility.
 

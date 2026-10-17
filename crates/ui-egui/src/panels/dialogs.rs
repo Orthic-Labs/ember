@@ -260,8 +260,8 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context) {
         Dialog::RemoveFolder { .. } => "Remove Folder from Library",
         Dialog::SynchronizeFolder { .. } => "Synchronize Folder",
         // (nothing to download from in this build: the dialog explains the manual install)
-        Dialog::SamModel { .. } if sam_by_hand(&app.session.segmenter) => "Install the SAM 3 Model",
-        Dialog::SamModel { .. } => "Download the SAM 3 Model?",
+        Dialog::SamModel { .. } if sam_by_hand(&app.session.segmenter) => "Install the AI Mask Model",
+        Dialog::SamModel { .. } => "Download the AI Mask Model?",
         Dialog::About => "About Ember",
         Dialog::Shortcuts => "Keyboard Shortcuts",
         Dialog::ViewOptions => "View Options",
@@ -1489,9 +1489,9 @@ fn sam_by_hand(sam: &lightcraft_engine::segment::Segmenter) -> bool {
 
 const SAM_HELP: &str = "https://github.com/storytold/lightcraft/blob/main/docs/ai-masks.md#getting-the-model";
 
-/// Open the configured SAM 3 folder itself; revealing a file opens its parent instead.
+/// Open the configured model folder itself; revealing a file opens its parent instead.
 pub(crate) fn show_model_folder(app: &mut LightcraftApp) -> Result<serde_json::Value, String> {
-    let dir = app.session.segmenter.dir.as_ref().ok_or("no folder is set for the SAM 3 model")?;
+    let dir = app.session.segmenter.dir.as_ref().ok_or("no folder is set for the AI mask model")?;
     let path = dir.to_str().ok_or("the model folder path is not valid UTF-8")?;
     let open = app.services.open_with.as_mut().ok_or("opening model folders is not available here")?;
     // Create only after the host action is available. Existing model files are left alone.
@@ -1517,37 +1517,41 @@ pub(crate) fn show_model_folder(app: &mut LightcraftApp) -> Result<serde_json::V
     Ok(json!({"path": path}))
 }
 
-/// The SAM 3 dialog: what the model is, its size and licence, and the download's progress.
+/// The AI mask model dialog: what the model is (MobileSAM by default), its size and licence, and the download's progress.
 fn sam_model_body(app: &mut LightcraftApp, ui: &mut egui::Ui, error: Option<&str>) {
-    use lightcraft_engine::segment::{LICENSE_NAME, LICENSE_URL, MODEL_BYTES};
+    use lightcraft_engine::segment::{LICENSE_NAME, LICENSE_URL, MODEL_BYTES, size_text};
     let t = Tokens::get(ui.ctx());
     let (installed, d, dir, mirrors_empty) = {
         let seg = &app.session.segmenter;
         (seg.installed(), seg.download_status(), seg.dir.as_ref().map(|d| d.display().to_string()).unwrap_or_default(), seg.mirrors().is_empty())
     };
     if installed {
-        ui.label(crate::i18n::tr("The SAM 3 model is installed: Object and Describe masks are ready."));
+        let text = if app.session.segmenter.require_text().is_ok() {
+            crate::i18n::tr("The SAM 3 model is installed: Object and Describe masks are ready.")
+        } else {
+            crate::i18n::tr("The MobileSAM model is installed: Object masks are ready. Describe needs a grounding model (not built yet) or SAM 3.")
+        };
+        ui.label(text);
         return;
     }
-    let gb = |b: u64| b as f64 / 1e9;
     ui.label(crate::i18n::tr(
-        "Object and Describe masks use SAM 3, Meta's segmentation model. It isn't part of Ember, and everything else works without it.",
+        "Object masks use MobileSAM, a small segmentation model. It isn't part of Ember, and everything else works without it.",
     ));
-    ui.label(format!("{} {:.1} GB, {} {dir}", crate::i18n::tr("A one-time download of about"), gb(MODEL_BYTES), crate::i18n::tr("saved in")));
+    ui.label(format!("{} {}, {} {dir}", crate::i18n::tr("A one-time download of about"), size_text(MODEL_BYTES), crate::i18n::tr("saved in")));
     ui.label(
         egui::RichText::new(format!(
             "{} {LICENSE_NAME} — {}",
             crate::i18n::tr("Licence:"),
-            crate::i18n::tr("Meta's terms, not Ember's. Downloading it means accepting them.")
+            crate::i18n::tr("The model's terms, not Ember's. Downloading it means accepting them.")
         ))
         .color(t.text_label),
     );
-    let r = ui.link(crate::i18n::tr("Read the SAM License")).on_hover_text(LICENSE_URL);
+    let r = ui.link(crate::i18n::tr("Read the model's licence")).on_hover_text(LICENSE_URL);
     crate::widgets::register(ui.ctx(), "link:samLicense", r.rect);
     if r.clicked() {
         let _ = crate::links::open(app, LICENSE_URL);
     }
-    let guide_label = if mirrors_empty { "How to install the model" } else { "SAM 3 install guide" };
+    let guide_label = if mirrors_empty { "How to install the model" } else { "Model install guide" };
     let guide_id = if mirrors_empty { "link:samHelp" } else { "link:samGuide" };
     let r = ui.link(crate::i18n::tr(guide_label)).on_hover_text(SAM_HELP);
     crate::widgets::register(ui.ctx(), guide_id, r.rect);
@@ -1557,7 +1561,7 @@ fn sam_model_body(app: &mut LightcraftApp, ui: &mut egui::Ui, error: Option<&str
     if d.running {
         ui.add_space(4.0);
         let frac = if d.total > 0 { d.done as f64 / d.total as f64 } else { 0.0 };
-        let text = format!("{:.2} / {:.2} GB · {}", gb(d.done), gb(d.total), d.file);
+        let text = format!("{} / {} · {}", size_text(d.done), size_text(d.total), d.file);
         let r = ui.add(egui::ProgressBar::new(frac as f32).text(text));
         crate::widgets::register(ui.ctx(), "progress:samDownload", r.rect);
         let r = ui.button(crate::i18n::tr("Cancel Download"));
@@ -1577,7 +1581,7 @@ fn sam_model_body(app: &mut LightcraftApp, ui: &mut egui::Ui, error: Option<&str
                 && let Some(path) = app.services.pick_folder.as_mut().and_then(|pick| pick())
             {
                 match app.run("segment.model.selectFolder", json!({"path": path})) {
-                    Ok(_) => app.toast(ui.ctx(), crate::i18n::tr("SAM 3 model folder verified.")),
+                    Ok(_) => app.toast(ui.ctx(), crate::i18n::tr("Model folder verified.")),
                     Err(e) => app.toast_error(ui.ctx(), e),
                 }
             }
@@ -1595,7 +1599,7 @@ fn sam_model_body(app: &mut LightcraftApp, ui: &mut egui::Ui, error: Option<&str
     if mirrors_empty {
         ui.label(
             egui::RichText::new(crate::i18n::tr(
-                "This build can't download the model yet. To install it by hand, put model.safetensors, vocab.json and merges.txt from Meta's facebook/sam3 in the folder above: Object and Describe work as soon as they are there.",
+                "This build can't download the model yet. To install it by hand, put mobile_sam-tiny-vitt.safetensors (MobileSAM, from lmz/candle-sam on Hugging Face) in the folder above: Object works as soon as it is there.",
             ))
             .color(t.text_dim),
         );

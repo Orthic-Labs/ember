@@ -1,11 +1,13 @@
-//! AI masks: Object (clicks) and Describe (text) selections computed with SAM 3
-//! (`lightcraft-segment`, cargo feature `sam`; the desktop app enables it).
+//! AI masks: Object (clicks, or a box) and Describe (text) selections computed with MobileSAM, or SAM 3
+//! when its files are installed (`lightcraft-segment`, cargo feature `sam`; the desktop app enables it).
 //!
-//! **Nothing requires the model.** It is not part of Ember (SAM License); the user
-//! downloads it when they first use an AI mask and agree to (`segment.model.download`), or
-//! puts the files in the model folder themselves. Without it, AI mask requests fail with a
-//! clear "not installed" error; renders, exports and every other feature never touch it
-//! (stored segmentations are plain data in the develop settings).
+//! **Nothing requires the model.** It is not part of Ember: the default is MobileSAM (40.6 MB,
+//! Apache-2.0, ungated), which the user downloads when they first use an AI mask and agree to
+//! (`segment.model.download`), or puts in the model folder themselves; SAM 3 (3.4 GB, Meta's SAM
+//! License, gated) is an optional upgrade that also takes text. Without a model, AI mask requests
+//! fail with a clear "not installed" error; renders, exports and every other feature never touch it
+//! (stored segmentations are plain data in the develop settings). Describe needs SAM 3 until the
+//! grounding step of issue #221 exists.
 //!
 //! The model sees the photo as developed, uncropped and without masks, at 1008 px — the frame
 //! mask coordinates live in — so a stored segmentation lines up with the photo at any size.
@@ -30,13 +32,22 @@ use crate::Session;
 
 /// Long edge of the image the model sees.
 pub const INPUT_EDGE: usize = 1008;
-/// Download size of the model (`model.safetensors`; the tokenizer files add ~2 MB).
-pub const MODEL_BYTES: u64 = 3_439_938_512;
+/// Download size of the default model (MobileSAM's `mobile_sam-tiny-vitt.safetensors`, 40.6 MB).
+pub const MODEL_BYTES: u64 = 40_613_024;
+/// The default model's name.
+pub const MODEL_NAME: &str = "MobileSAM";
 /// The model's licence (not Ember's): shown before downloading.
-pub const LICENSE_NAME: &str = "SAM License (Meta)";
-pub const LICENSE_URL: &str = "https://github.com/facebookresearch/sam3/blob/main/LICENSE";
+pub const LICENSE_NAME: &str = "Apache License 2.0";
+pub const LICENSE_URL: &str = "https://github.com/ChaoningZhang/MobileSAM/blob/master/LICENSE";
 /// How errors about a missing model start (frontends decide on [`crate::ErrorKind::ModelMissing`], not on this text).
-pub const NOT_INSTALLED: &str = "The SAM 3 model is not installed";
+pub const NOT_INSTALLED: &str = "The AI mask model is not installed";
+/// The weights file of the default model, in the model folder.
+pub const MODEL_FILE: &str = "mobile_sam-tiny-vitt.safetensors";
+
+/// "40.6 MB" or "3.4 GB".
+pub fn size_text(bytes: u64) -> String {
+    if bytes >= 1_000_000_000 { format!("{:.1} GB", bytes as f64 / 1e9) } else { format!("{:.1} MB", bytes as f64 / 1e6) }
+}
 /// Longest a waiting command (CLI, MCP) waits for the model (loading on a CPU can take minutes).
 #[cfg_attr(not(feature = "sam"), allow(dead_code))]
 const WAIT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
@@ -118,10 +129,13 @@ pub struct DownloadStatus {
 
 /// The model (on its worker thread), the download, and AI mask requests in flight.
 pub struct Segmenter {
-    /// Where the `facebook/sam3` files live (set by the app; `None`: no AI masks).
+    /// Where the model files live: MobileSAM's, or SAM 3's `facebook/sam3` files (set by the app; `None`: no AI masks).
     pub dir: Option<PathBuf>,
-    /// The user's list of download mirrors (one base URL per line), if any.
+    /// The user's list of download mirrors (one base URL per line), if any; it replaces the built-in location.
     pub mirrors_file: Option<PathBuf>,
+    /// Use the built-in download location (a pinned Hugging Face revision) when the user lists no mirrors.
+    /// On by default; tests that must never reach the network turn it off.
+    pub default_mirrors: bool,
     /// Run requests in the background and apply them in [`Session::segment_poll`] (the
     /// desktop app); otherwise commands wait for their result (CLI, MCP, tests).
     pub background: bool,
@@ -142,6 +156,7 @@ impl Default for Segmenter {
         Segmenter {
             dir: None,
             mirrors_file: None,
+            default_mirrors: true,
             background: false,
             pending: None,
             messages: Vec::new(),
@@ -183,13 +198,36 @@ impl Segmenter {
         None
     }
 
-    /// Whether the local model files are in place.
+    /// Whether the local model files are in place (MobileSAM's, or SAM 3's).
     pub fn installed(&self) -> bool {
         #[cfg(feature = "sam")]
         if let Some(dir) = &self.dir {
-            return lightcraft_segment::is_model_dir(dir);
+            return lightcraft_segment::is_installed(dir);
         }
         false
+    }
+
+    /// The installed model's name (`"MobileSAM"` or `"SAM 3"`; SAM 3 when both are there), if any.
+    pub fn installed_model(&self) -> Option<&'static str> {
+        #[cfg(feature = "sam")]
+        if let Some(kind) = self.dir.as_deref().and_then(lightcraft_segment::installed_kind) {
+            return Some(kind.name());
+        }
+        None
+    }
+
+    /// Whether Describe (text prompts) can run: it needs SAM 3 (or the remote SAM 3 worker), not MobileSAM.
+    /// `Err` says why not, in words for the user.
+    pub fn require_text(&self) -> Result<(), String> {
+        #[cfg(feature = "sam")]
+        {
+            if lightcraft_segment::remote::configured().is_some() || self.dir.as_deref().is_some_and(lightcraft_segment::is_model_dir) {
+                return Ok(());
+            }
+            Err(lightcraft_segment::Error::NeedsGrounding.to_string())
+        }
+        #[cfg(not(feature = "sam"))]
+        Err("AI masks are not available in this build".into())
     }
 
     /// Verify a user-selected model folder before making it active.
@@ -198,7 +236,7 @@ impl Segmenter {
             return Err("AI masks are not available in this build".into());
         }
         if dir.as_os_str().is_empty() || dir.to_string_lossy().len() > 8_192 || dir.to_string_lossy().contains('\0') {
-            return Err("invalid SAM 3 model folder".into());
+            return Err("invalid AI mask model folder".into());
         }
         #[cfg(feature = "sam")]
         lightcraft_segment::validate_model_dir(&dir).map_err(|e| e.to_string())?;
@@ -277,12 +315,12 @@ impl Segmenter {
         DownloadStatus::default()
     }
 
-    /// Where the model is downloaded from, in order (the user's mirrors first).
+    /// Where the model is downloaded from, in order (the user's own mirrors, else the built-in location).
     pub fn mirrors(&self) -> Vec<String> {
         #[cfg(feature = "sam")]
         {
             let env = std::env::var(lightcraft_segment::fetch::MIRRORS_ENV).ok();
-            lightcraft_segment::fetch::mirrors(env.as_deref(), self.mirrors_file.as_deref())
+            lightcraft_segment::fetch::mirrors_with(env.as_deref(), self.mirrors_file.as_deref(), self.default_mirrors)
         }
         #[cfg(not(feature = "sam"))]
         Vec::new()
@@ -304,7 +342,7 @@ impl Segmenter {
         if lightcraft_segment::remote::configured().is_some() {
             return Ok(PathBuf::new());
         }
-        let dir = self.dir.clone().ok_or_else(|| other("no folder is set for the SAM 3 model"))?;
+        let dir = self.dir.clone().ok_or_else(|| other("no folder is set for the AI mask model"))?;
         if self.installed() {
             return Ok(dir);
         }
@@ -314,8 +352,8 @@ impl Segmenter {
             format!("{NOT_INSTALLED} yet: it is downloading ({pct} %).")
         } else {
             format!(
-                "{NOT_INSTALLED}. Download it (about {:.1} GB, {LICENSE_NAME}) when Ember offers it, with `segment.model.download {{\"acknowledged\": true}}`, or put model.safetensors, vocab.json and merges.txt in {}.",
-                MODEL_BYTES as f64 / 1e9,
+                "{NOT_INSTALLED}. Download {MODEL_NAME} (about {}, {LICENSE_NAME}) when Ember offers it, with `segment.model.download {{\"acknowledged\": true}}`, or put {MODEL_FILE} in {}.",
+                size_text(MODEL_BYTES),
                 dir.display()
             )
         };
@@ -328,7 +366,7 @@ impl Segmenter {
         if !Self::AVAILABLE {
             return Err("AI masks are not available in this build".into());
         }
-        let dir = self.dir.clone().ok_or("no folder is set for the SAM 3 model")?;
+        let dir = self.dir.clone().ok_or("no folder is set for the AI mask model")?;
         if self.installed() {
             return Ok(false);
         }
@@ -338,7 +376,7 @@ impl Segmenter {
             if mirrors.is_empty() {
                 return Err(lightcraft_segment::fetch::no_mirrors_message());
             }
-            self.download.start(lightcraft_segment::fetch::SAM3_FILES, mirrors, dir, lightcraft_segment::fetch::options(), activity, "SAM 3")
+            self.download.start(lightcraft_segment::fetch::MOBILESAM_FILES, mirrors, dir, lightcraft_segment::fetch::options(), activity, MODEL_NAME)
         }
         #[cfg(not(feature = "sam"))]
         {
@@ -533,10 +571,31 @@ impl Session {
         }
     }
 
+    /// Segment the object inside `bx` (`[x0, y0, x1, y1]`, normalized to photo `id`) with MobileSAM, waiting
+    /// for the model. (SAM 3 takes clicks and text here; the box is not stored in a mask shape yet.)
+    pub fn segment_box(&mut self, id: PhotoId, bx: [f64; 4]) -> Result<SegMask, String> {
+        self.segmenter.model_dir()?;
+        let valid = bx.iter().all(|v| v.is_finite() && (0.0..=1.0).contains(v)) && bx[2] > bx[0] && bx[3] > bx[1];
+        if !valid {
+            return Err("the box must lie inside the photo, with its corner points in order".into());
+        }
+        #[cfg(feature = "sam")]
+        {
+            let bx = bx.map(|v| v as f32);
+            self.segment_wait(id, worker::Kind::Box(bx), None)?.ok_or_else(|| "nothing was selected".to_string())
+        }
+        #[cfg(not(feature = "sam"))]
+        {
+            let _ = id;
+            Err("AI masks are not available in this build".into())
+        }
+    }
+
     /// Segment everything `text` describes on photo `id`, waiting for the model; `Ok(None)`
     /// when nothing matches.
     pub fn segment_text(&mut self, id: PhotoId, text: &str) -> Result<Option<SegMask>, String> {
         self.segmenter.model_dir()?;
+        self.segmenter.require_text()?;
         let text = text.trim();
         if text.is_empty() {
             return Err("describe what to select".into());
@@ -578,6 +637,7 @@ impl Session {
     /// into mask `mask`) is created by [`Session::segment_poll`] when something matches.
     pub(crate) fn segment_text_later(&mut self, id: PhotoId, mask: Option<u32>, op: &str, name: Option<String>, text: &str) -> Result<(), String> {
         self.segmenter.model_dir()?;
+        self.segmenter.require_text()?;
         let text = text.trim();
         if text.is_empty() {
             return Err("describe what to select".into());
@@ -788,5 +848,51 @@ mod tests {
         assert!(detail_region(&seg_box(50, 2, 2, 48, 48), 1.0).is_none());
         let damaged = SegMask { side: 50, data: "?".into(), rect: None };
         assert!(detail_region(&damaged, 1.0).is_none());
+    }
+
+    #[test]
+    fn the_default_model_is_the_small_ungated_one() {
+        assert_eq!(MODEL_BYTES, 40_613_024);
+        assert_eq!((MODEL_NAME, LICENSE_NAME), ("MobileSAM", "Apache License 2.0"));
+        assert!(LICENSE_URL.contains("MobileSAM") && LICENSE_URL.ends_with("/LICENSE"));
+        assert_eq!(size_text(MODEL_BYTES), "40.6 MB");
+        assert_eq!(size_text(3_439_938_512), "3.4 GB");
+        #[cfg(feature = "sam")]
+        {
+            // the constants the UI shows are the pinned catalog entry's
+            assert_eq!(MODEL_BYTES, lightcraft_segment::fetch::MOBILESAM.size_bytes);
+            assert_eq!(MODEL_FILE, lightcraft_segment::MOBILESAM_FILE);
+            assert_eq!(LICENSE_NAME, lightcraft_segment::fetch::MOBILESAM.license);
+            assert_eq!(LICENSE_URL, lightcraft_segment::fetch::MOBILESAM.license_url);
+        }
+    }
+
+    #[cfg(feature = "sam")]
+    #[test]
+    fn mobilesam_alone_installs_the_model_but_not_describe() {
+        let dir = std::env::temp_dir().join(format!("lc-segmenter-installed-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut g = Segmenter { dir: Some(dir.clone()), ..Segmenter::default() };
+        assert!(!g.installed() && g.installed_model().is_none());
+        // not installed: Object says so with the file to put there
+        let e = g.require_model().unwrap_err().to_string();
+        assert!(e.starts_with(NOT_INSTALLED) && e.contains(MODEL_FILE) && e.contains("40.6 MB") && e.contains("Apache License 2.0"), "{e}");
+        std::fs::write(dir.join(MODEL_FILE), b"x").unwrap();
+        assert!(g.installed());
+        assert_eq!(g.installed_model(), Some("MobileSAM"));
+        assert!(g.require_model().is_ok());
+        // Describe needs a grounding model: a clear error that names issue #221 and the SAM 3 route
+        let e = g.require_text().unwrap_err();
+        assert!(e.contains("Describe") && e.contains("#221") && e.contains("SAM 3"), "{e}");
+        // SAM 3's files make Describe possible (and win when both are there)
+        for f in ["model.safetensors", "vocab.json", "merges.txt"] {
+            std::fs::write(dir.join(f), b"x").unwrap();
+        }
+        assert_eq!(g.installed_model(), Some("SAM 3"));
+        assert!(g.require_text().is_ok());
+        g.dir = None;
+        assert!(!g.installed());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

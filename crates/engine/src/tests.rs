@@ -1312,7 +1312,7 @@ fn ai_masks_without_the_model_explain_themselves() {
     let id = s.active().unwrap();
     // an Object mask that could never be computed is refused, not left empty
     let e = s.execute("mask.add", &json!({"kind": "object"})).unwrap_err().to_string();
-    assert!(e.contains("SAM 3") || e.contains("not available"), "{e}");
+    assert!(e.contains("AI mask model") || e.contains("not available"), "{e}");
     assert!(!e.contains("invalid parameters"), "shown as is: {e}");
     assert!(s.develop_of(id).unwrap().masks.is_empty());
     // an empty Object component (as an older document may hold) still takes clicks
@@ -1327,9 +1327,9 @@ fn ai_masks_without_the_model_explain_themselves() {
     s.active_mask = Some(1);
     // clicks and descriptions need the model: an error that says what's missing, nothing changed
     let e = s.execute("mask.objectPoint", &json!({"x": 0.5, "y": 0.5})).unwrap_err().to_string();
-    assert!(e.contains("SAM 3") || e.contains("not available"), "{e}");
+    assert!(e.contains("AI mask model") || e.contains("not available"), "{e}");
     let e = s.execute("mask.add", &json!({"kind": "prompt", "text": "sky"})).unwrap_err().to_string();
-    assert!(e.contains("SAM 3") || e.contains("not available"), "{e}");
+    assert!(e.contains("AI mask model") || e.contains("not available"), "{e}");
     let empty = std::env::temp_dir().join(format!("lc-no-sam3-{}", std::process::id()));
     s.segmenter.dir = Some(empty.clone());
     let e = s.execute("mask.objectPoint", &json!({"x": 0.5, "y": 0.5})).unwrap_err().to_string();

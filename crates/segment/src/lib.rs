@@ -1,4 +1,13 @@
-//! SAM 3 (Segment Anything with Concepts, Meta, 2025) inference in pure Rust on candle.
+//! Segmentation for AI masks in pure Rust on candle: **MobileSAM** (the default) and **SAM 3** (optional).
+//!
+//! - **MobileSAM** ([`mobilesam::MobileSam`]): the Segment Anything interface with a 5M-parameter
+//!   TinyViT encoder. Ungated Apache-2.0 weights of 40.6 MB, clicks and boxes, no text. Ember's default
+//!   model for Object masks. [`Model`] loads whichever model a folder holds (SAM 3 if its files are
+//!   there, else MobileSAM).
+//! - **SAM 3** (Segment Anything with Concepts, Meta, 2025), below, is the optional upgrade: gated,
+//!   3.4 GB, and the only model here with text prompts.
+//!
+//! SAM 3:
 //!
 //! - **Point prompts** ([`Sam3::segment_clicks`]): positive and negative clicks select one
 //!   object, via SAM 3's interactive (SAM 2 style) prompt encoder and mask decoder.
@@ -8,9 +17,10 @@
 //! The expensive part, the 32-layer ViT over the 1008 × 1008 input, runs once per image
 //! ([`Sam3::encode`]); each click or prompt then reuses the [`Encoded`] features.
 //!
-//! On macOS the model runs on the GPU through Metal; elsewhere (for now) on the CPU. The
-//! weights are not part of Ember: they are the `facebook/sam3` checkpoint (SAM License),
-//! read from a directory the user downloads them to ([`Sam3::load`]).
+//! On macOS the models run on the GPU through Metal; elsewhere (for now) on the CPU. The
+//! weights are not part of Ember: MobileSAM's are the `lmz/candle-sam` conversion of the official
+//! checkpoint (Apache-2.0) and SAM 3's the `facebook/sam3` checkpoint (SAM License), read from a
+//! directory the user downloads them to ([`Sam3::load`], [`mobilesam::MobileSam::load`]).
 //!
 //! Ported from the Hugging Face `transformers` implementation (Apache-2.0); see `NOTICE`.
 //! This crate is therefore licensed under the Apache License 2.0 only (not the MIT option of
@@ -19,6 +29,10 @@
 //! [`fetch`] downloads the model, only when the user asks for it (from configurable mirrors,
 //! verified before use). Nothing in Ember requires the model: without it, AI masks report
 //! that it isn't installed and everything else works.
+//!
+//! MobileSAM: network pieces from `candle-transformers` (MIT OR Apache-2.0); input geometry, prompt
+//! embeddings and mask post-processing in [`mobilesam_prep`], translated from the Segment Anything
+//! reference code (Meta, Apache-2.0). See NOTICE.
 //!
 //! Modified work (Apache License 2.0, §4(b)): ported by the Ember contributors in 2026 from
 //! the Python/PyTorch SAM 3 code of Hugging Face Transformers (`src/transformers/models/sam3` and `sam3_tracker`), Copyright The HuggingFace
@@ -64,6 +78,11 @@ mod mediapipe_ops;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod mediapipe_photo;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod mobilesam;
+pub mod mobilesam_prep;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod model;
+#[cfg(not(target_arch = "wasm32"))]
 mod neck;
 #[cfg(not(target_arch = "wasm32"))]
 mod nn;
@@ -89,14 +108,23 @@ use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 
 #[cfg(not(target_arch = "wasm32"))]
+pub use model::{Kind as ModelKind, Mask, Model, Scene, installed_kind};
+#[cfg(not(target_arch = "wasm32"))]
 pub use tracker::Click;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("SAM 3 model: {0}")]
     Model(String),
-    #[error("SAM 3 model files not found in {0} (expected model.safetensors, vocab.json, merges.txt)")]
+    #[error(
+        "AI mask model files not found in {0} (expected mobile_sam-tiny-vitt.safetensors for MobileSAM, or model.safetensors, vocab.json and merges.txt for SAM 3)"
+    )]
     Missing(PathBuf),
+    /// Describe (text prompts) needs a grounding model: MobileSAM is a promptable segmenter, not a grounding model.
+    #[error(
+        "Describe masks need a text-grounding model, which the installed MobileSAM is not: Ember's grounding step is not built yet (issue #221). Object masks work with clicks; to use Describe now, install SAM 3 by hand (see docs/ai-masks.md)"
+    )]
+    NeedsGrounding,
     #[cfg(not(target_arch = "wasm32"))]
     #[error(transparent)]
     Candle(#[from] candle_core::Error),
@@ -111,25 +139,38 @@ pub const MASK_SIDE: usize = 288;
 #[cfg(not(target_arch = "wasm32"))]
 const _: () = assert!(MASK_SIDE == tracker::LOW_RES && INPUT == vit::IMAGE);
 
-/// The files of a model directory.
+/// The SAM 3 weights file of a model directory.
 pub const WEIGHTS_FILE: &str = "model.safetensors";
+/// The MobileSAM weights file of a model directory (the `lmz/candle-sam` conversion of the official `mobile_sam.pt`).
+pub const MOBILESAM_FILE: &str = "mobile_sam-tiny-vitt.safetensors";
 
-/// Whether `dir` holds a usable checkpoint.
+/// Whether `dir` holds a SAM 3 checkpoint (all three files).
 pub fn is_model_dir(dir: &Path) -> bool {
     dir.join(WEIGHTS_FILE).is_file() && dir.join("vocab.json").is_file() && dir.join("merges.txt").is_file()
+}
+
+/// Whether `dir` holds the MobileSAM checkpoint.
+pub fn is_mobilesam_dir(dir: &Path) -> bool {
+    dir.join(MOBILESAM_FILE).is_file()
+}
+
+/// Whether `dir` holds a model AI masks can use (MobileSAM or SAM 3).
+pub fn is_installed(dir: &Path) -> bool {
+    is_model_dir(dir) || is_mobilesam_dir(dir)
 }
 
 /// Validate a user-selected checkpoint without loading tensors into a device.
 ///
 /// The weights header and every tensor range are checked by `Weights::open`; tokenizer files
-/// are size-bounded before parsing. The official checkpoint size is pinned by the fetch manifest.
+/// are size-bounded before parsing. The official checkpoint size and SHA-256 are pinned by the fetch manifest.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn validate_model_dir(dir: &Path) -> Result<()> {
     validate_model_dir_with_progress(dir, |_, _| true)
 }
 
 /// Validate a selected checkpoint while reporting streamed weight-hash progress. Returning
-/// `false` from callback cancels before model files are activated.
+/// `false` from callback cancels before model files are activated. A folder with SAM 3's weights is
+/// checked as SAM 3 (its three files); otherwise a folder with MobileSAM's weights as MobileSAM.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn validate_model_dir_with_progress<F>(dir: &Path, progress: F) -> Result<()>
 where
@@ -138,6 +179,46 @@ where
     if !dir.is_dir() {
         return Err(Error::Missing(dir.to_path_buf()));
     }
+    if dir.join(WEIGHTS_FILE).exists() {
+        validate_sam3_dir(dir, progress)
+    } else if dir.join(MOBILESAM_FILE).exists() {
+        validate_mobilesam_dir(dir, progress)
+    } else {
+        Err(Error::Missing(dir.to_path_buf()))
+    }
+}
+
+/// The MobileSAM checkpoint: exact pinned size and SHA-256, then a structural check of the safetensors file.
+#[cfg(not(target_arch = "wasm32"))]
+fn validate_mobilesam_dir<F>(dir: &Path, progress: F) -> Result<()>
+where
+    F: FnMut(u64, u64) -> bool,
+{
+    let path = dir.join(MOBILESAM_FILE);
+    let spec = fetch::MOBILESAM_FILES.first().ok_or_else(|| Error::Model("MobileSAM manifest has no weights entry".into()))?;
+    let size = std::fs::metadata(&path).map_err(|e| Error::Model(format!("{}: {e}", path.display())))?.len();
+    if size != fetch::MOBILESAM_SIZE {
+        return Err(Error::Model(format!(
+            "{}: expected official MobileSAM checkpoint size {}, found {size}",
+            path.display(),
+            fetch::MOBILESAM_SIZE
+        )));
+    }
+    let verified = fetch::verify_file_progress(spec, &path, progress).map_err(|e| Error::Model(format!("{}: {e}", path.display())))?;
+    match verified {
+        None => return Err(Error::Model("MobileSAM model validation cancelled".into())),
+        Some(false) => return Err(Error::Model(format!("{}: SHA-256 does not match the pinned MobileSAM manifest", path.display()))),
+        Some(true) => {}
+    }
+    let _ = weights::Weights::open(&path)?;
+    Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn validate_sam3_dir<F>(dir: &Path, progress: F) -> Result<()>
+where
+    F: FnMut(u64, u64) -> bool,
+{
     let weights_path = dir.join(WEIGHTS_FILE);
     let weights_spec =
         fetch::SAM3_FILES.iter().find(|spec| spec.name == WEIGHTS_FILE).ok_or_else(|| Error::Model("SAM 3 manifest has no weights entry".into()))?;

@@ -3,7 +3,7 @@ name = "lightcraft-segment"
 version.workspace = true
 edition.workspace = true
 license = "Apache-2.0"
-description = "Ember segmentation: SAM 3 (Segment Anything with Concepts) inference in pure Rust (L3)"
+description = "Ember segmentation: MobileSAM (default, Apache-2.0 weights) and SAM 3 (optional) inference in pure Rust (L3)"
 
 [lints]
 workspace = true
@@ -18,6 +18,7 @@ log = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
+candle-transformers = { workspace = true }
 lightcraft-fetch = { workspace = true }
 
 # Offline qualification reuses existing production baseline; no new external packages.

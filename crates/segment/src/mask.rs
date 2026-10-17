@@ -73,6 +73,51 @@ pub fn preprocess(rgb: &[u8], w: usize, h: usize, side: usize) -> Result<Vec<f32
     Ok(out)
 }
 
+/// An 8-bit RGB image (`w × h`, row-major, interleaved) resized to `tw × th` with Pillow's BILINEAR
+/// (antialiased when shrinking) and rounded to 8 bits: what SAM's `ResizeLongestSide` does.
+pub fn resize_rgb(rgb: &[u8], w: usize, h: usize, tw: usize, th: usize) -> Result<Vec<u8>> {
+    let n = w.checked_mul(h).and_then(|n| n.checked_mul(3)).ok_or_else(|| Error::Model("image too large".into()))?;
+    let out_len = tw.checked_mul(th).and_then(|n| n.checked_mul(3)).ok_or_else(|| Error::Model("resized image too large".into()))?;
+    if w == 0 || h == 0 || tw == 0 || th == 0 || rgb.len() < n {
+        return Err(Error::Model(format!("image buffer of {} bytes for {w} × {h} → {tw} × {th}", rgb.len())));
+    }
+    let (wx, wy) = (weights(w, tw), weights(h, th));
+    // horizontal pass: h rows × tw columns × 3
+    let mut tmp = vec![0f32; h * tw * 3];
+    for y in 0..h {
+        for (ox, (lo, ws)) in wx.iter().enumerate() {
+            let mut acc = [0f32; 3];
+            for (k, wt) in ws.iter().enumerate() {
+                let i = (y * w + lo + k) * 3;
+                for (c, a) in acc.iter_mut().enumerate() {
+                    *a += wt * f32::from(rgb.get(i + c).copied().unwrap_or(0));
+                }
+            }
+            if let Some(dst) = tmp.get_mut((y * tw + ox) * 3..(y * tw + ox) * 3 + 3) {
+                dst.copy_from_slice(&acc);
+            }
+        }
+    }
+    let mut out = vec![0u8; out_len];
+    for (oy, (lo, ws)) in wy.iter().enumerate() {
+        for ox in 0..tw {
+            let mut acc = [0f32; 3];
+            for (k, wt) in ws.iter().enumerate() {
+                let i = ((lo + k) * tw + ox) * 3;
+                for (c, a) in acc.iter_mut().enumerate() {
+                    *a += wt * tmp.get(i + c).copied().unwrap_or(0.0);
+                }
+            }
+            for (c, a) in acc.iter().enumerate() {
+                if let Some(d) = out.get_mut((oy * tw + ox) * 3 + c) {
+                    *d = a.round().clamp(0.0, 255.0) as u8;
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// Mask `logits` (`side × side`) resampled bilinearly (half-pixel centres) to `w × h` and
 /// mapped to 0..1 coverage (sigmoid).
 pub fn alpha(logits: &[f32], side: usize, w: usize, h: usize) -> Vec<f32> {
@@ -112,6 +157,25 @@ mod tests {
         // a flat image stays flat
         let flat = vec![255u8; 30 * 30 * 3];
         assert!(preprocess(&flat, 30, 30, 7).unwrap().iter().all(|v| (*v - 1.0).abs() < 1e-6));
+    }
+
+    #[test]
+    fn resize_rgb_keeps_flat_colours_and_sizes() {
+        let flat: Vec<u8> = [10u8, 130, 250].iter().copied().cycle().take(30 * 20 * 3).collect();
+        for (tw, th) in [(15, 10), (60, 40), (7, 33), (30, 20)] {
+            let r = resize_rgb(&flat, 30, 20, tw, th).unwrap();
+            assert_eq!(r.len(), tw * th * 3);
+            assert!(r.chunks(3).all(|p| p == [10, 130, 250]), "{tw}x{th}");
+        }
+        assert!(resize_rgb(&flat, 30, 20, 0, 5).is_err());
+        assert!(resize_rgb(&[0; 5], 2, 2, 4, 4).is_err());
+    }
+
+    #[test]
+    fn resize_rgb_halving_averages_pairs() {
+        // a 2x1 image of black and white shrunk to 1x1 is the mid grey Pillow gives (127.5 rounds to 128)
+        let r = resize_rgb(&[0, 0, 0, 255, 255, 255], 2, 1, 1, 1).unwrap();
+        assert_eq!(r, vec![128, 128, 128]);
     }
 
     #[test]

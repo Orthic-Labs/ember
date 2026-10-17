@@ -52,6 +52,19 @@ the facebook/sam3 checkpoint only when they choose to (in the app, or by hand), 
 License (https://github.com/facebookresearch/sam3/blob/main/LICENSE), a separate, non-OSI
 licence. See docs/ai-masks.md.
 
+crates/segment also runs MobileSAM (https://github.com/ChaoningZhang/MobileSAM, Apache License 2.0;
+Zhang et al., arXiv 2306.14289), which keeps the Segment Anything pipeline of Meta Platforms, Inc.
+(https://github.com/facebookresearch/segment-anything, Apache License 2.0). Its network (TinyViT
+encoder, mask decoder) is the candle-transformers crate (https://github.com/huggingface/candle,
+MIT OR Apache-2.0), a dependency. crates/segment/src/mobilesam_prep.rs translates to Rust the
+input resize and normalization, the prompt embeddings and the mask post-processing of the
+Segment Anything reference code (utils/transforms.py, modeling/sam.py, modeling/prompt_encoder.py);
+the file says so. The MobileSAM weights are not part of Ember and are never distributed with it:
+a user downloads, only when they choose to, the float32 safetensors conversion at
+huggingface.co/lmz/candle-sam (revision 8b4cb7c743f3b3cb8afd212a86ae15b1bbfdac97, 40,613,024 bytes,
+SHA-256 5ad43a841b57cc798e2837e251c15aa9f602868a1780d195459383d117784cf7) of the official
+mobile_sam.pt, under the Apache License 2.0 of the MobileSAM repository. See docs/ai-masks.md.
+
 crates/segment/src/dinov2.rs and dinov2_positions.rs adapt the DINOv2 ViT-S/14 architecture from
 Meta's DINOv2 repository at commit 7764ea0f912e53c92e82eb78a2a1631e92725fc8, licensed under the
 Apache License, Version 2.0

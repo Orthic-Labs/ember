@@ -49,10 +49,11 @@ fn status_and_model_commands_without_the_model() {
     assert_eq!(st["available"], Segmenter::AVAILABLE);
     assert_eq!(st["installed"], false);
     assert_eq!(st["download"]["running"], false);
-    assert!(st["license"].as_str().unwrap().contains("SAM License"));
+    assert!(st["license"].as_str().unwrap().contains("Apache"));
+    assert_eq!((st["sizeBytes"].as_u64(), st["model"].is_null(), st["describe"].as_bool()), (Some(40_613_024), true, Some(false)));
     // downloading needs the user's consent, and names the size and the licence
     let e = s.execute("segment.model.download", &json!({})).unwrap_err().to_string();
-    assert!(e.contains("acknowledged") && e.contains("SAM License") && e.contains("GB"), "{e}");
+    assert!(e.contains("acknowledged") && e.contains("Apache License") && e.contains("40.6 MB"), "{e}");
     let e = s.execute("segment.model.download", &json!({"acknowledged": "yes"})).unwrap_err().to_string();
     assert!(e.contains("acknowledged"), "{e}");
     assert_eq!(s.execute("segment.model.cancel", &json!({})).unwrap()["cancelled"], false);
@@ -66,6 +67,10 @@ fn status_and_model_commands_without_the_model() {
     let dir = tmp("nomirrors");
     s.segmenter.dir = Some(dir.clone());
     s.segmenter.mirrors_file = Some(dir.join("none.txt"));
+    // the built-in location is Hugging Face: with it, a download is possible (and not started here)
+    #[cfg(feature = "sam")]
+    assert_eq!(s.segmenter.mirrors(), lightcraft_segment::fetch::DEFAULT_MIRRORS.iter().map(ToString::to_string).collect::<Vec<_>>());
+    s.segmenter.default_mirrors = false;
     if s.segmenter.mirrors().is_empty() {
         let e = s.execute("segment.model.download", &json!({"acknowledged": true})).unwrap_err().to_string();
         assert!(e.contains("LIGHTCRAFT_SAM3_MIRRORS"), "{e}");
@@ -131,7 +136,7 @@ fn a_failing_download_ends_with_an_error_and_never_blocks() {
     assert!(e.contains("not found"), "{e}");
     assert!(!s.segmenter.installed());
     // nothing was left behind under a real name, and no error page was saved
-    for f in ["model.safetensors", "vocab.json", "merges.txt", "vocab.json.part"] {
+    for f in ["model.safetensors", "vocab.json", "merges.txt", "vocab.json.part", "mobile_sam-tiny-vitt.safetensors", "mobile_sam-tiny-vitt.safetensors.part"] {
         assert!(!dir.join(f).exists(), "{f}");
     }
     let _ = std::fs::remove_dir_all(&dir);
@@ -257,7 +262,8 @@ fn a_running_model_download_shows_in_activity_and_cancels() {
             while r.read_line(&mut line).unwrap_or(0) > 2 {
                 line.clear();
             }
-            let _ = c.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000000\r\nConnection: close\r\n\r\n");
+            // (the size the pinned MobileSAM file has: a server announcing another one is refused at once)
+            let _ = c.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 40613024\r\nConnection: close\r\n\r\n");
             for _ in 0..250 {
                 if c.write_all(&[b' '; 4000]).is_err() {
                     break;
@@ -275,7 +281,7 @@ fn a_running_model_download_shows_in_activity_and_cancels() {
     assert_eq!(s.execute("segment.model.download", &json!({"acknowledged": true})).unwrap()["started"], true);
     let rows = s.activity.list();
     assert_eq!(rows.len(), 1);
-    assert_eq!((rows[0].kind, rows[0].label.as_str(), rows[0].detail.as_str()), ("download", "Downloading model", "SAM 3"));
+    assert_eq!((rows[0].kind, rows[0].label.as_str(), rows[0].detail.as_str()), ("download", "Downloading model", "MobileSAM"));
     assert_eq!(rows[0].unit, crate::activity::Unit::Bytes);
     assert!(rows[0].cancellable);
     s.execute("activity.cancel", &json!({"id": rows[0].id})).unwrap();
@@ -315,4 +321,39 @@ fn a_missing_model_is_model_missing_by_kind() {
             }
         }
     }
+}
+
+/// MobileSAM, the default model, alone in the folder: Object works (a damaged file is an error naming the
+/// file), Describe says it needs a grounding model at once (issue #221), and the status says which model it is.
+#[cfg(feature = "sam")]
+#[test]
+fn a_mobilesam_folder_is_installed_and_describe_waits_for_grounding() {
+    let d = tmp("mobilesam");
+    std::fs::create_dir_all(&d).unwrap();
+    std::fs::write(d.join("mobile_sam-tiny-vitt.safetensors"), b"\x10\x00\x00\x00\x00\x00\x00\x00{not json at all}").unwrap();
+    for background in [true, false] {
+        let mut s = Session::with_demo();
+        s.segmenter.background = background;
+        s.segmenter.dir = Some(d.clone());
+        assert!(s.segmenter.installed());
+        assert_eq!(s.segmenter.installed_model(), Some("MobileSAM"));
+        let id = s.active().unwrap();
+        let t = Instant::now();
+        let e = s.execute("mask.add", &json!({"kind": "prompt", "text": "sky"})).unwrap_err().to_string();
+        assert!(e.contains("Describe") && e.contains("#221") && e.contains("SAM 3"), "background {background}: {e}");
+        assert!(t.elapsed() < Duration::from_millis(500), "an error at once, never a wait");
+        assert!(s.develop_of(id).unwrap().masks.is_empty());
+        let st = s.execute("segment.model.status", &json!({})).unwrap();
+        assert_eq!((st["installed"].as_bool(), st["model"].as_str(), st["describe"].as_bool()), (Some(true), Some("MobileSAM"), Some(false)));
+    }
+    // a damaged MobileSAM: the object request fails on the worker with the file named, never a crash
+    let mut s = Session::with_demo();
+    s.segmenter.dir = Some(d.clone());
+    let e = s.execute("mask.add", &json!({"kind": "object", "points": [[0.5, 0.5]]})).unwrap_err().to_string();
+    assert!(e.contains("mobile_sam-tiny-vitt.safetensors"), "{e}");
+    assert!(!s.segmenter.busy());
+    // selecting the folder verifies the pinned size first
+    let e = s.execute("segment.model.selectFolder", &json!({"path": d})).unwrap_err().to_string();
+    assert!(e.contains("official MobileSAM checkpoint size"), "{e}");
+    let _ = std::fs::remove_dir_all(&d);
 }

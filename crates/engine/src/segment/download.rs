@@ -144,14 +144,14 @@ impl Downloader {
             let error = match r {
                 Ok(Ok(())) => {
                     s.finished.store(true, Ordering::SeqCst);
-                    log::info!("SAM 3 model downloaded to {}", dir.display());
+                    log::info!("AI mask model downloaded to {}", dir.display());
                     None
                 }
                 Ok(Err(e)) => Some(e.to_string()),
                 Err(_) => Some("the download failed unexpectedly".to_string()),
             };
             if let Some(e) = &error {
-                log::warn!("SAM 3 download: {e}");
+                log::warn!("AI mask model download: {e}");
             }
             let mut text = lock(&s.text);
             text.cancelled = cancelled;

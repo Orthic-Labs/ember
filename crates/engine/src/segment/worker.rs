@@ -1,4 +1,4 @@
-//! The SAM 3 worker thread: it owns the model and the last encoded photo, and runs every
+//! The AI mask worker thread (MobileSAM, or SAM 3 when installed): it owns the model and the last encoded photo, and runs every
 //! request (load, render the model input, encode, clicks, descriptions, detail passes) in
 //! turn. The session only sends jobs and receives outcomes over channels, so no thread ever
 //! waits on a lock the model holds, and the UI thread never runs the model.
@@ -6,7 +6,7 @@
 //! Every job runs under `catch_unwind`: a panic inside candle becomes an error outcome, drops
 //! the (possibly inconsistent) model and leaves the worker ready for the next job. The busy
 //! counters are decremented by drop guards, so they can't stay stuck. The model is unloaded
-//! after [`IDLE_UNLOAD`] without requests (it holds several GB).
+//! after [`IDLE_UNLOAD`] without requests (SAM 3 holds several GB).
 
 use std::collections::VecDeque;
 use std::panic::AssertUnwindSafe;
@@ -18,8 +18,8 @@ use std::time::Duration;
 
 use lightcraft_develop::SegMask;
 use lightcraft_segment::{
-    Encoded, Sam3,
-    remote::{self, Operation, Request, text_logits},
+    Model, Scene,
+    remote::{self, Operation, Request},
 };
 
 use super::{Input, Prompt, Tag};
@@ -35,6 +35,8 @@ pub enum Kind {
     /// Load the model and encode the photo (so the first click is fast).
     Prepare,
     Clicks(Vec<lightcraft_segment::Click>),
+    /// The object inside a box `[x0, y0, x1, y1]` (normalized to the photo): MobileSAM only.
+    Box([f32; 4]),
     Text(String),
     /// A zoomed-in pass over `region` (normalized) of the photo, rendered by the job's `render`.
     Detail {
@@ -194,8 +196,8 @@ impl Worker {
 /// The model and the last encoded photo.
 #[derive(Default)]
 struct State {
-    model: Option<(PathBuf, Sam3)>,
-    cache: Option<(u64, Encoded)>,
+    model: Option<(PathBuf, Model)>,
+    cache: Option<(u64, Scene)>,
     remote: Option<remote::Client>,
 }
 
@@ -220,7 +222,7 @@ fn run(rx: &mpsc::Receiver<Job>, shared: &Shared, idle: Duration) {
                     if state.model.is_some() || state.remote.is_some() {
                         state = State::default();
                         shared.loaded.store(false, Ordering::SeqCst);
-                        log::info!("SAM 3 unloaded after {} minutes without use", idle.as_secs() / 60);
+                        log::info!("AI mask model unloaded after {} minutes without use", idle.as_secs() / 60);
                     }
                     continue;
                 }
@@ -253,7 +255,7 @@ fn run(rx: &mpsc::Receiver<Job>, shared: &Shared, idle: Duration) {
             Ok(r) => r,
             Err(p) => {
                 let why = p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_default();
-                log::error!("SAM 3 panicked: {why}");
+                log::error!("AI mask model panicked: {why}");
                 // don't trust what the model kept: load it again next time
                 state = State::default();
                 Err("the AI model failed unexpectedly (it will be reloaded on the next try)".to_string())
@@ -286,14 +288,14 @@ fn cancel_queued(job: Job, shared: &Shared) {
 }
 
 /// The model for `dir`, loading it when needed.
-fn model<'a>(state: &'a mut State, shared: &Shared, dir: &std::path::Path) -> Result<&'a mut Sam3, String> {
+fn model<'a>(state: &'a mut State, shared: &Shared, dir: &std::path::Path) -> Result<&'a mut Model, String> {
     if state.model.as_ref().is_none_or(|(d, _)| d != dir) {
         state.model = None;
         state.cache = None;
         let _busy = Flag::raise(&shared.encoding);
         let t = web_time::Instant::now();
-        let m = Sam3::load(dir).map_err(|e| e.to_string())?;
-        log::info!("SAM 3 loaded in {:?}", t.elapsed());
+        let m = Model::load(dir).map_err(|e| e.to_string())?;
+        log::info!("{} loaded in {:?}", m.kind().name(), t.elapsed());
         state.model = Some((dir.to_path_buf(), m));
         shared.loaded.store(true, Ordering::SeqCst);
     }
@@ -319,7 +321,7 @@ fn render(job: &mut Job) -> Result<Input, String> {
 }
 
 /// The model and the encoded photo `job.key` (rendering and encoding it when needed).
-fn encoded<'a>(state: &'a mut State, shared: &Shared, job: &mut Job) -> Result<(&'a mut Sam3, &'a mut Encoded), String> {
+fn encoded<'a>(state: &'a mut State, shared: &Shared, job: &mut Job) -> Result<(&'a mut Model, &'a mut Scene), String> {
     model(state, shared, &job.dir)?;
     if state.cache.as_ref().is_none_or(|(k, _)| *k != job.key) {
         state.cache = None;
@@ -327,9 +329,8 @@ fn encoded<'a>(state: &'a mut State, shared: &Shared, job: &mut Job) -> Result<(
         let _busy = Flag::raise(&shared.encoding);
         let m = state.model.as_mut().map(|(_, m)| m).ok_or("the model did not load")?;
         let t = web_time::Instant::now();
-        let mut enc = m.encode(&input.rgb, input.w, input.h).map_err(|e| e.to_string())?;
-        m.prepare_clicks(&mut enc).map_err(|e| e.to_string())?;
-        log::info!("SAM 3 encoded {}×{} in {:?}", input.w, input.h, t.elapsed());
+        let enc = m.encode(&input.rgb, input.w, input.h).map_err(|e| e.to_string())?;
+        log::info!("{} encoded {}×{} in {:?}", m.kind().name(), input.w, input.h, t.elapsed());
         state.cache = Some((job.key, enc));
     }
     let State { model, cache, .. } = state;
@@ -350,6 +351,7 @@ fn remote_job(state: &mut State, shared: &Shared, job: &mut Job, endpoint: &str)
         }
         Kind::Prepare => Operation::Prepare,
         Kind::Text(text) => Operation::Text(text),
+        Kind::Box(_) => return Err("box prompts need the local MobileSAM model, not the remote SAM 3 worker".into()),
         Kind::Clicks(clicks) => Operation::Clicks(clicks.iter().map(|c| [c.x, c.y, if c.positive { 1.0 } else { 0.0 }]).collect()),
         Kind::Detail { prompt, region: r } => {
             region = Some(r);
@@ -399,7 +401,6 @@ fn run_job(state: &mut State, shared: &Shared, job: &mut Job) -> Result<Option<S
         }
         return result.map_err(|e| format!("Remote SAM 3 failed: {e}. Check the worker and SSH tunnel, then retry."));
     }
-    let side = lightcraft_segment::MASK_SIDE;
     match std::mem::replace(&mut job.kind, Kind::Prepare) {
         Kind::Reset => {
             *state = State::default();
@@ -413,11 +414,16 @@ fn run_job(state: &mut State, shared: &Shared, job: &mut Job) -> Result<Option<S
         Kind::Clicks(clicks) => {
             let (m, enc) = encoded(state, shared, job)?;
             let p = m.segment_clicks(enc, &clicks).map_err(|e| e.to_string())?;
-            Ok(Some(SegMask::from_logits(side, &p.logits)))
+            Ok(Some(SegMask::from_logits(p.side, &p.logits)))
+        }
+        Kind::Box(bx) => {
+            let (m, enc) = encoded(state, shared, job)?;
+            let p = m.segment_box(enc, bx, &[]).map_err(|e| e.to_string())?;
+            Ok(Some(SegMask::from_logits(p.side, &p.logits)))
         }
         Kind::Text(text) => {
             let (m, enc) = encoded(state, shared, job)?;
-            Ok(text_logits(m, enc, &text)?.map(|l| SegMask::from_logits(side, &l)))
+            Ok(m.segment_text(enc, &text).map_err(|e| e.to_string())?.map(|k| SegMask::from_logits(k.side, &k.logits)))
         }
         #[cfg(test)]
         #[allow(clippy::panic)]
@@ -431,7 +437,7 @@ fn run_job(state: &mut State, shared: &Shared, job: &mut Job) -> Result<Option<S
             if !(rw > 0.0 && rh > 0.0) {
                 return Ok(None);
             }
-            let logits = match prompt {
+            let mask = match prompt {
                 Prompt::Clicks(clicks) => {
                     let inside: Vec<lightcraft_segment::Click> = clicks
                         .iter()
@@ -442,12 +448,12 @@ fn run_job(state: &mut State, shared: &Shared, job: &mut Job) -> Result<Option<S
                     if !inside.iter().any(|c| c.positive) {
                         return Ok(None);
                     }
-                    Some(m.segment_clicks(&mut enc, &inside).map_err(|e| e.to_string())?.logits)
+                    Some(m.segment_clicks(&mut enc, &inside).map_err(|e| e.to_string())?)
                 }
-                Prompt::Text(text) => text_logits(m, &mut enc, &text)?,
+                Prompt::Text(text) => m.segment_text(&mut enc, &text).map_err(|e| e.to_string())?,
             };
-            log::info!("SAM 3 detail pass ({}×{}) in {:?}", input.w, input.h, t.elapsed());
-            Ok(logits.map(|l| SegMask::from_logits_in(side, &l, region)))
+            log::info!("{} detail pass ({}×{}) in {:?}", m.kind().name(), input.w, input.h, t.elapsed());
+            Ok(mask.map(|k| SegMask::from_logits_in(k.side, &k.logits, region)))
         }
     }
 }
@@ -538,5 +544,21 @@ mod tests {
         assert_eq!(out.len(), 3);
         assert!(out[0].superseded && out[1].superseded && !out[2].superseded);
         assert_eq!(shared.pending.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn a_box_needs_the_local_model_and_never_goes_to_the_remote_worker() {
+        let (tx, _rx) = mpsc::channel();
+        let mut state = State::default();
+        let shared = Shared::default();
+        let mut j = job(Tag::Wait, &tx);
+        j.kind = Kind::Box([0.1, 0.1, 0.9, 0.9]);
+        // no model in the folder: an error that says so, nothing loaded
+        let e = model(&mut state, &shared, &j.dir).err().unwrap();
+        assert!(e.contains("not found"), "{e}");
+        assert!(state.model.is_none() && !shared.loaded.load(Ordering::SeqCst));
+        // SAM 3 on the remote worker has no box operation: refused before connecting
+        let e = remote_job(&mut state, &shared, &mut j, "127.0.0.1:1").unwrap_err();
+        assert!(e.contains("MobileSAM"), "{e}");
     }
 }

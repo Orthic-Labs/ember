@@ -52,7 +52,7 @@ lightcraft-fetch = { workspace = true }
 rightkit-crash = { version = "=0.3.0", default-features = false }
 
 [features]
-# AI masks with SAM 3 (Object / Describe). Off for the web and CLI builds.
+# AI masks (Object / Describe) with MobileSAM, or SAM 3 when installed. Off for the web and CLI builds.
 sam = ["dep:lightcraft-segment"]
 denoise = ["dep:lightcraft-denoise", "lightcraft-denoise/runtime", "lightcraft-gpu/denoise"]
 # Opt-in ONNX Runtime (DirectML / CoreML) denoise backend as a third candidate beside the CPU and wgpu runners, behind the same

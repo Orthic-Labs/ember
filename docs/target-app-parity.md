@@ -95,7 +95,7 @@ search embeddings; generative remove runs in reference publisher's cloud.
 |---|---|---|
 | Subject / Sky / Background masks | classical heuristics; the file's own DNG semantic mattes | 🟡 [#27](https://github.com/Orthic-Labs/ember/issues/27) |
 | People (faces, body, hair, skin…) and Landscape masks | — | ⬜ [#27](https://github.com/Orthic-Labs/ember/issues/27) |
-| Object / Describe masks | SAM 3 in pure Rust (Metal / CPU); opt-in 3.4 GB download, no mirror configured | 🟡 [#62](https://github.com/Orthic-Labs/ember/issues/62) |
+| Object / Describe masks | MobileSAM in pure Rust (Metal / CPU) for Object: opt-in 40.6 MB ungated Apache-2.0 download; Describe needs optional SAM 3 until #221 | 🟡 [#62](https://github.com/Orthic-Labs/ember/issues/62) |
 | Depth range mask, Lens Blur | Depth range selects on the depth map a Pixel / Android portrait JPEG or an iPhone portrait HEIC embeds (synthetic files only so far); Lens Blur has no depth source yet | 🟡 [#64](https://github.com/Orthic-Labs/ember/issues/64) |
 | AI Denoise | Bayer only, pure-Rust CPU / GPU, user-installed weights | 🟡 [#27](https://github.com/Orthic-Labs/ember/issues/27) |
 | Raw Details, Super Resolution | — | ⬜ [#51](https://github.com/Orthic-Labs/ember/issues/51) |

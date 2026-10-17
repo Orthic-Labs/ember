@@ -175,7 +175,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create New Mask",
             [],
             None,
-            "{kind: brush|linear|radial|sky|subject|background|luminanceRange|depthRange|colorRange|object|prompt, ...shape params (start/end, center/rx/ry/angle/feather, lo/hi…; depthRange: lo/hi/feather over the photo's embedded depth map, 0 near … 1 far; object: points/exclude [[x,y],…]; prompt: text; object/prompt: seg? a stored segmentation, no model needed), name?} — AI kinds need the SAM 3 model; in the app a prompt returns {pending} and the mask appears when found",
+            "{kind: brush|linear|radial|sky|subject|background|luminanceRange|depthRange|colorRange|object|prompt, ...shape params (start/end, center/rx/ry/angle/feather, lo/hi…; depthRange: lo/hi/feather over the photo's embedded depth map, 0 near … 1 far; object: points/exclude [[x,y],…]; prompt: text; object/prompt: seg? a stored segmentation, no model needed), name?} — AI kinds need the AI mask model (MobileSAM for object; prompt needs SAM 3 until the grounding step #221 exists); in the app a prompt returns {pending} and the mask appears when found",
             has_active,
             |s, p| {
                 let kind = str_param(p, "kind").unwrap_or("radial").to_string();
@@ -365,7 +365,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Object Click",
             [],
             None,
-            "{x, y: normalized image point, exclude?: bool (⌥-click: leave this part out), id?: maskId} — a click on the selected mask's Object selection (its last Object component); SAM 3 re-segments the object → {include, exclude}",
+            "{x, y: normalized image point, exclude?: bool (⌥-click: leave this part out), id?: maskId} — a click on the selected mask's Object selection (its last Object component); the AI mask model re-segments the object → {include, exclude}",
             has_active,
             |s, p| {
                 let c = "mask.objectPoint";
@@ -421,7 +421,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Refine AI Mask Detail",
             [],
             None,
-            "{id?: maskId, component?} — a zoomed-in SAM 3 pass over an Object/Describe selection (default: the mask's last one): the photo around it is analyzed again at a higher resolution, in the background; the mask updates when it's done → {started}",
+            "{id?: maskId, component?} — a zoomed-in AI mask pass over an Object/Describe selection (default: the mask's last one): the photo around it is analyzed again at a higher resolution, in the background; the mask updates when it's done → {started}",
             has_active,
             |s, p| {
                 let c = "mask.refineDetail";
@@ -446,7 +446,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Prepare AI Masks",
             [],
             None,
-            "{} — load SAM 3 and analyze the active photo in the background, so Object clicks are instant → {busy}",
+            "{} — load the AI mask model and analyze the active photo in the background, so Object clicks are instant → {busy}",
             has_active,
             |s, _| {
                 let c = "segment.prepare";
@@ -460,13 +460,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "AI Mask Model Status",
             [],
             None,
-            "{} — whether this build has AI masks, whether the SAM 3 model is installed (and where), loaded, busy, and the download's progress → {available, installed, dir, loaded, busy, analyzing, sizeBytes, license, licenseUrl, mirrors, download: {running, done, total, file, error, finished}}",
+            "{} — whether this build has AI masks, whether an AI mask model is installed (and where, and which: MobileSAM or SAM 3), whether Describe (text) works, loaded, busy, and the default model's download size and licence and the download's progress → {available, installed, model, describe, dir, loaded, busy, analyzing, sizeBytes, license, licenseUrl, mirrors, download: {running, done, total, file, error, finished}}",
             super::always,
             |s, _| {
                 let g = &s.segmenter;
                 Ok(json!({
                     "available": crate::segment::Segmenter::AVAILABLE,
                     "installed": g.installed(),
+                    "model": g.installed_model(),
+                    "describe": g.require_text().is_ok(),
                     "dir": g.dir.as_ref().map(|d| d.display().to_string()),
                     "remote": g.remote_endpoint(),
                     "loaded": g.loaded(),
@@ -485,7 +487,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Use SAM 3 Model Folder",
             [],
             None,
-            "{path} — verify an existing local SAM 3 folder (model.safetensors, vocab.json, merges.txt) and use it → {dir, installed}",
+            "{path} — verify an existing local model folder (MobileSAM's mobile_sam-tiny-vitt.safetensors, or SAM 3's model.safetensors, vocab.json and merges.txt) and use it → {dir, installed}",
             super::always,
             |s, p| {
                 let c = "segment.model.selectFolder";
@@ -499,7 +501,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Download AI Mask Model",
             [],
             None,
-            "{acknowledged: true} — download the SAM 3 model (about 3.4 GB, Meta's SAM License, not Ember's) in the background, from the configured mirrors; only after the user agreed to it. Watch segment.model.status; segment.model.cancel stops it (it resumes later) → {started, installed, downloading}",
+            "{acknowledged: true} — download the MobileSAM model (about 40.6 MB, Apache License 2.0, not Ember's) in the background, from the configured mirrors (default: a pinned Hugging Face revision); only after the user agreed to it. Watch segment.model.status; segment.model.cancel stops it (it resumes later) → {started, installed, downloading}",
             super::always,
             |s, p| {
                 let c = "segment.model.download";
@@ -507,8 +509,9 @@ pub fn specs() -> Vec<CommandSpec> {
                     return Err(bad(
                         c,
                         format!(
-                            "the SAM 3 model is a {:.1} GB download under Meta's {} ({}): pass `acknowledged: true` once the user has agreed to download it",
-                            crate::segment::MODEL_BYTES as f64 / 1e9,
+                            "the {} model is a {} download under the {} ({}): pass `acknowledged: true` once the user has agreed to download it",
+                            crate::segment::MODEL_NAME,
+                            crate::segment::size_text(crate::segment::MODEL_BYTES),
                             crate::segment::LICENSE_NAME,
                             crate::segment::LICENSE_URL
                         ),
@@ -523,7 +526,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cancel AI Mask Model Download",
             [],
             None,
-            "{} — stop the SAM 3 download (what has arrived is kept, and a new download resumes from it) → {cancelled}",
+            "{} — stop the model download (what has arrived is kept, and a new download resumes from it) → {cancelled}",
             super::always,
             |s, _| Ok(json!({"cancelled": s.segmenter.cancel_download()}))
         ),

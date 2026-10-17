@@ -11,7 +11,8 @@ use crate::EngineError;
 pub enum AiModel {
     /// YuNet, which finds faces (`faces.detect`; installed in Settings ▸ Faces).
     FaceDetector,
-    /// SAM 3, behind Object and Describe masks (`segment.model.download`).
+    /// The AI mask model, behind Object and Describe masks: MobileSAM, or SAM 3 (`segment.model.download`).
+    /// (Named for SAM 3, where it started: frontends decide on this value, so it stays.)
     Sam3,
 }
 

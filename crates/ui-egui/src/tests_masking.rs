@@ -1321,6 +1321,8 @@ fn ai_masks_without_the_model_offer_the_download() {
     let dir = std::env::temp_dir().join(format!("lc-ui-no-sam3-{}", std::process::id()));
     h.app.session.segmenter.dir = Some(dir.clone());
     h.app.session.segmenter.mirrors_file = Some(dir.join("none.txt"));
+    // (the built-in location is on the internet: this test never goes there)
+    h.app.session.segmenter.default_mirrors = false;
     let t = std::time::Instant::now();
     let r = h.request("ui.clickWidget", json!({"id": "maskNew:object"}), T);
     assert_eq!(r["ok"], true, "{r}");
