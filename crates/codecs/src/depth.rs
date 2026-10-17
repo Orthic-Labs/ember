@@ -60,7 +60,7 @@ fn png(bytes: &[u8]) -> Result<DepthCodes> {
     };
     let (data, max): (Vec<u16>, u32) = match out.bit_depth {
         png::BitDepth::Sixteen => {
-            let be = buf.chunks_exact(2).step_by(channels).filter_map(|c| <[u8; 2]>::try_from(c).ok());
+            let be = buf.as_chunks::<2>().0.iter().step_by(channels).copied();
             (be.map(u16::from_be_bytes).collect(), 65535)
         }
         _ => (buf.iter().step_by(channels).map(|&v| u16::from(v)).collect(), 255),

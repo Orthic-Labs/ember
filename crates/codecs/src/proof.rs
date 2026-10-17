@@ -136,7 +136,7 @@ fn compensate_black(rgb: &mut [f32], black: [f32; 3]) {
     if !(0..3).all(|k| bk[k].is_finite() && bk[k] >= 0.0 && bk[k] < 0.5 * white[k]) {
         return;
     }
-    for px in rgb.chunks_exact_mut(3) {
+    for px in rgb.as_chunks_mut::<3>().0 {
         let xyz = to_xyz.apply([f64::from(px[0]), f64::from(px[1]), f64::from(px[2])]);
         let scaled = [0, 1, 2].map(|k| white[k] * (xyz[k] - bk[k]) / (white[k] - bk[k]));
         let out = from_xyz.apply(scaled);

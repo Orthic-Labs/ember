@@ -258,7 +258,7 @@ mod tests {
         assert_eq!(at(0, 512, 0), 0.0);
         assert_eq!(at(2, 1023, 1023), 0.0);
         // a black photo is -mean / std
-        let p = prepare(&vec![0u8; 2 * 2 * 3], 2, 2).unwrap();
+        let p = prepare(&[0u8; 2 * 2 * 3], 2, 2).unwrap();
         assert!((p.pixels[0] + 2.117_9).abs() < 1e-3, "{}", p.pixels[0]);
         assert!(prepare(&[0; 5], 2, 2).is_err());
     }

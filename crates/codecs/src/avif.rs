@@ -897,7 +897,7 @@ fn convert(pic: &av1::Picture, want: Want, nclx: Option<Nclx>) -> Result<Dec> {
     let mut data = alloc_u16(sample_count(w, h, 3)?)?;
     let Some((sx, sy)) = pic.layout.shifts() else {
         // luma only: grey
-        for (o, &v) in data.chunks_exact_mut(3).zip(&luma.data) {
+        for (o, &v) in data.as_chunks_mut::<3>().0.iter_mut().zip(&luma.data) {
             let g = to16(ny(f32::from(v)));
             o.fill(g);
         }
@@ -917,7 +917,7 @@ fn convert(pic: &av1::Picture, want: Want, nclx: Option<Nclx>) -> Result<Dec> {
         let yrow = luma.data.get(y * w..(y + 1) * w).ok_or_else(|| bad("a luma row is missing"))?;
         chroma_row(cb, y, sx, sy, &mut cbr).ok_or_else(|| bad("a chroma plane is the wrong size"))?;
         chroma_row(cr, y, sx, sy, &mut crr).ok_or_else(|| bad("a chroma plane is the wrong size"))?;
-        for (x, px) in out.chunks_exact_mut(3).enumerate() {
+        for (x, px) in out.as_chunks_mut::<3>().0.iter_mut().enumerate() {
             let yv = f32::from(yrow.get(x).copied().unwrap_or(0));
             let (cbv, crv) = (cbr.get(x).copied().unwrap_or(0.0), crr.get(x).copied().unwrap_or(0.0));
             let [r, g, b] = match coeffs {
@@ -1050,7 +1050,7 @@ pub(crate) fn decode(bytes: &[u8], opts: &DecodeOptions) -> Result<Decoded> {
             return Err(bad("the alpha plane's size differs from the picture's"));
         }
         let mut rgba = alloc_u16(sample_count(color.w, color.h, 4)?)?;
-        for ((o, c3), a) in rgba.chunks_exact_mut(4).zip(data.chunks_exact(3)).zip(&alpha.data) {
+        for ((o, c3), a) in rgba.as_chunks_mut::<4>().0.iter_mut().zip(data.as_chunks::<3>().0).zip(&alpha.data) {
             o[..3].copy_from_slice(c3);
             o[3] = *a;
         }
