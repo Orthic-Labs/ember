@@ -50,3 +50,15 @@ Tauri remains preview until installed macOS & Windows qualification passes. Cuto
 ## Approved workspace design
 
 Astra layout with Fable refinements uses existing RightKit AppShell & SegmentedControl. Library & Develop share source sidebar (246px default), inspector content (292px) & one 44px tool rail; manual collapse preserves rail access. Filmstrip defaults to108px with source/filter context. Six primary tools are Edit, Crop, Heal, Mask, Presets & Info; advanced panels stay available under More, with active indication & keyboard/focus handling. Library uses justified virtual rows & compact Display controls. Develop keeps labelled Before/After in one stage-footer row & puts Navigator in zoom menu. Engine previews, commands, preferences, import/export & gesture undo remain authoritative. Generated target-native qualification measures actual geometry & executes updated rail journeys before this design is qualified.
+
+## Desktop updater publication
+
+The desktop app updates through `tauri-plugin-updater` and `@rightkit/app-update` (`apps/lightcraft-desktop/web/src/updates.ts`). The endpoint is `https://github.com/Orthic-Labs/ember/releases/latest/download/latest.json` and the public key is the suite updater key (`29395F9FF466261D`, identical to HeardRight, GenRight and MailRight); Ember has no key of its own. `right-release.config.mjs` declares the NSIS setup exe and macOS `.app.tar.gz` (with their `.sig`) under `targets.<os>.updater.artifacts`; the portable zips stay under `targets.<os>.artifacts` and are not in `latest.json`. Candidate bundles disable updater artifacts (`tauri.candidate.conf.json`), so the updater bundles come from a native-host release bundle signed by `right-release sign-updater`.
+
+Publish a sealed release, one run per platform (both share one `latest.json`):
+
+```sh
+right-release publish-update --release <id> --platform win|mac --tier update
+```
+
+`--tier update` writes tier `update`; Ember ignores the manifest tier (`getTier` returns `patch`, `isEligible` is true), so every published release is available to every user. `UPDATER_PROVISIONED` stays false until the first signed `latest.json` is live and a release proves the check; flip it only then.

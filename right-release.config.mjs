@@ -12,13 +12,18 @@ const packageCommand = { cmd: 'node', args: ['scripts/desktop/finalize-candidate
 const winStage = `dist/native/windows-x86_64/ember-${version}`;
 const macStage = `dist/native/macos-arm64/ember-${version}`;
 const winArchive = `dist/releases/windows/${version}/x86_64/ember-${version}-windows-x86_64.zip`;
+// Tauri updater bundles (rightkit#237 GitHub Releases lane): the NSIS setup exe and the macOS .app.tar.gz, each with its .sig made by
+// right-release sign-updater with the suite key. Names stay within [A-Za-z0-9._+-] so GitHub keeps them. They come from an updater-enabled
+// Tauri bundle (tauri.conf.json createUpdaterArtifacts); candidate bundles turn that off (tauri.candidate.conf.json). Portable zips stay in `artifacts`.
+const winUpdater = `target/x86_64-pc-windows-msvc/debug/bundle/nsis/Ember_${version}_x64-setup.exe`;
+const macUpdater = 'target/aarch64-apple-darwin/debug/bundle/macos/Ember.app.tar.gz';
 const macArchive = `dist/releases/mac/${version}/arm64/ember-${version}-macos-arm64.zip`;
 export default {
   schema: 1,
   app: 'lightcraft-desktop',
   version,
   hostedWorkflows: 'right-git-ci-only',
-  distribution: { provider: 'github-releases', repository: 'Orthic-Labs/ember' },
+  distribution: { provider: 'github-releases', repository: 'Orthic-Labs/ember', updaterKeyId: '29395F9FF466261D' },
   packageManager: 'pnpm@11.24.0',
   nativeAssembly: { cargoManifest: 'apps/lightcraft-desktop/Cargo.toml' },
   buildInputs: {
@@ -46,6 +51,7 @@ export default {
       },
       package: packageCommand,
       artifacts: [winArchive],
+      updater: { artifacts: [{ file: winUpdater, signature: `${winUpdater}.sig`, platform: 'windows-x86_64' }] },
     },
     mac: {
       signed: true,
@@ -62,6 +68,7 @@ export default {
       package: packageCommand,
       notarize: { file: macArchive, staple: false, receipt: '.right-release/receipts/macos-arm64-notarization.json' },
       artifacts: [macArchive],
+      updater: { artifacts: [{ file: macUpdater, signature: `${macUpdater}.sig`, platform: 'darwin-aarch64' }] },
     },
   },
 };
