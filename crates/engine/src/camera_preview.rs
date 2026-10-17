@@ -94,6 +94,7 @@ fn maker_matrix(raw: &mut RawImage, bytes: &[u8]) -> bool {
 
 /// [`starting_colour`] with the JPEG fit (the look, and whether the JPEG is black and white) and the black-and-white
 /// JPEG's tone fit passed in (tests pin the order with them).
+#[cfg(test)]
 fn starting_colour_with(
     raw: &mut RawImage,
     fit: impl FnOnce(&RawImage, &CameraTransform) -> (Option<CameraLook>, bool),

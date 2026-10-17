@@ -317,8 +317,7 @@ fn a_model_change_flips_an_ai_mask_to_needs_update_and_a_recompute_clears_it() {
     assert!(!m.ai_stale(7, 0, "MobileSAM"), "current for the model it was computed with");
     assert!(m.ai_stale(7, 0, "SAM 3"), "another model id makes it stale");
     assert!(m.ai_stale(7, 0, NO_AI_MODEL), "no model installed makes it stale");
-    let mut d = DevelopSettings::default();
-    d.masks = vec![m.clone()];
+    let d = DevelopSettings { masks: vec![m.clone()], ..DevelopSettings::default() };
     assert_eq!(lightcraft_develop::ai_stale_in(&d, 7, "MobileSAM"), 0);
     assert_eq!(lightcraft_develop::ai_stale_in(&d, 7, "SAM 3"), 1, "the photo's count follows the model");
     m.restamp(7, 0, "SAM 3");

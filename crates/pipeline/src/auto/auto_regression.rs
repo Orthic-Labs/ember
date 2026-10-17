@@ -542,7 +542,7 @@ fn the_decoders_clipped_count_on_the_source_replaces_the_proxy_estimate() {
     let counted = SourceInfo { clipped_share: Some(0.25), ..estimated.clone() };
     let pop = scene_population_with(&src, &counted, &DevelopSettings::default(), &AutoHints::default()).expect("population");
     assert_eq!(pop.clipped, 0.25);
-    assert!(auto_with(&src, &counted, &AutoHints::default()).highlights >= fit::highlight_floor(0.25));
+    assert!(auto_with(&src, &counted, &AutoHints::default()).highlights >= f64::from(fit::highlight_floor(0.25)));
     // hints stay the stronger word; a non-finite count counts as none
     let hinted =
         scene_population_with(&src, &counted, &DevelopSettings::default(), &AutoHints { faces: &[], clipped_share: Some(0.1) }).expect("population");
