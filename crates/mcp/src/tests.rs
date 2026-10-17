@@ -157,6 +157,23 @@ fn export_tool_forwards_its_advertised_options() {
     assert!(!r.is_error, "{r:?}");
     let files: Vec<_> = std::fs::read_dir(base.join("sub")).unwrap().collect();
     assert_eq!(files.len(), 1, "written into the subfolder");
+    // the JPEG XL options reach the encoder: each changes the file the default options write
+    let mut size = |extra: serde_json::Value| -> u64 {
+        let _ = std::fs::remove_dir_all(&base);
+        let mut args = json!({"dir": base.to_string_lossy(), "longEdge": 64, "format": "jxl"});
+        if let (Some(a), Some(e)) = (args.as_object_mut(), extra.as_object()) {
+            a.extend(e.clone());
+        }
+        let r = call_tool(&mut b, "export", &args);
+        assert!(!r.is_error, "{r:?}");
+        let files: Vec<_> = std::fs::read_dir(&base).unwrap().collect();
+        assert_eq!(files.len(), 1, "one file written");
+        files[0].as_ref().unwrap().metadata().unwrap().len()
+    };
+    let default = size(json!({}));
+    for extra in [json!({"jxlLossless": true}), json!({"jxlEffort": "fast"}), json!({"jxlProgressive": true})] {
+        assert_ne!(size(extra.clone()), default, "{extra} was dropped");
+    }
     let _ = std::fs::remove_dir_all(&base);
 }
 
