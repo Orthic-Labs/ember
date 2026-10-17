@@ -376,6 +376,70 @@ mod tests {
         assert_eq!(s2.catalog.photo(id).unwrap().rating, 5, "the rating survived");
     }
 
+    /// The documented web guarantee (docs/web.md, #193): a command is in memory when it returns and
+    /// in storage one flush later. A kill in between loses exactly the commands not yet flushed,
+    /// never more, and what storage holds always opens. A kill after the flush keeps the command.
+    /// The kill is simulated by reloading from the "disk" without applying the pending ops, and by
+    /// applying only a prefix of them.
+    #[test]
+    fn kill_right_after_return_loses_only_the_unflushed_command() {
+        let open = |disk: &BTreeMap<String, Vec<u8>>| {
+            let files = Files::default();
+            for (k, v) in disk {
+                files.preload(k, v.clone());
+            }
+            let mut s = Session::new();
+            let stores = LibraryStores { dir: "browser".into(), catalog: Box::new(files.store()), files: Box::new(files.store()), on_disk: false };
+            s.open_library_in(stores, true).unwrap();
+            (s, files)
+        };
+        let mut disk = BTreeMap::new();
+        let (mut s, files) = open(&disk);
+        flush(&files, &mut disk);
+        assert_eq!(files.durability(), Durability::Durable);
+        let id = s.selection.active.unwrap();
+        let before = s.catalog.photo(id).unwrap().rating;
+        let rated = if before == 5 { 3 } else { 5 };
+
+        s.execute("photo.rate", &json!({"rating": rated})).unwrap();
+        s.save_view();
+        // the command returned: visible in memory, not yet durable
+        assert_eq!(s.catalog.photo(id).unwrap().rating, rated);
+        assert_eq!(files.durability(), Durability::Pending, "the weaker guarantee: written a flush later");
+        let ops = files.take_dirty();
+        assert!(!ops.is_empty());
+
+        // killed before the flush ran: the command is lost, the library is the last durable state
+        let (killed, _) = open(&disk);
+        assert_eq!(killed.catalog.photo(id).unwrap().rating, before, "the unflushed command is lost");
+        assert_eq!(killed.catalog.len(), s.catalog.len(), "nothing else is lost");
+
+        // killed part-way through the flush, after any prefix of its writes: still opens, and the
+        // rating is the old or the new one, never something else
+        for n in 0..=ops.len() {
+            let mut partial = disk.clone();
+            for op in ops.iter().take(n) {
+                match op {
+                    FlushOp::Write { name, data } => {
+                        partial.insert(name.clone(), data.clone());
+                    }
+                    FlushOp::Append { name, offset, data } => {
+                        let f = partial.entry(name.clone()).or_default();
+                        assert_eq!(f.len(), *offset);
+                        f.extend_from_slice(data);
+                    }
+                }
+            }
+            let (r, _) = open(&partial);
+            let got = r.catalog.photo(id).unwrap().rating;
+            assert!(got == before || got == rated, "prefix {n}: rating {got}");
+            assert_eq!(r.catalog.len(), s.catalog.len(), "prefix {n}");
+            if n == ops.len() {
+                assert_eq!(got, rated, "the full flush keeps the command");
+            }
+        }
+    }
+
     #[test]
     fn library_survives_reload_through_flushes() {
         let mut disk = BTreeMap::new();

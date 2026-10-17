@@ -280,8 +280,12 @@ are the same in every version, so serve them with `Cache-Control: no-cache` (not
     `beforeunload` also asks the browser to confirm leaving, which gives the in-flight write time to
     finish. No handler can wait for an asynchronous write, so a forced kill (task manager, crash) in
     the window is still lost. This is the documented weaker guarantee.
-  - Not run yet: a browser kill check (headless Chrome: run a command, kill the tab, reload,
-    compare). Only the state machine is covered by tests.
+  - Kill check: `kill_right_after_return_loses_only_the_unflushed_command`
+    (`apps/lightcraft-web/src/files.rs`) runs a command, takes the pending flush and "kills" the page
+    before it ran, and after every prefix of its writes. It asserts the documented guarantee: the
+    command is lost when nothing was flushed, the library reopens intact (old or new value, never
+    a mix), and the full flush keeps the command. A real-browser kill (headless Chrome) is not run;
+    the storage backend's atomic replace per file is what that test assumes.
 - **Data safety: what is left** (issue #107): a panic in a decoder still ends the page, since a
   wasm32 panic aborts and can't be caught (a photo that panics while its thumbnail renders can do
   so again after a reload: use the `?safe` start above). Nothing else is open. [#194](https://github.com/Orthic-Labs/ember/issues/194)
