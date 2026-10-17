@@ -196,10 +196,13 @@ fn classic_keymap_p_picks_and_cmd0_toggles_the_histogram() {
     assert_eq!(h.app.ui.histogram, histogram, "⌘⇧H toggles the Histogram back with the Classic keymap");
 }
 
-/// KEYC-MODULE-OUTPUT: the Map, Slideshow and Print module keys (Book and Web are missing).
+/// KEYC-MODULE-OUTPUT: the Book, Map, Slideshow and Print module keys (Web is missing).
 #[test]
 fn keyc_module_output_keys_dispatch_the_map_slideshow_and_print_modules() {
-    assert_dispatch("KEYC-MODULE-OUTPUT", &[("Cmd+Alt+3", "map.view"), ("Cmd+Alt+5", "slideshow.view"), ("Cmd+Alt+6", "print.view")]);
+    assert_dispatch(
+        "KEYC-MODULE-OUTPUT",
+        &[("Cmd+Alt+3", "map.view"), ("Cmd+Alt+4", "book.view"), ("Cmd+Alt+5", "slideshow.view"), ("Cmd+Alt+6", "print.view")],
+    );
 }
 
 /// KEYC-COMPARE: Z, Home / End, = / −, ⌘⇧D and S. In the grids S runs `stack.toggle` (test
