@@ -1098,7 +1098,8 @@ mod tests {
         assert_eq!(centre_at(&a, &view, centre, pos2(460.0, 300.0)), None, "a point well off the centre is not the location");
     }
 
-
+    #[test]
+    fn map_online_and_tile_url_commands_toggle_and_validate() {
         let mut a = app();
         assert_eq!(a.run("map.online", json!({"enabled": true})).unwrap()["online"], true);
         assert!(a.ui.settings.online_map);

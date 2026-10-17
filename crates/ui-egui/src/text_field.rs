@@ -930,7 +930,7 @@ mod no_raw_text_edit {
         assert!(files.len() > 20, "the scan found only {} source files under {}", files.len(), src.display());
         let mut hits = Vec::new();
         for path in files {
-            let rel = path.strip_prefix(&src).unwrap_or(&path).to_string_lossy().replace('\', "/");
+            let rel = path.strip_prefix(&src).unwrap_or(&path).to_string_lossy().replace('\\', "/");
             if rel == "text_field.rs" || SKIPPED.iter().any(|(skipped, _)| *skipped == rel.as_str()) {
                 continue;
             }
