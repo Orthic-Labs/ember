@@ -93,7 +93,7 @@ pub fn stale_mask_ids(d: &DevelopSettings, source: u64, geometry: u64) -> Vec<u3
 }
 
 /// Update AI Settings for photo `id`: every stale AI mask, or only `mask` (its own Update badge). A
-/// stale Object or Describe mask needs the SAM 3 model and stays stale: the status line says so.
+/// stale Object or Describe mask needs the AI mask model and stays stale: the status line says so.
 fn update_ai(app: &mut LightcraftApp, id: PhotoId, mask: Option<u32>) {
     let mut params = json!({"ids": [id.0]});
     if let Some(mask) = mask {
@@ -102,7 +102,7 @@ fn update_ai(app: &mut LightcraftApp, id: PhotoId, mask: Option<u32>) {
     if let Ok(result) = app.run("develop.updateAi", params)
         && result["pending"].as_u64().unwrap_or(0) > 0
     {
-        app.ui.status = crate::i18n::tr("Object and Describe masks need the SAM 3 model to update").to_string();
+        app.ui.status = crate::i18n::tr("Object and Describe masks need the AI mask model to update").to_string();
     }
 }
 
@@ -211,7 +211,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
             ui.horizontal(|ui| {
                 let pct = if download.total > 0 { download.done as f64 / download.total as f64 } else { 0.0 };
                 let r = ui.add(
-                    egui::ProgressBar::new(pct as f32).desired_width(ui.available_width() - 70.0).text(format!("SAM 3: {} %", (pct * 100.0).floor())),
+                    egui::ProgressBar::new(pct as f32).desired_width(ui.available_width() - 70.0).text(format!("{}: {} %", lightcraft_engine::segment::MODEL_NAME, (pct * 100.0).floor())),
                 );
                 register(ui.ctx(), "maskSamProgress", r.rect);
                 if text_button(ui, "maskSamDetails", crate::i18n::tr("Details"), false).clicked() {
@@ -294,7 +294,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
                 let tip = if m.ai_recomputable() {
                     crate::i18n::tr("This AI mask is out of date: click to update it")
                 } else {
-                    crate::i18n::tr("Object and Describe masks need the SAM 3 model to update")
+                    crate::i18n::tr("Object and Describe masks need the AI mask model to update")
                 };
                 if click.on_hover_text(tip).clicked() {
                     update_ai(app, id, Some(m.id));
@@ -1134,7 +1134,7 @@ mod tests {
         d.masks = vec![ai_mask(1, object, 0)];
         app.session.set_develop(id, d, "setup").unwrap();
         update_ai(&mut app, id, Some(1));
-        assert!(app.ui.status.contains("SAM 3"), "{}", app.ui.status);
+        assert!(app.ui.status.contains("AI mask model") && !app.ui.status.contains("SAM 3"), "{}", app.ui.status);
         assert!(panel_widgets(&mut app, id).contains(&"maskUpdate:1".to_string()), "still stale: the badge stays");
     }
 }

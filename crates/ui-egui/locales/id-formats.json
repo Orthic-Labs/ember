@@ -156,7 +156,7 @@
   "Shows the model's terms, then downloads {} from {host}, installs it and starts using it. Nothing else is sent.": "Menampilkan ketentuan model, lalu mengunduh {} dari {host}, memasangnya, dan mulai menggunakannya. Tidak ada yang lain yang dikirim.",
   "Smart album: {}": "Album pintar: {}",
   "Tagged {n} photo{} from the tracklog": "Diberi tag {n} foto{} dari log jejak",
-  "The SAM 3 download failed: {e}": "Unduhan SAM 3 gagal: {e}",
+  "The MobileSAM download failed: {e}": "Unduhan MobileSAM gagal: {e}",
   "There is a keyword set “{name}” already": "Sudah ada set kata kunci “{name}”",
   "There is a “{name}” at the top level already. Merge the two?": "Sudah ada “{name}” di tingkat teratas. Gabungkan keduanya?",
   "Trained on: {provenance}": "Dilatih dengan: {provenance}",

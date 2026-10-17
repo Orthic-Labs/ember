@@ -173,7 +173,7 @@
   "Replace {} with:": "将 {0} 替换为：",
   "Scores {scope} for focus and exposure and finds similar shots taken within seconds of each other (bursts).": "为{scope}评估对焦和曝光，并找出相隔几秒内拍摄的相似照片（连拍）。",
   "Tagged {n} photo{} from the tracklog": "已根据轨迹日志标记 {n} 张照片{0:.0}",
-  "The SAM 3 download failed: {e}": "SAM 3 下载失败：{e}",
+  "The MobileSAM download failed: {e}": "MobileSAM 下载失败：{e}",
   "Unknown tag{s} {} stay{} as typed (see Tags)": "未知标签{s:.0} {0} 将按原样保留{1:.0}（参见“标签”）",
   "Virtual copy “{name}” of {of}": "{of} 的虚拟副本“{name}”",
   "Working on {what} for {} photos…": "正在为 {0} 张照片处理{what}…",

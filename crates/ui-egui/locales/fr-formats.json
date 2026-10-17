@@ -124,7 +124,7 @@
   "Showing {n} of {}": "Affichage de {n} sur {}",
   "Smart album: {}": "Album dynamique : {}",
   "Tagged {n} photo{} from the tracklog": "{n} photo{} géolocalisée(s) à partir du journal de trajet",
-  "The SAM 3 download failed: {e}": "Échec du téléchargement de SAM 3 : {e}",
+  "The MobileSAM download failed: {e}": "Échec du téléchargement de MobileSAM : {e}",
   "Undo {}": "Annuler {}",
   "Unknown tag{s} {} stay{} as typed (see Tags)": "Les étiquettes inconnues{s} {} restent{} telles quelles (voir Étiquettes)",
   "Updated “{name}”": "« {name} » mis à jour",

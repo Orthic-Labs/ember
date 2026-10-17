@@ -156,7 +156,7 @@
   "Shows the model's terms, then downloads {} from {host}, installs it and starts using it. Nothing else is sent.": "모델의 약관을 표시한 다음 {host}에서 {}을(를) 다운로드하여 설치하고 사용을 시작합니다. 그 밖의 정보는 전송되지 않습니다.",
   "Smart album: {}": "스마트 앨범: {}",
   "Tagged {n} photo{} from the tracklog": "트랙 로그에서 사진 {n}장{} 태그 지정됨",
-  "The SAM 3 download failed: {e}": "SAM 3 다운로드 실패: {e}",
+  "The MobileSAM download failed: {e}": "MobileSAM 다운로드 실패: {e}",
   "There is a keyword set “{name}” already": "키워드 세트 “{name}”이(가) 이미 있습니다",
   "There is a “{name}” at the top level already. Merge the two?": "최상위 수준에 “{name}”이(가) 이미 있습니다. 둘을 병합하시겠습니까?",
   "Trained on: {provenance}": "학습 데이터: {provenance}",

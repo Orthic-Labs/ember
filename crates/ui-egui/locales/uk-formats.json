@@ -124,7 +124,7 @@
   "Showing {n} of {}": "Показано {n} із {}",
   "Smart album: {}": "Смарт-альбом: {}",
   "Tagged {n} photo{} from the tracklog": "Позначено за журналом маршруту фото: {n}{:.0}",
-  "The SAM 3 download failed: {e}": "Не вдалося завантажити SAM 3: {e}",
+  "The MobileSAM download failed: {e}": "Не вдалося завантажити MobileSAM: {e}",
   "Undo {}": "Скасувати {}",
   "Unknown tag{s} {} stay{} as typed (see Tags)": "Невідомі теги{s:.0} {} залишаються як введено{:.0} (див. «Теги»)",
   "Updated “{name}”": "«{name}» оновлено",

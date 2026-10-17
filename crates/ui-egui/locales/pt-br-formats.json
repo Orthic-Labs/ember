@@ -173,7 +173,7 @@
   "Replace {} with:": "Substituir {} por:",
   "Scores {scope} for focus and exposure and finds similar shots taken within seconds of each other (bursts).": "Avalia o foco e a exposição de {scope} e encontra fotos semelhantes tiradas com segundos de diferença (sequências).",
   "Tagged {n} photo{} from the tracklog": "{n} foto{0} marcada{0} pelo tracklog",
-  "The SAM 3 download failed: {e}": "Falha no download do SAM 3: {e}",
+  "The MobileSAM download failed: {e}": "Falha no download do MobileSAM: {e}",
   "Unknown tag{s} {} stay{} as typed (see Tags)": "Marcador(es) desconhecido(s){s:.0} {} permanece(m) como digitado(s){:.0} (veja Marcadores)",
   "Virtual copy “{name}” of {of}": "Cópia virtual “{name}” de {of}",
   "Working on {what} for {} photos…": "Processando {what} em {} fotos…",

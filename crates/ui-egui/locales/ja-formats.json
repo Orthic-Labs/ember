@@ -173,7 +173,7 @@
   "Replace {} with:": "{}を次に置換：",
   "Scores {scope} for focus and exposure and finds similar shots taken within seconds of each other (bursts).": "{scope}のピントと露出を評価し、数秒以内に撮影した似た写真（連写）を検出します",
   "Tagged {n} photo{} from the tracklog": "GPS軌跡から{n}枚の写真に位置情報を付けました{:.0}",
-  "The SAM 3 download failed: {e}": "SAM 3のダウンロードに失敗しました：{e}",
+  "The MobileSAM download failed: {e}": "MobileSAMのダウンロードに失敗しました：{e}",
   "Unknown tag{s} {} stay{} as typed (see Tags)": "不明なタグ{s:.0} {} は入力したまま残ります{:.0}（「タグ」を参照）",
   "Virtual copy “{name}” of {of}": "{of}の仮想コピー「{name}」",
   "Working on {what} for {} photos…": "{}枚の写真の{what}を処理中…",

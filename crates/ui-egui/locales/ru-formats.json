@@ -129,7 +129,7 @@
   "Showing {n} of {}": "Показано {n} из {}",
   "Smart album: {}": "Смарт-альбом: {}",
   "Tagged {n} photo{} from the tracklog": "Привязано по треку фото: {n}{:.0}",
-  "The SAM 3 download failed: {e}": "Не удалось загрузить SAM 3: {e}",
+  "The MobileSAM download failed: {e}": "Не удалось загрузить MobileSAM: {e}",
   "Undo {}": "Отменить {}",
   "Unknown tag{s} {} stay{} as typed (see Tags)": "Неизвестные теги{s:.0} {} остаются как введены{:.0} (см. «Теги»)",
   "Updated “{name}”": "«{name}» обновлено",

@@ -156,7 +156,7 @@
   "Shows the model's terms, then downloads {} from {host}, installs it and starts using it. Nothing else is sent.": "Hiển thị điều khoản của mô hình, rồi tải {} từ {host}, cài đặt và bắt đầu dùng. Không gửi gì khác.",
   "Smart album: {}": "Album thông minh: {}",
   "Tagged {n} photo{} from the tracklog": "Đã gắn thẻ {n} ảnh{} từ nhật ký lộ trình",
-  "The SAM 3 download failed: {e}": "Tải SAM 3 thất bại: {e}",
+  "The MobileSAM download failed: {e}": "Tải MobileSAM thất bại: {e}",
   "There is a keyword set “{name}” already": "Đã có bộ từ khóa “{name}”",
   "There is a “{name}” at the top level already. Merge the two?": "Đã có “{name}” ở cấp cao nhất. Gộp hai cái?",
   "Trained on: {provenance}": "Huấn luyện trên: {provenance}",

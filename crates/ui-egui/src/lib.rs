@@ -863,7 +863,7 @@ impl LightcraftApp {
         }
     }
 
-    /// Open the dialog offering the SAM 3 download (never downloads by itself).
+    /// Open the dialog offering the AI mask model download (MobileSAM; never downloads by itself).
     pub fn offer_sam_download(&mut self, then: Option<(&str, &str)>) {
         if self.ui.dialog.is_none() || matches!(self.ui.dialog, Some(state::Dialog::SamModel { .. })) {
             self.ui.dialog = Some(state::Dialog::SamModel { then: then.map(|(k, o)| (k.to_string(), o.to_string())), error: None });
@@ -1532,15 +1532,15 @@ fn detect_summary(v: &Value) -> String {
     }
 }
 
-/// What to say when a SAM 3 download ended while its dialog was closed: the text, and whether it is
+/// What to say when the AI mask model (MobileSAM) download ended while its dialog was closed: the text, and whether it is
 /// shown as an error toast. A cancel is told by `cancelled`, not by the error's words.
 fn sam_download_ended(download: &lightcraft_engine::segment::DownloadStatus) -> Option<(String, bool)> {
     match &download.error {
         Some(_) if download.cancelled => {
-            Some((crate::i18n::tr("SAM 3 download stopped: it resumes where it left off next time.").to_string(), false))
+            Some((crate::i18n::tr("MobileSAM download stopped: it resumes where it left off next time.").to_string(), false))
         }
-        Some(e) => Some((crate::i18n::tr_format!("The SAM 3 download failed: {e}", e = e), true)),
-        None if download.finished => Some((crate::i18n::tr("The SAM 3 model is installed: Object and Describe masks are ready.").to_string(), true)),
+        Some(e) => Some((crate::i18n::tr_format!("The MobileSAM download failed: {e}", e = e), true)),
+        None if download.finished => Some((crate::i18n::tr("The MobileSAM model is installed: Object masks are ready.").to_string(), true)),
         None => None,
     }
 }

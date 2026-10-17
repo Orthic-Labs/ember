@@ -124,7 +124,7 @@
   "Showing {n} of {}": "{n} von {} werden angezeigt",
   "Smart album: {}": "Smart-Album: {}",
   "Tagged {n} photo{} from the tracklog": "{n} Foto{} anhand des GPS-Tracks verortet",
-  "The SAM 3 download failed: {e}": "SAM-3-Download fehlgeschlagen: {e}",
+  "The MobileSAM download failed: {e}": "MobileSAM-Download fehlgeschlagen: {e}",
   "Undo {}": "Rückgängig: {}",
   "Unknown tag{s} {} stay{} as typed (see Tags)": "Unbekannte Platzhalter{s:.0} {} bleiben unverändert{:.0} (siehe „Platzhalter“)",
   "Updated “{name}”": "„{name}“ aktualisiert",

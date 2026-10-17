@@ -55,7 +55,7 @@ fn run_typed_keeps_the_kind_and_run_the_message() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// A SAM 3 download that ended while its dialog was closed: a cancel is told by the status's
+/// A MobileSAM download that ended while its dialog was closed: a cancel is told by the status's
 /// `cancelled`, not by the error's words.
 #[test]
 fn a_cancelled_sam_download_is_told_by_its_flag() {
@@ -63,8 +63,11 @@ fn a_cancelled_sam_download_is_told_by_its_flag() {
         crate::sam_download_ended(&DownloadStatus { error: Some(error.into()), cancelled, ..DownloadStatus::default() }).unwrap()
     };
     let (text, error) = ended("Download abgebrochen", true);
-    assert!(!error && text.starts_with("SAM 3 download stopped"), "{text}");
+    assert!(!error && text.starts_with("MobileSAM download stopped"), "{text}");
     let (text, error) = ended("could not download model.safetensors: the mirror cancelled the transfer", false);
-    assert!(error && text.starts_with("The SAM 3 download failed: "), "{text}");
+    assert!(error && text.starts_with("The MobileSAM download failed: "), "{text}");
     assert_eq!(crate::sam_download_ended(&DownloadStatus::default()), None);
+    // a finished download is MobileSAM's: Object masks are ready, and nothing claims Describe or SAM 3
+    let (text, error) = crate::sam_download_ended(&DownloadStatus { finished: true, ..DownloadStatus::default() }).unwrap();
+    assert!(error && text == "The MobileSAM model is installed: Object masks are ready.", "{text}");
 }
