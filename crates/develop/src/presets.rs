@@ -11,7 +11,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::{AI_MASK_VERSION, DevelopSettings, Mask, NO_AI_MODEL, geometry_stamp};
+use crate::{AI_MASK_VERSION, DevelopSettings, Mask, geometry_stamp};
 
 /// Groups shown in "Choose settings to copy" / "Create preset" (Lightroom's checklist).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -310,7 +310,7 @@ impl Preset {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AI_MASK_VERSION, LocalAdjustments, MaskComponent, MaskOp, MaskShape};
+    use crate::{AI_MASK_VERSION, LocalAdjustments, MaskComponent, MaskOp, MaskShape, NO_AI_MODEL};
     use serde_json::json;
 
     #[test]

@@ -116,7 +116,7 @@ fn matrix_from_words(words: &[f64]) -> Option<Mat3> {
         return None;
     }
     let mut rows = [[0.0f64; 3]; 3];
-    for (row, chunk) in rows.iter_mut().zip(words.chunks_exact(3)) {
+    for (row, chunk) in rows.iter_mut().zip(words.as_chunks::<3>().0.iter()) {
         for (out, w) in row.iter_mut().zip(chunk) {
             // a SHORT entry holds the two's-complement word; a SSHORT one is already signed
             let signed = if *w > 32767.0 { *w - 65536.0 } else { *w };
