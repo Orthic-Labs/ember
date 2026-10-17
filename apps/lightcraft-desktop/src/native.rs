@@ -1300,6 +1300,15 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(not(feature = "qa-native"))]
+    #[test]
+    fn qa_hidden_flag_is_inert_without_the_qa_feature() {
+        assert!(!qa_hidden_enabled(Some(OsStr::new("1"))));
+        assert!(!qa_hidden_enabled(Some(OsStr::new("true"))));
+        assert!(!qa_hidden_enabled(None));
+    }
+
+    #[cfg(feature = "qa-native")]
     #[test]
     fn qa_hidden_flag_requires_enabled_value() {
         assert!(!qa_hidden_enabled(Some(OsStr::new("0"))));
