@@ -198,11 +198,7 @@ where
     let spec = fetch::MOBILESAM_FILES.first().ok_or_else(|| Error::Model("MobileSAM manifest has no weights entry".into()))?;
     let size = std::fs::metadata(&path).map_err(|e| Error::Model(format!("{}: {e}", path.display())))?.len();
     if size != fetch::MOBILESAM_SIZE {
-        return Err(Error::Model(format!(
-            "{}: expected official MobileSAM checkpoint size {}, found {size}",
-            path.display(),
-            fetch::MOBILESAM_SIZE
-        )));
+        return Err(Error::Model(format!("{}: expected official MobileSAM checkpoint size {}, found {size}", path.display(), fetch::MOBILESAM_SIZE)));
     }
     let verified = fetch::verify_file_progress(spec, &path, progress).map_err(|e| Error::Model(format!("{}: {e}", path.display())))?;
     match verified {

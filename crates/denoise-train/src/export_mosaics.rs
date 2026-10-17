@@ -141,12 +141,14 @@ pub fn parse_npy_u16(bytes: &[u8]) -> Result<(Vec<u16>, usize, usize)> {
     if !header.contains("'descr': '<u2'") || !header.contains("'fortran_order': False") {
         return data("npy: needs dtype <u2 in C order");
     }
-    let shape = header
-        .split("'shape': (")
-        .nth(1)
-        .and_then(|s| s.split(')').next())
-        .ok_or_else(|| Error::Data("npy: no shape".into()))?;
-    let dims: Vec<usize> = shape.split(',').map(str::trim).filter(|s| !s.is_empty()).map(|s| s.parse::<usize>()).collect::<std::result::Result<_, _>>().map_err(|_| Error::Data("npy: bad shape".into()))?;
+    let shape = header.split("'shape': (").nth(1).and_then(|s| s.split(')').next()).ok_or_else(|| Error::Data("npy: no shape".into()))?;
+    let dims: Vec<usize> = shape
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.parse::<usize>())
+        .collect::<std::result::Result<_, _>>()
+        .map_err(|_| Error::Data("npy: bad shape".into()))?;
     let [height, width] = dims[..] else { return data("npy: needs a 2-D shape") };
     if height > MAX_DIM || width > MAX_DIM {
         return data("npy: shape above the size bound");
@@ -294,7 +296,21 @@ mod tests {
     #[test]
     fn the_sidecar_field_names_are_the_ones_prepare_py_reads() {
         let v = serde_json::to_value(sample_sidecar()).unwrap();
-        for k in ["format_version", "sha256", "source_name", "npy", "width", "height", "dtype", "scale", "cfa_pattern", "iso", "black_mean", "white_level", "crop_offset"] {
+        for k in [
+            "format_version",
+            "sha256",
+            "source_name",
+            "npy",
+            "width",
+            "height",
+            "dtype",
+            "scale",
+            "cfa_pattern",
+            "iso",
+            "black_mean",
+            "white_level",
+            "crop_offset",
+        ] {
             assert!(v.get(k).is_some(), "sidecar lacks `{k}`");
         }
         assert_eq!(v["dtype"], "<u2");

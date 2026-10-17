@@ -115,9 +115,7 @@ fn diagnostics_bundle() -> Result<DiagnosticsBundle, String> {
 /// The diagnostics bundle the user may copy or save. Local only; never uploaded.
 #[tauri::command]
 pub(crate) async fn rightkit_logs_collect() -> Result<DiagnosticsBundle, String> {
-    let bundle = tauri::async_runtime::spawn_blocking(diagnostics_bundle)
-        .await
-        .map_err(|e| format!("join rightkit_logs_collect: {e}"))??;
+    let bundle = tauri::async_runtime::spawn_blocking(diagnostics_bundle).await.map_err(|e| format!("join rightkit_logs_collect: {e}"))??;
     Ok(bundle)
 }
 
@@ -129,7 +127,5 @@ fn clear_store() -> Result<(), String> {
 /// Remove the local event log (the user's own choice, from settings or the diagnostics panel).
 #[tauri::command]
 pub(crate) async fn rightkit_logs_clear() -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(clear_store)
-        .await
-        .map_err(|e| format!("join rightkit_logs_clear: {e}"))?
+    tauri::async_runtime::spawn_blocking(clear_store).await.map_err(|e| format!("join rightkit_logs_clear: {e}"))?
 }

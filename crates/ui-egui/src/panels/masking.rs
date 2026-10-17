@@ -210,9 +210,11 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 let pct = if download.total > 0 { download.done as f64 / download.total as f64 } else { 0.0 };
-                let r = ui.add(
-                    egui::ProgressBar::new(pct as f32).desired_width(ui.available_width() - 70.0).text(format!("{}: {} %", lightcraft_engine::segment::MODEL_NAME, (pct * 100.0).floor())),
-                );
+                let r = ui.add(egui::ProgressBar::new(pct as f32).desired_width(ui.available_width() - 70.0).text(format!(
+                    "{}: {} %",
+                    lightcraft_engine::segment::MODEL_NAME,
+                    (pct * 100.0).floor()
+                )));
                 register(ui.ctx(), "maskSamProgress", r.rect);
                 if text_button(ui, "maskSamDetails", crate::i18n::tr("Details"), false).clicked() {
                     app.offer_sam_download(None);

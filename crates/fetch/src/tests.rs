@@ -125,7 +125,12 @@ fn handle(mut s: TcpStream, hits: &AtomicUsize) {
             Some(from) => send(
                 &mut s,
                 "206 Partial Content",
-                &format!("ETag: {ETAG}\r\nContent-Range: bytes {from}-{}/{}\r\nContent-Length: {}\r\n", body.len() - 1, body.len(), body.len() - from as usize),
+                &format!(
+                    "ETag: {ETAG}\r\nContent-Range: bytes {from}-{}/{}\r\nContent-Length: {}\r\n",
+                    body.len() - 1,
+                    body.len(),
+                    body.len() - from as usize
+                ),
                 &body[from as usize..],
             ),
             None => send(&mut s, "200 OK", &format!("ETag: {ETAG}\r\nContent-Length: {}\r\n", body.len()), &body),

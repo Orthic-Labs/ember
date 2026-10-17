@@ -332,9 +332,8 @@ fn keyc_histogram_key_dispatches_the_histogram_command() {
 #[test]
 fn classic_keys_move_to_their_menu_items() {
     let mut h = library();
-    let shortcut = |h: &crate::headless::Headless, id: &str| {
-        crate::menus::menu_entries(&h.app).into_iter().find(|e| e.id == id).and_then(|e| e.shortcut)
-    };
+    let shortcut =
+        |h: &crate::headless::Headless, id: &str| crate::menus::menu_entries(&h.app).into_iter().find(|e| e.id == id).and_then(|e| e.shortcut);
     assert_eq!(shortcut(&h, "view.zoomFit").as_deref(), Some("Cmd+0"));
     h.app.ui.settings.classic_keymap = true;
     // the native menu bar would otherwise take ⌘0 for Zoom to Fit before the Classic layer sees it

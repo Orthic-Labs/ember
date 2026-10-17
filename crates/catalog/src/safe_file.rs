@@ -282,7 +282,11 @@ pub fn write_new_unique(candidates: &mut dyn Iterator<Item = PathBuf>, data: &[u
 /// caller syncs the folder.
 #[cfg(not(target_arch = "wasm32"))]
 fn publish_new(tmp: &Path, path: &Path) -> io::Result<()> {
-    let options = rightkit_fs::AtomicWriteOptions { durable: false, replace: rightkit_fs::ReplaceMode::NoReplace, ..rightkit_fs::AtomicWriteOptions::default() };
+    let options = rightkit_fs::AtomicWriteOptions {
+        durable: false,
+        replace: rightkit_fs::ReplaceMode::NoReplace,
+        ..rightkit_fs::AtomicWriteOptions::default()
+    };
     match rightkit_fs::publish_file_with(tmp, path, options) {
         Ok(()) => Ok(()),
         Err(e) if e.target_replaced() => {

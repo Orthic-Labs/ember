@@ -368,7 +368,13 @@ mod stub {
 
     impl DiskCache {
         pub fn new(dir: &Path, budget: u64) -> DiskCache {
-            DiskCache { dir: dir.to_path_buf(), budget: AtomicU64::new(budget), hits: AtomicU64::new(0), misses: AtomicU64::new(0), writes: AtomicU64::new(0) }
+            DiskCache {
+                dir: dir.to_path_buf(),
+                budget: AtomicU64::new(budget),
+                hits: AtomicU64::new(0),
+                misses: AtomicU64::new(0),
+                writes: AtomicU64::new(0),
+            }
         }
         pub fn dir(&self) -> &Path {
             &self.dir

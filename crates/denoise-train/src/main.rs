@@ -215,7 +215,13 @@ fn run(tokens: &[String]) -> Result<()> {
             a.flag("allow-outside-scratch");
             a.finish()?;
             let s = export_dir(&input, &out)?;
-            println!("wrote {} mosaics to {} ({} skipped, {} duplicates; see skipped.json)", s.written, out.display(), s.skipped.len(), s.duplicates.len());
+            println!(
+                "wrote {} mosaics to {} ({} skipped, {} duplicates; see skipped.json)",
+                s.written,
+                out.display(),
+                s.skipped.len(),
+                s.duplicates.len()
+            );
             for (p, why) in &s.skipped {
                 println!("  skipped {p}: {why}");
             }

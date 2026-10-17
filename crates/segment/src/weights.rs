@@ -177,7 +177,8 @@ mod tests {
     #[test]
     fn batchnorm_counters_are_skipped_and_other_non_f32_tensors_are_refused() {
         // 16 bytes of F32 for `a`, then 8 bytes of I64 for the counter
-        let header = r#"{"a":{"dtype":"F32","shape":[2,2],"data_offsets":[0,16]},"bn.num_batches_tracked":{"dtype":"I64","shape":[],"data_offsets":[16,24]}}"#;
+        let header =
+            r#"{"a":{"dtype":"F32","shape":[2,2],"data_offsets":[0,16]},"bn.num_batches_tracked":{"dtype":"I64","shape":[],"data_offsets":[16,24]}}"#;
         let p = write("bn", header, 24);
         let w = Weights::open(&p).unwrap();
         assert!(w.contains("a") && !w.contains("bn.num_batches_tracked"));

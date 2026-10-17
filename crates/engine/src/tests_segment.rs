@@ -136,7 +136,14 @@ fn a_failing_download_ends_with_an_error_and_never_blocks() {
     assert!(e.contains("not found"), "{e}");
     assert!(!s.segmenter.installed());
     // nothing was left behind under a real name, and no error page was saved
-    for f in ["model.safetensors", "vocab.json", "merges.txt", "vocab.json.part", "mobile_sam-tiny-vitt.safetensors", "mobile_sam-tiny-vitt.safetensors.part"] {
+    for f in [
+        "model.safetensors",
+        "vocab.json",
+        "merges.txt",
+        "vocab.json.part",
+        "mobile_sam-tiny-vitt.safetensors",
+        "mobile_sam-tiny-vitt.safetensors.part",
+    ] {
         assert!(!dir.join(f).exists(), "{f}");
     }
     let _ = std::fs::remove_dir_all(&dir);

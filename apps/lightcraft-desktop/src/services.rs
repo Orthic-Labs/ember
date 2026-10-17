@@ -12,8 +12,8 @@ use serde_json::{Value, json};
 use tauri::{WebviewWindow, Wry};
 
 use rfd::{AsyncFileDialog, FileHandle};
-use rightkit_child_process::reveal::{self as rk_reveal, PathScope};
 use rightkit_child_process::OwnedCommand;
+use rightkit_child_process::reveal::{self as rk_reveal, PathScope};
 
 const MAX_PATHS: usize = 512;
 const MAX_PREFERENCES_BYTES: usize = 4 * 1024 * 1024;

@@ -86,9 +86,7 @@ pub(crate) mod tauri_commands {
     /// renderer-supplied identity, and runs off the main thread so a locked keychain cannot freeze the UI.
     #[tauri::command]
     pub(crate) async fn secure_device_id_get_or_create() -> Result<String, String> {
-        tauri::async_runtime::spawn_blocking(super::device_id)
-            .await
-            .map_err(|error| format!("join secure_device_id_get_or_create: {error}"))?
+        tauri::async_runtime::spawn_blocking(super::device_id).await.map_err(|error| format!("join secure_device_id_get_or_create: {error}"))?
     }
 }
 

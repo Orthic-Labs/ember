@@ -40,10 +40,7 @@ struct State {
 }
 
 fn store_options() -> StoreOptions {
-    StoreOptions::new(Schema::new("ember", SCHEMA_VERSION))
-        .format(FileFormat::Flat)
-        .trailing_newline(true)
-        .max_bytes(MAX_BYTES as u64)
+    StoreOptions::new(Schema::new("ember", SCHEMA_VERSION)).format(FileFormat::Flat).trailing_newline(true).max_bytes(MAX_BYTES as u64)
 }
 
 fn open_store(path: &Path) -> Result<Store<PrefMap>, StoreError> {

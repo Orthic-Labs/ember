@@ -2,12 +2,12 @@
 mod menu;
 #[path = "preferences.rs"]
 mod preferences;
-#[path = "services.rs"]
-mod services;
 #[path = "rk_device.rs"]
 mod rk_device;
 #[path = "rk_logs.rs"]
 mod rk_logs;
+#[path = "services.rs"]
+mod services;
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
