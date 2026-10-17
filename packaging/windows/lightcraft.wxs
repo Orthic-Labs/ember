@@ -204,6 +204,11 @@
       <Component Id="LightcraftCli">
         <File Id="LightcraftCliExe" Source="$(var.BinDir)\lightcraft-cli.exe" KeyPath="yes" />
       </Component>
+
+      <!-- AV1 decoder worker: Ember.exe and lightcraft-cli.exe spawn it from their own folder to decode AVIF. -->
+      <Component Id="LightcraftAv1Worker">
+        <File Id="LightcraftAv1WorkerExe" Source="$(var.BinDir)\ember-av1-worker.exe" KeyPath="yes" />
+      </Component>
     </ComponentGroup>
   </Fragment>
 </Wix>

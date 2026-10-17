@@ -47,7 +47,7 @@ echo "==> Ember $VERSION for FreeBSD $ARCH"
 # The release VM has 12 GB; full parallelism on the biggest crates runs it out of memory.
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-4}"
 if [ "$SKIP_BUILD" = 0 ]; then
-  (cd "$ROOT" && cargo build --release --locked -p lightcraft -p lightcraft-cli --features lightcraft/heif,lightcraft-cli/heif)
+  (cd "$ROOT" && cargo build --release --locked -p lightcraft -p lightcraft-cli -p lightcraft-av1dec --features lightcraft/heif,lightcraft-cli/heif)
 fi
 WORK="$CARGO_TARGET_DIR/freebsd-package"
 STAGE="$WORK/$BASENAME"
@@ -61,7 +61,7 @@ if [ "$DRY_RUN" = 1 ]; then
   BIN="$WORK/stub-bin"
   OUT_DIR="$WORK"
   mkdir -p "$BIN"
-  for b in lightcraft lightcraft-cli; do
+  for b in lightcraft lightcraft-cli ember-av1-worker; do
     printf '#!/bin/sh\necho "%s %s (dry-run stub)"\n' "$b" "$VERSION" >"$BIN/$b"
     chmod 755 "$BIN/$b"
   done
@@ -71,8 +71,8 @@ fi
 # FreeBSD's install(1) has no -D: create the directories first.
 mkdir -p "$STAGE/bin" "$STAGE/share/applications" "$STAGE/share/mime/packages" \
   "$STAGE/share/metainfo" "$STAGE/share/icons" "$STAGE/share/doc/lightcraft"
-install -m 755 "$BIN/lightcraft" "$BIN/lightcraft-cli" "$STAGE/bin/"
-strip "$STAGE/bin/lightcraft" "$STAGE/bin/lightcraft-cli" 2>/dev/null || true
+install -m 755 "$BIN/lightcraft" "$BIN/lightcraft-cli" "$BIN/ember-av1-worker" "$STAGE/bin/"
+strip "$STAGE/bin/lightcraft" "$STAGE/bin/lightcraft-cli" "$STAGE/bin/ember-av1-worker" 2>/dev/null || true
 # The desktop entry, MIME type, metainfo and icons are the freedesktop files Linux ships.
 install -m 644 "$LINUX/$APP_ID.desktop" "$STAGE/share/applications/$APP_ID.desktop"
 install -m 644 "$LINUX/$APP_ID.mime.xml" "$STAGE/share/mime/packages/$APP_ID.xml"

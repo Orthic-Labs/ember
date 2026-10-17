@@ -58,12 +58,12 @@ echo "==> Ember $VERSION for macOS ($ARCH), identity: $IDENTITY, notarize: $NOTA
 if [ "$SKIP_BUILD" = 0 ]; then
   args=()
   for t in "${TARGETS[@]}"; do args+=(--target "$t"); done
-  (cd "$ROOT" && cargo build --release --locked -p lightcraft -p lightcraft-cli --features lightcraft/heif,lightcraft-cli/heif "${args[@]}")
+  (cd "$ROOT" && cargo build --release --locked -p lightcraft -p lightcraft-cli -p lightcraft-av1dec --features lightcraft/heif,lightcraft-cli/heif "${args[@]}")
 fi
 
 rm -rf "$WORK"
 mkdir -p "$WORK/bin"
-for bin in lightcraft lightcraft-cli; do
+for bin in lightcraft lightcraft-cli ember-av1-worker; do
   inputs=()
   for t in "${TARGETS[@]}"; do inputs+=("$CARGO_TARGET_DIR/$t/release/$bin"); done
   lipo -create -output "$WORK/bin/$bin" "${inputs[@]}"
@@ -102,6 +102,8 @@ echo "==> assembling $APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # Executable and icon carry the display name (CFBundleExecutable / CFBundleIconFile).
 cp "$WORK/bin/lightcraft" "$APP/Contents/MacOS/Ember"
+# AV1 decoder worker, beside the main executable (the app spawns it from its own directory).
+cp "$WORK/bin/ember-av1-worker" "$APP/Contents/MacOS/ember-av1-worker"
 cp "$ROOT/assets/app-icon/ember.icns" "$APP/Contents/Resources/Ember.icns"
 sed -e "s/@VERSION@/$VERSION/g" -e "s/@SHORT_VERSION@/$SHORT_VERSION/g" \
   -e "s/@BUILD_SHA@/${LIGHTCRAFT_BUILD_SHA:-unknown}/g" \
@@ -117,7 +119,8 @@ copy_docs "$APP/Contents/Resources/Licenses"
 xattr -cr "$APP"
 
 # Sign inside-out: nested code first, then the bundle itself (no --deep on the final signature).
-# Today the only nested code is the main executable; frameworks/helpers would be signed here too.
+# Nested code: the AV1 decoder worker and the main executable.
+sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP/Contents/MacOS/ember-av1-worker"
 sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP/Contents/MacOS/Ember"
 sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP"
 codesign --verify --strict --deep --verbose=2 "$APP"
@@ -210,12 +213,15 @@ echo "==> building $CLI_ZIP"
 CLI_DIR="$WORK/lightcraft-cli"
 mkdir -p "$CLI_DIR"
 cp "$WORK/bin/lightcraft-cli" "$CLI_DIR/"
+cp "$WORK/bin/ember-av1-worker" "$CLI_DIR/"
 copy_docs "$CLI_DIR"
 # Same entitlements as the app: `--opt addToPhotos=true` / `app.export {addToPhotos}` send Apple
 # Events to Photos through osascript too (macOS asks about the app that started the CLI, usually
 # the terminal).
 sign --options runtime --entitlements "$HERE/entitlements.plist" "$CLI_DIR/lightcraft-cli"
 codesign --verify --strict --verbose=2 "$CLI_DIR/lightcraft-cli"
+sign --options runtime --entitlements "$HERE/entitlements.plist" "$CLI_DIR/ember-av1-worker"
+codesign --verify --strict --verbose=2 "$CLI_DIR/ember-av1-worker"
 rm -f "$CLI_ZIP"
 ditto -c -k --keepParent "$CLI_DIR" "$CLI_ZIP"
 # A bare Mach-O can't carry a stapled ticket; Gatekeeper looks the notarization up online.

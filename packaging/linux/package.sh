@@ -45,7 +45,7 @@ BASENAME="lightcraft-$VERSION-linux-$ARCH"
 echo "==> Ember $VERSION for Linux $ARCH ($FORMATS)"
 
 if [ "$SKIP_BUILD" = 0 ]; then
-  (cd "$ROOT" && cargo build --release --locked -p lightcraft -p lightcraft-cli --features lightcraft/heif,lightcraft-cli/heif \
+  (cd "$ROOT" && cargo build --release --locked -p lightcraft -p lightcraft-cli -p lightcraft-av1dec --features lightcraft/heif,lightcraft-cli/heif \
     ${CROSS_TARGET:+--target "$CROSS_TARGET"})
 fi
 BIN="$CARGO_TARGET_DIR/${CROSS_TARGET:+$CROSS_TARGET/}release"
@@ -56,7 +56,9 @@ rm -rf "$WORK"
 # ---- stage an FHS tree (shared by every format) -------------------------------------------------
 install -Dm755 "$BIN/lightcraft" "$STAGE/usr/bin/lightcraft"
 install -Dm755 "$BIN/lightcraft-cli" "$STAGE/usr/bin/lightcraft-cli"
-"${CROSS_COMPILE:-}strip" "$STAGE/usr/bin/lightcraft" "$STAGE/usr/bin/lightcraft-cli" 2>/dev/null || true
+# AV1 decoder worker: the binaries above spawn it from their own directory to decode AVIF.
+install -Dm755 "$BIN/ember-av1-worker" "$STAGE/usr/bin/ember-av1-worker"
+"${CROSS_COMPILE:-}strip" "$STAGE/usr/bin/lightcraft" "$STAGE/usr/bin/lightcraft-cli" "$STAGE/usr/bin/ember-av1-worker" 2>/dev/null || true
 install -Dm644 "$HERE/$APP_ID.desktop" "$STAGE/usr/share/applications/$APP_ID.desktop"
 install -Dm644 "$HERE/$APP_ID.mime.xml" "$STAGE/usr/share/mime/packages/$APP_ID.xml"
 mkdir -p "$STAGE/usr/share/metainfo"

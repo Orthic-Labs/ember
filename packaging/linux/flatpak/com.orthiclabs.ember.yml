@@ -46,9 +46,10 @@ modules:
         CARGO_HOME: /run/build/lightcraft/cargo
         CARGO_NET_OFFLINE: 'true'
     build-commands:
-      - cargo --offline build --release --locked -p lightcraft -p lightcraft-cli
+      - cargo --offline build --release --locked -p lightcraft -p lightcraft-cli -p lightcraft-av1dec
       - install -Dm755 target/release/lightcraft /app/bin/lightcraft
       - install -Dm755 target/release/lightcraft-cli /app/bin/lightcraft-cli
+      - install -Dm755 target/release/ember-av1-worker /app/bin/ember-av1-worker
       - install -Dm644 packaging/linux/com.orthiclabs.ember.desktop /app/share/applications/com.orthiclabs.ember.desktop
       - install -Dm644 packaging/linux/com.orthiclabs.ember.mime.xml /app/share/mime/packages/com.orthiclabs.ember.xml
       - mkdir -p /app/share/icons && cp -R assets/app-icon/hicolor /app/share/icons/

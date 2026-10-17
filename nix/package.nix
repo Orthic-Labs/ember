@@ -107,6 +107,9 @@ rustPlatform.buildRustPackage {
     "lightcraft"
     "-p"
     "lightcraft-cli"
+    # The AV1 decoder worker (`ember-av1-worker`), installed to $out/bin beside both binaries.
+    "-p"
+    "lightcraft-av1dec"
   ];
 
   # `cargo run -p xtask -- ci` runs `cargo test --workspace`. Tests that need what the sandbox cannot have

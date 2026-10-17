@@ -39,6 +39,7 @@ modules:
     build-commands:
       - install -Dm755 bin/lightcraft /app/bin/lightcraft
       - install -Dm755 bin/lightcraft-cli /app/bin/lightcraft-cli
+      - install -Dm755 bin/ember-av1-worker /app/bin/ember-av1-worker
       - install -Dm644 share/applications/com.orthiclabs.ember.desktop /app/share/applications/com.orthiclabs.ember.desktop
       # The same MIME definitions the deb/rpm install.
       - install -Dm644 share/mime/packages/com.orthiclabs.ember.xml /app/share/mime/packages/com.orthiclabs.ember.xml

@@ -21,3 +21,5 @@ plan/
 /.cache/
 /artifacts/
 *.tsbuildinfo
+# Tauri sidecar staging: the AV1 worker copied in by scripts/desktop/build-native.mjs
+/apps/lightcraft-desktop/binaries/

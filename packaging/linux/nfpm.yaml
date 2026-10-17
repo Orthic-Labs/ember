@@ -62,6 +62,9 @@ contents:
   - src: ${STAGE}/usr/bin/lightcraft-cli
     dst: /usr/bin/lightcraft-cli
     file_info: { mode: 0755 }
+  - src: ${STAGE}/usr/bin/ember-av1-worker
+    dst: /usr/bin/ember-av1-worker
+    file_info: { mode: 0755 }
   - src: ${STAGE}/usr/share/
     dst: /usr/share/
     type: tree

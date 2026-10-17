@@ -33,7 +33,7 @@ if (checkout.error || checkout.status !== 0) fail('pinned craft-fonts checkout f
 const env = { ...process.env, CRAFT_FONTS_DIR: fonts, CRAFT_FONTS_REQUIRED: '1' };
 run(['run', 'build'], repoRoot, env);
 // Retain headless experiment CLI as an exact-revision compiler artifact too.
-const cliCompiler = runCargoSync(['build', '--locked', '-p', 'lightcraft-cli', '--target', target, '--message-format=json'], { cwd: repoRoot, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true });
+const cliCompiler = runCargoSync(['build', '--locked', '-p', 'lightcraft-cli', '-p', 'lightcraft-av1dec', '--target', target, '--message-format=json'], { cwd: repoRoot, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true });
 writeFileSync(path.join(root, 'cli-cargo-artifacts.jsonl'), cliCompiler.stdout || '');
 if (cliCompiler.stderr) process.stderr.write(cliCompiler.stderr);
 if (cliCompiler.error || cliCompiler.status !== 0) {
@@ -42,8 +42,8 @@ if (cliCompiler.error || cliCompiler.status !== 0) {
 }
 // Preserve offline extractor independently of later desktop packaging/installation.
 const cliRecord = path.join(root, 'cli-cargo-artifacts.jsonl');
-const cliEntries = cargoCompilerArtifacts(cliRecord).filter(entry => entry.target === 'lightcraft-cli' && entry.kind === 'executable');
-if (cliEntries.length !== 1) fail('expected one headless CLI compiler artifact');
+const cliEntries = cargoCompilerArtifacts(cliRecord).filter(entry => (entry.target === 'lightcraft-cli' || entry.target === 'ember-av1-worker') && entry.kind === 'executable');
+if (cliEntries.length !== 2) fail('expected the headless CLI and the AV1 worker compiler artifacts');
 materializeArtifacts(cliEntries, path.join(root, 'headless-cli'), {
   sourceRevision: process.env.RIGHT_GIT_SOURCE_REVISION,
   platform,
@@ -62,8 +62,13 @@ if (compiler.error || compiler.status !== 0) {
   fail(`RightKit candidate Cargo failed: ${compiler.error?.message || compiler.status}`);
 }
 const nativeRoot = path.join(repoRoot, 'apps/lightcraft-desktop');
+// The AV1 decoder worker ships beside the desktop executable: Tauri's externalBin (tauri.worker.conf.json) takes it from
+// binaries/ember-av1-worker-<target-triple>[.exe] and installs it next to the app under its plain name.
+const workerEntry = cliEntries.find(entry => entry.target === 'ember-av1-worker');
+mkdirSync(path.join(nativeRoot, 'binaries'), { recursive: true });
+cpSync(workerEntry.path, path.join(nativeRoot, 'binaries', `ember-av1-worker-${target}${platform === 'macos' ? '' : '.exe'}`));
 // Candidates are unsigned: tauri.candidate.conf.json turns off updater artifacts (they need the suite minisign key, which right-release sign-updater applies later, never in this build).
-run(['exec', 'tauri', 'build', '--ci', '--no-sign', '--debug', '--config', 'tauri.candidate.conf.json', '--target', target, '--features', 'qa-native,custom-protocol', '--bundles', platform === 'macos' ? 'app,dmg' : 'nsis', '--', '--locked'], nativeRoot, env);
+run(['exec', 'tauri', 'build', '--ci', '--no-sign', '--debug', '--config', 'tauri.candidate.conf.json', '--config', 'tauri.worker.conf.json', '--target', target, '--features', 'qa-native,custom-protocol', '--bundles', platform === 'macos' ? 'app,dmg' : 'nsis', '--', '--locked'], nativeRoot, env);
 // Cargo's dev profile writes to target/<triple>/debug; @rightkit/release before 0.2.167 still looks under release-iterate.
 const descriptor = { productName: 'Ember', targetTriple: target, manifestPath: 'apps/lightcraft-desktop/Cargo.toml', bundleDirectory: path.join('target', target, 'debug', 'bundle', platform === 'macos' ? 'macos' : 'nsis') };
 const bundle = resolveTauriBundleDirectory(descriptor, { root: repoRoot, platform: platform === 'macos' ? 'mac' : 'win', env });

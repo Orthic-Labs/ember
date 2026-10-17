@@ -29,7 +29,7 @@ const version = config.version;
 const stage = path.join(repoRoot, "dist", "native", `${platform}-${architecture}`, `ember-${version}`);
 const output = path.join(repoRoot, "dist", "releases", layout.out, version, architecture);
 const archive = path.join(output, `ember-${version}-${platform}-${architecture}.zip`);
-const required = ["lightcraft-desktop", "lightcraft-cli"];
+const required = ["lightcraft-desktop", "lightcraft-cli", "ember-av1-worker"];
 
 function readRecord(root) {
   const file = path.join(root, "compiler-artifacts.json");

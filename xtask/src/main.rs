@@ -271,6 +271,11 @@ fn cmd_ci() -> Result<(), String> {
                 let mut c = cargo();
                 c.args(["clippy", "-p", "lightcraft-codecs", "--features", "heif", "--all-targets", "--", "-D", "warnings"]);
                 run(c, "cargo clippy -p lightcraft-codecs --features heif --all-targets -- -D warnings")?;
+                // AVIF decodes in the ember-av1-worker child process; the codecs tests look for it in the target
+                // directory of the test executable, and this step builds only the packages named below.
+                let mut c = cargo();
+                c.args(["build", "-p", "lightcraft-av1dec", "--bin", "ember-av1-worker"]);
+                run(c, "cargo build -p lightcraft-av1dec --bin ember-av1-worker")?;
                 let mut c = cargo();
                 c.args(["test", "-p", "lightcraft-codecs", "-p", "lightcraft-heif", "--features", "lightcraft-codecs/heif"]);
                 run(c, "cargo test -p lightcraft-codecs -p lightcraft-heif --features lightcraft-codecs/heif")?;

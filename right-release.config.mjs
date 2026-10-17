@@ -46,7 +46,7 @@ export default {
       publishBlocked: 'signed release candidate only; publication is a separate admitted stage',
       prePackage: stageCommand,
       sign: {
-        prePackageFiles: [`${winStage}/bin/lightcraft-desktop.exe`, `${winStage}/bin/lightcraft-cli.exe`],
+        prePackageFiles: [`${winStage}/bin/lightcraft-desktop.exe`, `${winStage}/bin/lightcraft-cli.exe`, `${winStage}/bin/ember-av1-worker.exe`],
         receipt: '.right-release/receipts/windows-x86_64-raw-exe.json',
       },
       package: packageCommand,
@@ -62,7 +62,7 @@ export default {
       publishBlocked: 'signed release candidate only; publication is a separate admitted stage',
       prePackage: stageCommand,
       sign: {
-        prePackageFiles: [`${macStage}/bin/lightcraft-desktop`, `${macStage}/bin/lightcraft-cli`],
+        prePackageFiles: [`${macStage}/bin/lightcraft-desktop`, `${macStage}/bin/lightcraft-cli`, `${macStage}/bin/ember-av1-worker`],
         receipt: '.right-release/receipts/macos-arm64-signing.json',
       },
       package: packageCommand,
