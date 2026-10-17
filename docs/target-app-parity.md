@@ -1,6 +1,6 @@
 # Target-app parity: Ember vs reference editor
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-16 · **Change:** minor (research authorization wording aligned with Ember policy; historical measurements unchanged) · **Target:** reference catalog editor 15.5 (August 2026) and reference editor 9.6 (desktop)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-17 · **Change:** minor (Book module status aligned with its checklist rows; headline numbers unchanged) · **Target:** reference catalog editor 15.5 (August 2026) and reference editor 9.6 (desktop)
 
 The authoritative assessment of how close Ember is to reference editor. The row-by-row checklist is
 [parity-checklist.md](parity-checklist.md); the ranked work list is [gaps.md](gaps.md); deep areas
@@ -80,7 +80,7 @@ from the checklist sections and the deep-dive documents.
 | Export | 6% | 89% | 75% | 15–30 h | checklist S 88.9% |
 | Merge and HDR | 3% | 85% | 60% | 20–35 h | merge 100%, HDR 70% (no HDR display) |
 | Views, compare, zoom, culling | 5% | 90% | 70% | 15–30 h | zoom detail P0 gap |
-| Classic output modules (Map, Book, Slideshow, Print, Web, publish, tethering) | 4% | 15% | 10% | 90–150 h | Classic extras 48% counts many small keys; the modules themselves are mostly ⬜ [#119](https://github.com/Orthic-Labs/ember/issues/119) |
+| Classic output modules (Map, Book, Slideshow, Print, Web, publish, tethering) | 4% | 15% | 10% | 90–150 h | Classic extras 48% counts many small keys; Book is built (⌘⌥4 opens the view; its LRC-BOOK rows are ✅); Web and publish are ⬜ [#119](https://github.com/Orthic-Labs/ember/issues/119) |
 | Video | 1% | 0% | 0% | 25–45 h | catalogued only |
 | **Weighted** | 100% | **~77%** | **~61%** (60.6%) | **600–1,100 h** | |
 
@@ -300,6 +300,7 @@ P2 items 12–25 h; look tuning, performance, packaging, hardening 25–45 h.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | Classic Book status: the Book module (⌘⌥4, `book.view`) is built and its LRC-BOOK rows are ✅ (guides and backgrounds tested, #122, #126); the module line no longer calls Book missing; the headline numbers are not re-measured |
 | 2026-10-17 | minor | Depth range mask reads embedded depth maps (Android Dynamic Depth / GDepth, iPhone HEIC auxiliary depth): checklist row ⬜ → 🟡 (#64), no headline number moved |
 | 2026-10-13 | minor | Removed stale prohibition on internal research & publisher-specific installed-app path; aligned wording with maintainer-authorized read-only analysis while retaining historical evidence, asset exclusions & all measurements |
 | 2026-10-11 | minor | EOS R5 Mark II CR3 verified (raw-parity.md): use-weighted share whose camera decodes 84% → 85%, RAW decoding 76% → 77%; full 60.6% → 60.7%, mainstream depth 71.8% → 72.1%, essentials depth 77.4% → 77.5%; the rounded numbers (~61%, ~49%, ~64%) are unchanged |

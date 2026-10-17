@@ -843,4 +843,43 @@ mod tests {
         assert_eq!(line_pitch(11.0, 2.0, 72.0), 22);
         assert!(line_pitch(11.0, 1.0, 150.0) < line_pitch(11.0, 2.0, 150.0));
     }
+
+    #[test]
+    fn guides_never_reach_the_exported_page() {
+        let mut s = Session::with_demo();
+        let photos: Vec<PhotoId> = s.catalog.photos().take(3).map(|p| p.id).collect();
+        let mut m = Model::default();
+        auto_layout(&mut m, "Two Across", &photos, true).unwrap();
+        m.text.photo = "{file}".into();
+        m.guides = Guides { bleed_mm: 0.0, safe_mm: 0.0, show: false };
+        let off_page = render_page(&mut s, &m, 0, 72.0).unwrap();
+        let off_jpegs = export_jpegs(&mut s, &m, 72.0).unwrap();
+        // the widest guides on, shown: the output must not change
+        m.guides = Guides { bleed_mm: 10.0, safe_mm: 30.0, show: true };
+        let on_page = render_page(&mut s, &m, 0, 72.0).unwrap();
+        let on_jpegs = export_jpegs(&mut s, &m, 72.0).unwrap();
+        assert_eq!(off_page, on_page, "guides were drawn on the page");
+        assert_eq!(off_jpegs, on_jpegs, "guides were drawn in the exported JPEGs");
+    }
+
+    #[test]
+    fn page_background_colour_and_photo_are_drawn_behind_the_cells() {
+        let mut s = Session::with_demo();
+        let photo = s.catalog.photos().next().map(|p| p.id.0).unwrap();
+        let red = [200, 30, 30];
+        let corner = |img: &Rgba8| {
+            let p = img.data[0];
+            [p[0], p[1], p[2]]
+        };
+        let mut m = Model::default();
+        m.pages.push(Page { background: Background { color: Some(red), photo: None, opacity: 1.0 }, ..Page::default() });
+        // a colour background: the corner (in the margin, under no cell) is the colour, not the sheet
+        let colour = render_page(&mut s, &m, 0, 72.0).unwrap();
+        assert_eq!(corner(&colour), red);
+        // a photo over the colour at full opacity: the background area changes
+        m.pages[0].background.photo = Some(photo);
+        let photo_page = render_page(&mut s, &m, 0, 72.0).unwrap();
+        assert_ne!(corner(&photo_page), red, "the photo background was not drawn");
+        assert_ne!(photo_page, colour);
+    }
 }

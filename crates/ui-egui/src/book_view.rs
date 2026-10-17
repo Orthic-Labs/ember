@@ -273,13 +273,19 @@ fn fit(area: Rect, aspect: f32) -> Rect {
     Rect::from_center_size(area.center(), vec2(w, h))
 }
 
-/// The print guides of a page drawn in `rect`: bleed outside the trim, the trim, and the safe area.
-fn guides(painter: &egui::Painter, rect: Rect, model: &Model) {
+/// The print guides of a page drawn in `rect` when `shown`: the bleed outside the trim, the trim, and
+/// the safe area inside it, each with its colour and stroke side. Empty when the guides are off.
+fn guide_lines(rect: Rect, model: &Model, shown: bool) -> Vec<(Rect, Color32, StrokeKind)> {
+    if !shown {
+        return Vec::new();
+    }
     let k = rect.width() / model.settings.width_mm as f32;
     let g = &model.guides;
-    painter.rect_stroke(rect.expand(g.bleed_mm as f32 * k), 0.0_f32, Stroke::new(1.0, Color32::from_rgb(230, 70, 70)), StrokeKind::Outside);
-    painter.rect_stroke(rect, 0.0_f32, Stroke::new(1.0, Color32::from_rgb(40, 40, 40)), StrokeKind::Inside);
-    painter.rect_stroke(rect.shrink(g.safe_mm as f32 * k), 0.0_f32, Stroke::new(1.0, Color32::from_rgb(60, 190, 110)), StrokeKind::Inside);
+    vec![
+        (rect.expand(g.bleed_mm as f32 * k), Color32::from_rgb(230, 70, 70), StrokeKind::Outside),
+        (rect, Color32::from_rgb(40, 40, 40), StrokeKind::Inside),
+        (rect.shrink(g.safe_mm as f32 * k), Color32::from_rgb(60, 190, 110), StrokeKind::Inside),
+    ]
 }
 
 /// Draws the pages on screen (one page, or a spread) fitted to the window, with their guides when on.
@@ -326,8 +332,8 @@ fn draw_pages(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui, r
         if let Some((_, tex)) = run.shown.iter().find(|(i, _)| *i == index) {
             painter.image(tex.id(), side, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
         }
-        if run.guides {
-            guides(painter, side, &model);
+        for (line, color, kind) in guide_lines(side, &model, run.guides) {
+            painter.rect_stroke(line, 0.0_f32, Stroke::new(1.0, color), kind);
         }
         if spread && index == run.page {
             painter.rect_stroke(side, 0.0_f32, Stroke::new(2.0, ACCENT), StrokeKind::Inside);
@@ -459,5 +465,27 @@ mod tests {
         // a page past the end of the book is not on screen
         let past = Run { page: 7, ..Default::default() };
         assert!(past.visible(5).is_empty());
+    }
+
+    #[test]
+    fn guides_toggle_shows_and_hides_the_bleed_and_safe_guides() {
+        // a 280 x 210 mm page drawn 560 x 420 px: 2 px per mm, bleed 3 mm, safe area 5 mm
+        let model = Model::default();
+        let page = Rect::from_min_size(pos2(100.0, 50.0), vec2(560.0, 420.0));
+        let mut run = Run::default();
+        assert!(!run.guides);
+        assert!(guide_lines(page, &model, run.guides).is_empty(), "guides drawn while off");
+        run.guides = true;
+        let lines = guide_lines(page, &model, run.guides);
+        assert_eq!(lines.len(), 3);
+        let (bleed, trim, safe) = (lines[0].0, lines[1].0, lines[2].0);
+        assert_eq!(trim, page);
+        assert!((bleed.min.x - 94.0).abs() < 1e-3 && (bleed.min.y - 44.0).abs() < 1e-3, "bleed {bleed:?}");
+        assert!((bleed.width() - 572.0).abs() < 1e-3, "bleed {bleed:?}");
+        assert!((safe.min.x - 110.0).abs() < 1e-3 && (safe.min.y - 60.0).abs() < 1e-3, "safe {safe:?}");
+        assert!((safe.width() - 540.0).abs() < 1e-3, "safe {safe:?}");
+        // the toggle hides them again
+        run.guides = false;
+        assert!(guide_lines(page, &model, run.guides).is_empty());
     }
 }
