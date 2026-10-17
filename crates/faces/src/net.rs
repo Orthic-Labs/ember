@@ -211,7 +211,7 @@ fn conv_direct(node: &Node, x: &Tensor, g: &Graph) -> Result<Tensor> {
     let (cout, cin_g, kh, kw) = (*cout, *cin_g, *kh, *kw);
     let groups =
         usize::try_from(node.int("group").unwrap_or(1)).ok().filter(|g| *g >= 1).ok_or_else(|| NetError::Shape("a bad Conv group".into()))?;
-    if groups.checked_mul(cin_g) != Some(cin) || cout % groups != 0 || kh == 0 || kw == 0 {
+    if groups.checked_mul(cin_g) != Some(cin) || !cout.is_multiple_of(groups) || kh == 0 || kw == 0 {
         return shape_err("the Conv weights do not match its input");
     }
     let bias: Option<&[f32]> = match node.inputs.get(2).filter(|b| !b.is_empty()).and_then(|b| g.weights.get(b)) {

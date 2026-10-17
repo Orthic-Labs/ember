@@ -73,7 +73,7 @@ impl Detector {
         let outputs = g.outputs.clone();
         let net = Net::new(g)?;
         let side = match net.input_shape() {
-            Some(&[1, 3, h, w]) if h == w && (64..=4096).contains(&h) && h % 32 == 0 => h,
+            Some(&[1, 3, h, w]) if h == w && (64..=4096).contains(&h) && h.is_multiple_of(32) => h,
             _ => return Err(DetectError::Model("the model's input is not a fixed square image [1, 3, N, N] with N a multiple of 32".into())),
         };
         let shapes = net.validate_input(&[1, 3, side, side])?;
