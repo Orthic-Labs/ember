@@ -1,6 +1,6 @@
 # Gaps: where Ember falls short of reference editor
 
-> **Last reviewed:** 2026-10-17 · **Last updated:** 2026-10-17 · **Change:** minor (gap 16: the Classic Book rows, #119–#128; guides and backgrounds 🟡)
+> **Last reviewed:** 2026-10-17 · **Last updated:** 2026-10-17 · **Change:** minor (gap 20: Hasselblad 3FR / FFF checked, #171, #172; gap 16: the Classic Book rows, #119–#128; guides and backgrounds 🟡)
 
 Every known shortfall, one entry each, ranked by user impact (how many reference editor users hit it, and
 how hard it blocks them), then by effort. **Agents pick work from the top** (the first entry nobody is
@@ -38,7 +38,7 @@ numeric tone labels alone do not complete corpus preparation. See [format & comp
 | 17 | **Tethered capture** [#106](https://github.com/Orthic-Labs/ember/issues/106) | ⬜ | studio photographers | 25–45 + cameras | [hardware-parity](hardware-parity.md) |
 | 18 | **Video**: audio, the rest of trim (scrubber handles), global edits, re-encoded export (needs an approved sidecar build with an H.264 encoder); silent playback and the poster chooser landed [#73](https://github.com/Orthic-Labs/ember/issues/73) | VID rows: playback 🟡 (silent), trim 🟡 ([#74](https://github.com/Orthic-Labs/ember/issues/74)), export 🟡 ([#77](https://github.com/Orthic-Labs/ember/issues/77)), cover ✅ ([#76](https://github.com/Orthic-Labs/ember/issues/76)), the rest ⬜ | users who mix stills and clips | 20–38 | [target-app-parity](target-app-parity.md#features) |
 | 19 | **Plug-in ecosystem**: no reference editor SDK equivalent (export / publish plug-ins, metadata plug-ins) [#183](https://github.com/Orthic-Labs/ember/issues/183) | ⬜ | pro workflows built on plug-ins (LR/Enfuse, Jeffrey's exporters, Negative Lab Pro) | 40–80 + owner decision | [target-app-parity](target-app-parity.md#by-dimension) |
-| 20 | **Long-tail raw formats**: compressed SRW, ARQ pixel shift, IIQ, Hasselblad compression, X3F, CRW, MRW, ERF, KDC, DCR, MEF, old FinePix [#184](https://github.com/Orthic-Labs/ember/issues/184) | raw-parity.md | small user share each | 45–85 | [raw-parity](raw-parity.md) |
+| 20 | **Long-tail raw formats**: compressed SRW, ARQ pixel shift, IIQ, X3F, CRW, MRW, ERF, KDC, DCR, MEF, old FinePix [#184](https://github.com/Orthic-Labs/ember/issues/184) | raw-parity.md | small user share each | 45–85 | [raw-parity](raw-parity.md) |
 | 21 | **Localization**: 9 of 15 shipped languages partial (74–99% of catalog messages), lower-layer errors English; Hindi, Arabic, Indonesian, Korean, Vietnamese absent; no RTL or complex shaping [#185](https://github.com/Orthic-Labs/ember/issues/185) | measured from catalogs | non-English users see mixed English | 55–90 (shipped to full); 145–255 (five new) | [localization-parity](localization-parity.md) |
 | 22 | **Pen pressure**, OS monitor profiles, follow-window colour [#186](https://github.com/Orthic-Labs/ember/issues/186) | hardware-parity.md | brush users with tablets; multi-monitor setups | 11–22 | [hardware-parity](hardware-parity.md) |
 | 23 | **Accessibility** audit with screen readers; canvas tools keyboard-reachable [#92](https://github.com/Orthic-Labs/ember/issues/92) | LR-BEHAV-ACCESS 🟡 | blind and low-vision users | 10–20 | [ui-parity](ui-parity.md) |
@@ -83,6 +83,7 @@ loader qualification remain separate evidence; AI gaps stay open. See [corpus co
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | Gap 20 shrinks: Hasselblad 3FR / FFF (uncompressed and selection-value-8 lossless JPEG) checked on four CC0 files (#171, #172) |
 | 2026-10-17 | minor | Gap 16: the Classic Book (#119–#128) landed: settings, auto layout, pages and templates, cell padding, photo and page text, typography, views and PDF/JPEG export are ✅; guides and backgrounds are 🟡 (view-only guides, no pixel test of backgrounds); publish services stay open |
 | 2026-10-17 | minor | Gap 18: the poster frame is chosen in the player (#76) |
 | 2026-10-17 | minor | Gap 18 shrinks: silent playback in the loupe (#73), playback held to the trim; audio, scrubber trim handles, edits and re-encoded export remain |

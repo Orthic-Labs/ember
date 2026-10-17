@@ -51,7 +51,9 @@ fn corpus_raw_decodes() {
             let hevc_preview = fmt == RawFormat::Cr3
                 && lightcraft_meta::cr3::parse_cr3(&bytes)
                     .is_some_and(|c| c.tracks.iter().any(|t| t.kind == lightcraft_meta::cr3::Cr3TrackKind::Other(*b"HEVC") && t.data.is_some()));
-            assert!(fmt == RawFormat::Dng || name.starts_with("raw-panasonic-") || hevc_preview, "{name}: no embedded preview");
+            // Hasselblad 3FR / FFF carry only an uncompressed 8-bit RGB preview in IFD0, not a JPEG
+            let rgb_preview = name.starts_with("3fr-hasselblad-") || name.starts_with("fff-hasselblad-");
+            assert!(fmt == RawFormat::Dng || name.starts_with("raw-panasonic-") || hevc_preview || rgb_preview, "{name}: no embedded preview");
         }
         let preview_kb = preview.as_ref().map_or(0, |p| p.len() / 1024);
         let t1 = Instant::now();
@@ -1167,4 +1169,72 @@ fn fuji_embedded_lens_tables_follow_the_validated_models() {
         checked += 1;
     }
     eprintln!("Fuji lens tables: {checked} RAFs, {warped} warps, {vignetted} vignette gains");
+}
+
+/// IFD0's 8-bit RGB preview of a Hasselblad 3FR / FFF (an uncompressed strip, not a JPEG) as linear RGB, reduced to
+/// `gw × gh` cells.
+fn hasselblad_preview_cells(bytes: &[u8], gw: usize, gh: usize) -> Option<Vec<[f64; 3]>> {
+    let tiff = lightcraft_tiff::Tiff::parse(bytes).ok()?;
+    let ifd = tiff.all_ifds().into_iter().find(|i| i.u64s(0x0102).as_deref() == Some(&[8, 8, 8][..]) && i.u16(0x0103) == Some(1))?;
+    let (w, h) = (usize::try_from(ifd.u64(0x0100)?).ok()?, usize::try_from(ifd.u64(0x0101)?).ok()?);
+    let off = usize::try_from(ifd.u64(0x0111)?).ok()?;
+    let px = bytes.get(off..off.checked_add(w.checked_mul(h)?.checked_mul(3)?)?)?;
+    let (mut sum, mut n) = (vec![[0f64; 3]; gw * gh], vec![0f64; gw * gh]);
+    for y in 0..h {
+        for x in 0..w {
+            let i = (y * gh / h) * gw + x * gw / w;
+            for c in 0..3 {
+                let v = f64::from(px[(y * w + x) * 3 + c]) / 255.0;
+                sum[i][c] += if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) };
+            }
+            n[i] += 1.0;
+        }
+    }
+    Some(sum.iter().zip(&n).map(|(s, n)| s.map(|v| v / n)).collect())
+}
+
+/// Hasselblad 3FR and FFF (issues #171 and #172): the uncompressed X1D strip and Hasselblad's own lossless JPEG
+/// (scan selection value 8: H3D and CFV-50c 3FR, H4D FFF) decode to the full sensor raster, and the mosaic is the
+/// camera's own picture: its green ranks like the luminance of the file's RGB preview and its colours follow the
+/// preview better with the decoded layout than with any other. The expectations were first measured with an
+/// independent re-implementation of the selection-value-8 rule (full frame of all four files, green rank correlation
+/// 0.97 to 0.99, RGGB colour agreement 0.80 to 0.92 against at most -0.24 for the other layouts). Skips absent files.
+#[test]
+fn corpus_hasselblad_3fr_fff() {
+    let dir = corpus_root().join("raw");
+    // (file, width, height)
+    let cases = [
+        ("3fr-hasselblad-x1d.3fr", 8384, 6304),
+        ("3fr-hasselblad-h3d.3fr", 7262, 5456),
+        ("3fr-hasselblad-cfv50c.3fr", 8374, 6304),
+        ("fff-hasselblad-h4d50.fff", 8282, 6240),
+    ];
+    let mut seen = 0;
+    for (name, w, h) in cases {
+        let Ok(bytes) = std::fs::read(dir.join(name)) else {
+            eprintln!("skip: {name} absent");
+            continue;
+        };
+        assert_eq!(probe(&bytes), Some(RawFormat::CfaTiff), "{name}: format");
+        let img = decode(&bytes).unwrap_or_else(|e| panic!("{name}: {e}"));
+        img.validate().unwrap();
+        assert_eq!((img.width, img.height, img.bits), (w, h, 16), "{name}: size and depth");
+        assert!(img.white_at(0) > img.black.mean(), "{name}: white {} <= black {}", img.white_at(0), img.black.mean());
+        let layout = img.cfa.clone().unwrap_or_else(|| panic!("{name}: no CFA"));
+        let (gw, gh) = (24, 18);
+        let jpeg = hasselblad_preview_cells(&bytes, gw, gh).unwrap_or_else(|| panic!("{name}: no RGB preview in IFD0"));
+        let sites = raw_sites(&img, gw, gh);
+        let green: Vec<f64> = sites.iter().map(|s| (0..4).filter(|&i| layout.pattern[i] == 1).map(|i| s[i]).sum::<f64>()).collect();
+        let jg: Vec<f64> = jpeg.iter().map(|j| j[1]).collect();
+        let rho = correlation(&ranks(&green), &ranks(&jg));
+        let agree = |l: &str| chroma_agreement(&sites, &jpeg, &lightcraft_raw::Cfa::bayer(l).unwrap().pattern);
+        let cfa = layout.name();
+        let best_other = ["RGGB", "GRBG", "GBRG", "BGGR"].into_iter().filter(|l| *l != cfa).map(agree).fold(f64::MIN, f64::max);
+        let own = agree(&cfa);
+        eprintln!("{name:30} {w}x{h} {cfa}: green rank correlation {rho:.3}, colour agreement {own:.3} (others <= {best_other:.3})");
+        assert!(rho > 0.9, "{name}: rank correlation with the preview {rho}");
+        assert!(own > 0.5 && own > best_other, "{name}: colours follow the preview better with another layout ({own} vs {best_other})");
+        seen += 1;
+    }
+    eprintln!("Hasselblad 3FR / FFF checked on {seen} files");
 }

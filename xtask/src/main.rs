@@ -915,6 +915,26 @@ const RAW_SAMPLES: &[(&str, &str, &str)] = &[
         "https://raw.pixls.us/getfile.php/4204/nice/Leica%20-%20D-Lux%207%20-%204:3.RWL",
         "4f6db6492da83f7f2a5012591e370557249d1ed44d4c948784016605b799327c",
     ),
+    (
+        "3fr-hasselblad-x1d.3fr",
+        "https://raw.pixls.us/data/Hasselblad/X1D/B9999910.3FR",
+        "395acb2c706dc10270c58ec261e42a5e36f6ac8c39d2a767e86e83648aa318a3",
+    ),
+    (
+        "3fr-hasselblad-h3d.3fr",
+        "https://raw.pixls.us/data/Hasselblad/H3D/A9391120.3FR",
+        "34fdb93cb215e4f419ae0f7252c57b881fa381003124b4f9c143d27741f211b3",
+    ),
+    (
+        "3fr-hasselblad-cfv50c.3fr",
+        "https://raw.pixls.us/data/Hasselblad/CFV-50c/20200215_BERLIN_OldNew_WestHafen_B0000420.3FR",
+        "e27ff177519298fe7bae64506b975190789dc0e6ad70bea58be7c78fd094eae0",
+    ),
+    (
+        "fff-hasselblad-h4d50.fff",
+        "https://raw.pixls.us/data/Hasselblad/H4D-50/2-9-2017_street_0012.fff",
+        "44433062a0916fc41302d3bce0f18d5682e7cc2badcdf45a6441b11b7b412b92",
+    ),
 ];
 
 fn cmd_corpus(download: bool) -> Result<(), String> {
