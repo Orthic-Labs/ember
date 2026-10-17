@@ -417,7 +417,7 @@ pub(crate) fn merge_quads(quads: &[u16], w: usize, h: usize, cfa: &Cfa, black: f
             let q = |k: usize| u32::from(quads.get(i + k).copied().unwrap_or(0));
             let o = x * 3;
             if let Some(px) = row.get_mut(o..o + 3) {
-                px.copy_from_slice(&[q(0) as u16, ((q(1) + q(2) + 1) / 2) as u16, q(3) as u16]);
+                px.copy_from_slice(&[q(0) as u16, (q(1) + q(2)).div_ceil(2) as u16, q(3) as u16]);
             }
         }
     });
@@ -667,7 +667,7 @@ mod tests {
         for y in 0..h {
             for x in 0..w {
                 // the unshifted frame's own samples (G2 at odd rows, even columns) stay clean: it did not see the object
-                let moved = (60..100).contains(&x) && (50..90).contains(&y) && !(y % 2 == 1 && x % 2 == 0);
+                let moved = (60..100).contains(&x) && (50..90).contains(&y) && !(y % 2 == 1 && x.is_multiple_of(2));
                 // black 512 on every plane; the second green plane is brighter where something moved
                 quads.extend_from_slice(&[512 + flat[0], 512 + flat[1], 512 + flat[1] + if moved { 3000 } else { 0 }, 512 + flat[2]]);
             }
@@ -712,8 +712,8 @@ mod tests {
     #[test]
     fn bad_input_is_an_error_not_a_panic() {
         let cfa = Cfa::bayer_static("RGGB");
-        let f = vec![0u16; 64];
-        let short = vec![0u16; 63];
+        let f = [0u16; 64];
+        let short = [0u16; 63];
         assert!(merge_frames([&f, &f, &f, &short], 8, 8, &cfa, [0.0; 3], 100.0, true).is_err());
         assert!(merge_frames([&f, &f, &f, &f], 2, 32, &cfa, [0.0; 3], 100.0, true).is_err());
         assert!(merge_frames([&f, &f, &f, &f], 8, 8, &Cfa::xtrans(), [0.0; 3], 100.0, true).is_err());

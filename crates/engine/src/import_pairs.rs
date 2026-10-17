@@ -67,7 +67,7 @@ pub struct PairMatch {
     pub relation: &'static str,
 }
 
-const RAW_EXTENSIONS: &[&str] = &["dng", "cr2", "cr3", "nef", "nrw", "arw", "raf", "orf", "rw2", "rwl", "raw", "pef"];
+const RAW_EXTENSIONS: &[&str] = &["dng", "cr2", "cr3", "nef", "nrw", "arw", "arq", "raf", "orf", "rw2", "rwl", "raw", "pef"];
 
 fn is_raw(input: &PairInput) -> bool {
     input.kind == MediaKind::Raw

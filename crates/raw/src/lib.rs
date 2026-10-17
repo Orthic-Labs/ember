@@ -252,6 +252,8 @@ fn has_pentax_maker_note(t: &Tiff, bytes: &[u8]) -> bool {
 fn has_raw_ifd(t: &Tiff) -> bool {
     t.all_ifds().iter().any(|i| {
         i.u16(lightcraft_tiff::tags::PHOTOMETRIC) == Some(lightcraft_tiff::tags::photometric::CFA)
+            // a Sony ARQ's four merged pixel-shift planes
+            || i.u16(lightcraft_tiff::tags::PHOTOMETRIC) == Some(pixelshift::ARQ_PHOTOMETRIC)
             || i.u16(lightcraft_tiff::tags::COMPRESSION).is_some_and(|c| matches!(c, 34713 | 32767 | 32769 | 32770 | 99 | 65535))
             || i.contains(0x7010)
             || i.contains(lightcraft_tiff::tags::CFA_PATTERN_EP)
