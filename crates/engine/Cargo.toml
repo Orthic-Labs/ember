@@ -69,6 +69,11 @@ lightcraft-heif = { workspace = true, features = ["testdata"] }
 libc = { workspace = true }
 lightcraft-tiff = { workspace = true }
 
+# The model-download tests (denoise, faces, place names) talk to a loopback server, which the owner's public-web
+# address policy refuses unless this test-only feature is on.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+lightcraft-fetch = { workspace = true, features = ["testing"] }
+
 [[example]]
 name = "denoise_backends"
 required-features = ["onnx-accel"]

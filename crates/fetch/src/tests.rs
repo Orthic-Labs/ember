@@ -27,6 +27,9 @@ fn pinned() -> FileSpec<'static> {
     FileSpec { name: "model.bin", size: Some(p.len() as u64), sha256: Some(leak(sha_hex(&p))), max: p.len() as u64 }
 }
 
+/// The served file's strong ETag: the owner resumes a partial download only when the server proves it is the same file.
+const ETAG: &str = "\"payload-v1\"";
+
 struct Server {
     base: String,
     hits: Arc<AtomicUsize>,
@@ -102,7 +105,7 @@ fn handle(mut s: TcpStream, hits: &AtomicUsize) {
             std::thread::sleep(Duration::from_secs(5));
         }
         "slow" => {
-            let _ = s.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", body.len()).as_bytes());
+            let _ = s.write_all(format!("HTTP/1.1 200 OK\r\nETag: {ETAG}\r\nContent-Length: {}\r\n\r\n", body.len()).as_bytes());
             for c in body.chunks(1000) {
                 if s.write_all(c).is_err() {
                     return;
@@ -112,7 +115,7 @@ fn handle(mut s: TcpStream, hits: &AtomicUsize) {
         }
         "flaky" if n.is_multiple_of(2) && range.is_none() => {
             // the first try breaks off after a third
-            let _ = s.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", body.len()).as_bytes());
+            let _ = s.write_all(format!("HTTP/1.1 200 OK\r\nETag: {ETAG}\r\nContent-Length: {}\r\n\r\n", body.len()).as_bytes());
             let _ = s.write_all(&body[..body.len() / 3]);
         }
         "range416" if range.is_some() => send(&mut s, "416 Range Not Satisfiable", "Content-Length: 0\r\n", b""),
@@ -122,10 +125,10 @@ fn handle(mut s: TcpStream, hits: &AtomicUsize) {
             Some(from) => send(
                 &mut s,
                 "206 Partial Content",
-                &format!("Content-Range: bytes {from}-{}/{}\r\nContent-Length: {}\r\n", body.len() - 1, body.len(), body.len() - from as usize),
+                &format!("ETag: {ETAG}\r\nContent-Range: bytes {from}-{}/{}\r\nContent-Length: {}\r\n", body.len() - 1, body.len(), body.len() - from as usize),
                 &body[from as usize..],
             ),
-            None => send(&mut s, "200 OK", &format!("Content-Length: {}\r\n", body.len()), &body),
+            None => send(&mut s, "200 OK", &format!("ETag: {ETAG}\r\nContent-Length: {}\r\n", body.len()), &body),
         },
     }
 }
@@ -329,14 +332,6 @@ fn no_mirrors_is_a_clear_error_and_mirror_lists_are_parsed() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-#[test]
-fn content_ranges() {
-    assert_eq!(parse_content_range("bytes 100-299/300"), Some((100, Some(300))));
-    assert_eq!(parse_content_range("bytes 0-0/*"), Some((0, None)));
-    assert_eq!(parse_content_range("bytes 9-1/300"), None);
-    assert_eq!(parse_content_range("items 1-2/3"), None);
-}
-
 /// A bearer token goes only to https, only to the host the download began at, and only when there is one.
 #[test]
 fn a_token_is_sent_only_over_https_to_the_first_host() {
@@ -380,6 +375,55 @@ fn exact_url_keeps_query_and_owned_catalog_values() {
     assert_eq!(std::fs::read(dir.join(name)).unwrap(), b"abc");
     assert!(progress.iter().all(|p| !p.mirror.contains("secret")));
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The port to the owner's download changed how a download is carried out, not where it lands or what is already there:
+/// a model installed by an earlier build is verified in place and never fetched again, and a partial file an earlier
+/// build left (no resume record) is simply replaced by a complete verified one: no re-download of what is installed,
+/// no error from the leftovers, nothing stray left in the folder.
+#[test]
+fn an_installed_model_and_an_earlier_builds_partial_survive_the_owner_port() {
+    let srv = server();
+    let dir = tmp("migrate");
+    std::fs::create_dir_all(&dir).unwrap();
+    // installed by an earlier build: the final name holds the verified bytes; no mirror is reachable and none is asked
+    std::fs::write(dir.join("model.bin"), payload()).unwrap();
+    let dead = vec!["http://127.0.0.1:1/unreachable".to_string()];
+    let hits = srv.hits.load(Ordering::SeqCst);
+    run(&[pinned()], &dead, &dir, &AtomicBool::new(false)).0.unwrap();
+    assert_eq!(srv.hits.load(Ordering::SeqCst), hits);
+    assert_eq!(std::fs::read(dir.join("model.bin")).unwrap(), payload());
+    // damaged in place: it is replaced from a mirror, not kept
+    std::fs::write(dir.join("model.bin"), vec![9u8; 300_000]).unwrap();
+    run(&[pinned()], &[format!("{}/good", srv.base)], &dir, &AtomicBool::new(false)).0.unwrap();
+    assert_eq!(std::fs::read(dir.join("model.bin")).unwrap(), payload());
+    // a partial file from an earlier build (a prefix of the file, no resume record next to it)
+    std::fs::remove_file(dir.join("model.bin")).unwrap();
+    std::fs::write(part_path(&dir, "model.bin"), &payload()[..120_000]).unwrap();
+    run(&[pinned()], &[format!("{}/good", srv.base)], &dir, &AtomicBool::new(false)).0.unwrap();
+    assert_eq!(std::fs::read(dir.join("model.bin")).unwrap(), payload());
+    let mut names: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+    names.sort();
+    assert_eq!(names, ["model.bin"], "no partial file or resume record is left behind");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A cancelled download can be discarded completely: the partial file and the owner's resume record.
+#[test]
+fn discarding_a_partial_removes_its_resume_record_too() {
+    let srv = server();
+    let dir = tmp("discard");
+    let cancel = Arc::new(AtomicBool::new(false));
+    let c = cancel.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(400));
+        c.store(true, Ordering::SeqCst);
+    });
+    assert_eq!(run(&[pinned()], &[format!("{}/slow", srv.base)], &dir, &cancel).0, Err(DownloadError::Cancelled));
+    assert!(part_path(&dir, "model.bin").exists());
+    discard_partial(&dir, "model.bin");
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

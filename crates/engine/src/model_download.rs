@@ -206,12 +206,12 @@ fn fetch(_: &Download, _: &str, _: &Path, _: &Shared) -> Result<(), String> {
 /// The whole job: reuse a verified earlier copy, else fetch, check and stage. Always ends in a final [`State`].
 fn run(spec: &Download, mirror: &str, staging: &Path, shared: &Shared) {
     let target = staging.join(&spec.file_name);
-    let part = staging.join(format!("{}.part", spec.file_name));
     match fetch(spec, mirror, staging, shared) {
         Ok(()) => shared.set(State::Done { path: target, sha256: spec.sha256.to_string() }),
         #[cfg(not(target_arch = "wasm32"))]
         Err(lightcraft_fetch::DownloadError::Cancelled) => {
-            let _ = std::fs::remove_file(&part);
+            // the partial file and the owner's resume record: a cancelled staging download is not resumed
+            lightcraft_fetch::discard_partial(staging, &spec.file_name);
             shared.set(State::Cancelled);
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -220,7 +220,7 @@ fn run(spec: &Download, mirror: &str, staging: &Path, shared: &Shared) {
         }
         #[cfg(target_arch = "wasm32")]
         Err(e) => {
-            let _ = std::fs::remove_file(&part);
+            let _ = std::fs::remove_file(staging.join(format!("{}.part", spec.file_name)));
             shared.set(State::Failed(e));
         }
     }
@@ -342,6 +342,33 @@ mod tests {
         let again = Shared::new(spec.size_bytes);
         run(&spec, "http://127.0.0.1:1/m", &staging, &again);
         assert!(matches!(again.get(), State::Done { .. }), "{:?}", again.get());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Models staged or part-downloaded by a build before the owner download port keep working: a verified staged copy
+    /// is reused without the network, and a partial file with no resume record next to it is replaced by a whole,
+    /// verified one, leaving no partial file or record behind.
+    #[test]
+    fn a_staged_copy_and_an_earlier_builds_partial_are_picked_up() {
+        let dir = scratch("legacy");
+        let bytes: Vec<u8> = (0..150_000u32).map(|i| (i % 241) as u8).collect();
+        let (staging, spec) = (dir.join(STAGING), spec_for(&bytes));
+        std::fs::create_dir_all(&staging).unwrap();
+        // staged by an earlier build: nothing listens at the mirror, and the file is still Done
+        std::fs::write(staging.join(&spec.file_name), &bytes).unwrap();
+        let reused = Shared::new(spec.size_bytes);
+        run(&spec, "http://127.0.0.1:1/m", &staging, &reused);
+        assert!(matches!(reused.get(), State::Done { .. }), "{:?}", reused.get());
+        // an earlier build's interrupted download: a prefix as `.part`, no `.part.meta`
+        std::fs::remove_file(staging.join(&spec.file_name)).unwrap();
+        std::fs::write(staging.join(format!("{}.part", spec.file_name)), bytes.get(..40_000).unwrap()).unwrap();
+        let finished = Shared::new(spec.size_bytes);
+        run(&spec, &serve("200 OK", bytes.clone()), &staging, &finished);
+        let State::Done { path, .. } = finished.get() else { panic!("{:?}", finished.get()) };
+        assert_eq!(std::fs::read(path).unwrap(), bytes);
+        let mut names: Vec<String> = std::fs::read_dir(&staging).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        names.sort();
+        assert_eq!(names, [spec.file_name.clone()]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

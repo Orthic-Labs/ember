@@ -2,12 +2,15 @@
 //! (the next one when a mirror fails), resuming partial files, with connect and stall timeouts,
 //! a size cap, progress and cancellation, and checked (exact size, SHA-256 where pinned) before
 //! each file is moved into the model folder. Runs on whatever thread calls [`download`] (the
-//! engine uses a background thread; the UI thread never waits for the network). Pure Rust: the
-//! HTTPS client is the rightkit-http owner client (rustls, OS trust store; see [`http`]).
+//! engine uses a background thread; the UI thread never waits for the network).
 //!
-//! Files are written to `<name>.part` next to their final place and renamed when verified, so a
-//! model folder never holds a half-written file under a real name, and an interrupted download
-//! resumes from where it stopped. A file that fails its check is deleted, never kept.
+//! The transfer itself (vetted HTTPS through rightkit-http, `<name>.part` plus its resume record,
+//! strong-ETag byte-range resume, bounded retries, the SHA-256 check and the atomic rename into
+//! place) is the rightkit-models owner's `download_resumable`. This crate adds what the owner
+//! leaves to the app: Ember's mirror list and fallback, the size cap, progress across files, the
+//! bearer token scoped to one host, and the rule that a model folder never holds a half-written
+//! file under a real name. A file that fails its check is deleted, never kept. The `http` module
+//! stays for the small bounded requests (map tiles, AI calls) that are not model downloads.
 //!
 //! What to download and where from belongs to the caller: it passes the [`FileSpec`]s and the
 //! default mirrors (see [`mirrors`]). `lightcraft-segment` does so for the SAM 3 weights, which
@@ -21,15 +24,19 @@
 
 pub mod http;
 
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::cell::RefCell;
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use rightkit_models::ErrorCode;
+use rightkit_models::download::{DownloadRequest, download_resumable, part_path_for};
+use rightkit_models::http::{ModelHttp, ModelHttpOptions};
 use sha2::{Digest, Sha256};
 
-use http::{HttpError, Limits, Url};
+use http::Url;
 
 /// One file of the model.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -85,7 +92,7 @@ mod byte_verification_tests {
 /// Most mirrors used (a hostile list can't make a download loop forever).
 const MAX_MIRRORS: usize = 16;
 /// Redirects followed per request.
-const MAX_REDIRECTS: usize = 8;
+const MAX_REDIRECTS: u32 = 8;
 
 /// The mirrors to try, in order: `env`'s (base URLs separated by commas, spaces or newlines), then
 /// the mirrors file's (one base URL per line, `#` comments), then `defaults`; duplicates and
@@ -169,12 +176,11 @@ impl std::fmt::Display for DownloadError {
     }
 }
 
-/// One mirror's failure for one file; `Retry` resumes on the same mirror.
+/// One mirror's failure for one file.
 enum Fail {
-    Retry(String),
+    /// Try the next mirror.
     NextMirror(String),
     Cancelled,
-    Disk(String),
 }
 
 /// Fetch a single file from its exact URL, preserving any query string. The local filename
@@ -231,40 +237,38 @@ fn download_source(
         return Err(DownloadError::NoMirrors);
     }
     let mut before: u64 = files.iter().filter(|f| !todo.contains(f)).filter_map(|f| f.size).sum();
+    let http = transport(opts);
     for f in todo {
         let mut errors = Vec::new();
         let mut ok = false;
-        'mirrors: for m in mirrors {
+        for m in mirrors {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(DownloadError::Cancelled);
+            }
             let url = if exact_urls { m.clone() } else { format!("{m}/{}", f.name) };
-            for _ in 0..opts.attempts.clamp(1, 16) {
-                if cancel.load(Ordering::Relaxed) {
-                    return Err(DownloadError::Cancelled);
+            let mut report = |n: u64, announced: u64| {
+                let mirror = Url::parse(m).map(|u| u.display()).unwrap_or_default();
+                progress(&Progress {
+                    file: f.name.to_string(),
+                    done: before.saturating_add(n),
+                    total: total.max(before.saturating_add(announced)),
+                    mirror,
+                })
+            };
+            // a token for the configured host only (the owner client keeps a secret header off a redirect's host)
+            let token = Url::parse(m).ok().and_then(|u| {
+                let origin = u.host.clone();
+                bearer(opts.token_env.and_then(|name| std::env::var(name).ok()).as_deref(), &u, &origin).map(str::to_string)
+            });
+            match fetch_file(&http, f, &url, dir, token.as_deref(), cancel, &mut report) {
+                Ok(()) => {
+                    ok = true;
+                    break;
                 }
-                let mut report = |n: u64, announced: u64| {
-                    let mirror = Url::parse(m).map(|u| u.display()).unwrap_or_default();
-                    progress(&Progress {
-                        file: f.name.to_string(),
-                        done: before.saturating_add(n),
-                        total: total.max(before.saturating_add(announced)),
-                        mirror,
-                    })
-                };
-                match fetch_file(f, &url, dir, opts, cancel, &mut report) {
-                    Ok(()) => {
-                        ok = true;
-                        break 'mirrors;
-                    }
-                    Err(Fail::Cancelled) => return Err(DownloadError::Cancelled),
-                    Err(Fail::Disk(e)) => return Err(DownloadError::Disk(e)),
-                    Err(Fail::Retry(e)) => {
-                        log::warn!("download of {}: {e} (retrying)", short(&url));
-                        errors.push(format!("{}: {e}", short(m)));
-                    }
-                    Err(Fail::NextMirror(e)) => {
-                        log::warn!("download of {}: {e}", short(&url));
-                        errors.push(format!("{}: {e}", short(m)));
-                        continue 'mirrors;
-                    }
+                Err(Fail::Cancelled) => return Err(DownloadError::Cancelled),
+                Err(Fail::NextMirror(e)) => {
+                    log::warn!("download of {}: {e}", short(&url));
+                    errors.push(format!("{}: {e}", short(m)));
                 }
             }
         }
@@ -356,10 +360,6 @@ pub fn verify_file(f: &FileSpec<'_>, path: &Path) -> Result<bool, DownloadError>
     verified(f, path)
 }
 
-fn sha256_file(path: &Path) -> Result<String, String> {
-    sha256_file_progress(path, &mut |_, _| true)?.ok_or_else(|| "hash verification cancelled".into())
-}
-
 fn sha256_file_progress<F>(path: &Path, progress: &mut F) -> Result<Option<String>, String>
 where
     F: FnMut(u64, u64) -> bool,
@@ -383,167 +383,125 @@ where
     Ok(Some(h.finalize().iter().map(|b| format!("{b:02x}")).collect()))
 }
 
-/// A new, empty partial download at `part`, created exclusively after removing whatever was there (a link itself,
-/// never its target).
-fn new_part(part: &Path) -> std::io::Result<File> {
-    if std::fs::symlink_metadata(part).is_ok() {
-        std::fs::remove_file(part)?;
-    }
-    OpenOptions::new().write(true).create_new(true).open(part)
-}
-
 fn part_path(dir: &Path, name: &str) -> PathBuf {
-    dir.join(format!("{name}.part"))
+    part_path_for(&dir.join(name))
 }
 
-/// Fetch one file from one mirror into `<name>.part` (resuming it when its size is pinned),
+/// Remove the partial download of `name` in `dir` and its resume record, whatever state they are in. A caller that
+/// cancels a download it will not resume (the engine's model staging) calls this so nothing is left behind.
+pub fn discard_partial(dir: &Path, name: &str) {
+    rightkit_models::download::discard_partial(&part_path(dir, name));
+}
+
+/// The owner's transport for one download call: its vetted client (public-web address policy, per-hop redirect
+/// checks, the OS trust store, environment proxies), with Ember's connect and stall limits, bounded retries per
+/// mirror (`attempts` tries in all, each resuming where the last stopped) and a user agent naming Ember.
+fn transport(opts: &Options) -> ModelHttp {
+    let stall = opts.stall_timeout;
+    let options = ModelHttpOptions {
+        connect_timeout: Some(opts.connect_timeout),
+        header_timeout: Some(stall),
+        read_timeout: Some(stall),
+        max_redirects: MAX_REDIRECTS,
+        retries: opts.attempts.clamp(1, 16).saturating_sub(1),
+        app: Some(("Ember".to_string(), env!("CARGO_PKG_VERSION").to_string())),
+        ..base_options()
+    };
+    ModelHttp::new(options)
+}
+
+#[cfg(not(any(test, feature = "testing")))]
+fn base_options() -> ModelHttpOptions {
+    ModelHttpOptions::default()
+}
+
+/// Tests talk to a loopback server; the owner's public-web address policy would refuse it. Compiled only for this
+/// crate's tests and for a build that asks for the `testing` feature (the engine's tests, as a dev-dependency).
+#[cfg(any(test, feature = "testing"))]
+fn base_options() -> ModelHttpOptions {
+    ModelHttpOptions {
+        address_policy: rightkit_http::testing::loopback_config().address_policy,
+        proxy: rightkit_models::http::ProxyMode::None,
+        ..ModelHttpOptions::default()
+    }
+}
+
+/// Remove anything at the partial download's names that is not a plain file (a link, which the owner's `File::create`
+/// would write through): the link itself goes, never its target (issue #1502).
+fn clear_links(part: &Path) {
+    let mut record = part.as_os_str().to_os_string();
+    record.push(".meta");
+    let mut staged = record.clone();
+    staged.push(".meta");
+    for path in [part.to_path_buf(), PathBuf::from(record), PathBuf::from(staged)] {
+        if std::fs::symlink_metadata(&path).is_ok_and(|m| !m.is_file()) {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+}
+
+/// Fetch one file from one mirror into `<name>.part` (resuming it when the owner can prove it is the same file),
 /// check it and move it into place.
-fn fetch_file(f: &FileSpec<'_>, url: &str, dir: &Path, opts: &Options, cancel: &AtomicBool, report: &mut dyn FnMut(u64, u64)) -> Result<(), Fail> {
+fn fetch_file(
+    http: &ModelHttp,
+    f: &FileSpec<'_>,
+    url: &str,
+    dir: &Path,
+    token: Option<&str>,
+    cancel: &AtomicBool,
+    report: &mut dyn FnMut(u64, u64),
+) -> Result<(), Fail> {
+    let dest = dir.join(f.name);
     let part = part_path(dir, f.name);
     let limit = f.size.unwrap_or(f.max);
-    let disk = |e: std::io::Error| Fail::Disk(format!("{}: {e}", part.display()));
-    // resume only a pinned file (an unpinned one can't be checked after resuming), and only a plain file: anything
-    // else at that name (a link, which `metadata` would follow) is removed, never written through (issue #1502)
-    let mut have = match std::fs::symlink_metadata(&part) {
-        Ok(m) if m.is_file() && f.size.is_some() && m.len() <= limit => m.len(),
-        Ok(_) => {
-            std::fs::remove_file(&part).map_err(disk)?;
-            0
+    clear_links(&part);
+    // set when the server's file cannot be the expected one: the transfer is stopped through the cancel hook
+    let refused: RefCell<Option<String>> = RefCell::new(None);
+    let stop = || cancel.load(Ordering::Relaxed) || refused.borrow().is_some();
+    let progress = |received: u64, announced: u64| {
+        if refused.borrow().is_none() {
+            if announced > limit || (announced != 0 && f.size.is_some_and(|s| s != announced)) {
+                *refused.borrow_mut() = Some(format!("the server's file has the wrong size ({announced} bytes)"));
+            } else if received > limit {
+                *refused.borrow_mut() = Some(format!("the server sent more than the expected {limit} bytes"));
+            }
         }
-        Err(_) => 0,
+        report(received, f.size.unwrap_or(announced));
     };
-    let fetched = f.size != Some(have) || have == 0;
-    if fetched {
-        let limits = Limits { connect: opts.connect_timeout, stall: opts.stall_timeout, cancel, deadline: None };
-        let mut url = Url::parse(url).map_err(|e| Fail::NextMirror(e.to_string()))?;
-        let origin = url.host.clone();
-        let mut redirects = 0;
-        let mut resp = loop {
-            let mut headers = vec![];
-            if have > 0 {
-                headers.push(("Range", format!("bytes={have}-")));
-            }
-            // a token for the configured host only (never sent on to a redirect's host)
-            if let Some(t) = bearer(opts.token_env.and_then(|name| std::env::var(name).ok()).as_deref(), &url, &origin) {
-                headers.push(("Authorization", format!("Bearer {t}")));
-            }
-            let r = http::get(&url, &headers, &limits).map_err(http_fail)?;
-            match r.status {
-                301 | 302 | 303 | 307 | 308 => {
-                    redirects += 1;
-                    if redirects > MAX_REDIRECTS {
-                        return Err(Fail::NextMirror("too many redirects".into()));
-                    }
-                    let loc = r.header("location").ok_or_else(|| Fail::NextMirror("redirect without a location".into()))?;
-                    url = url.join(loc).map_err(|e| Fail::NextMirror(e.to_string()))?;
-                }
-                _ => break r,
-            }
-        };
-        let mut file = match resp.status {
-            200 => {
-                // the whole file (from the start, also when a range was asked for)
-                if resp.content_length().is_some_and(|n| n > limit || f.size.is_some_and(|s| s != n)) {
-                    return Err(Fail::NextMirror(format!("the server's file has the wrong size ({:?} bytes)", resp.content_length())));
-                }
-                have = 0;
-                new_part(&part).map_err(disk)?
-            }
-            206 if have > 0 => {
-                let range = resp.header("content-range").unwrap_or_default();
-                let (start, total) = parse_content_range(range).ok_or_else(|| Fail::NextMirror(format!("bad Content-Range `{range}`")))?;
-                if start != have || total.is_some_and(|t| Some(t) != f.size) {
-                    return Err(Fail::NextMirror(format!("the server resumed at the wrong place ({range})")));
-                }
-                // (still the plain file checked above: a link put there meanwhile is not appended to)
-                if !std::fs::symlink_metadata(&part).is_ok_and(|m| m.is_file()) {
-                    return Err(Fail::Retry("the partial download changed; starting over".into()));
-                }
-                OpenOptions::new().append(true).open(&part).map_err(disk)?
-            }
-            416 => {
-                // the partial file doesn't fit what the server has: start over
-                std::fs::remove_file(&part).map_err(disk)?;
-                return Err(Fail::Retry("the partial download didn't match; starting over".into()));
-            }
-            401 | 403 => return Err(Fail::NextMirror(format!("access denied (HTTP {})", resp.status))),
-            404 | 410 => return Err(Fail::NextMirror(format!("not found (HTTP {})", resp.status))),
-            s if s >= 500 => return Err(Fail::Retry(format!("server error (HTTP {s})"))),
-            s => return Err(Fail::NextMirror(format!("HTTP {s}"))),
-        };
-        let announced = f.size.unwrap_or_else(|| resp.content_length().unwrap_or(0));
-        report(have, announced);
-        let mut buf = vec![0u8; 256 * 1024];
-        loop {
-            let n = match resp.read(&mut buf, &limits) {
-                Ok(n) => n,
-                Err(e) => {
-                    let _ = file.flush();
-                    if f.size.is_none() {
-                        drop(file);
-                        let _ = std::fs::remove_file(&part);
-                    }
-                    return Err(http_fail(e));
-                }
-            };
-            if n == 0 {
-                break;
-            }
-            if have.saturating_add(n as u64) > limit {
-                drop(file);
-                let _ = std::fs::remove_file(&part);
-                return Err(Fail::NextMirror(format!("the server sent more than the expected {limit} bytes")));
-            }
-            file.write_all(buf.get(..n).unwrap_or_default()).map_err(disk)?;
-            have = have.saturating_add(n as u64);
-            report(have, announced);
+    let authorization = token.map(|t| format!("Bearer {t}"));
+    let request = DownloadRequest {
+        url,
+        part_path: &part,
+        dest_path: &dest,
+        expected_sha256: f.sha256,
+        authorization: authorization.as_deref(),
+        cancelled: &stop,
+    };
+    let outcome = download_resumable(http, request, progress);
+    let why = refused.borrow_mut().take();
+    if let Some(why) = why {
+        rightkit_models::download::discard_partial(&part);
+        return Err(Fail::NextMirror(why));
+    }
+    match outcome {
+        Ok(_) => {}
+        Err(e) if e.code == ErrorCode::Cancelled => return Err(Fail::Cancelled),
+        Err(e) if e.code == ErrorCode::HashMismatch => {
+            return Err(Fail::NextMirror(format!("the file is damaged or not the official one (SHA-256 check failed: {})", e.message)));
         }
-        file.sync_all().map_err(disk)?;
+        Err(e) => return Err(Fail::NextMirror(e.message)),
     }
-    // checks: exact size, hash
-    let len = std::fs::metadata(&part).map_err(disk)?.len();
-    if f.size.is_some_and(|s| s != len) {
-        return Err(Fail::Retry(format!("incomplete ({len} of {} bytes)", f.size.unwrap_or(0))));
+    // the owner checked the hash; the size is ours to check (an unpinned file has only the cap)
+    let len = std::fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
+    if len == 0 || f.size.is_some_and(|s| s != len) || len > limit {
+        let _ = std::fs::remove_file(&dest);
+        return Err(Fail::NextMirror(if len == 0 {
+            "the server sent an empty file".to_string()
+        } else {
+            format!("the file has the wrong size ({len} bytes)")
+        }));
     }
-    if len == 0 {
-        let _ = std::fs::remove_file(&part);
-        return Err(Fail::NextMirror("the server sent an empty file".into()));
-    }
-    if let Some(want) = f.sha256 {
-        let got = sha256_file(&part).map_err(Fail::Disk)?;
-        if got != want {
-            std::fs::remove_file(&part).map_err(disk)?;
-            let why = format!("the file is damaged or not the official one (SHA-256 {got})");
-            // a damaged partial file from an earlier run isn't this mirror's fault
-            return Err(if fetched { Fail::NextMirror(why) } else { Fail::Retry(why) });
-        }
-    }
-    std::fs::rename(&part, dir.join(f.name)).map_err(disk)?;
     Ok(())
-}
-
-fn http_fail(e: HttpError) -> Fail {
-    match e {
-        HttpError::Cancelled => Fail::Cancelled,
-        HttpError::Stalled | HttpError::Io(_) | HttpError::Protocol(_) => Fail::Retry(e.to_string()),
-        HttpError::BadUrl(_) | HttpError::Connect(_) | HttpError::Tls(_) => Fail::NextMirror(e.to_string()),
-    }
-}
-
-/// `bytes a-b/total` → (a, total) (`*` total → None).
-fn parse_content_range(v: &str) -> Option<(u64, Option<u64>)> {
-    let v = v.trim().strip_prefix("bytes")?.trim();
-    let (range, total) = v.split_once('/')?;
-    let (a, b) = range.split_once('-')?;
-    let (a, b) = (a.trim().parse::<u64>().ok()?, b.trim().parse::<u64>().ok()?);
-    if b < a {
-        return None;
-    }
-    let total = match total.trim() {
-        "*" => None,
-        t => Some(t.parse::<u64>().ok()?),
-    };
-    Some((a, total))
 }
 
 #[cfg(test)]

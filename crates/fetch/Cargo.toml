@@ -3,7 +3,7 @@ name = "lightcraft-fetch"
 version.workspace = true
 edition.workspace = true
 license = "Apache-2.0"
-description = "Ember model downloads: mirrors, resume, pinned SHA-256, over HTTPS in pure Rust (L0)"
+description = "Ember model downloads: mirrors, pinned SHA-256 and the size cap over the rightkit-models owner download (L0)"
 
 [lints]
 workspace = true
@@ -13,7 +13,14 @@ workspace = true
 log = { workspace = true }
 # The owner HTTP client (M17): blocking ureq + rustls with the OS trust store. No optional features.
 rightkit-http = { version = "=0.3.0", default-features = false }
+# The owner model download (resume, retries, SHA-256, atomic placement): the latest published release.
+rightkit-models = { version = "=0.3.2", default-features = false }
 sha2 = { version = "0.11", default-features = false }
+
+[features]
+# Lets the downloader reach a loopback server, for the engine's tests (a dev-dependency turns it on). Off in every
+# product build; the owner's public-web address policy then applies.
+testing = ["rightkit-http/testing"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 # The loopback test server is allowed by the owner's `testing` helpers only.

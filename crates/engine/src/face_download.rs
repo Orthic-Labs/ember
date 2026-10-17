@@ -218,22 +218,22 @@ fn fetch(_: &Download, _: &str, _: &Path, _: &Shared) -> Result<(), String> {
 /// The whole job: reuse a verified earlier copy, else fetch, check and stage. Always ends in a final [`State`].
 fn run(spec: &Download, mirror: &str, staging: &Path, shared: &Shared) {
     let target = staging.join(&spec.file_name);
-    let part = staging.join(format!("{}.part", spec.file_name));
     match fetch(spec, mirror, staging, shared) {
         Ok(()) => shared.set(State::Done { path: target, sha256: spec.sha256.to_string() }),
         #[cfg(not(target_arch = "wasm32"))]
         Err(lightcraft_fetch::DownloadError::Cancelled) => {
-            let _ = std::fs::remove_file(&part);
+            // the partial file and the owner's resume record: a cancelled staging download is not resumed
+            lightcraft_fetch::discard_partial(staging, &spec.file_name);
             shared.set(State::Cancelled);
         }
         #[cfg(not(target_arch = "wasm32"))]
         Err(e) => {
-            let _ = std::fs::remove_file(&part);
+            lightcraft_fetch::discard_partial(staging, &spec.file_name);
             shared.set(State::Failed(explain(&e)));
         }
         #[cfg(target_arch = "wasm32")]
         Err(e) => {
-            let _ = std::fs::remove_file(&part);
+            let _ = std::fs::remove_file(staging.join(format!("{}.part", spec.file_name)));
             shared.set(State::Failed(e));
         }
     }
