@@ -11,7 +11,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::{AI_MASK_VERSION, DevelopSettings, Mask, geometry_stamp};
+use crate::{AI_MASK_VERSION, DevelopSettings, Mask, NO_AI_MODEL, geometry_stamp};
 
 /// Groups shown in "Choose settings to copy" / "Create preset" (Lightroom's checklist).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -405,7 +405,7 @@ mod tests {
         assert_eq!(m1.ai_geometry, Some(geometry_stamp(&on_plain)));
         assert_eq!(m2.ai_geometry, Some(geometry_stamp(&on_cropped)));
         assert_ne!(m1.ai_geometry, m2.ai_geometry, "each photo has its own stamp");
-        assert!(!m1.ai_stale(0, geometry_stamp(&on_plain)));
+        assert!(!m1.ai_stale(0, geometry_stamp(&on_plain), NO_AI_MODEL));
     }
 
     /// Presets saved before the flag existed load, keep their pixel masks, and apply as they did.

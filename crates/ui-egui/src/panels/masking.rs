@@ -86,20 +86,22 @@ fn tile_layout(width: f32, label: impl Fn(f32) -> f32) -> (usize, f32, f32) {
     (2, room(2).max(24.0), 9.5)
 }
 
-/// The ids of the AI masks of `d` that Update AI Settings must recompute, for a photo whose current
-/// source and geometry stamps are `source` and `geometry` ([`lightcraft_engine::Session::ai_stamps`]).
-pub fn stale_mask_ids(d: &DevelopSettings, source: u64, geometry: u64) -> Vec<u32> {
-    d.masks.iter().filter(|m| m.ai_stale(source, geometry)).map(|m| m.id).collect()
+/// The ids of the AI masks of `d` that need updating, for a photo whose current source and geometry stamps are
+/// `source` and `geometry`, and whose segmentation model is `model` ([`lightcraft_engine::Session::ai_stamps`],
+/// [`lightcraft_engine::Session::ai_model_now`]).
+pub fn stale_mask_ids(d: &DevelopSettings, source: u64, geometry: u64, model: &str) -> Vec<u32> {
+    d.masks.iter().filter(|m| m.ai_stale(source, geometry, model)).map(|m| m.id).collect()
 }
 
-/// Update AI Settings for photo `id`: every stale AI mask, or only `mask` (its own Update badge). A
-/// stale Object or Describe mask needs the AI mask model and stays stale: the status line says so.
+/// Update AI for photo `id`: every stale AI mask (`masks.recompute`, which re-runs the model for Object and Describe
+/// too), or only `mask` (its own Update badge, `develop.updateAi`, which leaves Object and Describe pending). A stale
+/// Object or Describe mask needs the AI mask model and stays stale: the status line says so.
 fn update_ai(app: &mut LightcraftApp, id: PhotoId, mask: Option<u32>) {
-    let mut params = json!({"ids": [id.0]});
-    if let Some(mask) = mask {
-        params["masks"] = json!([mask]);
-    }
-    if let Ok(result) = app.run("develop.updateAi", params)
+    let result = match mask {
+        Some(mask) => app.run("develop.updateAi", json!({"ids": [id.0], "masks": [mask]})),
+        None => app.run("masks.recompute", json!({"ids": [id.0]})),
+    };
+    if let Ok(result) = result
         && result["pending"].as_u64().unwrap_or(0) > 0
     {
         app.ui.status = crate::i18n::tr("Object and Describe masks need the AI mask model to update").to_string();
@@ -111,7 +113,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
     let d = app.session.develop_of(id).unwrap_or_default();
     header(ui, "Masking");
     let (source, geometry) = app.session.ai_stamps(id);
-    let stale = stale_mask_ids(&d, source, geometry);
+    let stale = stale_mask_ids(&d, source, geometry, app.session.ai_model_now());
     if !stale.is_empty() {
         egui::Frame::NONE.inner_margin(egui::Margin { left: 24, right: 22, top: 0, bottom: 8 }).show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
@@ -1103,7 +1105,7 @@ mod tests {
         app.session.set_develop(id, d, "setup").unwrap();
 
         let (source, geometry) = app.session.ai_stamps(id);
-        assert_eq!(stale_mask_ids(&app.session.develop_of(id).unwrap(), source, geometry), [2]);
+        assert_eq!(stale_mask_ids(&app.session.develop_of(id).unwrap(), source, geometry, app.session.ai_model_now()), [2]);
         let widgets = panel_widgets(&mut app, id);
         assert!(widgets.contains(&"maskUpdate:2".to_string()), "the stale mask has the badge: {widgets:?}");
         assert!(!widgets.contains(&"maskUpdate:1".to_string()), "a current mask has none: {widgets:?}");
@@ -1115,7 +1117,7 @@ mod tests {
         app.session.set_develop(id, d, "setup").unwrap();
         update_ai(&mut app, id, Some(2));
         let (source, geometry) = app.session.ai_stamps(id);
-        assert_eq!(stale_mask_ids(&app.session.develop_of(id).unwrap(), source, geometry), [3], "mask 2 is current, mask 3 still stale");
+        assert_eq!(stale_mask_ids(&app.session.develop_of(id).unwrap(), source, geometry, app.session.ai_model_now()), [3], "mask 2 is current, mask 3 still stale");
         let widgets = panel_widgets(&mut app, id);
         assert!(!widgets.contains(&"maskUpdate:2".to_string()) && widgets.contains(&"maskUpdate:3".to_string()), "{widgets:?}");
 

@@ -205,6 +205,7 @@ const LAYOUT: &[(&str, &[&str])] = &[
             "develop.reset",
             "develop.updateProcess",
             "develop.updateAi",
+            "masks.recompute",
             "dialog.enhance",
             "dialog.createPreset",
             "---",
@@ -1553,6 +1554,18 @@ mod tests {
         let Some(MenuNode::Item { enabled, .. }) = find(&photo_menu, "develop.updateAi") else { panic!("not in the Photo menu") };
         assert!(enabled, "a selected photo can be updated");
         let r = run_item(&mut app, "develop.updateAi", json!({})).unwrap();
+        assert_eq!(r["stale"], 0, "{r}");
+    }
+
+    #[test]
+    fn recompute_ai_masks_is_in_the_photo_menu_and_runs_on_the_selection() {
+        let mut app = app();
+        let id = app.session.visible()[0].0;
+        app.session.execute("library.select", &json!({"ids": [id]})).unwrap();
+        let photo_menu = menu_bar(&app).into_iter().find(|(t, _)| t == "Photo").unwrap().1;
+        let Some(MenuNode::Item { enabled, .. }) = find(&photo_menu, "masks.recompute") else { panic!("not in the Photo menu") };
+        assert!(enabled, "a selected photo can be recomputed");
+        let r = run_item(&mut app, "masks.recompute", json!({})).unwrap();
         assert_eq!(r["stale"], 0, "{r}");
     }
 

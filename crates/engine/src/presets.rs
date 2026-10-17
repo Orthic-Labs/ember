@@ -666,7 +666,7 @@ mod tests {
             assert_eq!(m.components[0].shape, shape, "{id}");
             assert_eq!(m.adjust.exposure, exposure, "{id}: its adjustments");
             assert_eq!(m.ai_geometry, Some(geometry_stamp(&out)), "{id}: stamped for this photo");
-            assert!(!m.ai_stale(0, geometry_stamp(&out)), "{id}");
+            assert!(!m.ai_stale(0, geometry_stamp(&out), lightcraft_develop::NO_AI_MODEL), "{id}");
         }
         assert!(all.iter().any(|p| p.id == "lc.warm-glow" && !p.is_adaptive()), "ordinary presets are not adaptive");
     }

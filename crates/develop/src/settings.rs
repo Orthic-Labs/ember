@@ -1104,7 +1104,14 @@ pub struct Mask {
     /// such a mask is never stale for its source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ai_source: Option<u64>,
+    /// The segmentation model the AI selections were computed with ([`NO_AI_MODEL`] when none was installed).
+    /// `None` when not recorded: such a mask is never stale for its model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ai_model: Option<String>,
 }
+
+/// The model id recorded for AI selections computed while no segmentation model was installed.
+pub const NO_AI_MODEL: &str = "none";
 
 /// The AI mask algorithms: Subject, Sky, Background, People and Landscape (evaluated on render) and the SAM 3
 /// Object and Describe selections. Bump it when a change would select different pixels; a mask stamped with an
@@ -1143,6 +1150,7 @@ impl Default for Mask {
             ai_version: AI_MASK_VERSION,
             ai_geometry: None,
             ai_source: None,
+            ai_model: None,
         }
     }
 }
@@ -1154,13 +1162,15 @@ impl Mask {
     }
 
     /// Whether Update AI Settings must recompute the AI selections: another algorithm version made them, the source
-    /// file changed since (`source` is the photo's current [`source_stamp`]), or a stored segmentation (Object,
-    /// Describe) was made for a geometry the photo no longer has (`geometry` is its current [`geometry_stamp`]).
+    /// file changed since (`source` is the photo's current [`source_stamp`]), the segmentation model changed since
+    /// (`model` is the model now installed, [`NO_AI_MODEL`] for none), or a stored segmentation (Object, Describe)
+    /// was made for a geometry the photo no longer has (`geometry` is its current [`geometry_stamp`]).
     /// Semantic selections (Subject, Sky, ...) are evaluated on every render, so a geometry edit never stales them.
-    pub fn ai_stale(&self, source: u64, geometry: u64) -> bool {
+    pub fn ai_stale(&self, source: u64, geometry: u64, model: &str) -> bool {
         self.has_ai()
             && (self.ai_version != AI_MASK_VERSION
                 || self.ai_source.is_some_and(|s| s != source)
+                || self.ai_model.as_deref().is_some_and(|m| m != model)
                 || (self.has_segmentation() && self.ai_geometry.is_some_and(|g| g != geometry)))
     }
 
@@ -1175,11 +1185,12 @@ impl Mask {
         !self.has_segmentation()
     }
 
-    /// Stamp the AI selections as computed now, for `source` and `geometry`.
-    pub fn restamp(&mut self, source: u64, geometry: u64) {
+    /// Stamp the AI selections as computed now, for `source`, `geometry` and the segmentation `model`.
+    pub fn restamp(&mut self, source: u64, geometry: u64, model: &str) {
         self.ai_version = AI_MASK_VERSION;
         self.ai_source = Some(source);
         self.ai_geometry = Some(geometry);
+        self.ai_model = Some(model.to_string());
     }
 }
 
@@ -1206,16 +1217,17 @@ impl MaskShape {
 }
 
 /// How many of `masks` are stale for a photo whose current source and geometry stamps are `source` and `geometry`.
-pub fn ai_stale_count(masks: &[Mask], source: u64, geometry: u64) -> usize {
-    masks.iter().filter(|m| m.ai_stale(source, geometry)).count()
+pub fn ai_stale_count(masks: &[Mask], source: u64, geometry: u64, model: &str) -> usize {
+    masks.iter().filter(|m| m.ai_stale(source, geometry, model)).count()
 }
 
-/// How many AI masks of a photo's settings need Update AI Settings (`source`: the photo's [`source_stamp`]).
-pub fn ai_stale_in(d: &DevelopSettings, source: u64) -> usize {
+/// How many AI masks of a photo's settings need Update AI Settings (`source`: the photo's [`source_stamp`],
+/// `model`: the installed segmentation model, [`NO_AI_MODEL`] for none).
+pub fn ai_stale_in(d: &DevelopSettings, source: u64, model: &str) -> usize {
     if !d.masks.iter().any(Mask::has_ai) {
         return 0;
     }
-    ai_stale_count(&d.masks, source, geometry_stamp(d))
+    ai_stale_count(&d.masks, source, geometry_stamp(d), model)
 }
 
 /// A stable stamp of a photo's source file: its content hash when known, else its size and decoded dimensions.

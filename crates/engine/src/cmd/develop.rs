@@ -127,7 +127,7 @@ fn apply_auto_values(s: &mut Session, c: &str, id: PhotoId, r: &RegionAuto, basi
         return Ok(json!({"control": ctl, "value": value}));
     }
     let source = s.ai_source_of(id);
-    apply_auto(c, &mut d, r, source)?;
+    apply_auto(c, &mut d, r, source, s.ai_model_now())?;
     s.set_develop(id, d, "Auto")?;
     if let Some(active) = s.active_mask
         && !s.develop_of(id).is_some_and(|d| d.masks.iter().any(|m| m.id == active))
@@ -140,7 +140,7 @@ fn apply_auto_values(s: &mut Session, c: &str, id: PhotoId, r: &RegionAuto, basi
 /// Write Auto's result into `d`: the eight global values, and its region masks in place of the
 /// ones Auto made last time (the user's masks stay). The regions are stamped with the photo's
 /// source file (`source`, [`Session::ai_source_of`]) and geometry, as an AI selection computed now.
-fn apply_auto(c: &str, d: &mut DevelopSettings, r: &RegionAuto, source: u64) -> Result<()> {
+fn apply_auto(c: &str, d: &mut DevelopSettings, r: &RegionAuto, source: u64, model: &str) -> Result<()> {
     let a = r.global;
     d.light.exposure = a.exposure;
     d.light.contrast = a.contrast;
@@ -155,10 +155,45 @@ fn apply_auto(c: &str, d: &mut DevelopSettings, r: &RegionAuto, source: u64) -> 
     let g = lightcraft_develop::geometry_stamp(d);
     let mut masks = r.masks_for(&d.masks).ok_or_else(|| bad(c, "no free Auto mask IDs"))?;
     for m in &mut masks {
-        m.restamp(source, g);
+        m.restamp(source, g, model);
     }
     d.masks.extend(masks);
     Ok(())
+}
+
+/// Re-run the model for a mask's stored segmentations on photo `id`: Object clicks and Describe text. Returns `false`,
+/// leaving the mask as it is, when a part can't run here (no model, no clicks, a text prompt without SAM 3). The
+/// runs finish before anything is written, so an error leaves the photo unchanged.
+fn recompute_segmentations(s: &mut Session, c: &str, id: PhotoId, m: &mut lightcraft_develop::Mask, model: Option<&str>) -> Result<bool> {
+    use lightcraft_develop::MaskShape;
+    let runs_here = m.components.iter().all(|comp| match &comp.shape {
+        MaskShape::Object { hint, .. } => model.is_some() && !hint.is_empty(),
+        MaskShape::Prompt { text, .. } => model == Some("SAM 3") && !text.trim().is_empty(),
+        _ => true,
+    });
+    if !runs_here {
+        return Ok(false);
+    }
+    let mut segs = Vec::new();
+    for (i, comp) in m.components.iter().enumerate() {
+        match &comp.shape {
+            MaskShape::Object { hint, exclude, .. } => {
+                let clicks = super::masks::clicks_of(hint, exclude);
+                segs.push((i, Some(s.segment_clicks(id, &clicks).map_err(|e| bad(c, e))?)));
+            }
+            MaskShape::Prompt { text, .. } => segs.push((i, s.segment_text(id, text).map_err(|e| bad(c, e))?)),
+            _ => {}
+        }
+    }
+    for (i, seg) in segs {
+        if let Some(comp) = m.components.get_mut(i)
+            && let MaskShape::Object { seg: slot, detail, .. } | MaskShape::Prompt { seg: slot, detail, .. } = &mut comp.shape
+        {
+            *slot = seg;
+            detail.clear();
+        }
+    }
+    Ok(true)
 }
 
 /// The AI stamps of photos: the source file's, and the photo's geometry, as a selection computed now records them.
@@ -174,9 +209,15 @@ impl Session {
         (self.ai_source_of(id), g)
     }
 
+    /// The segmentation model AI selections computed now record: the installed one (MobileSAM or SAM 3), else
+    /// [`lightcraft_develop::NO_AI_MODEL`].
+    pub fn ai_model_now(&self) -> &'static str {
+        self.segmenter.installed_model().unwrap_or(lightcraft_develop::NO_AI_MODEL)
+    }
+
     /// How many AI masks of photo `id` Update AI Settings would recompute or report (the masking panel and grid badge).
     pub fn ai_stale_count(&self, id: PhotoId) -> usize {
-        self.develop_of(id).map_or(0, |d| lightcraft_develop::ai_stale_in(&d, self.ai_source_of(id)))
+        self.develop_of(id).map_or(0, |d| lightcraft_develop::ai_stale_in(&d, self.ai_source_of(id), self.ai_model_now()))
     }
 }
 
@@ -639,7 +680,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 for id in ids {
                     let r = auto_values(s, c, id, regions)?;
                     let mut d = (*s.develop_of(id).unwrap_or_default()).clone();
-                    apply_auto(c, &mut d, &r, s.ai_source_of(id))?;
+                    apply_auto(c, &mut d, &r, s.ai_source_of(id), s.ai_model_now())?;
                     ops.extend(s.develop_op(id, d, "Auto Settings"));
                 }
                 let n = ops.len();
@@ -672,16 +713,17 @@ pub fn specs() -> Vec<CommandSpec> {
                 let wanted = |m: &lightcraft_develop::Mask| only.as_ref().is_none_or(|ids| ids.contains(&m.id));
                 let ids: Vec<PhotoId> = s.targets(p)?.into_iter().filter(|id| s.catalog.photo(*id).is_some()).collect();
                 let (mut stale, mut updated, mut pending, mut changed) = (0, 0, 0, 0);
+                let model = s.ai_model_now();
                 let mut ops = Vec::new();
                 for id in ids {
                     let base = s.develop_of(id).unwrap_or_default();
                     let (src, g) = s.ai_stamps(id);
-                    stale += base.masks.iter().filter(|m| wanted(m) && m.ai_stale(src, g)).count();
+                    stale += base.masks.iter().filter(|m| wanted(m) && m.ai_stale(src, g, model)).count();
                     let mut d = (*base).clone();
                     let mut photo_changed = false;
-                    for m in d.masks.iter_mut().filter(|m| wanted(m) && m.ai_stale(src, g)) {
+                    for m in d.masks.iter_mut().filter(|m| wanted(m) && m.ai_stale(src, g, model)) {
                         if m.ai_recomputable() {
-                            m.restamp(src, g);
+                            m.restamp(src, g, model);
                             updated += 1;
                             photo_changed = true;
                         } else {
@@ -697,6 +739,53 @@ pub fn specs() -> Vec<CommandSpec> {
                     s.commit("Update AI Settings", Op::Batch { ops })?;
                 }
                 Ok(json!({"stale": stale, "updated": updated, "pending": pending, "changed": changed, "dryRun": dry}))
+            }
+        ),
+        // Recompute AI Masks: re-run the generation of the AI masks (every one with `all`, else the stale ones).
+        cmd!(
+            "masks.recompute",
+            "Recompute AI Masks",
+            ["Photo"],
+            None,
+            "{ids?, all?: bool (every AI mask, not only the stale ones), dryRun?: bool} — re-runs the AI mask generation of each target photo (`ids`, else the selection) as one undo step. A semantic mask (Subject, Sky, Background, People, Landscape) is restamped for the photo's current source and installed model. An Object mask is segmented again from its clicks, and a Describe mask from its text (SAM 3), when the model runs here (not in the app, which keeps the worker results out of this command); otherwise it stays stale and is counted in `pending`. A recomputed segmentation clears its detail passes → {stale, recomputed, pending, changed, model, dryRun}",
+            has_selection,
+            |s, p| {
+                let c = "masks.recompute";
+                let dry = bool_or(p, "dryRun", false);
+                let all = bool_or(p, "all", false);
+                let model = s.ai_model_now();
+                // In the app the model runs on the worker and its results return through segment_poll: a blocking
+                // wait here would freeze the window, so Object and Describe masks stay pending there.
+                let live = if s.segmenter.background { None } else { s.segmenter.installed_model() };
+                let ids: Vec<PhotoId> = s.targets(p)?.into_iter().filter(|id| s.catalog.photo(*id).is_some()).collect();
+                let _task = s.activity.start("recompute", "Recomputing AI masks", crate::activity::Cancel::No);
+                let (mut stale, mut recomputed, mut pending, mut changed) = (0, 0, 0, 0);
+                let mut ops = Vec::new();
+                for id in ids {
+                    let base = s.develop_of(id).unwrap_or_default();
+                    let (src, g) = s.ai_stamps(id);
+                    stale += base.masks.iter().filter(|m| m.ai_stale(src, g, model)).count();
+                    let mut d = (*base).clone();
+                    let mut photo_changed = false;
+                    for m in d.masks.iter_mut().filter(|m| m.has_ai() && (all || m.ai_stale(src, g, model))) {
+                        let done = if m.has_segmentation() { recompute_segmentations(s, c, id, m, live)? } else { true };
+                        if done {
+                            m.restamp(src, g, model);
+                            recomputed += 1;
+                            photo_changed = true;
+                        } else {
+                            pending += 1;
+                        }
+                    }
+                    if photo_changed {
+                        changed += 1;
+                        ops.extend(s.develop_op(id, d, "Recompute AI Masks"));
+                    }
+                }
+                if !dry && !ops.is_empty() {
+                    s.commit("Recompute AI Masks", Op::Batch { ops })?;
+                }
+                Ok(json!({"stale": stale, "recomputed": recomputed, "pending": pending, "changed": changed, "model": model, "dryRun": dry}))
             }
         ),
         // Thin wrappers (Classic ⌘U / ⇧⌘U): the same runs as Auto Settings and White Balance ▸ Auto.
@@ -1393,7 +1482,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 if preset.auto {
                     // "apply Auto": Auto Settings first, the preset's own settings on top
                     let r = auto_values(s, "preset.apply", id, false)?;
-                    apply_auto("preset.apply", &mut base, &r, source)?;
+                    apply_auto("preset.apply", &mut base, &r, source, s.ai_model_now())?;
                 }
                 ops.extend(s.develop_op(id, preset.apply_to_photo(&base, amount, Some(source)), &label));
             }
