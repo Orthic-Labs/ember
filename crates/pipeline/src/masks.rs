@@ -579,10 +579,18 @@ pub fn dab_spacing(r: f64) -> f64 {
 /// nothing, so holding the brush still adds no coverage (#518). Returns whether `q` was stamped;
 /// callers move `prev` on only then. A stroke holding [`MAX_STROKE_DABS`] takes no more.
 pub fn push_dabs(dabs: &mut Vec<Point>, prev: Option<Point>, q: Point, r: f64) -> bool {
-    let room = MAX_STROKE_DABS.saturating_sub(dabs.len());
+    let mut emitted = dabs.len();
+    push_dabs_counted(dabs, &mut emitted, prev, q, r)
+}
+
+/// Append a segment while retaining the stroke-wide emitted count across temporary buffers.
+/// Incremental callers keep `emitted` when clearing `dabs`; it advances only by appended dabs.
+pub fn push_dabs_counted(dabs: &mut Vec<Point>, emitted: &mut usize, prev: Option<Point>, q: Point, r: f64) -> bool {
+    let room = MAX_STROKE_DABS.saturating_sub(*emitted);
     if room == 0 || !(q.x.is_finite() && q.y.is_finite()) {
         return false;
     }
+    let before = dabs.len();
     if let Some(prev) = prev {
         let dist = prev.dist(q);
         if dist.is_nan() || dist <= STATIONARY_PX {
@@ -599,6 +607,7 @@ pub fn push_dabs(dabs: &mut Vec<Point>, prev: Option<Point>, q: Point, r: f64) -
         }
     }
     dabs.push(q);
+    *emitted += dabs.len() - before;
     true
 }
 
@@ -621,12 +630,26 @@ pub fn pressure_factors(p: f64, size: bool, flow: bool) -> (f64, f32) {
 /// pressure): the dabs it appends get a pressure ramped linearly from `prev`'s to `pen`, pushed into
 /// `pressure` alongside `dabs`, so the two stay parallel.
 pub fn push_pressed_dabs(dabs: &mut Vec<Point>, pressure: &mut Vec<f64>, prev: Option<(Point, f64)>, q: Point, pen: f64, r: f64) -> bool {
+    let mut emitted = dabs.len();
+    push_pressed_dabs_counted(dabs, pressure, &mut emitted, prev, q, pen, r)
+}
+
+/// Pressure-preserving form of [`push_dabs_counted`] for live incremental strokes.
+pub fn push_pressed_dabs_counted(
+    dabs: &mut Vec<Point>,
+    pressure: &mut Vec<f64>,
+    emitted: &mut usize,
+    prev: Option<(Point, f64)>,
+    q: Point,
+    pen: f64,
+    r: f64,
+) -> bool {
     let before = dabs.len();
     let (last, from) = match prev {
         Some((p, pp)) => (Some(p), pp),
         None => (None, pen),
     };
-    if !push_dabs(dabs, last, q, r) {
+    if !push_dabs_counted(dabs, emitted, last, q, r) {
         return false;
     }
     let added = dabs.len() - before;
@@ -1110,6 +1133,30 @@ mod tests {
         assert!(!push_dabs(&mut v, None, Point::new(f64::INFINITY, 1.0), r));
         push_dabs(&mut v, Some(Point::new(0.0, 0.0)), Point::new(1e300, 1.0), 0.0);
         assert!(v.len() <= 1_000_002, "{}", v.len());
+    }
+
+    #[test]
+    fn incremental_buffers_share_the_whole_stroke_dab_budget() {
+        let points = [Point::new(20.0, 20.0), Point::new(80.0, 20.0), Point::new(200.0, 80.0), Point::new(21.0, 20.0)];
+        let mut retained = Vec::new();
+        let mut streamed = Vec::new();
+        let mut retained_count = MAX_STROKE_DABS - 3;
+        let mut streamed_count = retained_count;
+        let mut prev = None;
+        for q in points {
+            let mut chunk = Vec::new();
+            let accepted = push_dabs_counted(&mut retained, &mut retained_count, prev, q, 10.0);
+            assert_eq!(accepted, push_dabs_counted(&mut chunk, &mut streamed_count, prev, q, 10.0));
+            streamed.extend(chunk);
+            if accepted {
+                prev = Some(q);
+            }
+        }
+        assert_eq!(retained, streamed);
+        assert_eq!(retained.len(), 3);
+        assert_eq!(retained_count, MAX_STROKE_DABS);
+        assert_eq!(streamed_count, retained_count);
+        assert_eq!(prev, Some(points[1]));
     }
 
     #[test]
