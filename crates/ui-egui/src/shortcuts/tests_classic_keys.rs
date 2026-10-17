@@ -328,3 +328,16 @@ fn keyc_histogram_key_dispatches_the_histogram_command() {
     assert!(!dispatched("Cmd+0").contains(&"view.zoomFit"), "⌘0 does not run Zoom to Fit with the Classic keymap");
     assert_eq!(super::shortcut_of(&Keymap::new(), "view.zoomFit"), Some("Cmd+0"), "the default keymap still fits on ⌘0");
 }
+
+#[test]
+fn classic_keys_move_to_their_menu_items() {
+    let mut h = library();
+    let shortcut = |h: &crate::headless::Headless, id: &str| {
+        crate::menus::menu_entries(&h.app).into_iter().find(|e| e.id == id).and_then(|e| e.shortcut)
+    };
+    assert_eq!(shortcut(&h, "view.zoomFit").as_deref(), Some("Cmd+0"));
+    h.app.ui.settings.classic_keymap = true;
+    // the native menu bar would otherwise take ⌘0 for Zoom to Fit before the Classic layer sees it
+    assert_eq!(shortcut(&h, "view.zoomFit"), None);
+    assert_eq!(shortcut(&h, "view.histogram").as_deref(), Some("Cmd+0"));
+}

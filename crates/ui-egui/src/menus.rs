@@ -2247,6 +2247,20 @@ pub fn menu_entries(app: &LightcraftApp) -> Vec<MenuEntry> {
             });
         }
     }
+    // the Classic layer's keys (that no user assignment has taken) move to their commands' items, so the
+    // native menu bar doesn't run another command on them (Classic ⌘0 is Histogram, not Zoom to Fit)
+    if app.ui.settings.classic_keymap {
+        let keymap = &app.ui.settings.keymap;
+        for (sc, id) in crate::shortcuts::CLASSIC_KEYS.iter().filter(|(sc, _)| !keymap.values().any(|s| s == sc)) {
+            for e in &mut v {
+                if e.id == *id {
+                    e.shortcut = Some(sc.to_string());
+                } else if e.shortcut.as_deref() == Some(*sc) {
+                    e.shortcut = None;
+                }
+            }
+        }
+    }
     v
 }
 
