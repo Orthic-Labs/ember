@@ -163,6 +163,42 @@ files and prose rather than from dcraw-family code.
 They give the algorithm's shape; constants, the bit layout and the stream header still have to be established from CC0
 sample files. A pointer for contributors, not legal advice.
 
+#### Compressed ORF: what a bounded black-box analysis settled and ruled out (#178, 2026-10-17)
+
+A time-boxed analysis of the CC0 E-M1, E-M5, E-M10, E-M10 III, E-PL5, E-5 and E-420 files (no third-party decoder
+source consulted) established the container but not the value model. No decoder was written.
+
+Established, identical on all seven bodies unless stated:
+
+- The strip starts `00 00 00 00 01`: the first set bit is bit 39 and the first symbol starts at bit 40.
+- Rows are byte-aligned. Rows 0 and 1 each open with two very large symbols (a zero run of 13 to 19 bits); every later
+  row does not, so rows 2 and up are predicted from something above. E-M1 row 1 starts at strip byte 4096, E-5 row 1 at
+  byte 3459 (both are the next big-symbol pair).
+- Symbol grammar that parses consistently: `z` zero bits ended by a one bit, one sign bit, then `k` raw bits,
+  magnitude `a = z << k | raw`. The first four E-M1 symbols with `k = 4` read 288, 213, then -1 and 0 against the pixel
+  two to the left (two Bayer colours at different levels), which is not a coincidence of random bits.
+- In E-M1 row 0 a fixed `k = 4` consumes 31594 bits for 4640 symbols, `k = 5` overshoots; an adaptive `k` held between
+  4 and 5 (several threshold rules over the last two to six magnitudes) lands exactly on the row end, bit 32768 (the
+  next byte-aligned row), and the magnitudes are correlated at lag 1 and 2 (0.2). The `k` rule outside 4 to 5, and its
+  start state, are unknown.
+
+Ruled out or still wrong:
+
+- The patent embodiment's flatness rule (thresholds 15 and 31, run length 2, `k` 2, 4, 5) and a grid of 5 to 9
+  threshold, run-length and low/high `k` variants, as the row-0 `k` rule.
+- Reading the parsed magnitudes as left or left-by-two differences: the accumulated values drift upward at about +3
+  per sample (sign bit set 47% of the time, mean magnitude 26.6 against 23.3), exceed the 12-bit range, and the signed
+  residuals are white (lag-2 autocorrelation 0.007, where a difference of noisy neighbours gives about -0.5). Sign
+  offsets of 0 to 13 on the negative side do not bound the row. So the predictor, or what the stored number means, is
+  not understood yet.
+- Not supported by the data: Elias-gamma style prefixes, a fixed Golomb parameter for a whole row, and bit orders other
+  than MSB-first within bytes (the zero-run length distribution is cleanest MSB-first). These were checked by symbol
+  count and run statistics, not exhaustively.
+
+Next step for whoever continues: find the value model on rows 2 and up with the embedded JPEG as oracle once the `k` rule
+reproduces the row ends of E-M1 rows 0 to 3 (their starts are the only places a big-symbol pair marks a boundary);
+scratch tools are not committed.
+
 ## Demosaic, levels, crops and lens metadata
 
 | Stage | Target | Ember | Status |
@@ -268,6 +304,7 @@ Beyond decoding:
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | Compressed ORF (#178): analysis note only, container facts and ruled-out hypotheses recorded; no decoder, no status change |
 | 2026-10-17 | minor | Audit of the open raw-parity rows against main: ARW A100 / SRF and the TIFF-raw row described as refused or not imported although they are recognised (preview only) or have decoded members; no decode status changed |
 | 2026-10-17 | minor | Hasselblad 3FR / FFF rows to ✅ (#171, #172): four CC0 files (X1D uncompressed, H3D and CFV-50c 3FR, H4D-50 FFF) pinned by sha256 in the corpus list and checked against the RGB preview in IFD0; the corpus test accepts an RGB-only preview for them. Per-model counts (Hasselblad row, medium-format bucket) not re-measured |
 | 2026-10-17 | minor | Vignetting / lateral CA from maker notes (#242): a maker-neutral radial table model, the opt-in "Use camera lens corrections" develop setting and the Fujifilm vignetting table (CA decoded, not applied; Sony, Panasonic and Olympus skipped: no documented table layout), `docs/camera-lens-tables.md`; lens score unchanged |
