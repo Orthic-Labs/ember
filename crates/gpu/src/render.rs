@@ -609,6 +609,7 @@ pub fn render(
         _ => None,
     };
     let _oom = (fault == Some(crate::Fault::OutOfMemory)).then(crate::ctx::SimulatedOom::new);
+    let _upload_oom = (fault == Some(crate::Fault::UploadOutOfMemory)).then(crate::ctx::SimulatedUploadOom::new);
     if !gpu.fits(n * 3) {
         fail(
             FailKind::Limit,

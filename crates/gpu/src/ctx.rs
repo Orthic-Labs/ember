@@ -475,39 +475,54 @@ impl Gpu {
         // back a mapping of nothing when the device has no memory for it
         let size = (bytes.len() as u64).next_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT);
         let buf = self.checked(size, || {
-            self.device.create_buffer(&wgpu::BufferDescriptor {
+            let buf = self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size,
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
-            })
+            });
+            // write_buffer allocates its own staging memory. Keep that allocation inside the
+            // same OOM scope: only a fully uploaded buffer may reach the pool or source cache.
+            if simulated_upload_oom() {
+                // Like wgpu's OOM, this is observed when the enclosing error scope pops, not
+                // when write_buffer returns. Leaving the write outside checked must fail tests.
+                PENDING_UPLOAD_OOM.with(|c| c.set(true));
+            } else if bytes.len() as u64 == size {
+                self.queue.write_buffer(&buf, 0, bytes);
+            } else {
+                // the queue copies whole 4-byte words
+                let mut padded = bytes.to_vec();
+                padded.resize(size as usize, 0);
+                self.queue.write_buffer(&buf, 0, &padded);
+            }
+            buf
         });
         let Some(buf) = buf else {
             return Buf { buf: Some(Tracked::new(self.placeholder())), len };
         };
-        if bytes.len() as u64 == size {
-            self.queue.write_buffer(&buf, 0, bytes);
-        } else {
-            // the queue copies whole 4-byte words
-            let mut padded = bytes.to_vec();
-            padded.resize(size as usize, 0);
-            self.queue.write_buffer(&buf, 0, &padded);
-        }
         Buf { buf: Some(Tracked::new(buf)), len }
     }
 
-    /// Create a buffer, or record [`FailKind::OutOfMemory`] and return `None` when the device has
-    /// no memory for it. wgpu hands back an invalid buffer on out of memory; caught here, it never
-    /// reaches the free pool or the shared source, where another thread's render would pick it up
+    /// Create and initialize a buffer, or record [`FailKind::OutOfMemory`] and return `None`
+    /// when the device has no memory for it (including upload staging). wgpu hands back an invalid
+    /// buffer on out of memory; caught here, it never reaches the free pool or the shared source,
+    /// where another thread's render would pick it up
     /// and fail with "Buffer is invalid", a validation error that retired the GPU (upstream #1764).
     fn checked(&self, size: u64, create: impl FnOnce() -> wgpu::Buffer) -> Option<wgpu::Buffer> {
         if simulated_oom() {
             fail(FailKind::OutOfMemory, "out of device memory (simulated)".into());
             return None;
         }
+        // A simulated error raised before this scope belongs to the outer render scope.
+        let pending_upload_oom = PENDING_UPLOAD_OOM.with(|c| c.get());
         let scope = self.device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
         let buf = create();
-        match pollster::block_on(scope.pop()) {
+        let error = pollster::block_on(scope.pop());
+        if !pending_upload_oom && let Some(f) = take_upload_oom() {
+            fail(f.kind, f.reason);
+            return None;
+        }
+        match error {
             None => Some(buf),
             Some(e) => {
                 fail(FailKind::OutOfMemory, format!("out of device memory for a {} MiB buffer: {e}", size.div_ceil(1 << 20)));
@@ -725,6 +740,40 @@ impl Drop for SimulatedOom {
 }
 
 thread_local! {
+    /// Only queue upload staging fails; destination allocation still succeeds (tests).
+    static SIMULATED_UPLOAD_OOM: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// A simulated staging error waits for its enclosing OOM scope to pop, just like wgpu.
+    static PENDING_UPLOAD_OOM: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn simulated_upload_oom() -> bool {
+    SIMULATED_UPLOAD_OOM.try_with(|c| c.get()).unwrap_or(false)
+}
+
+fn take_upload_oom() -> Option<Failure> {
+    PENDING_UPLOAD_OOM
+        .try_with(|c| c.replace(false))
+        .unwrap_or(false)
+        .then(|| Failure { kind: FailKind::OutOfMemory, reason: "out of device memory for upload staging (simulated)".into() })
+}
+
+/// Makes only queue uploads on this thread fail while it lives.
+pub(crate) struct SimulatedUploadOom;
+
+impl SimulatedUploadOom {
+    pub fn new() -> SimulatedUploadOom {
+        SIMULATED_UPLOAD_OOM.with(|c| c.set(true));
+        SimulatedUploadOom
+    }
+}
+
+impl Drop for SimulatedUploadOom {
+    fn drop(&mut self) {
+        let _ = SIMULATED_UPLOAD_OOM.try_with(|c| c.set(false));
+    }
+}
+
+thread_local! {
     /// The first failure of the render running on this thread.
     static FAILURE: std::cell::RefCell<Option<Failure>> = const { std::cell::RefCell::new(None) };
 }
@@ -771,6 +820,9 @@ impl ErrorScopes {
         let internal = pollster::block_on(internal.pop());
         let validation = pollster::block_on(validation.pop());
         let oom = pollster::block_on(oom.pop());
+        if let Some(f) = take_upload_oom() {
+            return Some(f);
+        }
         if let Some(e) = oom {
             return Some(Failure { kind: FailKind::OutOfMemory, reason: format!("out of device memory: {e}") });
         }
