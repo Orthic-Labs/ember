@@ -57,7 +57,7 @@ under the UI command that wraps it (a no-op error); the UI command now wins.
 |---|---|---|---|
 | Pick flag | Z (grids) | Z | Z is Toggle Zoom in Detail; P picks only with the Classic keymap |
 | Expand/collapse edit sections | ⌘⌥1–5 | ⌘1–6 | ⌘0 = Zoom to Fit, ⌘1 = Zoom 100 %; Geometry lives in the Crop panel |
-| Histogram | ⌘⇧H | ⌘0 | ⌘0 = Zoom to Fit |
+| Histogram | ⌘⇧H (Classic layer: ⌘0) | ⌘0 | Default ⌘0 = Zoom to Fit; with the Classic keymap ⌘0 = Histogram (unverified against Adobe, see docs/parity-checklist.md KEY-HISTOGRAM) |
 | Square Grid | ⇧G | (none; ⇧G = Guided Upright) | Guided Upright is a button in the Crop panel |
 | Export dialog | ⌘⇧E (+ ⇧E) | ⇧E | ⌘⇧E is "Edit in Photoshop" there; no external-editor command yet |
 | Crop overlay cycle | ⇧O | O | O = mask overlay; ⇧O (mask colour / overlay orientation) unused otherwise |

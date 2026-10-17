@@ -95,6 +95,8 @@ pub const CLASSIC_KEYS: &[(&str, &str)] = &[
     ("Shift+Q", "view.visualizeSpots"),
     // ⇧W: the Point Color picker tool (W stays the White Balance Selector)
     ("Shift+W", "tool.pointColor"),
+    // ⌘0: the Histogram (Classic's ⌘0; the primary keymap has Zoom to Fit on ⌘0)
+    ("Cmd+0", "view.histogram"),
     // Q: Spot Removal, the Remove panel (the primary keymap has it on H)
     ("Q", "panel.remove"),
     // P: Pick (the primary P is the Photos panel)

@@ -175,10 +175,10 @@ fn classic_module_keys_switch_between_library_and_develop() {
     assert_eq!(h.app.ui.view, ViewMode::PhotoGrid, "⌘⌥1 opens Library (the photo grid)");
 }
 
-/// KEYC-RATING under the Classic keymap: P picks (the default keymap has the Photos panel there), and the keys the
-/// Classic layer leaves (⌘0 Zoom to Fit, ⌘⇧H Histogram) keep their default meaning.
+/// P picks with the Classic keymap (the default keymap opens the Photos panel there). Classic ⌘0 is the
+/// Histogram (KEYC-HISTOGRAM), so it toggles the panel and does not fit the photo; ⌘⇧H keeps its default meaning.
 #[test]
-fn classic_keymap_p_picks_and_keeps_cmd0_and_cmd_shift_h() {
+fn classic_keymap_p_picks_and_cmd0_toggles_the_histogram() {
     use crate::state::Zoom;
     use lightcraft_catalog::{Flag, PhotoId};
     let mut h = library();
@@ -189,9 +189,10 @@ fn classic_keymap_p_picks_and_keeps_cmd0_and_cmd_shift_h() {
     assert_eq!(h.app.ui.left_panel, left, "P leaves the Photos panel alone with the Classic keymap");
     h.app.run("view.navigate", json!({"zoom": {"percent": 200.0}})).unwrap();
     press(&mut h, "0", true, false, false);
-    assert_eq!(h.app.ui.zoom, Zoom::Fit, "{:?}", h.app.ui.zoom);
+    assert_eq!(h.app.ui.histogram, !histogram, "⌘0 toggles the Histogram with the Classic keymap");
+    assert_ne!(h.app.ui.zoom, Zoom::Fit, "⌘0 does not fit the photo with the Classic keymap");
     press(&mut h, "H", true, false, true);
-    assert_eq!(h.app.ui.histogram, !histogram, "⌘⇧H toggles the Histogram with the Classic keymap");
+    assert_eq!(h.app.ui.histogram, histogram, "⌘⇧H toggles the Histogram back with the Classic keymap");
 }
 
 /// KEYC-MODULE-OUTPUT: the Map, Slideshow and Print module keys (Book and Web are missing).
@@ -318,4 +319,12 @@ fn classic_q_opens_the_remove_panel_only_with_the_classic_keymap() {
     h.app.run("app.classicKeymap", json!({"on": true})).unwrap();
     press(&mut h, "Q", false, false, false);
     assert_eq!(h.app.ui.right, RightPanel::Remove);
+}
+
+/// KEYC-HISTOGRAM: ⌘0 is the Histogram in the Classic layer; the default keymap still fits on ⌘0.
+#[test]
+fn keyc_histogram_key_dispatches_the_histogram_command() {
+    assert_dispatch("KEYC-HISTOGRAM", &[("Cmd+0", "view.histogram")]);
+    assert!(!dispatched("Cmd+0").contains(&"view.zoomFit"), "⌘0 does not run Zoom to Fit with the Classic keymap");
+    assert_eq!(super::shortcut_of(&Keymap::new(), "view.zoomFit"), Some("Cmd+0"), "the default keymap still fits on ⌘0");
 }
