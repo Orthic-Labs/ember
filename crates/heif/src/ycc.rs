@@ -139,7 +139,7 @@ fn chroma_at(planes: &Planes<'_>, cr: bool, y: usize, w: usize, mode: Upsampling
     (0..w)
         .map(|x| {
             let cx = x >> 1;
-            let nx = if x % 2 == 0 { cx.saturating_sub(1) } else { (cx + 1).min(last) };
+            let nx = if x.is_multiple_of(2) { cx.saturating_sub(1) } else { (cx + 1).min(last) };
             let (a, an) = (u32::from(*buf.get(cx)?), u32::from(*buf.get(nx)?));
             let v = if ys == 0 {
                 (3 * a + an + 2) >> 2
