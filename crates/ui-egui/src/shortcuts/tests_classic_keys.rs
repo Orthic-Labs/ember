@@ -147,7 +147,7 @@ fn keyc_views_keys_dispatch_the_view_commands() {
     );
 }
 
-/// KEYC-MODULES: ⌘⌥1 Library, ⌘⌥2 Develop, ⌘⌥3 Map, ⌘⌥5 Slideshow, ⌘⌥6 Print (⌘⌥4 Book and ⌘⌥7 Web have no module yet).
+/// KEYC-MODULES: ⌘⌥1 Library, ⌘⌥2 Develop, ⌘⌥3 Map, ⌘⌥4 Book, ⌘⌥5 Slideshow, ⌘⌥6 Print (⌘⌥7 Web has no module yet).
 #[test]
 fn keyc_modules_keys_dispatch_the_module_commands() {
     assert_dispatch(
@@ -156,6 +156,7 @@ fn keyc_modules_keys_dispatch_the_module_commands() {
             ("Cmd+Alt+1", "view.photoGrid"),
             ("Cmd+Alt+2", "view.detail"),
             ("Cmd+Alt+3", "map.view"),
+            ("Cmd+Alt+4", "book.view"),
             ("Cmd+Alt+5", "slideshow.view"),
             ("Cmd+Alt+6", "print.view"),
         ],

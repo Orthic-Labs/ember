@@ -1,6 +1,6 @@
 # Gaps: where Ember falls short of reference editor
 
-> **Last reviewed:** 2026-10-17 · **Last updated:** 2026-10-17 · **Change:** minor (gap 20: Hasselblad 3FR / FFF checked, #171, #172; gap 16: the Classic Book rows, #119–#128; guides and backgrounds 🟡)
+> **Last reviewed:** 2026-10-17 · **Last updated:** 2026-10-17 · **Change:** minor (KEYC-MODULES: ⌘⌥4 Book tested in the Classic layer, #241; gap 20: Hasselblad 3FR / FFF checked, #171, #172; gap 16: the Classic Book rows, #119–#128; guides and backgrounds 🟡)
 
 Every known shortfall, one entry each, ranked by user impact (how many reference editor users hit it, and
 how hard it blocks them), then by effort. **Agents pick work from the top** (the first entry nobody is
@@ -111,6 +111,7 @@ loader qualification remain separate evidence; AI gaps stay open. See [corpus co
 | 2026-10-11 | minor | Gap 14: `crs:HDREditMode` is read from XMP (#663); the headroom limit and SDR rendition still aren't |
 | 2026-10-17 | minor | Gap 26: the 100k-photo grid has a headless test (visible rows only, layout and list built once per view); timings still unrecorded (#189) |
 | 2026-10-11 | minor | Gaps 2 and 10 shrink: EOS R5 Mark II CR3 decodes and is verified (fourth CR3 body, Canon 12 verified, 235 models, ~42% on a verified body); CR3 gain +6.5 → +6.2 points |
+| 2026-10-17 | minor | KEYC-MODULES (#241): ⌘⌥4 Book (`book.view`) has a Classic-layer dispatch test; row stays 🟡 for Web (⌘⌥7, no Web command) |
 | 2026-10-10 | minor | RAW gaps re-measured model by model (raw-parity.md): CR3, compressed ORF and verification entries carry measured shares; HE NEF no longer a beta blocker (+1.1 points for 20–40 h); verification entry absorbs the cheap per-body fixes (#769, #702, A200 series) |
 | 2026-10-10 | minor | Beta total raised to 340–600 h to include the ~92 open core-path user issues |
 | 2026-10-10 | major | Created from the checklist's Top gaps (whose items 1–2 had been duplicated by a merge) and ROADMAP's Where we stand; re-ranked; added evidence, impact, hours and beta flags; added platform-CI, lens-database, HE NEF and localization gaps |

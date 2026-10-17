@@ -101,7 +101,7 @@ pub const CLASSIC_KEYS: &[(&str, &str)] = &[
     ("Q", "panel.remove"),
     // P: Pick (the primary P is the Photos panel)
     ("P", "photo.pick"),
-    // ⌘⌥1–7 switch modules: Library, Develop, Map, Slideshow, Print. Book (⌘⌥4) and Web (⌘⌥7) have no module yet.
+    // ⌘⌥1–7 switch modules: Library, Develop, Map, Book, Slideshow, Print. Web (⌘⌥7) has no module yet.
     ("Cmd+Alt+1", "view.photoGrid"),
     ("Cmd+Alt+2", "view.detail"),
     ("Cmd+Alt+3", "map.view"),
