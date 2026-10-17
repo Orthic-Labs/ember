@@ -42,7 +42,7 @@ jobs:
         run: exit 1
   admission:
     needs: [private-repo-guard]
-    # Temporary runner correction: published ownership approval supports macOS/Windows.
+    # Ownership approval supports only macOS and Windows; Linux fails "unsupported platform: linux".
     runs-on: macos-15
     permissions:
       contents: read

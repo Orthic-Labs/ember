@@ -80,7 +80,23 @@ function candidateRecord() {
 if (mode === "build") {
   // Right Release binds Windows installer freshness to this call's build start.
   // Keep its build & install in one invocation, then qualify that installed copy.
-  runDevelopment({ root: repoRoot, platform: releaseTargetName, config });
+  // Only ephemeral CI candidates use ad hoc signing; normal dev installs &
+  // protected release signing retain their configured Developer ID identity.
+  // RightKit rejects this opt-in outside a GitHub-hosted Actions runner.
+  const candidateConfig = platform === "macos" ? {
+    ...config,
+    development: {
+      ...config.development,
+      targets: {
+        ...config.development.targets,
+        mac: {
+          ...config.development.targets.mac,
+          install: { ...config.development.targets.mac.install, signing: "ci-adhoc" },
+        },
+      },
+    },
+  } : config;
+  runDevelopment({ root: repoRoot, platform: releaseTargetName, config: candidateConfig });
   const input = configuredRecord();
   const entries = cargoCompilerArtifacts(input);
   const cli = entries.find((entry) => entry.target === 'lightcraft-cli' && entry.kind === 'executable');
