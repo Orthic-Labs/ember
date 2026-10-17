@@ -197,6 +197,7 @@ pub fn export_limits(plan: &ClipPlan, cancel: Option<std::sync::Arc<std::sync::a
 }
 
 /// What a failed run says: the end of ffmpeg's error output, and for an encoder the sidecar build does not have, why and what to do.
+#[cfg_attr(not(any(target_os = "windows", target_os = "macos")), allow(dead_code))]
 pub(crate) fn failure_message(kind: ClipKind, stderr: &str) -> String {
     if let ClipKind::Reencode { encoder, .. } = kind
         && (stderr.contains("Unknown encoder") || stderr.contains("Encoder not found") || stderr.contains("Unrecognized option"))
