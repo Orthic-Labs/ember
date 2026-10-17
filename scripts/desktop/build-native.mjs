@@ -62,7 +62,8 @@ if (compiler.error || compiler.status !== 0) {
   fail(`RightKit candidate Cargo failed: ${compiler.error?.message || compiler.status}`);
 }
 const nativeRoot = path.join(repoRoot, 'apps/lightcraft-desktop');
-run(['exec', 'tauri', 'build', '--ci', '--no-sign', '--debug', '--target', target, '--features', 'qa-native,custom-protocol', '--bundles', platform === 'macos' ? 'app,dmg' : 'nsis', '--', '--locked'], nativeRoot, env);
+// Candidates are unsigned: tauri.candidate.conf.json turns off updater artifacts (they need the suite minisign key, which right-release sign-updater applies later, never in this build).
+run(['exec', 'tauri', 'build', '--ci', '--no-sign', '--debug', '--config', 'tauri.candidate.conf.json', '--target', target, '--features', 'qa-native,custom-protocol', '--bundles', platform === 'macos' ? 'app,dmg' : 'nsis', '--', '--locked'], nativeRoot, env);
 // Cargo's dev profile writes to target/<triple>/debug; @rightkit/release before 0.2.167 still looks under release-iterate.
 const descriptor = { productName: 'Ember', targetTriple: target, manifestPath: 'apps/lightcraft-desktop/Cargo.toml', bundleDirectory: path.join('target', target, 'debug', 'bundle', platform === 'macos' ? 'macos' : 'nsis') };
 const bundle = resolveTauriBundleDirectory(descriptor, { root: repoRoot, platform: platform === 'macos' ? 'mac' : 'win', env });

@@ -9,6 +9,7 @@
     "core:default",
     "core:window:allow-start-dragging",
     "core:window:allow-set-fullscreen",
-    "core:window:allow-create"
+    "core:window:allow-create",
+    "updater:default"
   ]
 }

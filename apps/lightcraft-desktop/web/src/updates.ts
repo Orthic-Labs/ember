@@ -4,25 +4,35 @@ import { createAutoUpdateClient, type AutoUpdateStatus, type CheckForUpdate } fr
 export const RELEASES_URL = 'https://github.com/Orthic-Labs/ember/releases';
 
 /**
- * Whether this build has the Tauri updater provisioned: the updater plugin, the update signing
- * public key (from the right-release signing setup) and a signed update manifest endpoint for
- * Orthic-Labs/ember. Until all three exist, no endpoint is contacted and no startup check runs.
- * Set it to true only together with a `check` that calls the Tauri updater.
+ * Whether the Tauri updater is live for this build. The plugin, the suite updater public key and the
+ * `createUpdaterArtifacts` bundle setting are wired; this stays false (dormant) until the RightKit
+ * GitHub Releases lane publishes a signed latest.json for Orthic-Labs/ember (Orthic-Labs/rightkit#237,
+ * Ember #96). While false, no endpoint is contacted, no startup check runs and Help ▸ Check for
+ * Updates… reports the manual download. Flip it to true only after a release has published latest.json.
  */
 export const UPDATER_PROVISIONED = false;
 
 export const NOT_PROVISIONED_MESSAGE = `Automatic updates are not set up in this build. Download the latest release from ${RELEASES_URL}`;
 
-/** The Tauri updater check. Not provisioned yet, so it reports a configuration error. */
-const check: CheckForUpdate = async () => {
+/** The Tauri updater plugin check (endpoint and pubkey live in tauri.conf.json plugins.updater). */
+export const pluginCheck: CheckForUpdate = async (options) => {
+  const { check } = await import('@tauri-apps/plugin-updater');
+  return check(options?.headers ? { headers: options.headers } : undefined);
+};
+
+/** The check used while the updater is dormant: a configuration error that carries the manual download. */
+export const dormantCheck: CheckForUpdate = async () => {
   throw new Error(NOT_PROVISIONED_MESSAGE);
 };
 
-function updateClient(onStatus?: (status: AutoUpdateStatus) => void) {
+function updateClient(check: CheckForUpdate, onStatus?: (status: AutoUpdateStatus) => void) {
   return createAutoUpdateClient({
     check,
     // Public artifacts take no credentials, so a manifest header is never sent to a download origin.
     strictInstallHeaders: true,
+    // Ember is one free tier: every published release is eligible, so the manifest needs no tier field.
+    getTier: () => 'patch',
+    isEligible: () => true,
     // Startup checks report only; an install runs when the user asks for it.
     shouldAutoInstall: () => false,
     onStatus,
@@ -30,13 +40,13 @@ function updateClient(onStatus?: (status: AutoUpdateStatus) => void) {
 }
 
 /** Startup policy: one silent check per launch, only once the updater is provisioned. */
-export function startupUpdateCheck(): Promise<AutoUpdateStatus> | null {
-  return UPDATER_PROVISIONED ? updateClient().checkOnce() : null;
+export function startupUpdateCheck(provisioned = UPDATER_PROVISIONED, check: CheckForUpdate = pluginCheck): Promise<AutoUpdateStatus> | null {
+  return provisioned ? updateClient(check).checkOnce() : null;
 }
 
 /** Help ▸ Check for Updates…: runs the check and returns its status. */
-export function checkForUpdates(): Promise<AutoUpdateStatus> {
-  return updateClient().checkOnce();
+export function checkForUpdates(provisioned = UPDATER_PROVISIONED, check: CheckForUpdate = pluginCheck): Promise<AutoUpdateStatus> {
+  return updateClient(provisioned ? check : dormantCheck).checkOnce();
 }
 
 /** One line for the notice bar describing an update status. */

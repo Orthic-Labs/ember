@@ -56,6 +56,7 @@ run(process.execPath, ["scripts/desktop/static-check.mjs"], "static contracts");
 run("pnpm", ["run", "typecheck"], "React typecheck");
 run(process.execPath, ["--test", "scripts/desktop/mask-geometry.test.mjs"], "mask geometry regression tests");
 run(process.execPath, ["--test", "scripts/desktop/slider-command-queue.test.mjs"], "slider command queue regression tests");
+run(process.execPath, ["--test", "scripts/desktop/updates.test.mjs"], "desktop updater state regression tests");
 run("pnpm", ["run", "build"], "React build");
 const lockfile = path.join(repoRoot, "Cargo.lock");
 bootstrapLockfile(lockfile);

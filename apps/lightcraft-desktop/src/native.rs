@@ -1059,6 +1059,8 @@ pub fn run() {
     let builder = tauri::Builder::default()
         // RightKit shell stays first so single-instance arbitration & webview hardening run before app plugins.
         .plugin(shell.plugin())
+        // Updater plugin: dormant until the web layer enables checks (updates.ts UPDATER_PROVISIONED, rightkit#237).
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .register_asynchronous_uri_scheme_protocol("lightcraft-preview", |ctx, request, responder| {
             let app = ctx.app_handle().clone();
             responder.respond(preview_response(&app, request));
