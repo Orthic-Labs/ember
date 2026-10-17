@@ -1,19 +1,30 @@
-//! Crash-safe app preferences for the Tauri preview host.
+//! Crash-safe app preferences for the Tauri desktop host, persisted by `rightkit-app-settings`.
 //!
 //! Preferences are JSON objects rather than a typed projection so fields introduced by another
-//! Ember host survive a round trip through this app.
+//! Ember host survive a round trip through this app. The file stays the flat object `ui.json`
+//! has always been (`FileFormat::Flat`): the egui host and the startup readers in `native.rs`
+//! (`persisted_library_path`, `model_paths`) read it directly, undeclared keys are kept, and an
+//! existing file is adopted byte for byte until the first real change.
+//!
+//! RightKit owns the atomic write, the cross-process lock, `.bak` retention, and quarantine of a
+//! damaged file. Ember keeps the deep-merge patch semantics and the 4 MiB bound.
 
 #![forbid(unsafe_code)]
 
-use std::fs::{self, File, OpenOptions};
-use std::io::Write;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
+use rightkit_app_settings::{Error as StoreError, FileFormat, OnRefused, Schema, Store, StoreOptions};
 use serde_json::{Map, Value};
 
 const MAX_BYTES: usize = 4 * 1024 * 1024;
+const SCHEMA_VERSION: u32 = 1;
+const OPEN_ATTEMPTS: u32 = 3;
+const OPEN_RETRY_DELAY: Duration = Duration::from_millis(40);
+
+type PrefMap = Map<String, Value>;
 
 #[derive(Clone)]
 pub struct Preferences {
@@ -21,30 +32,66 @@ pub struct Preferences {
 }
 
 struct State {
+    /// `None` while the file could not be opened at all (unreadable, not merely missing or
+    /// corrupt): the app runs on defaults and every save is refused.
+    store: Option<Store<PrefMap>>,
     path: PathBuf,
-    value: Map<String, Value>,
-    blocked: bool,
     warning: Option<String>,
+}
+
+fn store_options() -> StoreOptions {
+    StoreOptions::new(Schema::new("ember", SCHEMA_VERSION))
+        .format(FileFormat::Flat)
+        .trailing_newline(true)
+        .max_bytes(MAX_BYTES as u64)
+        .on_refused(OnRefused::ReadOnlyDefaults)
+}
+
+fn open_store(path: &Path) -> Result<Store<PrefMap>, StoreError> {
+    let mut attempt = 1;
+    loop {
+        match Store::<PrefMap>::open_path(path, store_options()) {
+            Err(StoreError::Io(_)) if attempt < OPEN_ATTEMPTS => {
+                attempt += 1;
+                std::thread::sleep(OPEN_RETRY_DELAY);
+            }
+            other => return other,
+        }
+    }
+}
+
+/// What is wrong with the file before the store looks at it, so the user can be told. The store
+/// itself quarantines an unparseable file and refuses an oversized one.
+fn diagnose(path: &Path) -> Option<String> {
+    match fs::read(path) {
+        Ok(bytes) if bytes.len() > MAX_BYTES => Some(format!("preferences exceed {MAX_BYTES} bytes")),
+        Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
+            Ok(Value::Object(_)) => None,
+            Ok(_) => Some("preferences must be a JSON object; the damaged file was quarantined next to it".into()),
+            Err(error) => Some(format!("preferences are invalid: {error}; the damaged file was quarantined next to it")),
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => Some(format!("preferences could not be read: {error}")),
+    }
 }
 
 impl Preferences {
     pub fn load(path: PathBuf) -> Self {
-        let (value, blocked, warning) = match fs::read(&path) {
-            Ok(bytes) if bytes.len() > MAX_BYTES => (Map::new(), true, Some(format!("preferences exceed {MAX_BYTES} bytes"))),
-            Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
-                Ok(Value::Object(object)) => (object, false, None),
-                Ok(_) => quarantine(&path, "preferences must be a JSON object"),
-                Err(error) => quarantine(&path, &format!("preferences are invalid: {error}")),
-            },
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (Map::new(), false, None),
-            Err(error) => (Map::new(), true, Some(format!("preferences could not be read: {error}"))),
+        let mut warning = diagnose(&path);
+        let store = match open_store(&path) {
+            Ok(store) => Some(store),
+            Err(error) => {
+                warning = Some(format!("preferences could not be opened: {error}"));
+                None
+            }
         };
-        Self { inner: Arc::new(Mutex::new(State { path, value, blocked, warning })) }
+        Self { inner: Arc::new(Mutex::new(State { store, path, warning })) }
     }
 
     pub fn get(&self) -> Result<Value, String> {
         let state = self.inner.lock().map_err(|_| "preferences lock poisoned".to_string())?;
-        Ok(Value::Object(state.value.clone()))
+        let value = state.store.as_ref().map(Store::get).unwrap_or_default();
+        Ok(Value::Object(value))
     }
 
     pub fn warning(&self) -> Option<String> {
@@ -55,19 +102,28 @@ impl Preferences {
     pub fn patch(&self, patch: Option<Value>) -> Result<Value, String> {
         let Some(patch) = patch else { return self.get() };
         let Value::Object(values) = patch else { return Err("preferences patch must be an object".into()) };
-        let mut state = self.inner.lock().map_err(|_| "preferences lock poisoned".to_string())?;
-        if state.blocked {
-            return Err(state.warning.clone().unwrap_or_else(|| "preferences file is blocked for this session".into()));
+        let state = self.inner.lock().map_err(|_| "preferences lock poisoned".to_string())?;
+        let blocked = || state.warning.clone().unwrap_or_else(|| "preferences file is blocked for this session".into());
+        let Some(store) = state.store.as_ref() else { return Err(blocked()) };
+        if !store.writable() {
+            return Err(blocked());
         }
-        let mut next = state.value.clone();
-        merge_object(&mut next, values);
-        let bytes = serde_json::to_vec_pretty(&Value::Object(next.clone())).map_err(|error| format!("serializing preferences: {error}"))?;
-        if bytes.len() > MAX_BYTES {
-            return Err("preferences patch exceeds size limit".into());
+        let mut too_large = false;
+        let result = store.update(|current| {
+            merge_object(current, values);
+            let size = serde_json::to_vec(&*current)?.len();
+            if size > MAX_BYTES {
+                too_large = true;
+                return Err(StoreError::Invalid("preferences patch exceeds size limit".into()));
+            }
+            Ok(())
+        });
+        match result {
+            Ok(()) => {}
+            Err(_) if too_large => return Err("preferences patch exceeds size limit".into()),
+            Err(error) => return Err(format!("saving preferences to {}: {error}", state.path.display())),
         }
-        write_atomic(&state.path, &bytes).map_err(|error| format!("saving preferences: {error}"))?;
-        state.value = next;
-        Ok(Value::Object(state.value.clone()))
+        Ok(Value::Object(store.get()))
     }
 }
 
@@ -88,37 +144,108 @@ fn merge_object(target: &mut Map<String, Value>, patch: Map<String, Value>) {
     }
 }
 
-fn quarantine(path: &Path, reason: &str) -> (Map<String, Value>, bool, Option<String>) {
-    let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_secs()).unwrap_or(0);
-    let quarantine = path.with_file_name(format!(
-        "{}.corrupt-{stamp}-{}",
-        path.file_name().and_then(|name| name.to_str()).unwrap_or("ui.json"),
-        std::process::id()
-    ));
-    let (blocked, message) = match fs::rename(path, &quarantine) {
-        Ok(()) => (false, format!("{reason}; damaged file quarantined at {}", quarantine.display())),
-        Err(error) => (true, format!("{reason}; damaged file could not be quarantined: {error}")),
-    };
-    (Map::new(), blocked, Some(message))
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
-fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let parent = path.parent().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "preferences path has no parent"))?;
-    fs::create_dir_all(parent)?;
-    let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("ui.json");
-    let tmp = parent.join(format!(".{name}.tmp-{}", std::process::id()));
-    let result = (|| {
-        let mut file = OpenOptions::new().create(true).truncate(true).write(true).open(&tmp)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
-        fs::rename(&tmp, path)?;
-        if let Ok(directory) = File::open(parent) {
-            let _ = directory.sync_all();
-        }
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&tmp);
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn test_dir(name: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        let dir = std::env::temp_dir().join(format!("ember-prefs-{name}-{}-{stamp}", std::process::id()));
+        fs::create_dir_all(&dir)?;
+        Ok(dir)
     }
-    result
+
+    /// A `ui.json` written by a build before RightKit settings: flat, unversioned, with keys this
+    /// build does not know and a nested object.
+    const LEGACY: &str = "{\n  \"libraryPath\": \"/photos/catalog\",\n  \"sam3Dir\": \"models\",\n  \"theme\": \"light\",\n  \"panels\": {\"left\": true, \"right\": false},\n  \"futureSetting\": {\"keep\": [1, 2, 3]}\n}";
+
+    #[test]
+    fn existing_flat_preferences_migrate_on_first_run_without_loss() -> TestResult {
+        let dir = test_dir("migrate")?;
+        let path = dir.join("ui.json");
+        fs::write(&path, LEGACY)?;
+
+        let preferences = Preferences::load(path.clone());
+        assert_eq!(preferences.warning(), None);
+        let expected: Value = serde_json::from_str(LEGACY)?;
+        assert_eq!(preferences.get()?, expected, "every legacy key reads back");
+        assert_eq!(fs::read_to_string(&path)?, LEGACY, "load alone does not rewrite the file");
+
+        let merged = preferences.patch(Some(json!({"theme": "dark", "panels": {"right": true}, "newKey": 7})))?;
+        assert_eq!(merged["theme"], json!("dark"));
+        assert_eq!(merged["panels"], json!({"left": true, "right": true}), "nested objects deep-merge");
+        assert_eq!(merged["newKey"], json!(7));
+
+        // A fresh load sees the saved file; the startup readers in native.rs parse it as a flat object.
+        let saved: Value = serde_json::from_slice(&fs::read(&path)?)?;
+        assert!(saved.get("schemaVersion").is_none() && saved.get("values").is_none(), "the file stays flat");
+        assert_eq!(saved["libraryPath"], json!("/photos/catalog"));
+        assert_eq!(saved["sam3Dir"], json!("models"));
+        assert_eq!(saved["futureSetting"], json!({"keep": [1, 2, 3]}), "unknown keys survive a save");
+        assert_eq!(Preferences::load(path).get()?, saved);
+
+        fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn missing_file_starts_empty_and_creates_on_first_patch() -> TestResult {
+        let dir = test_dir("missing")?;
+        let path = dir.join("nested").join("ui.json");
+        let preferences = Preferences::load(path.clone());
+        assert_eq!(preferences.get()?, json!({}));
+        assert!(!path.exists(), "nothing is written until the first change");
+        preferences.patch(Some(json!({"libraryPath": "/a"})))?;
+        assert_eq!(Preferences::load(path).get()?, json!({"libraryPath": "/a"}));
+        fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn damaged_file_is_quarantined_and_preferences_recover() -> TestResult {
+        let dir = test_dir("corrupt")?;
+        let path = dir.join("ui.json");
+        fs::write(&path, b"{ not json")?;
+        let preferences = Preferences::load(path.clone());
+        assert!(preferences.warning().is_some_and(|warning| warning.contains("invalid")));
+        assert_eq!(preferences.get()?, json!({}));
+        let quarantined = fs::read_dir(&dir)?.filter_map(Result::ok).any(|entry| entry.file_name().to_string_lossy().contains(".corrupt"));
+        assert!(quarantined, "the damaged bytes are kept beside the file");
+        preferences.patch(Some(json!({"theme": "dark"})))?;
+        assert_eq!(Preferences::load(path).get()?, json!({"theme": "dark"}));
+        fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn oversized_file_is_left_untouched_and_blocks_saves() -> TestResult {
+        let dir = test_dir("oversized")?;
+        let path = dir.join("ui.json");
+        let filler = "x".repeat(MAX_BYTES);
+        let body = format!("{{\"blob\":\"{filler}\"}}");
+        fs::write(&path, &body)?;
+        let preferences = Preferences::load(path.clone());
+        assert!(preferences.warning().is_some_and(|warning| warning.contains("exceed")));
+        assert!(preferences.patch(Some(json!({"theme": "dark"}))).is_err());
+        assert_eq!(fs::read_to_string(&path)?, body, "a refused file is never rewritten");
+        fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn patch_must_be_an_object_and_stays_within_the_size_bound() -> TestResult {
+        let dir = test_dir("bounds")?;
+        let path = dir.join("ui.json");
+        let preferences = Preferences::load(path.clone());
+        assert!(preferences.patch(Some(json!([1]))).is_err());
+        let huge = json!({"blob": "x".repeat(MAX_BYTES)});
+        assert_eq!(preferences.patch(Some(huge)), Err("preferences patch exceeds size limit".to_string()));
+        assert!(!path.exists());
+        fs::remove_dir_all(dir)?;
+        Ok(())
+    }
 }
