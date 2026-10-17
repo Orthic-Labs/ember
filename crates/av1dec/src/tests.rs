@@ -39,7 +39,7 @@ fn decodes_a_small_still_made_by_ravif() {
     let max = f64::from((1u32 << pic.bit_depth) - 1);
     let mean = y.data.iter().map(|&v| f64::from(v)).sum::<f64>() / y.data.len() as f64 / max;
     assert!((mean - 128.0 / 255.0).abs() < 0.03, "mean luma {mean}");
-    assert!(y.data.iter().all(|&v| u32::from(v) <= (1 << pic.bit_depth) - 1));
+    assert!(y.data.iter().all(|&v| u32::from(v) < (1 << pic.bit_depth)));
     // The stream says what the encoder tagged: full-range BT.601, sRGB.
     let c = pic.colour.expect("sequence header");
     assert!(c.full_range, "{c:?}");

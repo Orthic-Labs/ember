@@ -111,5 +111,6 @@ pub fn decode(data: &[u8]) -> Result<Picture, Error> {
     }
 }
 
-#[cfg(all(test, not(target_arch = "wasm32")))]
+#[cfg(test)]
+#[cfg(not(target_arch = "wasm32"))]
 mod tests;

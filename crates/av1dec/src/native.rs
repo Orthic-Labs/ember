@@ -194,7 +194,7 @@ unsafe fn copy_plane(base: Option<NonNull<c_void>>, stride: isize, width: usize,
         if bytes == 1 {
             data.extend(row.iter().map(|&v| u16::from(v)));
         } else {
-            data.extend(row.chunks_exact(2).map(|c| u16::from_ne_bytes([c[0], c[1]])));
+            data.extend(row.as_chunks::<2>().0.iter().map(|c| u16::from_ne_bytes(*c)));
         }
     }
     Ok(Plane { width, height, data })

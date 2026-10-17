@@ -577,7 +577,7 @@ fn pack(comps: &[&[i16]], cw: usize, chh: usize, mosaic: Mosaic) -> Result<Vec<u
         for x in 0..cw {
             let i = y * cw + x;
             let at = |c: &[i16]| c.get(i).map_or(0, |&v| i32::from(v as u16));
-            let (s, d_rg, d_bg, d_gd) = (at(*gs), at(*rg) - MIDPOINT, at(*bg) - MIDPOINT, at(*gd) - MIDPOINT);
+            let (s, d_rg, d_bg, d_gd) = (at(gs), at(rg) - MIDPOINT, at(bg) - MIDPOINT, at(gd) - MIDPOINT);
             let r = lookup((d_rg << 1) + s);
             let b = lookup((d_bg << 1) + s);
             let g1 = lookup(s + d_gd);
@@ -1365,6 +1365,6 @@ mod tests {
         assert!(matches!(crate::decode(&gpr(64, 48, [2, 1, 1, 0], plain(64, 48))), Err(RawError::Unsupported(_))));
         assert!(matches!(crate::decode(&gpr(64, 50, [0, 1, 1, 2], plain(64, 48))), Err(RawError::Corrupt(_))));
         // the header probe describes the file whatever its stream holds
-        assert!(crate::probe_info(&file).is_some());
+        assert!(crate::probe_info(&file).is_ok());
     }
 }
