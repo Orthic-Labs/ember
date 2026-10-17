@@ -1,3 +1,4 @@
+import { createI18n } from '@rightkit/i18n';
 import zhHans from '../../../../crates/ui-egui/locales/zh-hans.json';
 import zhHant from '../../../../crates/ui-egui/locales/zh-hant.json';
 import ja from '../../../../crates/ui-egui/locales/ja.json';
@@ -5,14 +6,35 @@ import ptBr from '../../../../crates/ui-egui/locales/pt-br.json';
 
 export const LOCALES = ['en', 'zh-hans', 'zh-hant', 'ja', 'pt-br'] as const;
 export type LocaleCode = (typeof LOCALES)[number];
-type Catalog = Record<string, string>;
+type Strings = Record<string, string>;
 
-const catalogs: Record<Exclude<LocaleCode, 'en'>, Catalog> = {
-  'zh-hans': zhHans as Catalog,
-  'zh-hant': zhHant as Catalog,
-  ja: ja as Catalog,
-  'pt-br': ptBr as Catalog,
-};
+/** Source strings are English, so the English catalog is empty and a missing key falls back to the key itself. */
+const i18n = createI18n<Strings>(
+  {},
+  {
+    defaultLocale: 'en',
+    loaders: {
+      'zh-hans': () => zhHans as Strings,
+      'zh-hant': () => zhHant as Strings,
+      ja: () => ja as Strings,
+      'pt-br': () => ptBr as Strings,
+    },
+  },
+);
+
+/**
+ * Catalogs that have finished loading, read synchronously by `translate`. The loaders return bundled JSON,
+ * so every entry is in place after the first microtask checkpoint following module evaluation, before any
+ * React render or user input. A locale not yet in this map reads as English rather than blocking.
+ */
+const loaded = new Map<LocaleCode, Strings>();
+for (const code of LOCALES) {
+  if (code === 'en') continue;
+  i18n.loadLocale(code).then(
+    (catalog) => loaded.set(code, catalog),
+    () => undefined,
+  );
+}
 
 /** Normalize persisted BCP-47-ish tags to baseline egui catalog codes. */
 export function normalizeLocale(value: unknown): LocaleCode {
@@ -28,5 +50,7 @@ export function normalizeLocale(value: unknown): LocaleCode {
 /** Translate built-in source strings; user content and unknown strings fall back unchanged. */
 export function translate(locale: unknown, source: string): string {
   const code = normalizeLocale(locale);
-  return code === 'en' ? source : catalogs[code][source] ?? source;
+  if (code === 'en') return source;
+  const catalog = loaded.get(code);
+  return catalog && Object.prototype.hasOwnProperty.call(catalog, source) ? catalog[source] : source;
 }
