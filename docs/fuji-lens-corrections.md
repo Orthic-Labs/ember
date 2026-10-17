@@ -118,6 +118,9 @@ them) shifted the planes the wrong way: the median measured shift rose from 0.10
 on 11 of 28 curves (X-T4 blue 0.16 → 0.58 px, X-T3 red 0.06 → 0.59 px). The table is therefore not applied; a correction
 before demosaicing would be needed.
 
+The maker-neutral reader of the vignetting table (and the decoded, unapplied CA table) for the opt-in "Use camera lens
+corrections" is described in [camera-lens-tables.md](camera-lens-tables.md).
+
 ## Tests
 
 - `crates/raw/src/vendor/raf_lens.rs`: layout, normalisation, the model list, malformed tables, the zoom and the

@@ -99,6 +99,25 @@ fn camera_name(b: &[u8]) -> String {
     String::from_utf8_lossy(name.get(..end).unwrap_or_default()).trim().to_string()
 }
 
+/// The recorded image: the header's crop records inside the `w × hgt` raw frame, else the whole frame.
+fn active_area(h: &Header, w: usize, hgt: usize) -> Rect {
+    let active = match (pair(h, CROP_TOP_LEFT), pair(h, CROPPED_SIZE)) {
+        (Some((top, left)), Some((ch, cw))) if ch > 0 && cw > 0 => Rect::new(left, top, cw, ch).clipped(w, hgt),
+        _ => Rect::new(0, 0, w, hgt),
+    };
+    if active.width == 0 || active.height == 0 { Rect::new(0, 0, w, hgt) } else { active }
+}
+
+/// The camera's own vignetting table of a RAF in the maker-neutral model (`None` for a file without one, another
+/// body than the validated ones, or a table in a layout that is not understood); see `raf_lens::camera_correction`.
+pub(crate) fn camera_correction(bytes: &[u8]) -> Option<lightcraft_geom::CameraCorrection> {
+    let h = header(bytes).ok()?;
+    let ifd = raw_ifd(h.raw?).ok()?;
+    let dimension = |tag: u16| ifd.u64(tag).and_then(|v| usize::try_from(v).ok()).filter(|v| *v > 0);
+    let active = active_area(&h, dimension(0xf001)?, dimension(0xf002)?);
+    super::raf_lens::camera_correction(&camera_name(bytes), &ifd, active)
+}
+
 /// The CFA: X-Trans from the (reversed) layout record, else RGGB.
 fn cfa(h: &Header) -> Cfa {
     match record(h, XTRANS_LAYOUT) {
@@ -173,11 +192,7 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         }
     }
 
-    let active = match (pair(&h, CROP_TOP_LEFT), pair(&h, CROPPED_SIZE)) {
-        (Some((top, left)), Some((ch, cw))) if ch > 0 && cw > 0 => Rect::new(left, top, cw, ch).clipped(w, hgt),
-        _ => Rect::new(0, 0, w, hgt),
-    };
-    let active = if active.width == 0 || active.height == 0 { Rect::new(0, 0, w, hgt) } else { active };
+    let active = active_area(&h, w, hgt);
     // black levels: one per CFA position, anchored at (0, 0) of the raw data; re-anchor at the active area
     let black = match ifd.f64s(0xf00a) {
         Some(v) if v.len() == cfa.pattern.len() && v.iter().any(|b| *b != v[0]) => {
@@ -454,6 +469,38 @@ pub(super) mod tests {
         assert!(crate::decode(&bytes).unwrap().opcodes.list3.iter().all(|o| !matches!(o, crate::Opcode::WarpRectilinear { .. })));
         let bytes = raf_full(w, h, 16, pack(&[1000; 96], 16), None, b"", 0, "X-T4", &[]);
         assert!(crate::decode(&bytes).unwrap().opcodes.list3.is_empty());
+    }
+
+    /// `camera_correction` reads the vignetting table of a synthetic RAF through the header, crop records and raw IFD,
+    /// for validated cameras only, without touching the opcodes, and survives garbage.
+    #[test]
+    fn camera_correction_reads_the_vignette_table_of_validated_cameras() {
+        let (w, h) = (16u32, 6u32);
+        let half = 12.0f64.hypot(4.0) / 2.0;
+        let rat = |v: &[f64]| -> Vec<(i32, i32)> { v.iter().map(|x| ((x * 1.0e6).round() as i32, 1_000_000)).collect() };
+        let knots = [0.3535211268, 0.5, 0.6126760563, 0.7070422535, 0.7908450704, 0.8661971831, 0.9352112676, 1.0, 1.06056338];
+        let mut v = vec![half / 9.0];
+        v.extend_from_slice(&knots);
+        v.extend_from_slice(&[98.5, 96.9, 94.9, 91.0, 84.7, 78.4, 73.0, 67.5, 67.5]);
+        let extra = vec![(0xf010, rat(&v))];
+        for (model, expected) in [("X-T4", true), ("GFX 100", true), ("X-T6", false), ("", false)] {
+            let bytes = raf_full(w, h, 16, pack(&[1000; 96], 16), None, b"", 0, model, &extra);
+            let c = crate::camera_correction(&bytes);
+            assert_eq!(c.is_some(), expected, "{model}");
+            let Some(c) = c else { continue };
+            let t = c.vignette.unwrap();
+            assert_eq!(c.ca, None);
+            assert!((t.at(1.0) - 0.675).abs() < 1e-6 && (t.at(0.0) - 1.0).abs() < 1e-9, "{model}");
+            // the opcode path is unchanged by it
+            assert_eq!(crate::decode(&bytes).unwrap().opcodes.list3.len(), 1, "{model}");
+        }
+        let bytes = raf_full(w, h, 16, pack(&[1000; 96], 16), None, b"", 0, "X-T4", &[]);
+        assert_eq!(crate::camera_correction(&bytes), None, "no table");
+        assert_eq!(crate::camera_correction(b"FUJIFILMCCD-RAW"), None);
+        assert_eq!(crate::camera_correction(b""), None);
+        let mut cut = raf_full(w, h, 16, pack(&[1000; 96], 16), None, b"", 0, "X-T4", &extra);
+        cut.truncate(120);
+        assert_eq!(crate::camera_correction(&cut), None);
     }
 
     #[test]

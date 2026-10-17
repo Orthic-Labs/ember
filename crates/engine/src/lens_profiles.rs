@@ -103,13 +103,25 @@ fn frame_of(raw: &lightcraft_raw::RawInfo) -> (f64, f64) {
     (w as f64, h as f64)
 }
 
-/// [`crate::files::embedded_lens`], else the database profile ([`lookup`]) for a raw with metadata `meta`.
-pub fn for_raw(raw: &lightcraft_raw::RawInfo, meta: impl FnOnce() -> lightcraft_meta::Metadata) -> Option<EmbeddedLens> {
-    crate::files::embedded_lens(raw).or_else(|| {
+/// [`crate::files::embedded_lens`], else the database profile ([`lookup`]) for a raw with metadata `meta`, with the
+/// camera's own maker-note tables of the file `bytes` ([`attach_camera`]).
+pub fn for_raw(raw: &lightcraft_raw::RawInfo, bytes: &[u8], meta: impl FnOnce() -> lightcraft_meta::Metadata) -> Option<EmbeddedLens> {
+    let profile = crate::files::embedded_lens(raw).or_else(|| {
         let db = database()?;
         let (w, h) = frame_of(raw);
         lookup(db, &meta(), w, h, raw.orientation)
-    })
+    });
+    attach_camera(profile, bytes)
+}
+
+/// `lens` with the vignetting and lateral CA tables the camera wrote into the raw file `bytes` ([`EmbeddedLens::camera`],
+/// applied only by the opt-in "Use camera lens corrections"). A file with such tables and no profile gets a lens that
+/// holds only them ([`EmbeddedLens::has_profile`] is then false); one without them keeps `lens` as it is.
+pub fn attach_camera(lens: Option<EmbeddedLens>, bytes: &[u8]) -> Option<EmbeddedLens> {
+    match lightcraft_raw::camera_correction(bytes) {
+        Some(camera) => Some(EmbeddedLens { camera: Some(camera), ..lens.unwrap_or_default() }),
+        None => lens,
+    }
 }
 
 /// The lens data of the raw file `bytes`: the automatic result ([`for_raw`]), or with `pick` the picked database
@@ -118,10 +130,10 @@ pub fn for_raw(raw: &lightcraft_raw::RawInfo, meta: impl FnOnce() -> lightcraft_
 pub fn for_bytes(bytes: &[u8], pick: Option<&LensOverride>) -> Option<EmbeddedLens> {
     let raw = lightcraft_raw::probe_info(bytes).ok()?;
     match pick {
-        None => for_raw(&raw, || lightcraft_meta::extract(bytes)),
+        None => for_raw(&raw, bytes, || lightcraft_meta::extract(bytes)),
         Some(pick) => {
             let (w, h) = frame_of(&raw);
-            lookup_override(database()?, pick, &lightcraft_meta::extract(bytes), w, h, raw.orientation)
+            attach_camera(Some(lookup_override(database()?, pick, &lightcraft_meta::extract(bytes), w, h, raw.orientation)?), bytes)
         }
     }
 }
@@ -156,6 +168,16 @@ mod tests {
             f_number: Some(3.5),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn camera_tables_attach_only_when_the_file_has_them() {
+        let lens = EmbeddedLens { vignette: Some(Default::default()), ..Default::default() };
+        // not a RAF (or any raw): the lens stays as it is, and nothing is invented for a photo without one
+        assert_eq!(attach_camera(Some(lens), b"not a raw file"), Some(lens));
+        assert_eq!(attach_camera(None, b"not a raw file"), None);
+        assert_eq!(attach_camera(None, &[]), None);
+        assert!(!EmbeddedLens::default().has_profile() && lens.has_profile());
     }
 
     #[test]

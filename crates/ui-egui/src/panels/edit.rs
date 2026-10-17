@@ -439,7 +439,8 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
         ui.add_space(8.0);
     });
     section(app, ui, &d, "optics", "Optics", |app, ui, d| {
-        let has_lens = app.session.catalog.photo(id).is_some_and(|p| p.embedded_lens.is_some());
+        let has_lens = app.session.catalog.photo(id).is_some_and(|p| p.embedded_lens.is_some_and(|l| l.has_profile()));
+        let has_camera = app.session.catalog.photo(id).is_some_and(|p| p.embedded_lens.is_some_and(|l| l.camera.is_some()));
         egui::Frame::NONE.inner_margin(egui::Margin { left: 24, right: 22, top: 4, bottom: 4 }).show(ui, |ui| {
             let mut ca = d.optics.remove_ca;
             if ui.checkbox(&mut ca, crate::i18n::tr("Remove Chromatic Aberration")).changed() {
@@ -455,6 +456,20 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
                         .size(11.0)
                         .color(Tokens::get(ui.ctx()).text_dim),
                 );
+            }
+            // the camera's own vignetting / lateral CA tables, for what the lens profile does not correct (off by default)
+            if has_camera || d.optics.camera_corrections {
+                let mut cc = d.optics.camera_corrections;
+                if ui.checkbox(&mut cc, crate::i18n::tr("Use camera lens corrections")).changed() {
+                    let _ = app.run("develop.merge", json!({"settings": {"optics": {"camera_corrections": cc}}, "label": "Camera Lens Corrections"}));
+                }
+                if cc && !has_camera {
+                    ui.label(
+                        egui::RichText::new(crate::i18n::tr("No camera correction tables in this file."))
+                            .size(11.0)
+                            .color(Tokens::get(ui.ctx()).text_dim),
+                    );
+                }
             }
             lens_picker(app, ui, d);
         });

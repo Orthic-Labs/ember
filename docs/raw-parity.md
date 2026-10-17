@@ -6,7 +6,7 @@ Raw processing is the deepest single dimension of reference editor parity: a pho
 does not decode, or decodes with the wrong colour, cannot switch. This document measures it model by
 model. The numbers feed [target-app-parity.md](target-app-parity.md); individual shortfalls are
 ranked in [gaps.md](gaps.md). Details per format: [cr3.md](cr3.md),
-[raf-compression.md](raf-compression.md), [sony-lens-corrections.md](sony-lens-corrections.md), [nikon-lens-corrections.md](nikon-lens-corrections.md),
+[raf-compression.md](raf-compression.md), [sony-lens-corrections.md](sony-lens-corrections.md), [nikon-lens-corrections.md](nikon-lens-corrections.md), [camera-lens-tables.md](camera-lens-tables.md),
 [camera-preview-colour.md](camera-preview-colour.md), [denoise.md](denoise.md).
 
 ## Headline
@@ -216,7 +216,7 @@ essentials user (the default look is what they keep).
 |---|---|---|
 | Profile database | 3,635 profile files, 56 makers, auto-selected | **0** (reference publisher LCPs never used; no database of our own) |
 | In-file corrections | ✅ | DNG opcodes (WarpRectilinear, FixVignetteRadial, GainMap…) applied; Panasonic / Leica RW2 distortion (79 photos, 13 bodies, 11 lenses); Sony tag 0x7037 distortion for the ILCE-7RM4A (2 lenses); Nikon NikonNEFInfo distortion (tag `0xc7d5`, about the sensor-shifted optical centre) for the Z 6II, Z 8 and Z f: F-mount lenses on the FTZ within 0.2 px of the camera JPEG, Z lenses within 0.5–1.5 px except the 24-70's wide end (7 px median; `docs/nikon-lens-corrections.md`) |
-| Vignetting / lateral CA from maker notes | ✅ | ⬜ |
+| Vignetting / lateral CA from maker notes | ✅ | 🟡 opt-in "Use camera lens corrections" (`optics.camera_corrections`, off by default): Fujifilm vignetting table (`0xf010`, 59 validated bodies) applied through a maker-neutral radial model; Fujifilm lateral CA (`0xf00f`) decoded but not applied (it moved the planes the wrong way after our demosaic); Sony, Panasonic and Olympus skipped (no documented table layout: Sony's int16s[16] / [32] have no published meaning, Panasonic and Olympus store On/Off flags); code and synthetic tests only, CI pending (`docs/camera-lens-tables.md`, #242) |
 | Manual distortion, vignetting, CA, defringe | ✅ | ✅ |
 
 **Lens score ~10%** (estimated): automatic correction reaches roughly Panasonic / Leica, phone and
@@ -268,6 +268,7 @@ Beyond decoding:
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | Vignetting / lateral CA from maker notes (#242): a maker-neutral radial table model, the opt-in "Use camera lens corrections" develop setting and the Fujifilm vignetting table (CA decoded, not applied; Sony, Panasonic and Olympus skipped: no documented table layout), `docs/camera-lens-tables.md`; lens score unchanged |
 | 2026-10-17 | minor | GoPro GPR decoded (#170): a DNG whose raw data is one VC-5 stream (SMPTE ST 2073, compression 9), in pure safe Rust ported from GoPro's reference decoder (Apache-2.0 OR MIT; NOTICE), RGGB 14-bit and GBRG 12-bit; the nine GoPro models move from unsupported to unverified (951 unverified, 27 unsupported, none of the 754 models added since 2017 unsupported); the algorithm was checked in a Python model on the five public GoPro samples (HERO5, 6, 7, 9 and Fusion) and the model's mosaic hashes are pinned in `crates/raw/tests/gpr_corpus.rs`, CI verification pending |
 | 2026-10-14 | minor | Nikon D600 and D610 image area (6016 × 4016 at 8, 6) measured on 4 CC0 NEFs of each, and the D90's area and white level applied to the D5000 (same sensor and filler, 2 CC0 NEFs): the filler and noise columns on the right no longer develop as a band, and for these bodies the white level is measured inside the image area, issue upstream #1627 |
 | 2026-10-13 | minor | Lens profiles: Nikon in-file distortion (NikonNEFInfo `0xc7d5`) for the Z 6II, Z 8 and Z f, validated on 83 frames from three lenses and the CC0 Z f sample (`docs/nikon-lens-corrections.md`); lens score unchanged |

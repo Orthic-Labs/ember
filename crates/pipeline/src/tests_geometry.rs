@@ -1,7 +1,7 @@
 //! Geometry / optics tests on synthetic images with known distortions.
 
 use lightcraft_develop::{DevelopSettings, EmbeddedLens, EmbeddedVignette, EmbeddedWarp};
-use lightcraft_geom::Point;
+use lightcraft_geom::{CameraCorrection, Point, RadialTable};
 use lightcraft_raster::resample::{Filter, resize};
 use lightcraft_raster::{Rgb32f, Rgba8};
 
@@ -156,6 +156,122 @@ fn profile_corrections_use_embedded_lens_only_when_enabled() {
     s.optics.profile_vignetting = 0.0;
     let zero = render(&src, &info, &s, &RenderRequest::fit(w, h)).image;
     assert_eq!(zero.data, off.data, "0 % = no correction");
+}
+
+/// A lens that holds only the camera's maker-note tables.
+fn camera_lens(vignette: Option<RadialTable>, ca: Option<[RadialTable; 2]>) -> EmbeddedLens {
+    EmbeddedLens { camera: Some(CameraCorrection { vignette, ca }), ..Default::default() }
+}
+
+/// Relative illumination 1 on the axis, 0.9 halfway, 0.6 at the corner (radius in half diagonals).
+fn vignette_table() -> RadialTable {
+    RadialTable::new(&[0.0, 0.5, 1.0], &[1.0, 0.9, 0.6]).unwrap()
+}
+
+#[test]
+fn camera_vignette_table_flattens_a_synthetic_vignette() {
+    let (w, h) = (300usize, 200usize);
+    let table = vignette_table();
+    let half = (w as f64).hypot(h as f64) / 2.0;
+    let flat = Rgb32f::from_fn(w, h, |_, _| [0.4; 3]);
+    let vignetted = Rgb32f::from_fn(w, h, |x, y| {
+        let r = (x as f64 + 0.5 - w as f64 / 2.0).hypot(y as f64 + 0.5 - h as f64 / 2.0) / half;
+        [(0.4 * table.at(r)) as f32; 3]
+    });
+    let info = SourceInfo { lens: Some(camera_lens(Some(table), None)), ..SourceInfo::default() };
+    let none = SourceInfo::default();
+    let request = RenderRequest::fit(w, h);
+    let mut s = DevelopSettings::default();
+    let reference = render(&flat, &none, &s, &request).image;
+    // the vignette is real: the corner is far darker than the middle
+    let before = render(&vignetted, &info, &s, &request).image;
+    assert!(reference.get(1, 1)[1] as i32 - before.get(1, 1)[1] as i32 > 25, "{:?} {:?}", reference.get(1, 1), before.get(1, 1));
+    // switched on, every pixel of the corrected render is the flat one within two 8-bit levels (rounding)
+    s.optics.camera_corrections = true;
+    let after = render(&vignetted, &info, &s, &request).image;
+    let worst = after
+        .data
+        .iter()
+        .zip(&reference.data)
+        .map(|(a, b)| (0..3).map(|i| (a[i] as i32 - b[i] as i32).abs()).max().unwrap_or(0))
+        .max()
+        .unwrap_or(0);
+    assert!(worst <= 2, "flattened to within {worst} levels");
+    // the same switch on a photo without tables, or with a lens profile only, changes nothing
+    let plain = render(&vignetted, &none, &s, &request).image;
+    s.optics.camera_corrections = false;
+    assert_eq!(plain.data, render(&vignetted, &none, &s, &request).image.data);
+}
+
+#[test]
+fn camera_corrections_off_are_bit_identical() {
+    let (w, h) = (300usize, 200usize);
+    let src = synth(w, h, |p| p, |p| [grid_value(p, 30.0), grid_value(p, 31.0), grid_value(p, 29.0)]);
+    let ca = [RadialTable::new(&[0.0, 1.0], &[0.004, 0.004]).unwrap(), RadialTable::new(&[0.0, 1.0], &[-0.003, -0.003]).unwrap()];
+    let request = RenderRequest::fit(w, h);
+    let plain = render(&src, &SourceInfo::default(), &DevelopSettings::default(), &request).image;
+    let info = SourceInfo { lens: Some(camera_lens(Some(vignette_table()), Some(ca))), ..SourceInfo::default() };
+    let mut s = DevelopSettings::default();
+    assert_eq!(render(&src, &info, &s, &request).image.data, plain.data, "off by default");
+    s.optics.lens_profile = true;
+    assert_eq!(render(&src, &info, &s, &request).image.data, plain.data, "the profile switch does not turn it on");
+    assert!(DevelopSettings::default().to_json().pointer("/optics/camera_corrections").is_none(), "off is not written, so hashes stay");
+    s.optics.camera_corrections = true;
+    assert_ne!(render(&src, &info, &s, &request).image.data, plain.data, "on changes the render");
+    // a lens without camera tables: on changes nothing
+    let bare = SourceInfo { lens: Some(EmbeddedLens::default()), ..SourceInfo::default() };
+    assert_eq!(render(&src, &bare, &s, &request).image.data, plain.data);
+}
+
+#[test]
+fn camera_ca_tables_align_the_colour_planes() {
+    let (w, h) = (640usize, 420usize);
+    let src = ca_source(w, h, 0.005, -0.004);
+    let request = RenderRequest::fit(w, h);
+    let tables = [RadialTable::new(&[0.0, 1.0], &[0.005, 0.005]).unwrap(), RadialTable::new(&[0.0, 1.0], &[-0.004, -0.004]).unwrap()];
+    let info = SourceInfo { lens: Some(camera_lens(None, Some(tables))), ..SourceInfo::default() };
+    let mut s = DevelopSettings::default();
+    let before = fringe(&render(&src, &info, &s, &request).image);
+    s.optics.camera_corrections = true;
+    let after = fringe(&render(&src, &info, &s, &request).image);
+    assert!(after < before * 0.35, "fringing {before:.2} -> {after:.2}");
+}
+
+#[test]
+fn camera_tables_yield_to_what_the_lens_profile_corrects() {
+    let (w, h) = (300.0, 200.0);
+    let tables = [vignette_table(), vignette_table()];
+    let lens = EmbeddedLens {
+        vignette: Some(EmbeddedVignette { k: [0.5, 0.0, 0.0, 0.0, 0.0], center: Point::new(0.5, 0.5), radius: 0.6 }),
+        warp: Some(EmbeddedWarp {
+            planes: [[1.0, -0.01, 0.0, 0.0, 0.0, 0.0], [1.0, -0.01, 0.0, 0.0, 0.0, 0.0], [1.0, -0.012, 0.0, 0.0, 0.0, 0.0]],
+            center: Point::new(0.5, 0.5),
+            radius: 0.6,
+        }),
+        camera: Some(CameraCorrection { vignette: Some(vignette_table()), ca: Some(tables) }),
+        ..Default::default()
+    };
+    let mut s = DevelopSettings::default();
+    s.optics.camera_corrections = true;
+    // profile corrections off: the camera tables apply
+    let wp = crate::optics::Warp::from_settings(w, h, &s, Some(&lens));
+    assert!(wp.cam_vig.is_some() && wp.cam_ca.is_some() && wp.needs_f64());
+    // profile on: its vignette and its per-colour warp are used, not the camera's
+    s.optics.lens_profile = true;
+    let wp = crate::optics::Warp::from_settings(w, h, &s, Some(&lens));
+    assert!(wp.cam_vig.is_none() && wp.cam_ca.is_none());
+    // profile on but its amounts at 0: nothing is corrected by it, so the camera's tables apply
+    s.optics.profile_distortion = 0.0;
+    s.optics.profile_vignetting = 0.0;
+    let wp = crate::optics::Warp::from_settings(w, h, &s, Some(&lens));
+    assert!(wp.cam_vig.is_some() && wp.cam_ca.is_some());
+    // a profile with a single-colour warp leaves CA to the camera
+    s.optics.profile_distortion = 100.0;
+    s.optics.profile_vignetting = 100.0;
+    let mut mono = lens;
+    mono.warp = Some(EmbeddedWarp { planes: [[1.0, -0.01, 0.0, 0.0, 0.0, 0.0]; 3], center: Point::new(0.5, 0.5), radius: 0.6 });
+    let wp = crate::optics::Warp::from_settings(w, h, &s, Some(&mono));
+    assert!(wp.cam_vig.is_none() && wp.cam_ca.is_some());
 }
 
 fn mean_abs_diff_downscaled(small: &Rgba8, big: &Rgba8) -> f32 {

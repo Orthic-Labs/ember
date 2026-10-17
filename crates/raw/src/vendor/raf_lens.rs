@@ -17,10 +17,19 @@
 //! - vignetting: relative illumination in percent at the source radius; the correction is the gain `100 / V`.
 
 use crate::{Opcode, Rect};
+use lightcraft_geom::{CameraCorrection, RadialTable};
 use lightcraft_tiff::Ifd;
 
 const DISTORTION: u16 = 0xf00b;
+const LATERAL_CA: u16 = 0xf00f;
 const VIGNETTING: u16 = 0xf010;
+/// Whether the lateral CA table (`0xf00f`) is part of [`camera_correction`]. It is not: measured on 46 curves from 30
+/// files it is real, but applied after our demosaic it moved the colour planes the wrong way (see
+/// docs/fuji-lens-corrections.md, "Chromatic aberration"), so only the vignetting table leaves the reader.
+/// [`camera_ca`] still decodes it.
+const APPLY_CA: bool = false;
+/// Largest lateral CA shift a table may state, as a fraction of the radius (real tables stay below 0.002).
+const MAX_CA_SHIFT: f64 = 0.02;
 const SAMPLES: usize = 1024;
 /// Largest allowed deviation of the warp polynomial from the table, in half diagonals (median over the 118 sample
 /// tables 0.00012, largest 0.0007; about 1 px at 1440 px).
@@ -299,6 +308,70 @@ fn vignette(ifd: &Ifd, w: usize, h: usize) -> Option<Opcode> {
     Some(Opcode::FixVignetteRadial { k, center: [0.5, 0.5] })
 }
 
+/// A table in the maker-neutral model: knot `k` becomes the radius `k / last` in half diagonals (the last knot is the
+/// farthest corner), with `at_zero` at the axis when the first knot lies above it. Its values are as given.
+fn model_table(knots: &[f64], values: &[f64], at_zero: f64) -> Option<RadialTable> {
+    let last = *knots.last()?;
+    if last <= 0.0 {
+        return None;
+    }
+    let (mut k, mut v) = (Vec::new(), Vec::new());
+    if knots.first().is_some_and(|k0| *k0 > 0.0) {
+        k.push(0.0);
+        v.push(at_zero);
+    }
+    k.extend(knots.iter().map(|x| x / last));
+    v.extend_from_slice(values);
+    RadialTable::new(&k, &v)
+}
+
+/// The vignetting table (`0xf010`, percent of the axial illumination) as relative illumination.
+fn camera_vignette(ifd: &Ifd, half_diagonal: f64) -> Option<RadialTable> {
+    let t = read(ifd, VIGNETTING, half_diagonal)?;
+    if t.values.iter().any(|v| !(10.0..=130.0).contains(v)) || t.values.iter().all(|v| *v == 100.0) {
+        return None;
+    }
+    let illumination: Vec<f64> = t.values.iter().map(|v| v / 100.0).collect();
+    model_table(&t.knots, &illumination, 1.0)
+}
+
+/// The lateral CA table (`0xf00f`): `[scale, knots × n, red × n, blue × n, scale]`, the shifts of the red and blue
+/// planes against green as fractions of the radius (own analysis, docs/fuji-lens-corrections.md). `scale × n` is the
+/// recorded image's half diagonal like the other tables, and the closing `scale` repeats the first.
+fn camera_ca(ifd: &Ifd, half_diagonal: f64) -> Option<[RadialTable; 2]> {
+    let v = ifd.f64s(LATERAL_CA)?;
+    let n = v.len().checked_sub(2)? / 3;
+    if v.len() != 2 + 3 * n || !(3..=15).contains(&n) || v.iter().any(|x| !x.is_finite()) {
+        return None;
+    }
+    let scale = *v.first()?;
+    if scale <= 0.0 || (scale * n as f64 / half_diagonal - 1.0).abs() > SCALE_TOLERANCE || (v.last()? - scale).abs() > scale * 1e-3 {
+        return None;
+    }
+    let knots = v.get(1..=n)?;
+    if knots.first().is_none_or(|k| *k < 0.0) || knots.windows(2).any(|w| !matches!(w, [a, b] if b > a)) || !(0.5..=2.0).contains(knots.last()?) {
+        return None;
+    }
+    let (red, blue) = (v.get(1 + n..1 + 2 * n)?, v.get(1 + 2 * n..1 + 3 * n)?);
+    if red.iter().chain(blue).any(|s| s.abs() > MAX_CA_SHIFT) || red.iter().chain(blue).all(|s| *s == 0.0) {
+        return None;
+    }
+    Some([model_table(knots, red, 0.0)?, model_table(knots, blue, 0.0)?])
+}
+
+/// The camera's own vignetting table of a RAF whose camera `model` was validated, in the maker-neutral model, for the
+/// opt-in "Use camera lens corrections" (the lens profile path above already applies the same table through a
+/// polynomial; this one is the table itself). A table that is not in the understood layout and scale is skipped on its
+/// own. `active` is the recorded image.
+pub(super) fn camera_correction(model: &str, raw: &Ifd, active: Rect) -> Option<CameraCorrection> {
+    if !VALIDATED.contains(&model.trim()) || active.width < 2 || active.height < 2 {
+        return None;
+    }
+    let half = (active.width as f64).hypot(active.height as f64) / 2.0;
+    let c = CameraCorrection { vignette: camera_vignette(raw, half), ca: if APPLY_CA { camera_ca(raw, half) } else { None } };
+    (!c.is_empty()).then_some(c)
+}
+
 /// The lens corrections of a RAF whose camera `model` was validated (anything else, and any table that is not in
 /// the understood layout and scale, is left uncorrected). `active` is the recorded image (the raw crop).
 pub(super) fn corrections(model: &str, raw: &Ifd, active: Rect) -> Vec<Opcode> {
@@ -439,6 +512,91 @@ mod tests {
         let nearest = 5999.0f64.min(3999.0) / 5999.0f64.hypot(3999.0);
         let at_edge = evaluate(&planes[0], nearest) / nearest;
         assert!((at_edge - planes[0][0]).abs() < 0.004);
+    }
+
+    /// A lateral CA table in the real layout `[scale, knots, red, blue, scale]`.
+    fn ca_table(scale: f64, knots: &[f64], red: &[f64], blue: &[f64]) -> Value {
+        let mut v = vec![scale];
+        v.extend_from_slice(knots);
+        v.extend_from_slice(red);
+        v.extend_from_slice(blue);
+        v.push(scale);
+        rationals(&v)
+    }
+    const XT4_RED: [f64; 9] = [-0.00003, -0.00009, -0.00015, -0.0002, -0.00027, -0.00034, -0.00046, -0.0006, -0.0006];
+    const XT4_BLUE: [f64; 9] = [0.00002, 0.00007, 0.00012, 0.00018, 0.00025, 0.00031, 0.0004, 0.00052, 0.00052];
+
+    #[test]
+    fn camera_vignette_table_in_the_neutral_model() {
+        let c = camera_correction("X-T4", &xt4(), XT4_AREA).unwrap();
+        let t = c.vignette.unwrap();
+        // the axis is anchored at 100 %, then the nine knots, the last one the corner (radius 1)
+        let points: Vec<(f64, f64)> = t.points().collect();
+        assert_eq!(points.len(), 10);
+        assert_eq!(points[0], (0.0, 1.0));
+        assert!((points[9].0 - 1.0).abs() < 1e-6 && (points[9].1 - 0.6745703125).abs() < 1e-6, "{:?}", points[9]);
+        assert!((points[1].0 - 0.3535211268 / 1.06056338).abs() < 1e-6 && (points[1].1 - 0.9846142578).abs() < 1e-6, "{:?}", points[1]);
+        // at the knot 0.5 (radius 0.4714): the same linear table the opcode path reads
+        assert!((t.at(0.5 / 1.06056338) - 0.9687792969).abs() < 1e-6);
+        assert!((t.at(1.0) - 0.6745703125).abs() < 1e-6 && (t.at(2.0) - 0.6745703125).abs() < 1e-6);
+        // the lateral CA table is not part of the result (see APPLY_CA)
+        assert_eq!(c.ca, None);
+    }
+
+    #[test]
+    fn camera_ca_table_is_decoded_in_the_documented_layout() {
+        let scale = 3749.0 / 9.0;
+        let ifd = only(LATERAL_CA, ca_table(scale, &KNOTS9, &XT4_RED, &XT4_BLUE));
+        let [red, blue] = camera_ca(&ifd, 3749.0).unwrap();
+        // no vignette-style anchor is needed above 0: the axis is anchored at no shift
+        let (r, b): (Vec<_>, Vec<_>) = (red.points().collect(), blue.points().collect());
+        assert_eq!((r.len(), b.len()), (10, 10));
+        assert_eq!((r[0], b[0]), ((0.0, 0.0), (0.0, 0.0)));
+        for (i, (rv, bv)) in XT4_RED.iter().zip(XT4_BLUE).enumerate() {
+            assert!((r[i + 1].1 - rv).abs() < 2e-6 && (b[i + 1].1 - bv).abs() < 2e-6, "{i}");
+            assert!((r[i + 1].0 - KNOTS9[i] / 1.06056338).abs() < 1e-6, "{i}");
+        }
+        assert!(red.at(1.0) < 0.0 && blue.at(1.0) > 0.0, "red and blue shift opposite ways in this sample");
+    }
+
+    #[test]
+    fn malformed_camera_tables_are_ignored() {
+        let scale = 3749.0 / 9.0;
+        let ca = |value: Value| camera_ca(&only(LATERAL_CA, value), 3749.0);
+        assert!(ca(ca_table(scale, &KNOTS9, &XT4_RED, &XT4_BLUE)).is_some());
+        // another normalisation, a closing scale that differs, shifts that are not fractions of the radius, all zero
+        assert!(ca(ca_table(4643.0 / 9.0, &KNOTS9, &XT4_RED, &XT4_BLUE)).is_none());
+        let mut open = vec![scale];
+        open.extend_from_slice(&KNOTS9);
+        open.extend_from_slice(&XT4_RED);
+        open.extend_from_slice(&XT4_BLUE);
+        open.push(scale * 2.0);
+        assert!(ca(rationals(&open)).is_none());
+        assert!(ca(ca_table(scale, &KNOTS9, &[0.5; 9], &XT4_BLUE)).is_none());
+        assert!(ca(ca_table(scale, &KNOTS9, &[0.0; 9], &[0.0; 9])).is_none());
+        // non-increasing knots, a short blue half, NaN, the wrong value type, an empty table, too few knots
+        let mut flat = KNOTS9;
+        flat[4] = flat[3];
+        assert!(ca(ca_table(scale, &flat, &XT4_RED, &XT4_BLUE)).is_none());
+        assert!(ca(ca_table(scale, &KNOTS9, &XT4_RED, &XT4_BLUE[..8])).is_none());
+        assert!(ca(Value::Short(vec![29; 29])).is_none());
+        assert!(ca(rationals(&[])).is_none());
+        assert!(ca(rationals(&[1.0])).is_none());
+        assert!(ca(ca_table(scale, &KNOTS9[..2], &XT4_RED[..2], &XT4_BLUE[..2])).is_none());
+        // vignetting: out-of-range percent, flat, another scale, wrong knot count
+        let vig = |value: Value| camera_correction("X-T4", &only(VIGNETTING, value), XT4_AREA);
+        assert!(vig(table(scale, &KNOTS9, &XT4_VIG)).is_some());
+        assert!(vig(table(scale, &KNOTS9, &[5.0; 9])).is_none());
+        assert!(vig(table(scale, &KNOTS9, &[100.0; 9])).is_none());
+        assert!(vig(table(4643.0 / 9.0, &KNOTS9, &XT4_VIG)).is_none());
+        assert!(vig(table(scale, &KNOTS9[..8], &XT4_VIG)).is_none());
+        assert!(vig(table(scale, &KNOTS9, &[f64::NAN; 9])).is_none());
+        assert!(camera_correction("X-T4", &Ifd::default(), XT4_AREA).is_none());
+        // only validated bodies, and not a degenerate frame
+        for model in ["", "X-T6", "x-t4"] {
+            assert!(camera_correction(model, &xt4(), XT4_AREA).is_none(), "{model:?}");
+        }
+        assert!(camera_correction("X-T4", &xt4(), Rect::new(0, 0, 1, 1)).is_none());
     }
 
     #[test]

@@ -371,7 +371,13 @@ pub(crate) fn lens_ops(id: lightcraft_catalog::PhotoId, ph: &lightcraft_catalog:
     }
     let mut ops = vec![Op::SetEmbeddedLens { id, lens: info.embedded_lens.map(Box::new) }];
     // (a photo with a default-preset look keeps it: that look is its import state)
-    if ph.embedded_lens.is_none() && info.embedded_lens.is_some() && ph.import_look.is_none() && !ph.is_edited() && !ph.develop.optics.lens_profile {
+    // (camera tables alone are not a profile correction: they leave the lens correction switch as it is)
+    if !ph.embedded_lens.is_some_and(|l| l.has_profile())
+        && info.embedded_lens.is_some_and(|l| l.has_profile())
+        && ph.import_look.is_none()
+        && !ph.is_edited()
+        && !ph.develop.optics.lens_profile
+    {
         let mut d = (*ph.develop).clone();
         d.optics.lens_profile = true;
         ops.push(Op::SetDevelop { id, settings: std::sync::Arc::new(d), label: "Lens Corrections".into(), edited: ph.edited.clone() });
@@ -543,6 +549,7 @@ mod tests {
             warp: Some(lightcraft_develop::EmbeddedWarp { planes: [[1.0, -0.1, 0.03, 0.0, 0.0, 0.0]; 3], ..Default::default() }),
             vignette: None,
             stages: Default::default(),
+            camera: None,
         }
     }
     fn old_rw2() -> lightcraft_catalog::Photo {

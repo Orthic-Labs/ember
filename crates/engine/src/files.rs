@@ -169,7 +169,7 @@ pub fn probe_bytes(name: &str, bytes: &[u8]) -> Result<ProbeInfo, String> {
         }
         let scale = WbScaleOf::new(raw.format, &raw.color, raw.wb_multipliers, &raw.metadata);
         let as_shot_wb = Some(scale.as_shot(lightcraft_raw::color::as_shot_white_xy_of(&raw)));
-        let embedded_lens = crate::lens_profiles::for_raw(&raw, || m.clone());
+        let embedded_lens = crate::lens_profiles::for_raw(&raw, bytes, || m.clone());
         return Ok(ProbeInfo {
             embedded_lens,
             width: w,
@@ -447,7 +447,7 @@ fn load_bytes_now(
         // Embedded lens corrections are applied by the pipeline ("Enable Profile Corrections"), not baked in
         // (removed before the camera look's binned sensor proxy too, which needs an empty `OpcodeList3`).
         let info = raw.info();
-        let lens = crate::lens_profiles::for_raw(&info, || lightcraft_meta::extract(&bytes));
+        let lens = crate::lens_profiles::for_raw(&info, &bytes, || lightcraft_meta::extract(&bytes));
         raw.opcodes.list3.retain(|op| !op.is_lens_correction());
         // Which scale white balance is edited on, and the as-shot white on it, from the file's own colour tags or
         // the camera's measured matrices (`Photo::relative_wb` decides the same from the catalog's camera)

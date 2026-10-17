@@ -3,7 +3,7 @@
 //! exception is `process`: missing (or unreadable), it is V1, the rendering those older files were
 //! made with.
 
-use lightcraft_geom::{CropGeometry, Homography, Orientation, Point};
+use lightcraft_geom::{CameraCorrection, CropGeometry, Homography, Orientation, Point};
 use serde::{Deserialize, Serialize};
 
 pub const SCHEMA_VERSION: u32 = 1;
@@ -674,6 +674,11 @@ impl Default for Detail {
 pub struct Optics {
     pub remove_ca: bool,
     pub lens_profile: bool,
+    /// "Use camera lens corrections": apply the vignetting and lateral CA tables the camera wrote into its maker notes
+    /// ([`EmbeddedLens::camera`]) for whatever the lens profile corrections above do not already supply. Off by default
+    /// and not written while off, so settings (and their hashes) from before it existed are unchanged.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub camera_corrections: bool,
     pub profile_distortion: f64,
     pub profile_vignetting: f64,
     pub defringe_purple_amount: f64,
@@ -696,6 +701,7 @@ impl Default for Optics {
         Self {
             remove_ca: false,
             lens_profile: false,
+            camera_corrections: false,
             profile_distortion: 100.0,
             profile_vignetting: 100.0,
             defringe_purple_amount: 0.0,
@@ -736,6 +742,10 @@ pub struct EmbeddedLens {
     /// A DNG 1.6 `WarpRectilinear2` chain (up to [`WARP_STAGES`] stages, in `OpcodeList3` order; each stage warps
     /// the result of the one before it). When any is set, `warp` is `None`: the chain holds every warp opcode.
     pub stages: [Option<EmbeddedWarpStage>; WARP_STAGES],
+    /// The vignetting and lateral CA tables from the camera's maker notes. Applied only by
+    /// [`Optics::camera_corrections`]; not part of "Enable Profile Corrections".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub camera: Option<CameraCorrection>,
 }
 
 /// Most warp stages an [`EmbeddedLens`] chain keeps.
@@ -759,6 +769,12 @@ impl EmbeddedLens {
     /// Whether a `WarpRectilinear2` chain is set.
     pub fn has_stages(&self) -> bool {
         self.stages.iter().any(Option::is_some)
+    }
+
+    /// Whether the lens carries a profile correction (a warp, a chain or a vignette), as opposed to only the camera's
+    /// maker-note tables.
+    pub fn has_profile(&self) -> bool {
+        self.warp.is_some() || self.vignette.is_some() || self.has_stages()
     }
 }
 

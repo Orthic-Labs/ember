@@ -19,7 +19,7 @@ use std::sync::Mutex;
 
 use lightcraft_color::perceptual::{oklab_from_2020, oklab_to_2020};
 use lightcraft_develop::{DevelopSettings, EmbeddedLens, EmbeddedVignette, EmbeddedWarp, EmbeddedWarpStage};
-use lightcraft_geom::{Affine, Homography, Interval, Orientation, Point, Real};
+use lightcraft_geom::{Affine, Homography, Interval, Orientation, Point, RadialTable, Real};
 use lightcraft_raster::{Plane, Rgb32f};
 
 use crate::for_rows;
@@ -51,6 +51,11 @@ pub struct Warp {
     pub lens: Option<EmbeddedLens>,
     pub lens_dist: f64,
     pub lens_vig: f64,
+    /// The camera's own vignetting table ("Use camera lens corrections"): relative illumination at the source radius
+    /// (half diagonals), the gain being its reciprocal. Set only for what the lens profile does not already correct.
+    pub cam_vig: Option<RadialTable>,
+    /// The camera's own lateral CA tables for the red and blue planes (same condition).
+    pub cam_ca: Option<[RadialTable; 2]>,
 }
 
 impl Warp {
@@ -67,6 +72,8 @@ impl Warp {
             lens: None,
             lens_dist: 0.0,
             lens_vig: 0.0,
+            cam_vig: None,
+            cam_ca: None,
         }
     }
 
@@ -88,6 +95,22 @@ impl Warp {
             wp.lens_dist = (o.profile_distortion / 100.0).clamp(0.0, 2.0);
             wp.lens_vig = (o.profile_vignetting / 100.0).clamp(0.0, 2.0);
         }
+        if o.camera_corrections
+            && let Some(c) = lens.and_then(|l| l.camera)
+        {
+            // only what the lens profile (embedded or database) does not already supply: no correction applied twice
+            if !(wp.lens_vig != 0.0 && wp.lens.is_some_and(|l| l.vignette.is_some())) {
+                wp.cam_vig = c.vignette;
+            }
+            let profile_ca = wp.lens_dist != 0.0
+                && wp.lens.is_some_and(|l| {
+                    l.warp.is_some_and(|w| w.planes[0] != w.planes[1] || w.planes[1] != w.planes[2])
+                        || l.stages.iter().flatten().any(|s| s.planes[0] != s.planes[1] || s.planes[1] != s.planes[2])
+                });
+            if !profile_ca {
+                wp.cam_ca = c.ca;
+            }
+        }
         wp
     }
 
@@ -104,26 +127,29 @@ impl Warp {
         self.persp != Homography::IDENTITY
             || self.k1 != 0.0
             || self.ca.iter().any(|c| *c != 0.0)
+            || self.cam_ca.is_some()
             || (self.lens_dist != 0.0 && self.lens.is_some_and(|l| l.warp.is_some() || l.has_stages()))
     }
 
     /// Whether the embedded lens warp is a `WarpRectilinear2` chain, whose degree-14 polynomials are ill-conditioned
-    /// in `f32` (terms of 1e5 cancelling to 1): a renderer that works in `f32` must sample on the CPU.
+    /// in `f32` (terms of 1e5 cancelling to 1), or the camera's maker-note tables are in use (the GPU kernels have no
+    /// table lookup): a renderer that works in `f32` must sample on the CPU.
     pub fn needs_f64(&self) -> bool {
-        self.lens_dist != 0.0 && self.lens.is_some_and(|l| l.has_stages())
+        (self.lens_dist != 0.0 && self.lens.is_some_and(|l| l.has_stages())) || self.cam_vig.is_some() || self.cam_ca.is_some()
     }
 
     /// Whether the colour planes are sampled at different positions.
     pub fn per_channel(&self) -> bool {
         self.ca[0] != self.ca[1]
             || self.ca[1] != self.ca[2]
+            || self.cam_ca.is_some()
             || (self.lens_dist != 0.0 && self.lens.and_then(|l| l.warp).is_some_and(|w| w.planes[0] != w.planes[1] || w.planes[1] != w.planes[2]))
             || (self.lens_dist != 0.0
                 && self.lens.is_some_and(|l| l.stages.iter().flatten().any(|s| s.planes[0] != s.planes[1] || s.planes[1] != s.planes[2])))
     }
 
     pub fn has_gain(&self) -> bool {
-        self.vig_stops != 0.0 || (self.lens_vig != 0.0 && self.lens.is_some_and(|l| l.vignette.is_some()))
+        self.vig_stops != 0.0 || self.cam_vig.is_some() || (self.lens_vig != 0.0 && self.lens.is_some_and(|l| l.vignette.is_some()))
     }
 
     pub fn is_identity(&self) -> bool {
@@ -159,7 +185,25 @@ impl Warp {
     /// Lens-corrected px → source px for colour plane `ch` (0 = R, 1 = G, 2 = B).
     pub fn corrected_to_source(&self, p: Point, ch: usize) -> Point {
         let (x, y) = self.corrected_to_source_real(p.x, p.y, ch);
-        Point::new(x, y)
+        self.camera_ca(Point::new(x, y), ch)
+    }
+
+    /// The camera's lateral CA table of plane `ch` (0 = R, 2 = B) applied to the green source position `q`: the plane
+    /// holds that point at `r · (1 + s(r))` about the centre. Green, and a photo without the table, stay put. (Kept out
+    /// of [`Warp::corrected_to_source_real`]: the coverage tests bound the green plane only, and a table lookup has
+    /// no interval form.)
+    fn camera_ca(&self, q: Point, ch: usize) -> Point {
+        let Some(table) = self.cam_ca.as_ref().and_then(|t| match ch {
+            0 => t.first(),
+            2 => t.get(1),
+            _ => None,
+        }) else {
+            return q;
+        };
+        let c = self.centre();
+        let hd = (self.w.hypot(self.h) / 2.0).max(1e-9);
+        let k = 1.0 + table.at(q.dist(c) / hd);
+        Point::new(c.x + (q.x - c.x) * k, c.y + (q.y - c.y) * k)
     }
 
     /// [`Warp::corrected_to_source`] for any [`Real`].
@@ -213,6 +257,11 @@ impl Warp {
             && let Some(v) = self.lens.and_then(|l| l.vignette)
         {
             g *= 1.0 + (embedded_vignette_gain(&v, src, self.w, self.h) - 1.0) * self.lens_vig;
+        }
+        if let Some(t) = &self.cam_vig {
+            let hd = (self.w.hypot(self.h) / 2.0).max(1e-9);
+            // (a table that says almost no light reaches the corner is not believed past 20x)
+            g /= t.at(src.dist(self.centre()) / hd).clamp(0.05, 4.0);
         }
         g as f32
     }
@@ -375,7 +424,8 @@ pub fn reorient_lens(lens: &EmbeddedLens, o: Orientation, w: f64, h: f64) -> Emb
             EmbeddedWarpStage { planes, center: map_pt(st.center), radius: st.radius * long_ratio, reciprocal: st.reciprocal }
         })
     });
-    EmbeddedLens { warp, vignette, stages }
+    // (the camera's tables are radial about the frame centre in half diagonals: the same after any orientation)
+    EmbeddedLens { warp, vignette, stages, camera: lens.camera }
 }
 
 // ------------------------------------------------------------------------------------------ lateral CA

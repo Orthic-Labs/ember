@@ -174,6 +174,29 @@ mod tests {
         assert_eq!(partial.lens_override, Some(LensOverride { make: "Sigma".into(), model: String::new() }));
     }
 
+    /// "Use camera lens corrections" is off by default and absent while off, so settings from before it existed keep
+    /// their JSON and hash; on, it round-trips. The camera's tables on a photo's lens are absent while unset.
+    #[test]
+    fn camera_corrections_are_backward_compatible() {
+        let s = DevelopSettings::default();
+        assert!(!s.optics.camera_corrections);
+        assert!(s.to_json().pointer("/optics/camera_corrections").is_none(), "off: not written");
+        assert_eq!(DevelopSettings::from_json(&s.to_json()).unwrap(), s);
+        let on = s.merged(&json!({"optics": {"camera_corrections": true}})).unwrap();
+        assert!(on.optics.camera_corrections);
+        assert_ne!(on.hash64(), s.hash64());
+        assert_eq!(on.to_json().pointer("/optics/camera_corrections"), Some(&json!(true)));
+        assert_eq!(DevelopSettings::from_json(&on.to_json()).unwrap(), on);
+
+        let bare = EmbeddedLens::default();
+        assert!(serde_json::to_value(bare).unwrap().get("camera").is_none(), "unset: not written");
+        assert_eq!(serde_json::from_value::<EmbeddedLens>(serde_json::to_value(bare).unwrap()).unwrap(), bare);
+        let table = lightcraft_geom::RadialTable::new(&[0.0, 1.0], &[1.0, 0.7]).unwrap();
+        let with = EmbeddedLens { camera: Some(lightcraft_geom::CameraCorrection { vignette: Some(table), ca: None }), ..Default::default() };
+        assert_eq!(serde_json::from_value::<EmbeddedLens>(serde_json::to_value(with).unwrap()).unwrap(), with);
+        assert!(!with.has_profile());
+    }
+
     /// Settings saved before Lens Blur's `enabled` became optional wrote `"enabled": false` for every photo; that
     /// must still read as unedited, with the default's hash. A deliberate off switch on a live amount survives.
     #[test]

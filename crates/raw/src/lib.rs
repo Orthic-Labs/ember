@@ -376,6 +376,17 @@ pub fn probe_info(bytes: &[u8]) -> Result<RawInfo> {
     decode_with(bytes, Mode::Header).map(RawImage::into_info)
 }
 
+/// The vignetting and lateral CA tables the camera wrote into the maker data of the raw file `bytes`, in the
+/// maker-neutral [`lightcraft_geom::CameraCorrection`] (normalized radius, so resolution independent), for the opt-in
+/// "Use camera lens corrections". `None` for a file without usable tables, a body whose tables were not validated, or
+/// a maker whose layout is not documented (see `docs/camera-lens-tables.md`). Never panics on a malformed table.
+pub fn camera_correction(bytes: &[u8]) -> Option<lightcraft_geom::CameraCorrection> {
+    match probe(bytes)? {
+        RawFormat::Raf => vendor::raf::camera_correction(bytes),
+        _ => None,
+    }
+}
+
 /// How much of a file a decoder reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Mode {
