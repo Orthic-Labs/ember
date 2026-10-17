@@ -525,3 +525,24 @@ fn a_heavily_clipped_raw_caps_highlight_recovery() {
     let told = auto_with(&src, &raw, &AutoHints { faces: &[], clipped_share: Some(0.5) });
     assert!(told.highlights >= -18.0 && finite_outputs(told));
 }
+
+#[test]
+fn the_decoders_clipped_count_on_the_source_replaces_the_proxy_estimate() {
+    let src = clipped_raw_scene();
+    let estimated = SourceInfo { raw: true, ..Default::default() };
+    // the decoder counted the mosaic and found nothing clipped (the proxy's plateau is not clipping)
+    let counted_none = SourceInfo { clipped_share: Some(0.0), ..estimated.clone() };
+    let pop = scene_population_with(&src, &counted_none, &DevelopSettings::default(), &AutoHints::default()).expect("population");
+    assert_eq!(pop.clipped, 0.0);
+    assert_eq!(auto_with(&src, &counted_none, &AutoHints::default()), auto_with(&src, &estimated, &AutoHints { faces: &[], clipped_share: Some(0.0) }));
+    // a count of a quarter of the samples caps recovery where the estimate said no more than it did
+    let counted = SourceInfo { clipped_share: Some(0.25), ..estimated.clone() };
+    let pop = scene_population_with(&src, &counted, &DevelopSettings::default(), &AutoHints::default()).expect("population");
+    assert_eq!(pop.clipped, 0.25);
+    assert!(auto_with(&src, &counted, &AutoHints::default()).highlights >= fit::highlight_floor(0.25));
+    // hints stay the stronger word; a non-finite count counts as none
+    let hinted = scene_population_with(&src, &counted, &DevelopSettings::default(), &AutoHints { faces: &[], clipped_share: Some(0.1) }).expect("population");
+    assert_eq!(hinted.clipped, 0.1);
+    let junk = SourceInfo { clipped_share: Some(f32::NAN), ..estimated };
+    assert_eq!(scene_population_with(&src, &junk, &DevelopSettings::default(), &AutoHints::default()).expect("population").clipped, 0.0);
+}

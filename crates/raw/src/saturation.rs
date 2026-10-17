@@ -104,6 +104,68 @@ impl RawImage {
         }
         changed
     }
+    /// The exact share (0..=1) of the active area's channel samples at or above the white level,
+    /// after [`Self::lift_clipped_samples`] has raised early-saturating plateaus to it: the mean
+    /// over the colour planes of each plane's clipped share, so a Bayer mosaic's two greens do not
+    /// outweigh red and blue, the same weighting as Auto's per-channel estimate from a proxy.
+    /// `None` for data it cannot count (inconsistent sizes, an active area outside the image,
+    /// unusable levels, or no colour plane).
+    pub fn clipped_share(&self) -> Option<f32> {
+        let a = self.active_area;
+        let fits = |start: usize, len: usize, max: usize| start.checked_add(len).is_some_and(|end| end <= max);
+        if a.width == 0 || a.height == 0 || !fits(a.x, a.width, self.width) || !fits(a.y, a.height, self.height) {
+            return None;
+        }
+        let cpp = self.cpp;
+        if !matches!(cpp, 1 | 3) || self.width.checked_mul(self.height)?.checked_mul(cpp)? != self.data.len() {
+            return None;
+        }
+        if cpp == 1 && !self.cfa.as_ref().is_some_and(|c| c.valid()) {
+            return None;
+        }
+        // planes: three colours for a CFA or linear RGB; a monochrome sensor has one
+        let planes = if cpp == 3 || self.cfa.is_some() { 3 } else { 1 };
+        let mut clipped = [0u64; 3];
+        let mut total = [0u64; 3];
+        for y in 0..a.height {
+            for x in 0..a.width {
+                let (px, py) = (a.x + x, a.y + y);
+                let base = py.checked_mul(self.width)?.checked_add(px)?;
+                for k in 0..cpp {
+                    let (plane, white) = if cpp == 3 {
+                        (k, self.white_at(k))
+                    } else {
+                        (self.cfa.as_ref().map_or(0, |c| c.color_at(px, py).min(2) as usize), self.white_at(0))
+                    };
+                    let v = match &self.data {
+                        RawData::U16(d) => f32::from(*d.get(base * cpp + k)?),
+                        RawData::F32(d) => *d.get(base * cpp + k)?,
+                    };
+                    if !v.is_finite() {
+                        continue;
+                    }
+                    let Some(t) = total.get_mut(plane) else { continue };
+                    *t += 1;
+                    if white.is_finite()
+                        && white > 0.0
+                        && v >= white
+                        && let Some(c) = clipped.get_mut(plane)
+                    {
+                        *c += 1;
+                    }
+                }
+            }
+        }
+        let mut sum = 0.0f64;
+        let mut n = 0u32;
+        for (c, t) in clipped.iter().zip(&total).take(planes) {
+            if *t > 0 {
+                sum += *c as f64 / *t as f64;
+                n += 1;
+            }
+        }
+        (n > 0).then(|| (sum / f64::from(n)) as f32)
+    }
 }
 
 #[cfg(test)]
@@ -266,5 +328,41 @@ mod tests {
         assert!(r.lift_clipped_samples() > 1000);
         let after = render(&r);
         assert!(tint(after) < 0.01, "{after:?}");
+    }
+
+    #[test]
+    fn the_clipped_share_counts_samples_at_the_white_level_per_colour() {
+        // nothing reaches 4095: nothing is clipped
+        let mut r = raw_with(None, 4095.0);
+        without_top(&mut r);
+        assert_eq!(r.clipped_share(), Some(0.0));
+        // every red sample (RGGB: even row, even column) clipped, nothing else: a third of the planes
+        if let RawData::U16(d) = &mut r.data {
+            for (i, v) in d.iter_mut().enumerate() {
+                if (i / 64) % 2 == 0 && (i % 64) % 2 == 0 {
+                    *v = 4095;
+                }
+            }
+        }
+        let share = r.clipped_share().expect("countable");
+        assert!((share - 1.0 / 3.0).abs() < 1e-6, "{share}");
+        // a pile-up below the stated white level counts once it is lifted, not before
+        let mut early = raw_with(Some(3567), 4095.0);
+        assert_eq!(early.clipped_share(), Some(0.0));
+        early.lift_clipped_samples();
+        assert!(early.clipped_share().is_some_and(|s| s > 0.01));
+    }
+
+    #[test]
+    fn the_clipped_share_refuses_data_it_cannot_count() {
+        let mut r = raw_with(Some(4095), 4095.0);
+        r.active_area = Rect::new(usize::MAX, 0, 2, 64);
+        assert_eq!(r.clipped_share(), None);
+        let mut r = raw_with(Some(4095), 4095.0);
+        r.width = 63;
+        assert_eq!(r.clipped_share(), None);
+        let mut r = raw_with(Some(4095), 4095.0);
+        r.active_area = Rect::new(0, 0, 0, 0);
+        assert_eq!(r.clipped_share(), None);
     }
 }

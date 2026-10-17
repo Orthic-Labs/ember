@@ -98,6 +98,10 @@ pub struct SourceInfo {
     /// The raw's own local tone mapping (DNG `ProfileGainTableMap`), rendered only when the
     /// photo's Profile option asks for it ([`local_tone`]).
     pub local_tone: Option<Arc<local_tone::LocalTone>>,
+    /// The raw decoder's exact share (0..=1) of clipped channel samples, counted on the mosaic;
+    /// `None` when the decoder did not count (rendered sources, previews). Auto caps highlight
+    /// recovery with it in place of its own estimate from the proxy ([`auto::AutoHints`]).
+    pub clipped_share: Option<f32>,
 }
 
 impl Default for SourceInfo {
@@ -113,6 +117,7 @@ impl Default for SourceInfo {
             camera_tone: None,
             mattes: None,
             local_tone: None,
+            clipped_share: None,
         }
     }
 }

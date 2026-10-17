@@ -168,7 +168,7 @@ pub fn scene_population_with(src: &Rgb32f, info: &SourceInfo, s: &DevelopSetting
         return None;
     }
     let mut img = lightcraft_raster::resample::fit(src, 512, 512, lightcraft_raster::resample::Filter::Box);
-    let clipped = match hints.clipped_share {
+    let clipped = match hints.clipped_share.or(info.clipped_share) {
         Some(c) if c.is_finite() => c.clamp(0.0, 1.0),
         Some(_) => 0.0,
         None if info.raw => plateau_share(&img),

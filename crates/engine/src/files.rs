@@ -447,6 +447,8 @@ fn load_bytes_now(
         // Embedded lens corrections are applied by the pipeline ("Enable Profile Corrections"), not baked in
         // (removed before the camera look's binned sensor proxy too, which needs an empty `OpcodeList3`).
         let info = raw.info();
+        // the exact clipped share, counted on the mosaic (Auto caps highlight recovery with it)
+        let clipped_share = raw.clipped_share();
         let lens = crate::lens_profiles::for_raw(&info, &bytes, || lightcraft_meta::extract(&bytes));
         raw.opcodes.list3.retain(|op| !op.is_lens_correction());
         // Which scale white balance is edited on, and the as-shot white on it, from the file's own colour tags or
@@ -559,6 +561,7 @@ fn load_bytes_now(
                 camera_tone,
                 mattes,
                 local_tone,
+                clipped_share,
             },
         ));
     }
@@ -1827,6 +1830,30 @@ mod tests {
         let mut dng = crate::tests_xmp::synthetic_dng_with(None, Default::default());
         dng.truncate(dng.len() / 2);
         assert!(load_bytes(&dng, 24).is_err());
+    }
+
+    /// #205: the raw decoder counts the clipped samples on the mosaic and the source carries the
+    /// share, so Auto caps highlight recovery on the exact count.
+    #[test]
+    fn a_decoded_raw_carries_its_exact_clipped_share() {
+        let plain = crate::tests_xmp::synthetic_dng_with(None, Default::default());
+        let mut raw = lightcraft_raw::decode(&plain).unwrap();
+        let white = raw.white_at(0);
+        let (_, info) = load_bytes(&plain, 64).unwrap();
+        let before = info.clipped_share.expect("a raw source is counted");
+        assert!((0.0..=1.0).contains(&before));
+        // clip a sample in four: the share rises by about a quarter of the unclipped part
+        if let lightcraft_raw::RawData::U16(d) = &mut raw.data {
+            for (i, v) in d.iter_mut().enumerate() {
+                if i % 4 == 0 {
+                    *v = white as u16;
+                }
+            }
+        }
+        let clipped = lightcraft_raw::write_dng(&raw, &Default::default()).unwrap();
+        let (_, info) = load_bytes(&clipped, 64).unwrap();
+        let after = info.clipped_share.expect("counted");
+        assert!(after >= before + 0.2 * (1.0 - before) && after <= 1.0, "{before} -> {after}");
     }
 
     /// Issue #138: a DNG's own profile look (hue/saturation map, look table, tone curve) is
