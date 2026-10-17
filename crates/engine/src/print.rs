@@ -5,7 +5,7 @@
 //! independence). A job writes PDF or JPEG only: OS printing needs a platform API this build lacks.
 //! The print job lives with the session; user print templates are saved with the library preferences.
 use crate::Session;
-use crate::book::{self, Rect, font_px, line_height, text_line};
+use crate::book::{self, Rect, font_px, line_height};
 use crate::contact_sheet::{Pdf, blit};
 use crate::export::{SharpenAmount, SharpenFor, encode_image, named_space, output_sharpen};
 use crate::media::RenderJob;
@@ -537,6 +537,14 @@ fn frame(img: &mut Rgba8, r: Rect, width: usize, colour: [u8; 3]) {
     }
 }
 
+/// A line of print text (a band or a caption) `width` × `height` pixels on `base`, set at `size_pt` at
+/// `ppi` through the book's shared shaping: the glyphs keep their size in a strip of any shape, where
+/// the watermark's own sizing would shrink them to half the strip's short edge.
+fn text_strip(width: usize, height: usize, base: [u8; 3], text: &str, size_pt: f64, ppi: f64, align: &str) -> Rgba8 {
+    let s = book::Setting { size_px: font_px(size_pt, ppi), pitch: height, align, color: TEXT_COLOUR };
+    book::fitted_line(width, height, base, text, &s)
+}
+
 /// A line of page text in the margin band, `top` or bottom; nothing is drawn with no margin.
 fn band_text(img: &mut Rgba8, m: &Model, text: &str, band: usize, ppi: f64, top: bool, align: &str) -> Result<(), String> {
     if text.trim().is_empty() || band == 0 || img.width <= 2 * band || img.height < band {
@@ -545,7 +553,7 @@ fn band_text(img: &mut Rgba8, m: &Model, text: &str, band: usize, ppi: f64, top:
     let size = m.page.text_size_pt;
     let lh = line_height(size, ppi, band);
     let y = if top { (band - lh) / 2 } else { img.height - band + (band - lh) / 2 };
-    let line = text_line(img.width - 2 * band, lh, m.page.background, text, font_px(size, ppi), align, TEXT_COLOUR);
+    let line = text_strip(img.width - 2 * band, lh, m.page.background, text, size, ppi, align);
     blit(img, &line, band, y)
 }
 
@@ -700,7 +708,7 @@ impl Prepared {
         }
         if let Some(name) = &c.caption {
             let size = self.model.page.text_size_pt;
-            let line = text_line(c.cell.w, c.strip, self.model.page.background, name, font_px(size, self.ppi), "center", TEXT_COLOUR);
+            let line = text_strip(c.cell.w, c.strip, self.model.page.background, name, size, self.ppi, "center");
             blit(img, &line, c.cell.x, c.cell.y + c.cell.h - c.strip)?;
         }
         Ok(())
@@ -995,5 +1003,36 @@ mod tests {
         assert!(pkg.validate().is_ok());
         assert_eq!(template("Custom Grid").unwrap().layout.cell_width_mm, 80.0);
         assert!(template("poster").is_err());
+    }
+
+    /// The first and last rows of `img` that differ from `base`.
+    fn ink_rows(img: &Rgba8, base: [u8; 3]) -> Option<(usize, usize)> {
+        let ys: Vec<usize> = (0..img.height)
+            .filter(|&y| (0..img.width).any(|x| img.data.get(y * img.width + x).is_some_and(|p| [p[0], p[1], p[2]] != base)))
+            .collect();
+        Some((ys.first().copied()?, ys.last().copied()?))
+    }
+
+    /// The height in pixels of `H` in Inter at `size_px`, as the face outlines it at that size.
+    fn cap_height_px(size_px: f64) -> f64 {
+        use ab_glyph::{Font, PxScale};
+        let fonts = crate::export::watermark_fonts(crate::fonts::CRAFT_FONTS);
+        let Some(latin) = fonts.first() else { return 0.0 };
+        let glyph = latin.glyph_id('H').with_scale(PxScale::from(size_px as f32));
+        latin.outline_glyph(glyph).map_or(0.0, |o| o.px_bounds().height() as f64)
+    }
+
+    #[test]
+    fn a_ten_point_caption_keeps_its_cap_height_through_the_shared_shaping() {
+        let (base, ppi) = ([255, 255, 255], 300.0);
+        // the caption strip as prepare_cell sizes it: one line at the default leading
+        let strip_h = line_height(10.0, ppi, 10_000);
+        let strip = text_strip(600, strip_h, base, "HHHH", 10.0, ppi, "center");
+        let (top, bottom) = ink_rows(&strip, base).expect("the caption drew no ink");
+        let ink = (bottom - top + 1) as f64;
+        // 10 pt at 300 ppi is about 41.7 px; the watermark's old sizing drew it at 0.8 of that
+        let expected = cap_height_px(font_px(10.0, ppi));
+        assert!(expected > 20.0, "{expected}");
+        assert!((ink - expected).abs() <= 3.0, "cap height {ink} px, expected {expected:.1} px");
     }
 }

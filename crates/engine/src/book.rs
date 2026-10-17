@@ -5,7 +5,7 @@
 //! preferences (`prefs.json`), so it reopens with the library.
 use crate::Session;
 use crate::contact_sheet::{Pdf, blit};
-use crate::export::{Anchor, Watermark, draw_watermark, encode_image, watermark_fonts, watermark_text_coverage};
+use crate::export::{Anchor, Watermark, encode_image, watermark_fonts, watermark_text_coverage};
 use crate::slideshow::{self, Fields};
 use lightcraft_catalog::PhotoId;
 use lightcraft_pipeline::{OutputDepth, OutputSpace};
@@ -366,24 +366,6 @@ pub fn cell_rect(settings: &Settings, cell: &Cell, dpi: f64) -> Rect {
 
 fn rgba(c: [u8; 3]) -> [u8; 4] {
     [c[0], c[1], c[2], 255]
-}
-
-/// A line of text `width` × `height` pixels on `base`, `size_px` tall, aligned as `align`.
-pub(crate) fn text_line(width: usize, height: usize, base: [u8; 3], text: &str, size_px: f64, align: &str, color: [u8; 3]) -> Rgba8 {
-    let mut strip = Rgba8::filled(width.max(1), height.max(1), rgba(base));
-    if text.trim().is_empty() {
-        return strip;
-    }
-    let short = width.min(height).max(1) as f64;
-    let anchor = match align {
-        "center" => Anchor::Center,
-        "right" => Anchor::Right,
-        _ => Anchor::Left,
-    };
-    let size = (size_px / short) as f32;
-    let wm = Watermark { text: text.to_string(), size, opacity: 1.0, anchor, inset_x: 0.0, inset_y: 0.0, color, shadow: false, ..Default::default() };
-    draw_watermark(&mut strip, &wm);
-    strip
 }
 
 pub(crate) fn font_px(size_pt: f64, dpi: f64) -> f64 {
