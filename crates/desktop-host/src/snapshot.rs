@@ -287,6 +287,8 @@ pub fn snapshot(
         "selection": selection,
         "source": serde_json::to_value(session.source).unwrap_or(Value::Null),
         "filter": serde_json::to_value(&session.filter).unwrap_or(Value::Null),
+        "browse": session.browse,
+        "libraryFolder": session.library_folder,
         "sort": format!("{:?}", session.sort),
         "commands": commands,
         "controls": controls,

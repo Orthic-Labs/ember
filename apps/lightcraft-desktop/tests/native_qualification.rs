@@ -1086,6 +1086,151 @@ fn assert_active_grid_is_bounded(control: &rightkit_qa::control::Control) {
     assert!(value["loaded"].as_u64().is_some_and(|count| count > 0), "grid must expose decoded WebView pixels: {value}");
 }
 
+fn assert_grid_generation_refresh_retains_preview(control: &rightkit_qa::control::Control, photo_id: u64, expect_scrolled: bool) {
+    let before = snapshot(control);
+    let before_generation = before["viewGeneration"].as_u64().expect("grid refresh baseline generation must be numeric");
+    let before_slice = control
+        .command("lc_view_slice", &json!({"generation": before_generation, "offset": 0, "limit": 512}))
+        .expect("grid refresh baseline slice must reply");
+    let before_photo = before_slice["photos"]
+        .as_array()
+        .and_then(|photos| photos.iter().find(|photo| photo["id"].as_u64() == Some(photo_id)))
+        .expect("selected grid photo must exist in scratch catalog slice");
+    let file_name = before_photo["fileName"].as_str().expect("selected scratch photo filename must be text");
+    wait_for_active_grid_preview(control, file_name, None);
+    let next_rating = if before_photo["rating"].as_u64() == Some(1) { 0 } else { 1 };
+    let key = format!("__lcGridRefreshContinuity_{}", RETAINED_LAYOUT_IDENTITY_NONCE.fetch_add(1, Ordering::Relaxed));
+    let setup = control
+        .eval(&format!(r#"return (() => {{
+            const key = {key:?};
+            const api = window.__TAURI_INTERNALS__;
+            const workspace = document.querySelector('.lc-library-workspace');
+            const cell = document.querySelector('.lc-photo-cell.is-active');
+            const frame = cell?.querySelector('.photo-preview-frame');
+            const image = frame?.querySelector('img.lc-photo-preview');
+            if (!api || typeof api.invoke !== 'function' || !workspace || !cell || !frame || !image || !image.complete || image.naturalWidth < 1) return {{installed:false, reason:'invoke seam or decoded active grid frame missing'}};
+            if (Object.prototype.hasOwnProperty.call(window, key)) return {{installed:false, reason:'probe key collision'}};
+            const scroll = document.querySelector('.lc-grid-scroll');
+            const scrollTop = scroll?.scrollTop ?? 0;
+            const state = {{api, original:api.invoke, workspace, cell, frame, scroll, scrollTop, held:[], targetGeneration:null, targetHeldAt:null, calls:0, targetSamples:0, samples:0, removed:false, frameRemoved:false, gap:false, scrollChanged:false, stopped:false, armed:true}};
+            state.check = () => {{
+                const images = [...frame.querySelectorAll('img.lc-photo-preview')];
+                if (!cell.isConnected || !frame.isConnected || frame.closest('.lc-photo-cell') !== cell || !images.some(img => img.isConnected && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0)) state.gap = true;
+            }};
+            state.observer = new MutationObserver(records => {{
+                for (const record of records) for (const node of record.removedNodes) {{
+                    if (node === cell || node.contains?.(cell)) state.removed = true;
+                    if (node === frame || node.contains?.(frame)) state.frameRemoved = true;
+                }}
+                state.check();
+            }});
+            state.observer.observe(workspace, {{childList:true, subtree:true, attributes:true, attributeFilter:['src']}});
+            api.invoke = function(command, args) {{
+                if (command === 'lc_view_slice' && state.armed) {{
+                    state.calls++;
+                    const generation = args?.generation;
+                    return new Promise((resolve, reject) => {{
+                        state.held.push({{generation, release:() => state.original.call(api, command, args).then(resolve, reject)}});
+                        if (generation === state.targetGeneration && state.targetHeldAt === null) state.targetHeldAt = performance.now();
+                    }});
+                }}
+                return state.original.call(api, command, args);
+            }};
+            state.sample = () => {{
+                if (state.stopped) return;
+                state.samples++;
+                state.check();
+                if (state.held.some(request => request.generation === state.targetGeneration) && state.targetHeldAt !== null) state.targetSamples++;
+                if (scroll && Math.abs(scroll.scrollTop - scrollTop) > 1) state.scrollChanged = true;
+                state.timer = setTimeout(state.sample, 12);
+            }};
+            state.sample(); window[key] = state;
+            return {{installed:true, scrollTop, selectedId:cell.querySelector('.lc-photo-caption span:first-child')?.textContent?.trim() || ''}};
+        }})();"#))
+        .expect("grid generation refresh continuity probe must install");
+    assert_eq!(setup["installed"].as_bool(), Some(true), "grid continuity probe must install: {setup}");
+
+    let mutation = run(control, "photo.rate", json!({"ids": [photo_id], "rating": next_rating}));
+    assert!(mutation.is_object(), "scratch catalog rating mutation must execute: {mutation}");
+    let after = wait_for_snapshot(
+        control,
+        |value| value["viewGeneration"].as_u64().is_some_and(|generation| generation > before_generation),
+        "metadata-only scratch catalog update must advance view generation",
+    );
+    assert_eq!(after["total"], before["total"], "metadata-only grid refresh must preserve total");
+    assert_eq!(after["active"], before["active"], "metadata-only grid refresh must preserve active photo");
+    assert_eq!(after["selection"], before["selection"], "metadata-only grid refresh must preserve selection");
+    let after_generation = after["viewGeneration"].as_u64().expect("updated grid generation must be numeric");
+    control
+        .eval(&format!("return (() => {{ const state=window[{key:?}]; if(!state)return false; state.targetGeneration={after_generation}; if(state.held.some(request=>request.generation===state.targetGeneration)&&state.targetHeldAt===null)state.targetHeldAt=performance.now(); return true; }})();"))
+        .expect("target generation must bind to held-slice probe");
+    let after_slice = control
+        .command("lc_view_slice", &json!({"generation": after_generation, "offset": 0, "limit": 512}))
+        .expect("updated scratch catalog slice must reply");
+    let ids = |slice: &Value| slice["photos"].as_array().map(|photos| photos.iter().map(|photo| photo["id"].clone()).collect::<Vec<_>>());
+    assert_eq!(ids(&after_slice), ids(&before_slice), "metadata-only refresh must preserve visible photo IDs & order");
+    assert!(
+        after_slice["photos"]
+            .as_array()
+            .is_some_and(|photos| photos.iter().any(|photo| photo["id"].as_u64() == Some(photo_id) && photo["rating"].as_u64() == Some(next_rating))),
+        "scratch catalog rating update must be visible in refreshed slice: {after_slice}"
+    );
+
+    let mut held = Value::Null;
+    let hold_deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < hold_deadline {
+        held = control
+            .eval(&format!("return (() => {{ const state=window[{key:?}]; return state ? {{calls:state.calls,targetCalls:state.held.filter(request=>request.generation===state.targetGeneration).length,targetSamples:state.targetSamples,targetHeldAt:state.targetHeldAt,samples:state.samples,gap:state.gap,removed:state.removed}} : null; }})();"))
+            .expect("grid refresh held-slice state must be readable");
+        if held["targetCalls"].as_u64().is_some_and(|calls| calls > 0) && held["targetSamples"].as_u64().is_some_and(|samples| samples >= 4) {
+            break;
+        }
+        sleep(Duration::from_millis(20));
+    }
+    sleep(Duration::from_millis(120));
+    let trace = control
+        .eval(&format!(r#"return (() => {{
+            const key={key:?}, state=window[key];
+            if (!state) return {{cleaned:false}};
+            state.armed=false;
+            state.api.invoke=state.original;
+            state.observer.disconnect(); state.stopped=true; clearTimeout(state.timer);
+            state.check();
+            const images=[...state.frame.querySelectorAll('img.lc-photo-preview')];
+            const result={{calls:state.calls,targetCalls:state.held.filter(request=>request.generation===state.targetGeneration).length,targetSamples:state.targetSamples,targetHeldAt:state.targetHeldAt,targetHoldMs:state.targetHeldAt===null?0:performance.now()-state.targetHeldAt,removed:state.removed,frameRemoved:state.frameRemoved,gap:state.gap,scrollTop:state.scrollTop,scrollChanged:state.scrollChanged,cellConnected:state.cell.isConnected,frameConnected:state.frame.isConnected,activeFrameSame:document.querySelector('.lc-photo-cell.is-active .photo-preview-frame')===state.frame,decodedImages:images.filter(img=>img.isConnected&&img.complete&&img.naturalWidth>0&&img.naturalHeight>0).length}};
+            for (const request of state.held.splice(0)) request.release();
+            delete window[key]; result.cleaned=!Object.prototype.hasOwnProperty.call(window,key); return result;
+        }})();"#))
+        .expect("grid refresh continuity probe must release queued slices");
+    assert_eq!(trace["cleaned"].as_bool(), Some(true), "grid continuity probe must clean up its owned state: {trace}");
+    assert!(
+        held["targetCalls"].as_u64().is_some_and(|calls| calls > 0)
+            && held["targetSamples"].as_u64().is_some_and(|samples| samples >= 4)
+            && held["targetHeldAt"].as_f64().is_some(),
+        "renderer must hold target-generation slice & sample its loading interval within five seconds: {held}"
+    );
+    assert!(trace["targetHeldAt"].as_f64().is_some(), "target-generation slice must remain pending through dwell: {trace}");
+    assert!(
+        trace["targetHoldMs"].as_f64().is_some_and(|duration| duration >= 100.0),
+        "target-generation slice must stay held for a measured 100ms interval: {trace}"
+    );
+    assert_eq!(trace["removed"].as_bool(), Some(false), "active photo cell must not unmount during generation refresh: {trace}");
+    assert_eq!(trace["frameRemoved"].as_bool(), Some(false), "active preview frame must not unmount during generation refresh: {trace}");
+    assert_eq!(trace["gap"].as_bool(), Some(false), "active frame must keep a decoded image mounted through preview lease handoff: {trace}");
+    assert_eq!(trace["cellConnected"].as_bool(), Some(true), "active photo cell identity must remain connected: {trace}");
+    assert_eq!(trace["frameConnected"].as_bool(), Some(true), "active preview frame identity must remain connected: {trace}");
+    assert_eq!(trace["activeFrameSame"].as_bool(), Some(true), "same active preview frame must survive metadata refresh: {trace}");
+    assert!(
+        trace["decodedImages"].as_u64().is_some_and(|count| count > 0),
+        "active frame must contain decoded WebView pixels after release: {trace}"
+    );
+    assert_eq!(trace["scrollChanged"].as_bool(), Some(false), "generation refresh must preserve library scroll position: {trace}");
+    if expect_scrolled {
+        assert!(setup["scrollTop"].as_f64().is_some_and(|top| top > 0.0), "scrolled continuity case must start away from top: {setup}");
+    }
+    wait_for_rendered_preview(control, ".lc-photo-cell.is-active img.lc-photo-preview", None);
+}
+
 fn assert_grid_geometry_retains_focus_and_preview(control: &rightkit_qa::control::Control) {
     let nonce = RETAINED_LAYOUT_IDENTITY_NONCE.fetch_add(1, Ordering::Relaxed);
     let key = format!("__lcGridGeometryIdentity_{nonce}");
@@ -2322,7 +2467,9 @@ fn native_hidden_control_journeys() {
                         assert_eq!(opened_snapshot["libraryPath"].as_str(), Some(library_path.as_str()), "snapshot must expose scalability library path");
                         assert_eq!(opened_snapshot["counts"]["catalog"].as_u64(), Some(fixture_inputs::SCALABILITY_PHOTO_COUNT as u64));
                         assert_eq!(opened_snapshot["total"].as_u64(), Some(fixture_inputs::SCALABILITY_PHOTO_COUNT as u64));
-                        let generation = opened_snapshot["viewGeneration"].as_u64().expect("scalability generation must be numeric");
+                        run(control, "library.sort", json!({"key": "fileName", "ascending": true}));
+                        let grid_baseline = snapshot(control);
+                        let generation = grid_baseline["viewGeneration"].as_u64().expect("scalability generation must be numeric");
                         let first_page = control
                             .command("lc_view_slice", &json!({"generation": generation, "offset": 0, "limit": 4096}))
                             .expect("scalability first page must reply");
@@ -2348,6 +2495,49 @@ fn native_hidden_control_journeys() {
                         assert!(initial["scrollHeight"].as_f64().unwrap_or(0.0) > initial["clientHeight"].as_f64().unwrap_or(0.0), "2048-photo grid must have scrollable height: {initial}");
                         assert_active_grid_is_bounded(control);
                         assert_grid_geometry_retains_focus_and_preview(control);
+                        let grid_style = control
+                            .eval("return document.querySelector('.lc-display-views button[aria-pressed=true]')?.textContent?.trim() || ''; ")
+                            .expect("initial grid style must be queryable");
+                        if grid_style.as_str() != Some("▦ Photo grid") {
+                            click_dom(control, ".lc-display-wrap > button", "grid style menu must open for photo grid qualification");
+                            click_dom(control, ".lc-display-views button:first-child", "photo grid style must be selected");
+                            wait_for_dom(control, "return document.querySelector('.lc-display-views button[aria-pressed=true]')?.textContent?.trim() === '▦ Photo grid';");
+                            control.key("Escape").expect("photo grid style menu dismissal must execute");
+                        }
+                        assert_grid_generation_refresh_retains_preview(control, first_id, false);
+                        control
+                            .eval("return (() => { const scroll=document.querySelector('.lc-grid-scroll'); if (!scroll) return false; scroll.scrollTop=Math.min(600, Math.max(0, scroll.scrollHeight-scroll.clientHeight)); scroll.dispatchEvent(new Event('scroll',{bubbles:true})); return true; })();")
+                            .expect("scrolled grid continuity setup must execute");
+                        wait_for_dom(control, "return (document.querySelector('.lc-grid-scroll')?.scrollTop || 0) > 0;");
+                        wait_for_grid(control, true, None);
+                        let selected_visible = control
+                            .eval("return (() => { const bounds=document.querySelector('.lc-grid-scroll')?.getBoundingClientRect(); const cells=[...document.querySelectorAll('.lc-grid-window .lc-photo-cell')]; const cell=cells.find(e=>{const r=e.getBoundingClientRect();return bounds&&r.bottom>bounds.top&&r.top<bounds.bottom;}); if(!cell)return null; cell.click(); return true; })();")
+                            .expect("scrolled visible photo selection must execute");
+                        assert_eq!(selected_visible.as_bool(), Some(true), "scrolled grid must expose a visible photo cell");
+                        let scrolled_active = wait_for_snapshot(
+                            control,
+                            |value| value["active"].as_u64().is_some_and(|id| id != first_id),
+                            "visible scrolled photo must become active",
+                        )["active"]
+                            .as_u64()
+                            .expect("scrolled active photo id must be numeric");
+                        assert_grid_generation_refresh_retains_preview(control, scrolled_active, true);
+                        click_dom(control, ".lc-display-wrap > button", "grid style menu must open for square grid qualification");
+                        click_dom(control, ".lc-display-views button:nth-child(2)", "square grid style must be selected");
+                        wait_for_dom(control, "return document.querySelector('.lc-display-views button[aria-pressed=true]')?.textContent?.trim() === '□ Square grid';");
+                        control.key("Escape").expect("square grid style menu dismissal must execute");
+                        let square_visible = control
+                            .eval("return (() => { const bounds=document.querySelector('.lc-grid-scroll')?.getBoundingClientRect(); const cells=[...document.querySelectorAll('.lc-grid-window .lc-photo-cell')]; const cell=cells.find(e=>!e.classList.contains('is-active')&&(()=>{const r=e.getBoundingClientRect();return bounds&&r.bottom>bounds.top&&r.top<bounds.bottom;})()); if(!cell)return null; cell.click(); return true; })();")
+                            .expect("square grid visible photo selection must execute");
+                        assert_eq!(square_visible.as_bool(), Some(true), "square grid must expose another visible photo cell");
+                        let square_active = wait_for_snapshot(
+                            control,
+                            |value| value["active"].as_u64().is_some_and(|id| id != scrolled_active),
+                            "visible square-grid photo must become active",
+                        )["active"]
+                            .as_u64()
+                            .expect("square grid active photo id must be numeric");
+                        assert_grid_generation_refresh_retains_preview(control, square_active, true);
                         scroll_grid_to_end(control);
                         let far = wait_for_grid(control, true, Some(initial_name.as_str()));
                         assert!(far["scrollHeight"].as_f64().unwrap_or(0.0) > far["clientHeight"].as_f64().unwrap_or(0.0), "far grid viewport must preserve scrollable height: {far}");

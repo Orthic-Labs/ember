@@ -267,6 +267,7 @@ function VirtualPhotoGrid({ snapshot, mode, thumbSize }: { snapshot: DesktopSnap
   const [viewportWidth, setViewportWidth] = useState(900);
   const [menu, setMenu] = useState<MenuState>(null);
   const pageHeights = useRef(new Map<number, number>());
+  const retainedSlices = useRef(new Map<string, PhotoSummary[]>());
   const [geometryRevision, setGeometryRevision] = useState(0);
   const previousPageAnchor = useRef<{ page: number; top: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -310,13 +311,35 @@ function VirtualPhotoGrid({ snapshot, mode, thumbSize }: { snapshot: DesktopSnap
   const chunkOffset = isJustified ? pageIndex * PAGE : Math.floor((Math.max(0, Math.floor(scrollTop / squareRowHeight) - 2) * columns) / PAGE) * PAGE;
   const chunkStartRow = Math.floor(chunkOffset / columns);
   const slice = usePhotoSlice(chunkOffset, PAGE);
-  const sliceReady = slice.offset === chunkOffset && slice.generation === snapshot.viewGeneration && !slice.loading;
-  const photos = sliceReady ? slice.photos : [];
+  const sliceReady = slice.offset === chunkOffset && slice.generation === snapshot.viewGeneration && !slice.loading && !slice.error;
   const nextPageIndex = Math.min(pageCount - 1, pageIndex + 1);
   const nextChunkOffset = Math.min(snapshot.total, chunkOffset + PAGE);
   const nextSlice = usePhotoSlice(nextChunkOffset, PAGE);
-  const nextSliceReady = nextChunkOffset > chunkOffset && nextSlice.offset === nextChunkOffset && nextSlice.generation === snapshot.viewGeneration && !nextSlice.loading;
-  const nextPhotos = nextSliceReady ? nextSlice.photos : [];
+  const nextSliceReady = nextChunkOffset > chunkOffset && nextSlice.offset === nextChunkOffset && nextSlice.generation === snapshot.viewGeneration && !nextSlice.loading && !nextSlice.error;
+  const contextKey = JSON.stringify([snapshot.libraryPath ?? null, snapshot.source ?? null, snapshot.browse ?? null, snapshot.libraryFolder ?? null, snapshot.filter ?? null, snapshot.sort ?? '', snapshot.total, mode]);
+  const sliceKey = (offset: number) => `${contextKey}:${offset}`;
+  const currentSliceKey = sliceKey(chunkOffset);
+  const nextSliceKey = sliceKey(nextChunkOffset);
+  useEffect(() => {
+    if (sliceReady) {
+      retainedSlices.current.delete(currentSliceKey);
+      retainedSlices.current.set(currentSliceKey, slice.photos);
+    }
+    if (nextSliceReady) {
+      retainedSlices.current.delete(nextSliceKey);
+      retainedSlices.current.set(nextSliceKey, nextSlice.photos);
+    }
+    while (retainedSlices.current.size > 4) {
+      const oldest = retainedSlices.current.keys().next().value;
+      if (oldest === undefined) break;
+      retainedSlices.current.delete(oldest);
+    }
+  }, [currentSliceKey, nextSliceKey, nextSlice.photos, nextSliceReady, slice.photos, sliceReady]);
+  const retainedCurrent = retainedSlices.current.get(currentSliceKey);
+  const retainedNext = retainedSlices.current.get(nextSliceKey);
+  const photos = sliceReady ? slice.photos : retainedCurrent ?? [];
+  const nextCanRender = nextSliceReady || retainedNext !== undefined;
+  const nextPhotos = nextSliceReady ? nextSlice.photos : retainedNext ?? [];
   const selected = new Set(snapshot.selection);
   const active = snapshot.active;
   const flushScrollTop = useCallback(() => {
@@ -376,7 +399,7 @@ function VirtualPhotoGrid({ snapshot, mode, thumbSize }: { snapshot: DesktopSnap
   const aspectRows = useMemo(() => {
     return mode === 'photoGrid' && photos.length ? buildJustifiedRows(photos, gridWidth, thumbSize, gap) : [];
   }, [gap, gridWidth, mode, photos, thumbSize]);
-  const nextAspectRows = useMemo(() => (isJustified && nextSliceReady ? buildJustifiedRows(nextPhotos, gridWidth, thumbSize, gap) : []), [gap, gridWidth, isJustified, nextPhotos, nextSliceReady, thumbSize]);
+  const nextAspectRows = useMemo(() => (isJustified && nextCanRender ? buildJustifiedRows(nextPhotos, gridWidth, thumbSize, gap) : []), [gap, gridWidth, isJustified, nextCanRender, nextPhotos, thumbSize]);
   const aspectRowLayout = useMemo(() => layoutJustifiedRows(aspectRows, gap), [aspectRows, gap]);
   const nextAspectRowLayout = useMemo(() => layoutJustifiedRows(nextAspectRows, gap), [gap, nextAspectRows]);
   const rowOverscan = Math.max(72, Math.min(viewportHeight * 0.75, rowHeight * 1.5));
@@ -439,7 +462,7 @@ function VirtualPhotoGrid({ snapshot, mode, thumbSize }: { snapshot: DesktopSnap
       setScrollTop(0);
     }
     setGeometryRevision((value) => value + 1);
-  }, [isJustified, snapshot.viewGeneration]);
+  }, [contextKey, isJustified]);
   useEffect(() => {
     if (!isJustified) return;
     pageHeights.current.clear();
@@ -458,11 +481,11 @@ function VirtualPhotoGrid({ snapshot, mode, thumbSize }: { snapshot: DesktopSnap
     setGeometryRevision((value) => value + 1);
   }, [estimatedPageHeight, isJustified, measuredPageHeight, pageIndex, pageHeights, photos.length, sliceReady]);
   const nextMeasuredPageHeight = useMemo(() => {
-    if (!nextSliceReady || !nextAspectRows.length) return null;
+    if (!nextCanRender || !nextAspectRows.length) return null;
     return nextAspectRows.reduce((height, row) => height + row.height, 0) + Math.max(0, nextAspectRows.length - 1) * gap;
-  }, [gap, nextAspectRows, nextSliceReady]);
+  }, [gap, nextAspectRows, nextCanRender]);
   useEffect(() => {
-    if (!nextSliceReady || nextMeasuredPageHeight === null || !nextPhotos.length) return;
+    if (!nextCanRender || nextMeasuredPageHeight === null || !nextPhotos.length) return;
     const nextHeight = boundedPageHeight(nextMeasuredPageHeight, estimatedPageHeight);
     if (pageHeights.current.get(nextPageIndex) === nextHeight) return;
     pageHeights.current.set(nextPageIndex, nextHeight);
@@ -472,7 +495,7 @@ function VirtualPhotoGrid({ snapshot, mode, thumbSize }: { snapshot: DesktopSnap
       pageHeights.current.delete(oldest);
     }
     setGeometryRevision((value) => value + 1);
-  }, [estimatedPageHeight, nextMeasuredPageHeight, nextPageIndex, nextPhotos.length, nextSliceReady, pageHeights]);
+  }, [estimatedPageHeight, nextCanRender, nextMeasuredPageHeight, nextPageIndex, nextPhotos.length, pageHeights]);
   const currentPageTop = useMemo(() => (isJustified ? pageStart(pageIndex) : chunkStartRow * squareRowHeight), [chunkStartRow, geometryRevision, isJustified, pageIndex, squareRowHeight]);
   const currentVisibleRows = useMemo(() => visibleJustifiedRows(aspectRowLayout, scrollTop - currentPageTop, scrollTop - currentPageTop + viewportHeight, rowOverscan), [aspectRowLayout, currentPageTop, rowOverscan, scrollTop, viewportHeight]);
   const nextPageTop = pageStart(nextPageIndex);
@@ -481,7 +504,7 @@ function VirtualPhotoGrid({ snapshot, mode, thumbSize }: { snapshot: DesktopSnap
   const squareViewportEndRow = Math.ceil((scrollTop + viewportHeight) / squareRowHeight) + 2;
   const squareStartIndex = Math.max(chunkOffset, squareViewportStartRow * columns);
   const squareEndIndex = Math.min(snapshot.total, (squareViewportEndRow + 1) * columns);
-  const squareLoadedPhotos = sliceReady ? (nextSliceReady ? [...photos, ...nextPhotos] : photos) : [];
+  const squareLoadedPhotos = photos.length ? (nextCanRender ? [...photos, ...nextPhotos] : photos) : [];
   const squareLoadedEnd = Math.min(snapshot.total, chunkOffset + squareLoadedPhotos.length);
   const squareRenderStart = Math.min(squareLoadedEnd, squareStartIndex);
   const squareRenderEnd = Math.min(squareLoadedEnd, squareEndIndex);
@@ -506,7 +529,7 @@ function VirtualPhotoGrid({ snapshot, mode, thumbSize }: { snapshot: DesktopSnap
   const totalHeight = isJustified
     ? Math.max(viewportHeight, pageCount * estimatedPageHeight + Math.max(0, pageCount - 1) * gap + Array.from(pageHeights.current.values()).reduce((delta, height) => delta + height - estimatedPageHeight, 0) + 24)
     : Math.max(viewportHeight, rows * squareRowHeight + 24);
-  const showNextPage = isJustified && nextSliceReady && scrollTop + viewportHeight >= currentPageTop + pageHeight(pageIndex) - rowHeight * 2;
+  const showNextPage = isJustified && nextCanRender && scrollTop + viewportHeight >= currentPageTop + pageHeight(pageIndex) - rowHeight * 2;
   // Refresh geometry-only DOM when hidden WebKit keeps stale inline layout.
   // Photo content retains identity; scroll container & interaction state stay mounted.
   const spacerGeometryKey = `${geometrySignature}:${viewportHeight}:${totalHeight}`;
