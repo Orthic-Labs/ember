@@ -1,3 +1,4 @@
+import { applyThemeAttribute, prefersDark } from '@rightkit/theme';
 import { getPreferences } from './api';
 
 export type ThemeChoice = 'light' | 'dark' | 'system';
@@ -13,7 +14,8 @@ export function bootTheme(): ThemeChoice {
 /**
  * Reads the saved theme and sets `data-theme` before React renders, so a restart in dark mode
  * never paints light first. Bounded and best effort: on a slow or failed read the app starts
- * with the system theme and hydrates the saved one as before.
+ * with the system theme and hydrates the saved one as before. The system query and the attribute
+ * write come from `@rightkit/theme`, the same runtime the shell's theme store follows afterwards.
  */
 export async function applyBootTheme(): Promise<void> {
   try {
@@ -25,6 +27,5 @@ export async function applyBootTheme(): Promise<void> {
   } catch {
     // Preferences unavailable: keep the system theme.
   }
-  const dark = choice === 'dark' || (choice === 'system' && window.matchMedia?.('(prefers-color-scheme: dark)').matches === true);
-  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  applyThemeAttribute(choice === 'dark' || (choice === 'system' && prefersDark()) ? 'dark' : 'light');
 }
