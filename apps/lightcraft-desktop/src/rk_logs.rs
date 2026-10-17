@@ -5,6 +5,12 @@
 //! Records below `warn` are kept only for Ember's own targets (`lightcraft*`), so debug output stays out of the
 //! file. The owner's built-in redaction always applies to the diagnostics bundle and to web events.
 
+// tauri-macros 2.7.1 emits a sibling `const _: () = if false { ... unreachable!() ... }` for async Result
+// commands (`rightkit_logs_collect`, `rightkit_logs_clear`). The branch cannot run, and the const is a sibling of
+// the function, so an attribute on the function would not reach it: the allowance is scoped to this module, which
+// holds no other `unreachable!`, and it keeps the command paths the owner wires in `native.rs`.
+#![allow(clippy::unreachable)]
+
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};

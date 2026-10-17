@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use rightkit_app_settings::{Error as StoreError, FileFormat, OnRefused, Schema, Store, StoreOptions};
+use rightkit_app_settings::{Error as StoreError, FileFormat, Schema, Store, StoreOptions};
 use serde_json::{Map, Value};
 
 const MAX_BYTES: usize = 4 * 1024 * 1024;
@@ -32,8 +32,8 @@ pub struct Preferences {
 }
 
 struct State {
-    /// `None` while the file could not be opened at all (unreadable, not merely missing or
-    /// corrupt): the app runs on defaults and every save is refused.
+    /// `None` while the file could not be opened at all (unreadable, oversized or from a newer schema, not
+    /// merely missing or corrupt): the app runs on defaults and every save is refused.
     store: Option<Store<PrefMap>>,
     path: PathBuf,
     warning: Option<String>,
@@ -44,7 +44,6 @@ fn store_options() -> StoreOptions {
         .format(FileFormat::Flat)
         .trailing_newline(true)
         .max_bytes(MAX_BYTES as u64)
-        .on_refused(OnRefused::ReadOnlyDefaults)
 }
 
 fn open_store(path: &Path) -> Result<Store<PrefMap>, StoreError> {
@@ -81,7 +80,9 @@ impl Preferences {
         let store = match open_store(&path) {
             Ok(store) => Some(store),
             Err(error) => {
-                warning = Some(format!("preferences could not be opened: {error}"));
+                // An oversized or newer-schema file makes `open_path` fail and leaves the file untouched; keep
+                // the more specific reason `diagnose` found, if any.
+                warning.get_or_insert_with(|| format!("preferences could not be opened: {error}"));
                 None
             }
         };
@@ -105,9 +106,6 @@ impl Preferences {
         let state = self.inner.lock().map_err(|_| "preferences lock poisoned".to_string())?;
         let blocked = || state.warning.clone().unwrap_or_else(|| "preferences file is blocked for this session".into());
         let Some(store) = state.store.as_ref() else { return Err(blocked()) };
-        if !store.writable() {
-            return Err(blocked());
-        }
         let mut too_large = false;
         let result = store.update(|current| {
             merge_object(current, values);

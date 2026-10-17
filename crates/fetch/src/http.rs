@@ -335,7 +335,6 @@ fn client_config(user_agent: Option<String>, limits: &Limits) -> ClientConfig {
     config.user_agent = user_agent.unwrap_or_else(|| format!("Ember/{}", env!("CARGO_PKG_VERSION")));
     config.connect_timeout = Some(limits.connect);
     config.response_timeout = Some(limits.stall);
-    config.idle_timeout = Some(limits.stall);
     config.retry = RetryPolicy::none();
     config.max_redirects = 0;
     config

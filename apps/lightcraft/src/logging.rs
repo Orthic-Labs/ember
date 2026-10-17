@@ -1,7 +1,8 @@
 //! The desktop app's logger: `log::` records go to standard error and to a log file.
 //!
-//! The file sink is `rightkit-logs` ([`rightkit_logs::RotatingTextWriter`], M15 `rightkit-logs`): rotation, the
-//! generation names and the failure counts are the owner's. A launch from a desktop menu or the Dock has no
+//! The file sink is `rightkit-logs` ([`rightkit_logs::RotatingTextWriter`], M15 `rightkit-logs`): size rotation and
+//! the failure counts are the owner's; the start-of-run rotation and the `lightcraft.N.log` names are Ember's (0.3.0
+//! has neither). A launch from a desktop menu or the Dock has no
 //! terminal, so the file is what a bug report can attach: `<settings folder>/logs/lightcraft.log`, next to
 //! `ui.json` (`config_dir` in `main.rs`; Linux `$XDG_CONFIG_HOME/lightcraft/logs`, by default
 //! `~/.config/lightcraft/logs`). Never in the library folder. Each start moves the previous log to
@@ -29,7 +30,7 @@ use std::sync::{Mutex, OnceLock, PoisonError, TryLockError};
 use std::time::SystemTime;
 
 use log::LevelFilter;
-use rightkit_logs::{RotatedNaming, RotatingTextWriter};
+use rightkit_logs::RotatingTextWriter;
 
 /// The current log file's name inside the log folder.
 pub const LOG_FILE: &str = "lightcraft.log";
@@ -214,13 +215,41 @@ impl Sink {
     }
 }
 
+/// The name of generation `n` of the log: `lightcraft.<n>.log`.
+fn generation_path(dir: &Path, n: u32) -> PathBuf {
+    let stem = LOG_FILE.strip_suffix(".log").unwrap_or(LOG_FILE);
+    dir.join(format!("{stem}.{n}.log"))
+}
+
+/// Move the previous log into `lightcraft.1.log`, older generations up one, and drop the oldest beyond
+/// [`KEEP`]. `rightkit-logs` 0.3.0 names generations `lightcraft.log.N` and has no rotate-on-open, so the
+/// start-of-run rotation and its `lightcraft.N.log` names are Ember's; the owner's writer keeps rolling by
+/// size during a run.
+fn rotate_on_open(dir: &Path) -> std::io::Result<()> {
+    let current = dir.join(LOG_FILE);
+    if !current.exists() {
+        return Ok(());
+    }
+    let oldest = generation_path(dir, KEEP);
+    if oldest.exists() {
+        std::fs::remove_file(&oldest)?;
+    }
+    for n in (1..KEEP).rev() {
+        let from = generation_path(dir, n);
+        if from.exists() {
+            std::fs::rename(&from, generation_path(dir, n + 1))?;
+        }
+    }
+    std::fs::rename(&current, generation_path(dir, 1))
+}
+
 /// Open a fresh log in `dir` (created if missing): the previous `lightcraft.log` rolls into `lightcraft.1.log`,
 /// older generations shift up, and the oldest beyond [`KEEP`] is dropped. An error leaves nothing open.
 pub fn open_log(dir: &Path) -> std::io::Result<(PathBuf, RotatingTextWriter)> {
     std::fs::create_dir_all(dir)?;
     let path = dir.join(LOG_FILE);
-    let writer = RotatingTextWriter::new(path.clone(), MAX_FILE_BYTES).with_generations(KEEP).with_naming(RotatedNaming::StemNumbered);
-    writer.rotate_now()?;
+    rotate_on_open(dir)?;
+    let writer = RotatingTextWriter::new(path.clone(), MAX_FILE_BYTES).with_generations(KEEP);
     Ok((path, writer))
 }
 

@@ -156,7 +156,7 @@ pub fn parse_npy_u16(bytes: &[u8]) -> Result<(Vec<u16>, usize, usize)> {
     if body.len() != count * 2 {
         return data(format!("npy: {} data bytes, shape needs {}", body.len(), count * 2));
     }
-    let samples = body.chunks_exact(2).filter_map(|c| <[u8; 2]>::try_from(c).ok().map(u16::from_le_bytes)).collect();
+    let samples = body.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).collect();
     Ok((samples, height, width))
 }
 

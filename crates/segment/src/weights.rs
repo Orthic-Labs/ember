@@ -47,9 +47,12 @@ impl Weights {
             if name == "__metadata__" {
                 continue;
             }
-            let dtype = match v.get("dtype").and_then(|d| d.as_str()) {
-                Some("F32") => DType::F32,
-                other => return Err(Error::Model(format!("{name}: unsupported dtype {other:?} (the SAM 3 checkpoint is F32)"))),
+            // BatchNorm bookkeeping (`...bn.num_batches_tracked`, I64) is never read by inference: it is checked
+            // like any tensor below but not kept. Every other tensor must be F32.
+            let (dtype, keep) = match v.get("dtype").and_then(|d| d.as_str()) {
+                Some("F32") => (DType::F32, true),
+                Some("I64") if name.ends_with("num_batches_tracked") => (DType::I64, false),
+                other => return Err(Error::Model(format!("{name}: unsupported dtype {other:?} (the checkpoints are F32)"))),
             };
             let shape: Vec<usize> = v
                 .get("shape")
@@ -67,7 +70,9 @@ impl Weights {
             if (8 + n).checked_add(end).is_none_or(|e| e > file_len) {
                 return Err(Error::Model(format!("{}: tensor {name} lies outside the file (incomplete or damaged download?)", path.display())));
             }
-            entries.insert(name, Entry { shape, start, end });
+            if keep {
+                entries.insert(name, Entry { shape, start, end });
+            }
         }
         Ok(Arc::new(Self { file: Mutex::new(file), entries, data_start: 8 + n }))
     }
@@ -165,6 +170,27 @@ mod tests {
         std::fs::write(&p, 1000u64.to_le_bytes()).unwrap();
         assert!(Weights::open(&p).is_err());
         for f in [ok, short, huge, wrap, p] {
+            let _ = std::fs::remove_file(f);
+        }
+    }
+
+    #[test]
+    fn batchnorm_counters_are_skipped_and_other_non_f32_tensors_are_refused() {
+        // 16 bytes of F32 for `a`, then 8 bytes of I64 for the counter
+        let header = r#"{"a":{"dtype":"F32","shape":[2,2],"data_offsets":[0,16]},"bn.num_batches_tracked":{"dtype":"I64","shape":[],"data_offsets":[16,24]}}"#;
+        let p = write("bn", header, 24);
+        let w = Weights::open(&p).unwrap();
+        assert!(w.contains("a") && !w.contains("bn.num_batches_tracked"));
+        assert_eq!(w.read("a").unwrap().dims(), &[2, 2]);
+        // the skipped entry still gets the offset and size checks
+        let bad_size = write("bn-size", r#"{"bn.num_batches_tracked":{"dtype":"I64","shape":[],"data_offsets":[0,4]}}"#, 8);
+        assert!(Weights::open(&bad_size).err().unwrap().to_string().contains("size does not match"));
+        let outside = write("bn-out", r#"{"bn.num_batches_tracked":{"dtype":"I64","shape":[],"data_offsets":[0,8]}}"#, 4);
+        assert!(Weights::open(&outside).err().unwrap().to_string().contains("outside the file"));
+        // any other I64 tensor is still unsupported
+        let other = write("i64", r#"{"ids":{"dtype":"I64","shape":[],"data_offsets":[0,8]}}"#, 8);
+        assert!(Weights::open(&other).err().unwrap().to_string().contains("unsupported dtype"));
+        for f in [p, bad_size, outside, other] {
             let _ = std::fs::remove_file(f);
         }
     }
