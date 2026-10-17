@@ -11,18 +11,48 @@ importers:
       '@rightkit/app-update':
         specifier: 0.2.5
         version: 0.2.5
+      '@rightkit/i18n':
+        specifier: 0.1.0
+        version: 0.1.0(react@19.3.1)
+      '@rightkit/legal-ui':
+        specifier: 0.2.2
+        version: 0.2.2(react@19.3.1)
+      '@rightkit/license':
+        specifier: 0.2.0
+        version: 0.2.0(@tauri-apps/plugin-http@2.8.3)
+      '@rightkit/logs':
+        specifier: 0.1.4
+        version: 0.1.4
+      '@rightkit/onboarding':
+        specifier: 0.3.3
+        version: 0.3.3(@rightkit/legal-ui@0.2.2(react@19.3.1))(@rightkit/react-shell@0.6.5(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.1))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)
       '@rightkit/platform-ui':
         specifier: 0.2.8
         version: 0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.1)
       '@rightkit/react-shell':
         specifier: 0.6.5
         version: 0.6.5(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.1))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@rightkit/settings-ui':
+        specifier: 0.4.4
+        version: 0.4.4(@rightkit/app-update@0.2.5)(@rightkit/license@0.2.0(@tauri-apps/plugin-http@2.8.3))(@rightkit/logs@0.1.4)(@rightkit/react-shell@0.6.5(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.1))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@rightkit/theme@0.2.3)(react@19.3.1)
+      '@rightkit/tauri':
+        specifier: 0.2.0
+        version: 0.2.0(@rightkit/updates@0.2.5)
       '@rightkit/tauri-shell':
         specifier: 0.1.1
         version: 0.1.1
+      '@rightkit/theme':
+        specifier: 0.2.3
+        version: 0.2.3
       '@tauri-apps/api':
         specifier: 2.12.4
         version: 2.12.4
+      '@tauri-apps/plugin-http':
+        specifier: 2.8.3
+        version: 2.8.3
+      '@tauri-apps/plugin-updater':
+        specifier: 2.14.0
+        version: 2.14.0
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -33,15 +63,15 @@ importers:
       '@rightkit/ci':
         specifier: 0.2.45
         version: 0.2.45
+      '@rightkit/qa':
+        specifier: 0.4.8
+        version: 0.4.8
       '@rightkit/qa-chrome':
         specifier: 0.1.6
         version: 0.1.6
       '@rightkit/release':
         specifier: 0.2.162
         version: 0.2.162
-      '@rightkit/theme':
-        specifier: 0.2.3
-        version: 0.2.3
       '@tauri-apps/cli':
         specifier: 2.12.3
         version: 2.12.3
@@ -73,6 +103,34 @@ packages:
     resolution: {integrity: sha512-IJyZYLo3qKGHZjjtPQm7TcF1gA51XtQTw3iLGU7NOU14c7SQhVPVT4GqvwNCMcod45oOU26EZLhPCc3118Unsw==}
     hasBin: true
 
+  '@rightkit/i18n@0.1.0':
+    resolution: {integrity: sha512-tTpGYud+r6C0y8oSE+KrCTYhKKYJWL6XEz6ecL7A78lqfewicBtPYQiIw/3zSccuKW7uUmUdU5LludQEmNz2pA==}
+    peerDependencies:
+      react: '>=18 <21'
+
+  '@rightkit/legal-ui@0.2.2':
+    resolution: {integrity: sha512-oVW6n4iUa9/duKJq0zICOVoxO9xb1amFLhrFjmXSBk1m7QR/5ogbsZV1f6soARkrpEC1W1BqTGfHwVSpaIbZrg==}
+    peerDependencies:
+      react: '>=18 <21'
+
+  '@rightkit/license@0.2.0':
+    resolution: {integrity: sha512-rAPeSiETQQdryUPEGTzJ63Bpj25dqa4v5kh0LHOP1EYo0yB4Uk5b93SxBHeGGDERq9f+EHChuQL1Eyk5dn8QjQ==}
+    peerDependencies:
+      '@tauri-apps/plugin-http': ^2
+    peerDependenciesMeta:
+      '@tauri-apps/plugin-http':
+        optional: true
+
+  '@rightkit/logs@0.1.4':
+    resolution: {integrity: sha512-nw2QTJLmB4lLZMkD2e6bLhU5Mr+iISNubf9Ht67qEDGjJgzY0Ddldqqr/wVBfyHlNxDMJPJjnJyFSLXJy3UKdg==}
+
+  '@rightkit/onboarding@0.3.3':
+    resolution: {integrity: sha512-28y5iqRJd5TLQRPrvL8rMDLMZ+OR6XHqZDm3CVoH1i0jzDJt1rGLFv/AbjW97foKa0CJPLpfu5fAjX8wzIWUOA==}
+    peerDependencies:
+      '@rightkit/legal-ui': '>=0.1.2 <1'
+      '@rightkit/react-shell': '>=0.2.0 <1'
+      react: '>=18 <21'
+
   '@rightkit/platform-ui@0.2.8':
     resolution: {integrity: sha512-gVzP23HVi6C8bl9Af9G5QlWUqhMxw5MrnxkvwnBi8ohJZm7MucHDQCof62i5vVSXecYgJvvhmi/29jA5q7sZPw==}
     peerDependencies:
@@ -85,6 +143,9 @@ packages:
   '@rightkit/qa-chrome@0.1.6':
     resolution: {integrity: sha512-eNjtSwBFEDRr7yPb0jzFytvPP/pvH0gvwEhxa6f2+KeF102mCXZ3L/9dux7nU+qagmpKi48wswI3+soFzvZtcA==}
     hasBin: true
+
+  '@rightkit/qa@0.4.8':
+    resolution: {integrity: sha512-/69inrQQG4a2IDbgNMGbUXEMRq3hBmrVOELqChxAYBAdqWn8xRRpBGGjmsnXll1U3kAnqm2xsrglA9y+hxnvgg==}
 
   '@rightkit/react-shell@0.6.5':
     resolution: {integrity: sha512-HD75IRMDfRRJONkoNk4cBmUz0l8ggCx8FRn0Bz6e+JlnmhLxVFyRZJ2FYrZ3H7T4nW6zEkUQRDtyG9aGYW2psw==}
@@ -101,12 +162,35 @@ packages:
     resolution: {integrity: sha512-u3QHraj6vBZGWS/ntToMBRqB2bj9VY1u4MPGkDjn5VLytw1aAFkLd0dv8rkhWtvolSw4DWRWdbAWQsXA6ceKWQ==}
     hasBin: true
 
+  '@rightkit/settings-ui@0.4.4':
+    resolution: {integrity: sha512-/VuxMNrnpq6ZjwDE7wc8EXI2KyiJu5UHFIINGLo+9TRS2ivSQO08wb+cOU/L9FEedQhWHJ4LzlujFnaiQib6Yw==}
+    peerDependencies:
+      '@rightkit/app-update': '>=0.2.0'
+      '@rightkit/license': '>=0.1.0'
+      '@rightkit/logs': '>=0.1.0'
+      '@rightkit/react-shell': '>=0.2.0 <1'
+      '@rightkit/theme': '>=0.2.0 <1'
+      react: '>=18 <21'
+    peerDependenciesMeta:
+      '@rightkit/app-update':
+        optional: true
+      '@rightkit/logs':
+        optional: true
+
   '@rightkit/tauri-shell@0.1.1':
     resolution: {integrity: sha512-pvneSdd+9zvT+Mw2nG1lOXqTkaZszEj9Y0hjqUC78EaLADlqmEMLL7CSK+A5syAR94P0UbBCqVEAOd5iOObR6g==}
+
+  '@rightkit/tauri@0.2.0':
+    resolution: {integrity: sha512-s6V45XyXmUeNBYk1ZL/nyu8CvdPaM/T8nFfqAP9Ad4RJiJTmAjBwfOCJ2I4mnB9CMkEQ+tuky41UhWNvQ9NOWw==}
+    peerDependencies:
+      '@rightkit/updates': ^0.2.5
 
   '@rightkit/theme@0.2.3':
     resolution: {integrity: sha512-ABg4Xd1q625uMew/xPqKxwWf/gs0jBecKRu/3gScvMvc+Y0Aa13mvuLnSpIZMSCRmwbV3U8Q6DQOa9hVAQRYtQ==}
     hasBin: true
+
+  '@rightkit/updates@0.2.5':
+    resolution: {integrity: sha512-/5USpBLOYF3mFYqsbhc8NFtK0wRAgIKtfDBP3T8T8A3FXQVHO+B3R9rnsYLmL9PMOCesuXQRszSmH9Njm0ie6A==}
 
   '@rolldown/binding-android-arm-eabi@1.2.14':
     resolution: {integrity: sha512-aWR+XKH9+rW7m5fWq/5360J3mHycrx/o6xZM2DQFdJnTMdyP7/WzxPjhtLbVWdKo2y612/4U1bWqb3HQhiF7vg==}
@@ -286,8 +370,14 @@ packages:
     engines: {node: '>= 10'}
     hasBin: true
 
+  '@tauri-apps/plugin-http@2.8.3':
+    resolution: {integrity: sha512-MrgCnnxSnzxkMX+Tk1XXB8rSI9hfhUHQmtbn0EpflEDcSx04K1BDfrv51tcK27SCuU/B1j8sNHL0UZur/1iqKA==}
+
   '@tauri-apps/plugin-os@2.4.0':
     resolution: {integrity: sha512-XFQjntNNI3Vlqdy4WUGwiXX8DByzKVvoemAcUVkBm9NJPGmoDtII5i+vfuAzWaJfOE5cUJJLUDqXBnd4reSAIA==}
+
+  '@tauri-apps/plugin-updater@2.14.0':
+    resolution: {integrity: sha512-gdylJ9tger4hkyOn24QZd6MNOKVo2Eh53iw5th2Qj1vKTR/+u4PIwJWuiis5hohYvobn6iOvlnALfrqIPSzh7Q==}
 
   '@types/react-dom@19.3.0':
     resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
@@ -509,6 +599,26 @@ snapshots:
 
   '@rightkit/ci@0.2.45': {}
 
+  '@rightkit/i18n@0.1.0(react@19.3.1)':
+    dependencies:
+      react: 19.3.1
+
+  '@rightkit/legal-ui@0.2.2(react@19.3.1)':
+    dependencies:
+      react: 19.3.1
+
+  '@rightkit/license@0.2.0(@tauri-apps/plugin-http@2.8.3)':
+    optionalDependencies:
+      '@tauri-apps/plugin-http': 2.8.3
+
+  '@rightkit/logs@0.1.4': {}
+
+  '@rightkit/onboarding@0.3.3(@rightkit/legal-ui@0.2.2(react@19.3.1))(@rightkit/react-shell@0.6.5(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.1))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      '@rightkit/legal-ui': 0.2.2(react@19.3.1)
+      '@rightkit/react-shell': 0.6.5(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.1))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      react: 19.3.1
+
   '@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.1)':
     dependencies:
       react: 19.3.1
@@ -516,6 +626,10 @@ snapshots:
       '@tauri-apps/plugin-os': 2.4.0
 
   '@rightkit/qa-chrome@0.1.6': {}
+
+  '@rightkit/qa@0.4.8':
+    dependencies:
+      '@rightkit/qa-chrome': 0.1.6
 
   '@rightkit/react-shell@0.6.5(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.1))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
@@ -529,9 +643,26 @@ snapshots:
     dependencies:
       smol-toml: 1.9.0
 
+  '@rightkit/settings-ui@0.4.4(@rightkit/app-update@0.2.5)(@rightkit/license@0.2.0(@tauri-apps/plugin-http@2.8.3))(@rightkit/logs@0.1.4)(@rightkit/react-shell@0.6.5(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.1))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@rightkit/theme@0.2.3)(react@19.3.1)':
+    dependencies:
+      '@rightkit/license': 0.2.0(@tauri-apps/plugin-http@2.8.3)
+      '@rightkit/react-shell': 0.6.5(@rightkit/platform-ui@0.2.8(@tauri-apps/plugin-os@2.4.0)(react@19.3.1))(@tauri-apps/plugin-os@2.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@rightkit/theme': 0.2.3
+      react: 19.3.1
+    optionalDependencies:
+      '@rightkit/app-update': 0.2.5
+      '@rightkit/logs': 0.1.4
+
   '@rightkit/tauri-shell@0.1.1': {}
 
+  '@rightkit/tauri@0.2.0(@rightkit/updates@0.2.5)':
+    dependencies:
+      '@rightkit/logs': 0.1.4
+      '@rightkit/updates': 0.2.5
+
   '@rightkit/theme@0.2.3': {}
+
+  '@rightkit/updates@0.2.5': {}
 
   '@rolldown/binding-android-arm-eabi@1.2.14':
     optional: true
@@ -629,10 +760,18 @@ snapshots:
       '@tauri-apps/cli-win32-ia32-msvc': 2.12.3
       '@tauri-apps/cli-win32-x64-msvc': 2.12.3
 
+  '@tauri-apps/plugin-http@2.8.3':
+    dependencies:
+      '@tauri-apps/api': 2.12.4
+
   '@tauri-apps/plugin-os@2.4.0':
     dependencies:
       '@tauri-apps/api': 2.12.4
     optional: true
+
+  '@tauri-apps/plugin-updater@2.14.0':
+    dependencies:
+      '@tauri-apps/api': 2.12.4
 
   '@types/react-dom@19.3.0(@types/react@19.3.0)':
     dependencies:
