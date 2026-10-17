@@ -388,8 +388,10 @@ mod tests {
     /// applied to computes the mask with its own geometry stamp. Pixel brush masks are left out.
     #[test]
     fn adaptive_preset_keeps_semantic_masks_and_stamps_each_photo() {
-        let mut a = DevelopSettings::default();
-        a.masks = vec![local_mask(MaskShape::Subject, "Subject"), local_mask(MaskShape::Brush { strokes: Vec::new() }, "Brush")];
+        let a = DevelopSettings {
+            masks: vec![local_mask(MaskShape::Subject, "Subject"), local_mask(MaskShape::Brush { strokes: Vec::new() }, "Brush")],
+            ..Default::default()
+        };
         let (p, dropped) = Preset::from_settings_counted("p", "Adaptive", "User", &a, &[SettingsGroup::Masks]);
         assert!(p.adaptive && p.is_adaptive());
         assert_eq!(dropped, 1, "the brush mask holds one photo's pixels and is not saved");
@@ -424,8 +426,7 @@ mod tests {
         assert!(matches!(out.masks[0].components[0].shape, MaskShape::Brush { .. }), "a pixel mask stays a pixel mask");
         assert_eq!(out.light.exposure, 1.0);
 
-        let mut a = DevelopSettings::default();
-        a.masks = vec![local_mask(MaskShape::Brush { strokes: Vec::new() }, "Brush")];
+        let a = DevelopSettings { masks: vec![local_mask(MaskShape::Brush { strokes: Vec::new() }, "Brush")], ..Default::default() };
         let (plain, dropped) = Preset::from_settings_counted("q", "Plain", "User", &a, &[SettingsGroup::Masks]);
         assert_eq!(dropped, 0);
         assert!(!plain.adaptive, "a pixel-only preset is not adaptive");
