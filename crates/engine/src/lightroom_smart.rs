@@ -119,9 +119,9 @@ fn criterion(item: &Lua, why: &mut Vec<String>) -> Option<Rule> {
         }
         "pick" => {
             let choice = match num(v1) {
-                Some(n) if n == 1.0 => "pick",
-                Some(n) if n == -1.0 => "reject",
-                Some(n) if n == 0.0 => "none",
+                Some(1.0) => "pick",
+                Some(-1.0) => "reject",
+                Some(0.0) => "none",
                 _ => return unmapped(),
             };
             match op {

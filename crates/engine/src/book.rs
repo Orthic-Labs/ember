@@ -403,7 +403,7 @@ pub(crate) fn fitted_line(width: usize, height: usize, base: [u8; 3], text: &str
 /// canvas it is given, so a strip shorter than twice the text would shrink the glyphs.
 fn draw_fitted(strip: &mut Rgba8, text: &str, s: &Setting<'_>) {
     let (w, h) = (strip.width, strip.height);
-    if text.trim().is_empty() || w == 0 || h == 0 || !(s.size_px > 0.0) {
+    if text.trim().is_empty() || w == 0 || h == 0 || s.size_px.is_nan() || s.size_px <= 0.0 {
         return;
     }
     let pad = s.size_px.ceil().max(1.0) as usize;
@@ -785,7 +785,8 @@ mod tests {
         assert!(cjk.len() >= 2, "{cjk:?}");
         assert_eq!(cjk.concat(), "漢字かな交じり文");
         // a block holds only the lines that fit its height
-        let s = setting(&Typography::default(), 150.0);
+        let typography = Typography::default();
+        let s = setting(&typography, 150.0);
         let block = text_block(300, 100, [255; 3], &"word ".repeat(60), &s).unwrap();
         assert!(block.height > 0 && block.height <= 100, "{}", block.height);
         assert_eq!(block.height % s.pitch, 0);
