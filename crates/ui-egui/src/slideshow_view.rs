@@ -293,7 +293,7 @@ pub fn show_module(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::
     let backdrop_name = model.backdrop.image.and_then(|id| app.session.catalog.photo(lightcraft_catalog::PhotoId(id)).map(|p| p.file_name.clone()));
     let (mut close, mut export, mut export_jpeg, mut play, mut fit, mut save) = (false, false, false, false, false, false);
     let (mut chosen, mut delete): (Option<String>, Option<String>) = (None, None);
-    egui::SidePanel::left("classicSlideshowSettings").resizable(false).default_width(290.0).show_inside(ui, |ui| {
+    egui::Panel::left("classicSlideshowSettings").resizable(false).default_size(290.0).show(ui, |ui| {
         ui.horizontal_wrapped(|ui| {
             if ui.button(crate::i18n::tr("Close")).clicked() {
                 close = true;

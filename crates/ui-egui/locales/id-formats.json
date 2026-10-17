@@ -254,5 +254,7 @@
   "· {trashed} in Recently Deleted": "· {trashed} di Baru Dihapus",
   "“{parent}” has a “{name}” already. Merge the two?": "“{parent}” sudah memiliki “{name}”. Gabungkan keduanya?",
   "•  {assumption}": "•  {assumption}",
-  "… and {more} more": "… dan {more} lainnya"
+  "… and {more} more": "… dan {more} lainnya",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "Melupakan {embeddings} embedding wajah dan {regions} wajah tanpa nama.",
+  "Thumbnail cache folder changed; moved {n}": "Folder cache thumbnail diubah; {n} dipindahkan"
 }

@@ -254,5 +254,7 @@
   "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested} suggestions, {accepted} acceptées. Rien n'est marqué tant que vous n'appliquez pas.",
   "Applied {n} culling flags": "{n} marqueurs de tri appliqués",
   "{n} faces": "{n} visages",
-  "Not this person: {name}": "Pas cette personne : {name}"
+  "Not this person: {name}": "Pas cette personne : {name}",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "{embeddings} empreintes de visages et {regions} visages sans nom oubliés.",
+  "Thumbnail cache folder changed; moved {n}": "Dossier du cache des vignettes modifié ; {n} déplacés"
 }

@@ -91,14 +91,11 @@ pub fn overlay(app: &mut LightcraftApp, ui: &mut egui::Ui, p: &egui::Painter, ma
     if app.ui.face_draft.is_some() {
         let people = app.caches.person_names(&app.session.catalog);
         let setup = faces::setup(app, ui.ctx());
-        let outcome = match app.ui.face_draft.as_mut() {
-            Some((stored, edit)) => {
-                let n = orient.map_norm_rect(*stored);
-                let at = screen_of(map, n.x0, n.y1) + vec2(0.0, 8.0);
-                Some((*stored, faces::name_editor(ui.ctx(), at, edit, &[], &people, setup)))
-            }
-            None => None,
-        };
+        let outcome = app.ui.face_draft.as_mut().map(|(stored, edit)| {
+            let n = orient.map_norm_rect(*stored);
+            let at = screen_of(map, n.x0, n.y1) + vec2(0.0, 8.0);
+            (*stored, faces::name_editor(ui.ctx(), at, edit, &[], &people, setup))
+        });
         match outcome {
             Some((stored, Editor::Submit(name))) => {
                 app.ui.face_draft = None;

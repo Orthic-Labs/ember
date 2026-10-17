@@ -254,5 +254,7 @@
   "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested} sugerencias, {accepted} aceptadas. No se marca nada hasta que apliques.",
   "Applied {n} culling flags": "Se aplicaron {n} marcas de selección",
   "{n} faces": "{n} rostros",
-  "Not this person: {name}": "No es esta persona: {name}"
+  "Not this person: {name}": "No es esta persona: {name}",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "Se olvidaron {embeddings} incrustaciones faciales y {regions} caras sin nombre.",
+  "Thumbnail cache folder changed; moved {n}": "Carpeta de la caché de miniaturas cambiada; se movieron {n}"
 }

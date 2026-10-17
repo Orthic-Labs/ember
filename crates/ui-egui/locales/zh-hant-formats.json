@@ -254,5 +254,7 @@
   "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested} 項建議，已接受 {accepted} 項。套用前不會標記任何相片。",
   "Applied {n} culling flags": "已套用 {n} 個篩選標記",
   "{n} faces": "{n} 張臉",
-  "Not this person: {name}": "不是此人：{name}"
+  "Not this person: {name}": "不是此人：{name}",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "已清除 {embeddings} 個人臉嵌入和 {regions} 個未命名人臉。",
+  "Thumbnail cache folder changed; moved {n}": "縮圖快取資料夾已變更；已移動 {n} 項"
 }

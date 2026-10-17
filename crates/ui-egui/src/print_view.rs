@@ -139,7 +139,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     let mut command: Option<(&'static str, Value)> = None;
     let (mut layout, mut image, mut texts) = (model.layout.clone(), model.image.clone(), model.page.clone());
     let (mut guides, mut job) = (model.guides.clone(), model.job.clone());
-    egui::SidePanel::left("classicPrintSettings").resizable(false).default_width(270.0).show_inside(ui, |ui| {
+    egui::Panel::left("classicPrintSettings").resizable(false).default_size(270.0).show(ui, |ui| {
         ui.horizontal(|ui| {
             if ui.button(crate::i18n::tr("Close")).clicked() {
                 close = true;

@@ -254,5 +254,7 @@
   "· {trashed} in Recently Deleted": "· {trashed} trong Đã xóa gần đây",
   "“{parent}” has a “{name}” already. Merge the two?": "“{parent}” đã có “{name}”. Gộp hai cái?",
   "•  {assumption}": "•  {assumption}",
-  "… and {more} more": "… và {more} nữa"
+  "… and {more} more": "… và {more} nữa",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "Đã xóa {embeddings} vector nhúng khuôn mặt và {regions} khuôn mặt chưa đặt tên.",
+  "Thumbnail cache folder changed; moved {n}": "Đã đổi thư mục bộ nhớ đệm ảnh thu nhỏ; đã chuyển {n}"
 }

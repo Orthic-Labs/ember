@@ -254,5 +254,7 @@
   "{suggested} suggestions, {accepted} accepted. Nothing is flagged until you apply.": "{suggested}件の提案、{accepted}件を承認。適用するまでフラグは付きません。",
   "Applied {n} culling flags": "{n}件の選別フラグを適用しました",
   "{n} faces": "{n} 件の顔",
-  "Not this person: {name}": "この人物ではない: {name}"
+  "Not this person: {name}": "この人物ではない: {name}",
+  "Forgot {embeddings} face embeddings and {regions} unnamed faces.": "顔の埋め込み {embeddings} 件と名前のない顔 {regions} 件を消去しました。",
+  "Thumbnail cache folder changed; moved {n}": "サムネイルキャッシュのフォルダーを変更しました。{n} 件を移動しました"
 }
