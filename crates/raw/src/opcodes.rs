@@ -1027,9 +1027,9 @@ pub(crate) mod tests {
         let out = warp_fisheye(&img, &[[1.0, 0.0, 0.0, 0.0], [0.8, 0.2, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]], [0.5, 0.5]);
         assert!((out.get(8, 4)[0] - 7.48168).abs() < 2e-3 && (out.get(8, 4)[1] - 7.04912).abs() < 2e-3);
         // an off-centre optical centre: (0.25, 0.5) gives c_x = 2, m_x = max(2, 6) = 6, m = sqrt(36 + 16) = 7.211103; pixel (8, 4) has
-        // dx = 6 / m = 0.832050, r = 0.832050, theta = arctan(0.832050) = 0.694738, f = theta / r = 0.834950, x' = 2 + 6 * 0.834950 = 7.00970
+        // dx = 6 / m = 0.832050, r = 0.832050, theta = arctan(0.832050) = 0.693981, f = theta / r = 0.834055, x' = 2 + 6 * 0.834055 = 7.00433
         let out = warp_fisheye(&img, &[[1.0, 0.0, 0.0, 0.0]], [0.25, 0.5]);
-        assert!((out.get(8, 4)[0] - 7.00970).abs() < 2e-3, "{}", out.get(8, 4)[0]);
+        assert!((out.get(8, 4)[0] - 7.00433).abs() < 2e-3, "{}", out.get(8, 4)[0]);
     }
 
     /// No polynomial in theta is the identity (that is tan theta), but its series 1, 1/3, 2/15, 17/315 is, to far below a

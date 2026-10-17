@@ -4,10 +4,13 @@
 //! four corners of the chart's patch grid. [`fit_chart`] turns those camera values and the chart's published
 //! reference colours into DNG colour tags ([`Calibration::fill`]), which [`crate::color`]'s DNG model then renders:
 //!
-//! 1. The camera neutral is the least-squares fit of `camera = neutral · Y` over the white and four grey patches.
-//! 2. With `wb = 1 / neutral`, a `ForwardMatrix` (white-balanced camera → XYZ D50, the DNG spec's definition) is
-//!    fitted by linear least squares over all 24 patches, constrained so camera white maps exactly to D50 white
-//!    (each row is solved exactly in two unknowns, the third follows from the constraint).
+//! 1. A 3 × 3 matrix `P` (camera → XYZ D50) is fitted by linear least squares over all 24 patches. The printed greys
+//!    are not exactly neutral (their published a*, b* are not zero), so the neutral is not read off the grey row:
+//!    that would bias the fit by the greys' own tint.
+//! 2. The camera neutral is the camera value `P` maps to D50 white, `neutral = P⁻¹ · D50`. The `ForwardMatrix`
+//!    (white-balanced camera → XYZ D50, the DNG spec's definition) is `P · diag(neutral)`, so camera white (1, 1, 1)
+//!    maps exactly to D50 white, as the specification requires, and a camera whose response is linear in XYZ is
+//!    recovered exactly.
 //! 3. `ColorMatrix` (XYZ → camera) for the chart's illuminant is the inverse of
 //!    `Bradford(D50 → illuminant) · ForwardMatrix · diag(1 / neutral)`, the relation DNG spec chapter 6 defines
 //!    between the two matrices. The forward matrix does not depend on the illuminant; the colour matrix only
@@ -29,8 +32,6 @@ use serde::{Deserialize, Serialize};
 pub const PATCHES: usize = 24;
 const COLS: usize = 6;
 const ROWS: usize = 4;
-/// Patches 19 to 23 (white, neutral 8, 6.5, 5 and 3.5): the grey row without the black patch.
-const NEUTRALS: std::ops::RangeInclusive<usize> = 18..=22;
 /// A patch average at or above this is clipped (white level is 1.0).
 const CLIP: f64 = 0.98;
 
@@ -207,46 +208,36 @@ pub fn fit_chart(patches: &[[f64; 3]], edition: ChartEdition, illuminant: Xy) ->
     }
     let d50 = D50.to_xyz();
     let reference = reference_xyz(edition);
-    // camera neutral: camera = n · Y over the grey row
-    let (mut num, mut den) = ([0.0f64; 3], 0.0f64);
-    for i in NEUTRALS {
-        let (Some(p), Some(r)) = (patches.get(i), reference.get(i)) else { continue };
+    // camera -> XYZ D50 by least squares: the normal equations (sum p pT) x_j = sum p ref_j, one row j of P at a time
+    let (mut gram, mut rhs) = ([[0.0f64; 3]; 3], [[0.0f64; 3]; 3]);
+    for (p, r) in patches.iter().zip(&reference) {
         for c in 0..3 {
-            num[c] += p[c] * r[1];
+            for k in 0..3 {
+                gram[c][k] += p[c] * p[k];
+            }
+            for (j, rj) in rhs.iter_mut().enumerate() {
+                rj[c] += p[c] * r[j];
+            }
         }
-        den += r[1] * r[1];
     }
-    let n = num.map(|v| v / den);
-    if n.iter().any(|v| v.is_nan() || *v <= 1e-6) {
-        return Err("the grey patches are black or negative: check exposure and black level".into());
+    let gram = Mat3(gram);
+    let det = gram.determinant();
+    let scale = gram.0[0][0] * gram.0[1][1] * gram.0[2][2];
+    if !det.is_finite() || det.abs() <= 1e-12 * scale.max(1e-30) {
+        return Err("the patch colours are degenerate: is this a colour chart?".into());
     }
+    let gram_inv = gram.inverse().ok_or("the patch colours are degenerate: is this a colour chart?")?;
+    let fitted = Mat3(rhs.map(|r| gram_inv.apply(r)));
+    // the camera value of D50 white, and from it the neutral (largest 1)
+    let n = fitted.inverse().map(|inv| inv.apply(d50)).ok_or("the fitted matrix is not usable")?;
     let m = n.iter().cloned().fold(f64::MIN, f64::max);
+    if !m.is_finite() || m <= 0.0 || n.iter().any(|v| !v.is_finite() || *v / m <= 1e-6) {
+        return Err("the camera white is black or negative: check exposure, black level and the chart edition".into());
+    }
     let neutral = n.map(|v| v / m);
     // white-balanced and exposure-normalised: a neutral of luminance Y reads (Y, Y, Y)
     let a: Vec<[f64; 3]> = patches.iter().map(|p| [p[0] / n[0], p[1] / n[1], p[2] / n[2]]).collect();
-    let mut rows = [[0.0f64; 3]; 3];
-    for (j, row) in rows.iter_mut().enumerate() {
-        let d = d50[j];
-        let (mut suu, mut suv, mut svv, mut sut, mut svt) = (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
-        for (ai, ri) in a.iter().zip(&reference) {
-            let u = ai[0] - ai[2];
-            let v = ai[1] - ai[2];
-            let t = ri[j] - ai[2] * d;
-            suu += u * u;
-            suv += u * v;
-            svv += v * v;
-            sut += u * t;
-            svt += v * t;
-        }
-        let det = suu * svv - suv * suv;
-        if !det.is_finite() || det.abs() <= 1e-12 * (suu * svv).max(1e-30) {
-            return Err("the patch colours are degenerate: is this a colour chart?".into());
-        }
-        let r1 = (sut * svv - suv * svt) / det;
-        let r2 = (suu * svt - suv * sut) / det;
-        *row = [r1, r2, d - r1 - r2];
-    }
-    let forward_matrix = Mat3(rows);
+    let forward_matrix = fitted.mul(&Mat3::diag(n[0], n[1], n[2]));
     if forward_matrix.0.iter().flatten().any(|v| !v.is_finite() || v.abs() > 64.0) || forward_matrix.inverse().is_none() {
         return Err("the fitted matrix is not usable".into());
     }
@@ -480,7 +471,9 @@ mod tests {
             }
         }
         // a grey patch is neutral in the working space
-        let g = t.matrix.apply(std::array::from_fn(|k| patches[20][k] * f64::from(t.wb[k])));
+        // (the printed grey patches are slightly tinted, so the neutral is the camera's own reading of the chart light)
+        let neutral = m.apply(D65.to_xyz()).map(|v| v * 0.3);
+        let g = t.matrix.apply(std::array::from_fn(|k| neutral[k] * f64::from(t.wb[k])));
         assert!((g[0] - g[1]).abs() < 1e-6 * g[1].abs().max(1.0) && (g[1] - g[2]).abs() < 1e-6 * g[1].abs().max(1.0), "{g:?}");
     }
 
