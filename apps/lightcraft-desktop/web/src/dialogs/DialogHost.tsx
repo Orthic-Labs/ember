@@ -5,14 +5,14 @@ import { acknowledgePreview, cancelMergePreview, convertFileSrc, requestMergePre
 import { useDesktop } from '../desktop';
 import { ImportCandidatePreview } from '../preview/ImportCandidatePreview';
 import { CullReviewDialog } from './CullReviewDialog';
+import { EmberSettings } from '../settings/EmberSettings';
 import { openLegalDocument } from '../legal';
-import type { DesktopContextValue, DialogState, JsonObject, MergePreviewDescriptor, UiState } from '../types';
+import type { DesktopContextValue, DialogState, JsonObject, MergePreviewDescriptor } from '../types';
 import './dialogs.css';
 
 type AnyRecord = Record<string, any>;
 type HostProps = { desktop?: DesktopContextValue };
 let mergePreviewSequence = 0;
-let settingsCameraSequence = 0;
 
 const text = (v: unknown, fallback = '') => typeof v === 'string' ? v : fallback;
 const bool = (v: unknown, fallback = false) => typeof v === 'boolean' ? v : fallback;
@@ -632,181 +632,8 @@ function AlbumDialog({ folder, desktop, d }: { folder: boolean; desktop: Desktop
 function SmartAlbumDialog({ desktop, d, kind = 'smartAlbum' }: { desktop: DesktopContextValue; d: DialogState; kind?: string }) { const editing = kind === 'smartRules'; const [name, setName] = useState(text(d.params?.name)); const [field, setField] = useState(text(d.params?.field, 'rating')); const [op, setOp] = useState(text(d.params?.operator, field === 'rating' ? 'gte' : 'is')); const [value, setValue] = useState(text(d.params?.value, '3')); const save = async () => { try { const numeric = ['rating', 'iso', 'aperture', 'focalLength', 'megapixels', 'album', 'sharpness'].includes(field); const boolean = field === 'edited'; const parsed = Number(value); const ruleValue = numeric ? (Number.isFinite(parsed) ? parsed : 0) : boolean ? ['true', 'yes', '1'].includes(value.trim().toLowerCase()) : value; const rules = { ruleSet: { match: 'all', rules: [{ field, op, value: ruleValue }] } }; if (editing) await desktop.run('album.setRules', { id: num(d.params?.id), rules, replace: true }); else await desktop.run('album.createSmart', { name: name.trim() || 'Smart Album', rules }); desktop.setDialog(null); } catch (e) { desktop.setNotice(String(e)); } }; const options: [string, string][] = field === 'rating' ? [["is", 'Is'], ['gte', 'At least'], ['lte', 'At most']] : field === 'camera' || field === 'keywords' ? [["contains", 'Contains'], ['is', 'Is'], ['isNot', 'Is not']] : [["is", 'Is'], ['isNot', 'Is not']]; return <Frame title={editing ? 'Edit Smart Album' : 'Smart Album'} onClose={() => desktop.setDialog(null)} actions={<><Button onClick={() => desktop.setDialog(null)}>Cancel</Button><Button primary onClick={() => void save()}>{editing ? 'Save Rules' : 'Create Smart Album'}</Button></>}><Field label="Name" value={name} onChange={setName} placeholder="Smart Album" /><Select label="Match field" value={field} options={[["rating", 'Rating'], ['flag', 'Pick flag'], ['label', 'Color label'], ['camera', 'Camera'], ['keywords', 'Keywords'], ['edited', 'Has edits']]} onChange={(v) => { setField(v); setOp(v === 'rating' ? 'gte' : v === 'camera' || v === 'keywords' ? 'contains' : 'is'); }} /><Select label="Condition" value={op} options={options} onChange={setOp} /><Field label="Value" value={value} onChange={setValue} /></Frame>; }
 
 function SettingsDialog({ desktop, d }: { desktop: DesktopContextValue; d: DialogState }) {
-  const record = (value: unknown): AnyRecord => value && typeof value === 'object' && !Array.isArray(value) ? value as AnyRecord : {};
-  const persisted = record(desktop.snapshot?.preferences);
-  const persistedSettings = record(persisted.settings);
-  const persistedUi = record(persisted.ui ?? persisted.layout ?? persisted);
-  const supplied = record(d.params?.values);
-  const startup = text(supplied.startupView, text(persistedUi.startupView, text(persistedSettings.startupView, desktop.ui.startupView)));
-  const startupView = startup === 'grid' ? 'photoGrid' : ['last', 'photoGrid', 'detail'].includes(startup) ? startup : 'last';
-  const overlay = supplied.infoOverlay ?? persistedUi.infoOverlay ?? persistedSettings.infoOverlay;
-  const infoOverlay = typeof overlay === 'string' ? ({ off: 0, basic: 1, exposure: 2 }[overlay] ?? desktop.ui.infoOverlay) : num(overlay, desktop.ui.infoOverlay);
-  const initial: AnyRecord = {
-    ...persistedSettings, ...persistedUi, ...supplied,
-    theme: text(supplied.theme, text(persistedUi.theme, desktop.ui.theme)),
-    locale: text(supplied.locale, text(persistedUi.locale, desktop.ui.locale)),
-    startupView,
-    infoOverlay,
-    confirmDelete: typeof supplied.confirmDelete === 'boolean' ? supplied.confirmDelete : typeof persistedUi.confirmDelete === 'boolean' ? persistedUi.confirmDelete : desktop.ui.confirmDelete,
-    autoAdvance: typeof supplied.autoAdvance === 'boolean' ? supplied.autoAdvance : typeof persistedUi.autoAdvance === 'boolean' ? persistedUi.autoAdvance : typeof persistedSettings.autoAdvance === 'boolean' ? persistedSettings.autoAdvance : desktop.ui.autoAdvance,
-    filmstrip: typeof supplied.filmstrip === 'boolean' ? supplied.filmstrip : typeof persistedUi.filmstrip === 'boolean' ? persistedUi.filmstrip : typeof persistedSettings.filmstrip === 'boolean' ? persistedSettings.filmstrip : desktop.ui.filmstrip,
-    filmNames: typeof supplied.filmNames === 'boolean' ? supplied.filmNames : typeof persistedUi.filmNames === 'boolean' ? persistedUi.filmNames : typeof persistedSettings.filmNames === 'boolean' ? persistedSettings.filmNames : desktop.ui.filmNames,
-    filmBadges: typeof supplied.filmBadges === 'boolean' ? supplied.filmBadges : typeof persistedUi.filmBadges === 'boolean' ? persistedUi.filmBadges : typeof persistedSettings.filmBadges === 'boolean' ? persistedSettings.filmBadges : desktop.ui.filmBadges,
-    gridInfo: typeof supplied.gridInfo === 'boolean' ? supplied.gridInfo : typeof persistedUi.gridInfo === 'boolean' ? persistedUi.gridInfo : typeof persistedSettings.gridInfo === 'boolean' ? persistedSettings.gridInfo : desktop.ui.gridInfo,
-    navigator: typeof supplied.navigator === 'boolean' ? supplied.navigator : typeof persistedUi.navigator === 'boolean' ? persistedUi.navigator : typeof persistedSettings.navigator === 'boolean' ? persistedSettings.navigator : desktop.ui.navigator,
-    externalEditor: text(supplied.externalEditor, text(persistedUi.externalEditor, text(persistedSettings.externalEditor, desktop.ui.externalEditor))),
-    previewEdge: num(supplied.previewEdge, num(persistedUi.previewEdge, desktop.ui.previewEdge)),
-    memoryMb: Number(supplied.memoryMb ?? supplied.memoryBudget ?? persistedUi.memoryMb ?? desktop.ui.memoryMb),
-    gpu: typeof supplied.gpu === 'boolean' ? supplied.gpu : typeof persistedUi.gpu === 'boolean' ? persistedUi.gpu : desktop.ui.gpu,
-  };
-  const requestedTab = text(d.params?.tab, 'general');
-  const tabs = ['general', 'import', 'performance', 'interface', 'language'];
-  const [tab, setTab] = useState(tabs.includes(requestedTab) ? requestedTab : 'general');
-  const [values, setValues] = useState<AnyRecord>(initial);
-  const [presets, setPresets] = useState<AnyRecord[]>([]);
-  const [metadataPresets, setMetadataPresets] = useState<AnyRecord[]>([]);
-  const [smartOriginalPath, setSmartOriginalPath] = useState('');
-  const [loaded, setLoaded] = useState(false);
-  const [loadError, setLoadError] = useState('');
-  const [smartError, setSmartError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const dirty = useRef(new Set<string>());
-  const sectionFor = (key: string) => ['theme', 'confirmDelete', 'startupView', 'autoAdvance', 'externalEditor'].includes(key) ? 'general' : ['filmstrip', 'filmNames', 'filmBadges', 'gridInfo', 'navigator', 'infoOverlay'].includes(key) ? 'interface' : key === 'locale' ? 'language' : ['rawPreset', 'otherPreset', 'perCamera', 'cameras', 'copyright', 'creator', 'metadataPreset', 'xmpAutoWrite', 'xmpNaming', 'autoFolder', 'autoCopy', 'autoAlbum'].includes(key) ? 'import' : 'performance';
-  const sectionDirty = (section: string) => [...dirty.current].some((key) => sectionFor(key) === section);
-  const update = (key: string, value: unknown) => { dirty.current.add(key); setValues((old) => ({ ...old, [key]: value })); };
-  const cameraDefaults = arr(values.cameras).map((value) => record(value));
-
-  useEffect(() => {
-    let live = true;
-    const load = async () => {
-      try {
-        const [libraryPrefs, xmpPrefs, gpu, memory, presetResult, metadataResult] = await Promise.all([
-          desktop.run('library.preferences', {}), desktop.run('library.xmpPreferences', {}), desktop.run('app.gpu', {}), desktop.run('app.memoryBudget', {}), desktop.run('presets.list', {}), desktop.run('metadata.presets', {}),
-        ]);
-        let smart: AnyRecord = {};
-        try { smart = record(await desktop.run('library.smartPreviewsLocation', {})); } catch (reason) { if (live) setSmartError(errorText(reason)); }
-        if (!live) return;
-        const library = record(libraryPrefs); const imports = record(library.import); const xmp = record(xmpPrefs);
-        const smartPath = text(smart.path); setSmartOriginalPath(smartPath);
-        setPresets(arr(presetResult).map(record)); setMetadataPresets(arr(metadataResult).map(record));
-        setValues((old) => {
-          const next = { ...old };
-          if (!dirty.current.has('rawPreset')) next.rawPreset = imports.rawPreset == null ? old.rawPreset : text(imports.rawPreset, 'default');
-          if (!dirty.current.has('otherPreset')) next.otherPreset = imports.otherPreset == null ? old.otherPreset : text(imports.otherPreset, 'default');
-          if (!dirty.current.has('perCamera') && typeof imports.perCamera === 'boolean') next.perCamera = imports.perCamera;
-          if (!dirty.current.has('cameras') && Array.isArray(imports.cameras)) next.cameras = imports.cameras.map((camera: unknown) => ({ ...record(camera), _settingsKey: `camera-${settingsCameraSequence++}` }));
-          if (!dirty.current.has('copyright')) next.copyright = text(imports.copyright, text(old.copyright));
-          if (!dirty.current.has('creator')) next.creator = text(imports.creator, text(old.creator));
-          if (!dirty.current.has('metadataPreset')) next.metadataPreset = imports.metadataPreset == null ? 'none' : text(imports.metadataPreset);
-          if (!dirty.current.has('autoFolder')) next.autoFolder = imports.autoFolder == null ? '' : text(imports.autoFolder);
-          if (!dirty.current.has('autoCopy') && typeof imports.autoCopy === 'boolean') next.autoCopy = imports.autoCopy;
-          if (!dirty.current.has('autoAlbum')) next.autoAlbum = imports.autoAlbum == null ? '' : text(imports.autoAlbum);
-          if (!dirty.current.has('xmpAutoWrite') && typeof xmp.autoWrite === 'boolean') next.xmpAutoWrite = xmp.autoWrite;
-          if (!dirty.current.has('xmpNaming')) next.xmpNaming = text(xmp.naming, text(old.xmpNaming, 'stem'));
-          if (!dirty.current.has('cacheMb')) next.cacheMb = num(library.cacheMb, num(old.cacheMb));
-          if (!dirty.current.has('forgetLocalDays')) next.forgetLocalDays = num(library.forgetLocalDays, num(old.forgetLocalDays));
-          if (!dirty.current.has('smartPath')) next.smartPath = smartPath;
-          next.smartAvailable = Boolean(smartPath); next.smartCount = num(smart.count); next.smartBytes = num(smart.bytes);
-          if (!dirty.current.has('gpu') && typeof record(gpu).enabled === 'boolean') next.gpu = record(gpu).enabled;
-          if (!dirty.current.has('memoryMb')) next.memoryMb = num(old.memoryMb) === 0 ? 0 : num(record(memory).budget, num(old.memoryMb * 1048576)) / 1048576;
-          return next;
-        });
-        setLoaded(true);
-      } catch (reason) {
-        if (live) { setLoadError(errorText(reason)); setLoaded(true); }
-      }
-    };
-    void load();
-    return () => { live = false; };
-  }, []);
-
-  const save = async () => {
-    if (!loaded) return;
-    setBusy(true); setError('');
-    const fields = dirty.current;
-    const requestedMemoryMb = num(values.memoryMb, num(values.memoryBudget));
-    if (fields.has('memoryMb') && requestedMemoryMb !== 0 && requestedMemoryMb < 64) {
-      setError('Memory budget must be 0 (automatic) or at least 64 MB.');
-      setBusy(false);
-      return;
-    }
-    try {
-      if (sectionDirty('import')) {
-        const importPatch: AnyRecord = {};
-        if (fields.has('rawPreset')) importPatch.rawPreset = text(values.rawPreset).trim() || 'default';
-        if (fields.has('otherPreset')) importPatch.otherPreset = text(values.otherPreset).trim() || 'default';
-        if (fields.has('perCamera')) importPatch.perCamera = bool(values.perCamera);
-        if (fields.has('cameras')) importPatch.cameras = arr(values.cameras).map((value: unknown): AnyRecord => record(value)).map((camera: AnyRecord): AnyRecord => ({ camera: text(camera.camera).trim(), preset: text(camera.preset).trim() || null })).filter((camera: AnyRecord) => camera.camera);
-        if (fields.has('copyright')) importPatch.copyright = text(values.copyright).trim();
-        if (fields.has('creator')) importPatch.creator = text(values.creator).trim();
-        if (fields.has('metadataPreset')) importPatch.metadataPreset = text(values.metadataPreset).trim() || null;
-        if (Object.keys(importPatch).length) await desktop.run('library.preferences', { import: importPatch });
-        if (fields.has('xmpAutoWrite') || fields.has('xmpNaming')) await desktop.run('library.xmpPreferences', { ...(fields.has('xmpAutoWrite') ? { autoWrite: bool(values.xmpAutoWrite) } : {}), ...(fields.has('xmpNaming') ? { naming: text(values.xmpNaming, 'stem') } : {}) });
-        if (fields.has('autoFolder') || fields.has('autoCopy') || fields.has('autoAlbum')) await desktop.run('library.autoImport', { ...(fields.has('autoFolder') ? { folder: text(values.autoFolder).trim() || null } : {}), ...(fields.has('autoCopy') ? { copy: bool(values.autoCopy) } : {}), ...(fields.has('autoAlbum') ? { album: text(values.autoAlbum).trim() || null } : {}) });
-      }
-      if (sectionDirty('performance')) {
-        if (fields.has('cacheMb')) await desktop.run('library.preferences', { cacheMb: Math.max(0, Math.round(num(values.cacheMb))) });
-        if (fields.has('forgetLocalDays')) await desktop.run('library.preferences', { forgetLocalDays: Math.max(0, Math.round(num(values.forgetLocalDays))) });
-        if (fields.has('clearCache') && values.clearCache) await desktop.run('library.clearPreviews', {});
-        const existing = text(values.smartExisting, 'move');
-        if (fields.has('smartReset') && bool(values.smartReset)) await desktop.run('library.smartPreviewsLocation', { reset: true, existing });
-        else if (fields.has('smartPath') && text(values.smartPath) && text(values.smartPath) !== smartOriginalPath) await desktop.run('library.smartPreviewsLocation', { path: text(values.smartPath), existing });
-        if (fields.has('gpu') && typeof values.gpu === 'boolean') await desktop.run('app.gpu', { enabled: values.gpu });
-        if (fields.has('memoryMb') && requestedMemoryMb >= 64) await desktop.run('app.memoryBudget', { mb: Math.round(requestedMemoryMb) });
-        const edge = Math.max(256, Math.min(8192, Math.round(num(values.previewEdge, desktop.ui.previewEdge))));
-        if (fields.has('previewEdge') && edge !== desktop.ui.previewEdge) await desktop.run('library.buildPreviews', { size: 'standard', edge });
-      }
-      const uiPatch: AnyRecord = {};
-      if (fields.has('theme')) uiPatch.theme = values.theme;
-      if (fields.has('confirmDelete')) uiPatch.confirmDelete = values.confirmDelete;
-      if (fields.has('startupView')) uiPatch.startupView = text(values.startupView, 'last');
-      if (fields.has('autoAdvance')) uiPatch.autoAdvance = bool(values.autoAdvance);
-      if (fields.has('externalEditor')) uiPatch.externalEditor = text(values.externalEditor).trim();
-      if (fields.has('filmstrip')) uiPatch.filmstrip = bool(values.filmstrip);
-      if (fields.has('filmNames')) uiPatch.filmNames = bool(values.filmNames);
-      if (fields.has('filmBadges')) uiPatch.filmBadges = bool(values.filmBadges);
-      if (fields.has('gridInfo')) uiPatch.gridInfo = bool(values.gridInfo);
-      if (fields.has('navigator')) uiPatch.navigator = bool(values.navigator);
-      if (fields.has('infoOverlay')) uiPatch.infoOverlay = Math.max(0, Math.min(2, Math.round(num(values.infoOverlay, desktop.ui.infoOverlay))));
-      if (fields.has('locale')) uiPatch.locale = values.locale;
-      if (fields.has('previewEdge')) uiPatch.previewEdge = Math.max(256, Math.min(8192, Math.round(num(values.previewEdge, desktop.ui.previewEdge))));
-      if (fields.has('gpu')) uiPatch.gpu = values.gpu;
-      if (fields.has('memoryMb')) uiPatch.memoryMb = num(values.memoryMb, desktop.ui.memoryMb);
-      if (Object.keys(uiPatch).length) { await desktop.native('preferences.patch', { ui: uiPatch }); desktop.setUi(uiPatch as Partial<UiState>); }
-      desktop.setDialog(null);
-    } catch (reason) { setError(errorText(reason)); } finally { setBusy(false); }
-  };
-
-  const addCamera = () => update('cameras', [...cameraDefaults, { _settingsKey: `camera-${settingsCameraSequence++}`, camera: '', preset: '' }]);
-  const removeCamera = (index: number) => update('cameras', cameraDefaults.filter((_, i) => i !== index));
-  const updateCamera = (index: number, key: string, value: string) => update('cameras', cameraDefaults.map((camera, i) => i === index ? { ...camera, [key]: value } : camera));
-  const chooseAutoFolder = async () => { const paths = await choose(desktop.native, 'chooseFolder'); if (paths[0]) update('autoFolder', paths[0]); };
-  const chooseSmartFolder = async () => { const paths = await choose(desktop.native, 'chooseFolder'); if (paths[0]) { update('smartPath', paths[0]); update('smartReset', false); } };
-  const openLibrary = async () => { setBusy(true); setError(''); try { await desktop.run('app.openLibrary', {}); } catch (reason) { setError(errorText(reason)); } finally { setBusy(false); } };
-  const presetChoices = (noneLabel: string, current = ''): [string, string][] => { const options: [string, string][] = [['default', noneLabel], ...presets.filter((preset) => text(preset.id)).map((preset): [string, string] => [text(preset.id), text(preset.name, text(preset.id))])]; if (current && current !== 'default' && !options.some(([id]) => id === current)) options.push([current, `${current} (missing)`]); return options; };
-  const metadataValue = text(values.metadataPreset, 'none');
-  const metadataChoices: [string, string][] = [['none', 'None'], ...metadataPresets.filter((preset) => text(preset.name)).map((preset): [string, string] => [text(preset.name), text(preset.name)])];
-  if (metadataValue !== 'none' && !metadataChoices.some(([name]) => name === metadataValue)) metadataChoices.push([metadataValue, `${metadataValue} (missing)`]);
-  const importTab = <>
-    <Select label="Raw photos" value={text(values.rawPreset, 'default')} options={presetChoices('Ember Default', text(values.rawPreset))} onChange={(v) => update('rawPreset', v)} />
-    <Select label="Non-raw photos" value={text(values.otherPreset, 'default')} options={presetChoices('None', text(values.otherPreset))} onChange={(v) => update('otherPreset', v)} />
-    <Check checked={bool(values.perCamera)} onChange={(v) => update('perCamera', v)}>Use camera-specific defaults</Check>
-    {bool(values.perCamera) && <div className="lc-form-stack">{cameraDefaults.map((camera, index) => <div key={text(camera._settingsKey, `camera-${index}`)} className="lc-dialog-toolbar"><Field label="Camera" value={text(camera.camera)} onChange={(v) => updateCamera(index, 'camera', v)} placeholder="Make Model" /><Select label="Preset" value={text(camera.preset, 'default')} options={presetChoices('Ember Default', text(camera.preset))} onChange={(v) => updateCamera(index, 'preset', v)} /><Button onClick={() => removeCamera(index)}>Remove</Button></div>)}<Button onClick={addCamera}>Add camera default</Button></div>}
-    <Field label="Default copyright" value={text(values.copyright)} onChange={(v) => update('copyright', v)} /><Field label="Default creator" value={text(values.creator)} onChange={(v) => update('creator', v)} />
-    <Select label="Metadata preset" value={metadataValue} options={metadataChoices} onChange={(v) => update('metadataPreset', v)} />
-    <h3 className="lc-section-heading">XMP sidecars</h3><Check checked={bool(values.xmpAutoWrite)} onChange={(v) => update('xmpAutoWrite', v)}>Automatically write changes into XMP sidecars</Check><Select label="Sidecar names" value={text(values.xmpNaming, 'stem')} options={[['stem', 'IMG_1.xmp'], ['full', 'IMG_1.CR3.xmp'], ['split', 'Per file']]} onChange={(v) => update('xmpNaming', v)} />
-    <h3 className="lc-section-heading">Auto Import</h3><Note>Watched folder is scanned every few seconds while desktop is open.</Note><Field label="Watched folder" value={text(values.autoFolder)} onChange={(v) => update('autoFolder', v)} placeholder="Off" /><div className="lc-dialog-toolbar"><Button onClick={() => void chooseAutoFolder()}>Choose Folder…</Button><Button onClick={() => update('autoFolder', '')}>Turn Off</Button></div><Check checked={bool(values.autoCopy)} onChange={(v) => update('autoCopy', v)}>Copy into library</Check><Field label="Auto-import album" value={text(values.autoAlbum)} onChange={(v) => update('autoAlbum', v)} placeholder="None" />
-  </>;
-  const performanceTab = <>
-    <Field label="Preview edge" type="number" value={num(values.previewEdge, desktop.ui.previewEdge)} min={256} max={8192} step={128} onChange={(v) => update('previewEdge', Number(v))} /><Field label="Cache size (MB)" type="number" value={num(values.cacheMb, 0)} min={0} onChange={(v) => update('cacheMb', Number(v))} /><Field label="Forget unchanged photos after (days)" type="number" value={num(values.forgetLocalDays, 0)} min={0} onChange={(v) => update('forgetLocalDays', Number(v))} /><Button onClick={() => update('clearCache', true)}>Clear thumbnail cache</Button><Field label="Memory budget (MB; 0 = automatic)" type="number" value={num(values.memoryMb, desktop.ui.memoryMb)} min={0} onChange={(v) => update('memoryMb', Number(v))} /><Check checked={bool(values.gpu, desktop.ui.gpu)} onChange={(v) => update('gpu', v)}>Use GPU rendering when available</Check>
-    <h3 className="lc-section-heading">Smart previews</h3>{bool(values.smartAvailable) ? <><Field label="Folder" value={text(values.smartPath)} onChange={(v) => { update('smartPath', v); update('smartReset', false); }} /><Select label="Existing previews" value={text(values.smartExisting, 'move')} options={[['move', 'Move them'], ['leave', 'Leave them'], ['discard', 'Delete them']]} onChange={(v) => update('smartExisting', v)} /><div className="lc-dialog-toolbar"><Button onClick={() => void chooseSmartFolder()}>Choose Folder…</Button><Button onClick={() => update('smartReset', true)}>Use library folder</Button></div><Note>{num(values.smartCount)} smart previews · {Math.round(num(values.smartBytes) / 1048576)} MB</Note></> : <Note>Smart previews require an on-disk library.</Note>}
-  </>;
-  const libraryPath = text(desktop.snapshot?.libraryPath);
-  const overlayValue = String(Math.max(0, Math.min(2, Math.round(num(values.infoOverlay, desktop.ui.infoOverlay)))));
-  const generalTab = <><Select label="Theme" value={text(values.theme, desktop.ui.theme)} options={[['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]} onChange={(v) => update('theme', v)} /><h3 className="lc-section-heading">Library</h3><div className="lc-dialog-toolbar"><span className="lc-path">{libraryPath || 'In memory — nothing is saved'}</span><Button disabled={busy} onClick={() => void openLibrary()}>Open Library…</Button></div><h3 className="lc-section-heading">Startup</h3><Select label="Open in" value={text(values.startupView, 'last')} options={[['last', 'Last view'], ['photoGrid', 'Photo Grid'], ['detail', 'Detail']]} onChange={(v) => update('startupView', v)} /><h3 className="lc-section-heading">Culling</h3><Check checked={bool(values.autoAdvance, desktop.ui.autoAdvance)} onChange={(v) => update('autoAdvance', v)}>Auto Advance: move to next photo after rating or flagging</Check><Check checked={bool(values.confirmDelete, desktop.ui.confirmDelete)} onChange={(v) => update('confirmDelete', v)}>Confirm photo deletion</Check><h3 className="lc-section-heading">External Editor</h3><Field label="Application" value={text(values.externalEditor)} onChange={(v) => update('externalEditor', v)} placeholder="System default" /><Note>Photo &gt; Edit in External Editor renders a TIFF copy, stacks it with original & opens it here.</Note></>;
-  const interfaceTab = <><h3 className="lc-section-heading">Filmstrip</h3><Check checked={bool(values.filmstrip, desktop.ui.filmstrip)} onChange={(v) => update('filmstrip', v)}>Show filmstrip</Check><Check checked={bool(values.filmNames, desktop.ui.filmNames)} onChange={(v) => update('filmNames', v)}>Show file names</Check><Check checked={bool(values.filmBadges, desktop.ui.filmBadges)} onChange={(v) => update('filmBadges', v)}>Show ratings, flags & edit badges</Check><h3 className="lc-section-heading">Grid</h3><Check checked={bool(values.gridInfo, desktop.ui.gridInfo)} onChange={(v) => update('gridInfo', v)}>Show grid info</Check><h3 className="lc-section-heading">Detail</h3><Check checked={bool(values.navigator, desktop.ui.navigator)} onChange={(v) => update('navigator', v)}>Show Navigator while zoomed in</Check><Select label="Info overlay" value={overlayValue} options={[['0', 'Off'], ['1', 'File & date'], ['2', 'Exposure']]} onChange={(v) => update('infoOverlay', Number(v))} /></>;
-  return <Frame title="Settings" wide busy={busy} onClose={() => desktop.setDialog(null)} actions={<><Button disabled={busy} onClick={() => desktop.setDialog(null)}>Cancel</Button><Button primary disabled={busy || !loaded || Boolean(loadError)} onClick={() => void save()}>Save</Button></>}><div className="lc-settings"><nav aria-label="Settings sections">{tabs.map((item) => <button key={item} data-settings-section={item} className={tab === item ? 'lc-settings-tab active' : 'lc-settings-tab'} onClick={() => setTab(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</nav><div className="lc-settings-panel">{!loaded && <Note>Loading saved settings…</Note>}{loadError && <Note tone="error">Could not load saved settings: {loadError}</Note>}{tab === 'general' && generalTab}{tab === 'import' && importTab}{tab === 'performance' && performanceTab}{tab === 'interface' && interfaceTab}{tab === 'language' && <><Select label="Language" value={text(values.locale, desktop.ui.locale)} options={[['en', 'English'], ['zh-hans', '简体中文'], ['zh-hant', '繁體中文'], ['ja', '日本語'], ['pt-br', 'Português (Brasil)']]} onChange={(v) => update('locale', v)} /><Note>Language selection is saved & applied to shell and command labels.</Note></>}{smartError && <Note tone="error">Smart preview settings unavailable: {smartError}</Note>}{error && <Note tone="error">{error}</Note>}</div></div></Frame>;
+  // RightKit settings panel: settings save as they change, so the dialog has a single Done action.
+  return <Frame title="Settings" wide onClose={() => desktop.setDialog(null)} actions={<Button primary onClick={() => desktop.setDialog(null)}>Done</Button>}><EmberSettings desktop={desktop} initialSection={text(d.params?.tab)} /></Frame>;
 }
 
 // The engine's `SettingsGroup` ids and labels (crates/develop/src/presets.rs), in its order; unknown ids are refused.

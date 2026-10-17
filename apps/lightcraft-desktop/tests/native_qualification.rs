@@ -67,7 +67,7 @@ fn scenario_workspace(scenario: &rightkit_qa::harness::Scenario) -> rightkit_qa:
 fn launch_hidden(binary: &Path, scenario: &rightkit_qa::harness::Scenario, _catalog: &Path) -> (rightkit_qa::control::Control, PathBuf) {
     let ws = scenario_workspace(scenario);
     let data = ws.data_dir.clone();
-    let env = ws
+    let mut env = ws
         .env
         .iter()
         .filter(|(key, _)| {
@@ -87,6 +87,8 @@ fn launch_hidden(binary: &Path, scenario: &rightkit_qa::harness::Scenario, _cata
         })
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect::<Vec<_>>();
+    // The device identity (rightkit-device) lives in the OS credential store; a journey must never touch it.
+    env.push(("RIGHTKIT_NO_KEYCHAIN".to_string(), "1".to_string()));
     // SDK launch supplies RIGHTKIT_QA_BACKGROUND for both background/hidden modes.
     // App QA handling keeps its actual window invisible without hiding NSApplication.
     #[cfg(target_os = "macos")]
@@ -1368,6 +1370,25 @@ fn assert_png_pixels(path: &Path, expected_width: u32, expected_height: u32) {
     assert!(pixels[..info.buffer_size()].iter().any(|&pixel| pixel != 0), "exported PNG pixels must not be all zero");
 }
 
+fn set_setting_field(control: &rightkit_qa::control::Control, label: &str, value: &str) {
+    // RightKit settings rows (`.rk-sr`): text and number inputs save when they lose focus, selects on change.
+    let label_json = serde_json::to_string(label).expect("setting label must serialize");
+    let value_json = serde_json::to_string(value).expect("setting value must serialize");
+    let changed = control.eval(&format!(r#"return (() => {{
+        const row = [...document.querySelectorAll('.lc-dialog .rk-sr')].find((node) => node.querySelector('.rk-sr__label')?.textContent === {label_json});
+        const node = row?.querySelector('input,select,textarea');
+        if (!node) return false;
+        node.focus();
+        const prototype = node instanceof HTMLSelectElement ? HTMLSelectElement.prototype : node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(prototype, 'value').set.call(node, {value_json});
+        node.dispatchEvent(new Event(node instanceof HTMLSelectElement ? 'change' : 'input', {{bubbles:true}}));
+        const kept = node.value === {value_json};
+        node.blur();
+        return kept;
+    }})();"#)).expect("setting input must execute in native WebView");
+    assert_eq!(changed.as_bool(), Some(true), "native Settings row {label} must accept input");
+}
+
 fn set_dialog_field(control: &rightkit_qa::control::Control, label: &str, value: &str) {
     let label_json = serde_json::to_string(label).expect("field label must serialize");
     let value_json = serde_json::to_string(value).expect("field value must serialize");
@@ -1820,19 +1841,18 @@ fn native_hidden_control_journeys() {
                         control.key(key).expect("settings hydration search must execute");
                     }
                     click_dom(control, "[data-command=\"app.settings\"]", "settings hydration command must open");
-                    wait_for_dom(control, "return document.querySelector('.lc-dialog h2')?.textContent === 'Settings';");
-                    wait_for_dom(control, "return document.querySelector('.lc-dialog-actions .lc-button-primary')?.disabled === false;");
+                    wait_for_dom(control, "return document.querySelector('.lc-dialog h2')?.textContent === 'Settings' && document.querySelector('.lc-dialog .rk-settings__loading') === null;");
                     let import_tab_top = control
-                        .eval("return document.querySelector('[data-settings-section=\"import\"]')?.getBoundingClientRect().top;")
+                        .eval("return document.querySelector('[data-section-id=\"import\"]')?.getBoundingClientRect().top;")
                         .expect("Settings navigation geometry must be readable");
-                    click_dom(control, "[data-settings-section=\"import\"]", "settings Import tab must open");
-                    wait_for_dom(control, "return ['Raw photos','Default copyright','Default creator','Metadata preset'].every((label) => [...document.querySelectorAll('.lc-settings-panel .lc-field span')].some((node) => node.textContent === label)) && document.querySelector('.lc-dialog-actions .lc-button-primary')?.disabled === false;");
+                    click_dom(control, "[data-section-id=\"import\"]", "settings Import tab must open");
+                    wait_for_dom(control, "return ['Raw photos','Default copyright','Default creator','Metadata preset'].every((label) => [...document.querySelectorAll('.lc-dialog .rk-sr__label')].some((node) => node.textContent === label));");
                     let import_tab_top_after = control
-                        .eval("return document.querySelector('[data-settings-section=\"import\"]')?.getBoundingClientRect().top;")
+                        .eval("return document.querySelector('[data-section-id=\"import\"]')?.getBoundingClientRect().top;")
                         .expect("Settings navigation geometry must remain readable");
                     assert_eq!(import_tab_top_after, import_tab_top, "switching Settings sections must keep navigation stationary");
                     let hydrated = control
-                        .eval("return Object.fromEntries([...document.querySelectorAll('.lc-settings-panel .lc-field')].map((field) => [field.querySelector('span')?.textContent, field.querySelector('input,select')?.value]));")
+                        .eval("return Object.fromEntries([...document.querySelectorAll('.lc-dialog .rk-sr')].map((row) => [row.querySelector('.rk-sr__label')?.textContent, row.querySelector('input,select')?.value]));")
                         .expect("settings hydration fields must be readable");
                     let raw_expected = before_library["import"]["rawPreset"].as_str().unwrap_or("default");
                     let other_expected = before_library["import"]["otherPreset"].as_str().unwrap_or("default");
@@ -1842,17 +1862,25 @@ fn native_hidden_control_journeys() {
                     assert_eq!(hydrated["Metadata preset"].as_str(), Some(metadata_expected), "saved metadata preset must hydrate");
                     assert_eq!(hydrated["Default copyright"].as_str(), Some("Fixture Copyright"), "saved copyright default must hydrate");
                     assert_eq!(hydrated["Default creator"].as_str(), Some("Fixture Creator"), "saved creator default must hydrate");
-                    click_dom(control, "[data-settings-section=\"performance\"]", "settings Performance tab must open");
-                    wait_for_dom(control, "return [...document.querySelectorAll('.lc-settings-panel .lc-field span')].some((node) => node.textContent === 'Memory budget (MB; 0 = automatic)');");
+                    click_dom(control, "[data-section-id=\"performance\"]", "settings Performance tab must open");
+                    wait_for_dom(control, "return [...document.querySelectorAll('.lc-dialog .rk-sr__label')].some((node) => node.textContent === 'Memory budget (MB; 0 = automatic)');");
                     let memory = control
-                        .eval("return [...document.querySelectorAll('.lc-settings-panel .lc-field')].find((field) => field.querySelector('span')?.textContent === 'Memory budget (MB; 0 = automatic)')?.querySelector('input')?.value || ''; ")
+                        .eval("return [...document.querySelectorAll('.lc-dialog .rk-sr')].find((row) => row.querySelector('.rk-sr__label')?.textContent === 'Memory budget (MB; 0 = automatic)')?.querySelector('input')?.value || ''; ")
                         .expect("automatic memory setting must be readable");
                     assert_eq!(memory.as_str(), Some("0"), "fresh settings must expose automatic memory budget");
-                    click_dom(control, "[data-settings-section=\"general\"]", "settings General tab must open");
-                    set_dialog_field(control, "Theme", "dark");
+                    click_dom(control, "[data-section-id=\"appearance\"]", "settings Appearance section must open");
+                    // The standard Appearance section's third segment is Dark; settings save as they change.
+                    click_dom(control, ".lc-dialog .rk-settings__body .rk-seg__item:nth-child(3)", "settings theme choice must apply");
+                    for _ in 0..100 {
+                        let saved = control.command("lc_preferences", &Value::Null).expect("theme preference must be readable");
+                        if saved["ui"]["theme"].as_str() == Some("dark") {
+                            break;
+                        }
+                        sleep(Duration::from_millis(50));
+                    }
                     // Simulate a persisted workspace that lags the live UI debounce.
                     control.command("lc_preferences", &json!({"ui": {"view": "photoGrid"}})).expect("stale persisted workspace fixture must save");
-                    click_dom(control, ".lc-dialog-actions .lc-button-primary", "settings field-only save must execute");
+                    click_dom(control, ".lc-dialog-actions .lc-button-primary", "settings Done must close the dialog");
                     assert_eq!(wait_for_dom(control, "return document.querySelector('.lc-dialog') === null;").as_bool(), Some(true));
                     wait_for_dom(control, "return document.querySelector('.stage-workspace')?.classList.contains('stage-dark') === true;");
                     let after_library = run(control, "library.preferences", json!({}));
@@ -1865,12 +1893,13 @@ fn native_hidden_control_journeys() {
                         control.key(key).expect("settings parity search must execute");
                     }
                     click_dom(control, "[data-command=\"app.settings\"]", "settings parity dialog must open");
-                    wait_for_dom(control, "return document.querySelector('.lc-dialog-actions .lc-button-primary')?.disabled === false;");
-                    set_dialog_field(control, "Open in", "detail");
-                    set_dialog_field(control, "Application", "QA External Editor");
-                    click_dom(control, "[data-settings-section=\"interface\"]", "Interface settings must open");
-                    set_dialog_field(control, "Info overlay", "2");
-                    click_dom(control, ".lc-dialog-actions .lc-button-primary", "settings parity values must save");
+                    wait_for_dom(control, "return document.querySelector('.lc-dialog h2')?.textContent === 'Settings' && document.querySelector('.lc-dialog .rk-settings__loading') === null;");
+                    set_setting_field(control, "Open in", "detail");
+                    set_setting_field(control, "Application", "QA External Editor");
+                    click_dom(control, "[data-section-id=\"interface\"]", "Interface settings must open");
+                    wait_for_dom(control, "return [...document.querySelectorAll('.lc-dialog .rk-sr__label')].some((node) => node.textContent === 'Info overlay');");
+                    set_setting_field(control, "Info overlay", "2");
+                    click_dom(control, ".lc-dialog-actions .lc-button-primary", "settings Done must close the dialog");
                     wait_for_dom(control, "return document.querySelector('.lc-dialog') === null;");
                     let parity = control.command("lc_preferences", &Value::Null).expect("new settings must persist");
                     assert_eq!(parity["ui"]["startupView"].as_str(), Some("detail"));
