@@ -815,6 +815,7 @@ fn av1_err(e: av1::Error) -> Error {
         av1::Error::Unsupported(why) => Error::Unsupported(F, why),
         av1::Error::Unavailable => Error::Unsupported(F, "AV1 decoding isn't available in this build of Ember"),
         av1::Error::TooLarge(w, h) => Error::TooLarge(w, h),
+        av1::Error::HelperMissing => Error::Unsupported(F, "AV1 decoder helper missing (ember-av1-worker not found next to the application)"),
         other => Error::Malformed(F, other.to_string()),
     }
 }

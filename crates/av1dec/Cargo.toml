@@ -3,11 +3,16 @@ name = "lightcraft-av1dec"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Ember av1dec (L0): safe AV1 still-picture decoder over rav1d (BSD-2-Clause Rust port of dav1d). Allowed `unsafe` for the rav1d FFI calls only; the API is safe."
+description = "Ember av1dec (L0): safe AV1 still-picture decoder over rav1d (BSD-2-Clause Rust port of dav1d), run in the ember-av1-worker child process so a rav1d abort cannot kill the application. Allowed `unsafe` for the rav1d FFI calls only; the API is safe."
 
 # Opts out of the workspace lints only to keep `unsafe_code = "deny"` overridable for the single FFI
 # module (`native`); like `lightcraft-sysmem` this is an isolated helper crate (see CLAUDE.md and
 # craftrules standards/never-crash.md).
+# The decoder worker the host spawns (see `host.rs`); it ships beside every Ember binary.
+[[bin]]
+name = "ember-av1-worker"
+path = "src/bin/ember-av1-worker.rs"
+
 [lints.rust]
 unsafe_code = "deny"
 

@@ -351,6 +351,12 @@ fn mutated_files_agree_with_decode() {
     };
     let (mut decodable, mut disagreements) = (0, Vec::new());
     for (name, bytes) in fixtures(160, 96) {
+        // AVIF decodes in the `ember-av1-worker` child process (rav1d aborts on some damaged streams);
+        // the xtask `ci` builds that binary before the tests, a bare test run may not have it.
+        if name == "avif" && decoded(&bytes).is_err_and(|e| e.to_string().contains("helper missing")) {
+            eprintln!("skipping AVIF mutations: ember-av1-worker is not built");
+            continue;
+        }
         for _ in 0..300 {
             let mut b = bytes.clone();
             for _ in 0..1 + rnd() % 3 {
