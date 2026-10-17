@@ -17,6 +17,7 @@
 
 use super::{black_from_columns, cfa_from_exif, white_from_data};
 
+use crate::pixelshift;
 use crate::tiffraw::{Packing, read_image_in};
 use crate::{BlackLevel, Cfa, ColorData, Mode, OpcodeLists, RawData, RawError, RawFormat, RawImage, Rect, Result};
 use lightcraft_geom::Orientation;
@@ -235,7 +236,46 @@ fn is_exactly_packed(info: &ImageInfo, file_len: u64) -> bool {
     !chunks.is_empty() && chunks.iter().all(|c| c.len == (u64::from(c.width) * bits).div_ceil(8) * u64::from(c.height))
 }
 
+/// The samples of one raw frame (`info`: IFD0's, or a pixel-shift frame's), read per `read`. The Huffman table is
+/// the maker note's `mn` (a pixel-shift file repeats the same table in every frame's note).
+fn read_samples(bytes: &[u8], tiff: &Tiff, info: &ImageInfo, mn: Option<&makernote::MakerNote>, read: Mode) -> Result<RawData> {
+    let (w, hgt) = (info.width as usize, info.height as usize);
+    let bits = info.bits() as u32;
+    Ok(match info.compression {
+        65535 => {
+            let mn = mn.ok_or_else(|| RawError::Corrupt("compressed PEF without maker note".into()))?;
+            let tb = mn.ifd.bytes(HUFFMAN).ok_or_else(|| RawError::Unsupported("compressed PEF without a Huffman table".into()))?;
+            let huff = table(tb, mn.order)?;
+            let chunks = info.chunks(bytes.len() as u64);
+            let first = chunks.first().ok_or_else(|| RawError::Corrupt("PEF without image data".into()))?;
+            let mut c = *first;
+            c.len = chunks.iter().map(|c| c.len).sum::<u64>().max(first.len);
+            let src = chunk_bytes(bytes, &c)
+                .or_else(|| bytes.get(first.offset as usize..))
+                .ok_or_else(|| RawError::Corrupt("PEF data outside file".into()))?;
+            if read == Mode::Full { RawData::U16(decode_huffman(src, &huff, w, hgt, bits)?) } else { RawData::U16(Vec::new()) }
+        }
+        1 => {
+            let strip: u64 = info.chunks(bytes.len() as u64).iter().map(|c| c.len).sum();
+            let packing = if strip >= (w * hgt * 2) as u64 { Packing::Word16 } else { Packing::Msb };
+            read_image_in(read, bytes, info, tiff.order, packing)?
+        }
+        // Some bodies tag plain packed samples as PackBits (32773). Only a strip that holds exactly the packed
+        // size of its rows is read, as the uncompressed MSB-first samples it is; any other size stays unsupported.
+        32773 if is_exactly_packed(info, bytes.len() as u64) => {
+            let packed = ImageInfo { compression: 1, ..info.clone() };
+            read_image_in(read, bytes, &packed, tiff.order, Packing::Msb)?
+        }
+        c => return Err(RawError::Unsupported(format!("PEF compression {c}"))),
+    })
+}
+
 pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
+    decode_report(bytes, mode).map(|(img, _)| img)
+}
+
+/// [`decode`], and how many points of a merged pixel-shift picture came from the single-frame demosaic (0 for any other file).
+fn decode_report(bytes: &[u8], mode: Mode) -> Result<(RawImage, usize)> {
     let tiff = Tiff::parse(bytes)?;
     let ifd0 = &tiff.ifds[0];
     let info = ifd0.image()?;
@@ -259,33 +299,7 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
     };
     // without crop tags the image area is found from the samples (dark borders)
     let read = if tagged.is_some() { mode } else { Mode::Full };
-    let data = match info.compression {
-        65535 => {
-            let mn = mn.as_ref().ok_or_else(|| RawError::Corrupt("compressed PEF without maker note".into()))?;
-            let tb = mn.ifd.bytes(HUFFMAN).ok_or_else(|| RawError::Unsupported("compressed PEF without a Huffman table".into()))?;
-            let huff = table(tb, mn.order)?;
-            let chunks = info.chunks(bytes.len() as u64);
-            let first = chunks.first().ok_or_else(|| RawError::Corrupt("PEF without image data".into()))?;
-            let mut c = *first;
-            c.len = chunks.iter().map(|c| c.len).sum::<u64>().max(first.len);
-            let src = chunk_bytes(bytes, &c)
-                .or_else(|| bytes.get(first.offset as usize..))
-                .ok_or_else(|| RawError::Corrupt("PEF data outside file".into()))?;
-            if read == Mode::Full { RawData::U16(decode_huffman(src, &huff, w, hgt, bits)?) } else { RawData::U16(Vec::new()) }
-        }
-        1 => {
-            let strip: u64 = info.chunks(bytes.len() as u64).iter().map(|c| c.len).sum();
-            let packing = if strip >= (w * hgt * 2) as u64 { Packing::Word16 } else { Packing::Msb };
-            read_image_in(read, bytes, &info, tiff.order, packing)?
-        }
-        // Some bodies tag plain packed samples as PackBits (32773). Only a strip that holds exactly the packed
-        // size of its rows is read, as the uncompressed MSB-first samples it is; any other size stays unsupported.
-        32773 if is_exactly_packed(&info, bytes.len() as u64) => {
-            let packed = ImageInfo { compression: 1, ..info.clone() };
-            read_image_in(read, bytes, &packed, tiff.order, Packing::Msb)?
-        }
-        c => return Err(RawError::Unsupported(format!("PEF compression {c}"))),
-    };
+    let data = read_samples(bytes, &tiff, &info, mn.as_ref(), read)?;
     let RawData::U16(ref samples) = data else { return Err(RawError::Unsupported("float PEF".into())) };
 
     let white = white_from_data(samples, bits);
@@ -316,6 +330,36 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         let g = (v[1] + v[2]) / 2.0;
         [(v[0] / g) as f32, 1.0, (v[3] / g) as f32]
     });
+    // Pentax Pixel Shift Resolution: four frames, IFD0's raw first, merged into full-colour samples (`pixelshift`)
+    let shift = pixelshift::pef_frames(&tiff, bytes).filter(|f| f.first().is_some_and(|first| std::ptr::eq(*first, ifd0)));
+    let mut data = data;
+    let mut black = black;
+    let mut moving = 0;
+    if let Some(frames) = shift
+        && mode == Mode::Full
+    {
+        let mut others = Vec::with_capacity(3);
+        for ifd in frames.iter().skip(1) {
+            let finfo = ifd.image()?;
+            if (finfo.width, finfo.height, finfo.compression) != (info.width, info.height, info.compression) {
+                return Err(RawError::Corrupt("pixel-shift frames of different size or coding".into()));
+            }
+            match read_samples(bytes, &tiff, &finfo, mn.as_ref(), Mode::Full)? {
+                RawData::U16(v) => others.push(v),
+                RawData::F32(_) => return Err(RawError::Unsupported("float PEF".into())),
+            }
+        }
+        let [Some(b), Some(c), Some(d)] = [others.first(), others.get(1), others.get(2)] else {
+            return Err(RawError::Corrupt("pixel-shift file without four frames".into()));
+        };
+        let RawData::U16(ref first) = data else { return Err(RawError::Unsupported("float PEF".into())) };
+        let per_colour = pixelshift::black_per_colour(&black, &cfa.shifted(active.x, active.y));
+        let merged = pixelshift::merge_frames([first, b, c, d], w, hgt, &cfa, per_colour, white, true)?;
+        black = BlackLevel::uniform(merged.black);
+        moving = merged.moving;
+        data = RawData::U16(merged.data);
+    }
+    let merged_rgb = shift.is_some();
     let mut metadata = lightcraft_meta::from_tiff(&tiff);
     metadata.width = Some(active.width as u32);
     metadata.height = Some(active.height as u32);
@@ -323,9 +367,9 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         format: RawFormat::Pef,
         width: w,
         height: hgt,
-        cpp: 1,
+        cpp: if merged_rgb { 3 } else { 1 },
         data,
-        cfa: Some(cfa),
+        cfa: if merged_rgb { None } else { Some(cfa) },
         bits,
         black,
         white: vec![white],
@@ -339,12 +383,40 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         metadata,
     };
     img.validate_for(mode)?;
-    Ok(img)
+    Ok((img, moving))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `corpus/raw/<name>` (`LIGHTCRAFT_CORPUS` overrides the corpus root), `None` when the file is absent.
+    fn corpus_file(name: &str) -> Option<Vec<u8>> {
+        let root = std::env::var_os("LIGHTCRAFT_CORPUS")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus"));
+        let bytes = std::fs::read(root.join("raw").join(name)).ok();
+        if bytes.is_none() {
+            eprintln!("skip: corpus/raw/{name} absent");
+        }
+        bytes
+    }
+
+    /// The CC0 Pentax K-3 III pixel-shift PEF (`pef-pentax-k3m3-pixelshift.pef`, a tripod shot of four Huffman frames)
+    /// merges into one full-colour picture in which almost nothing is called moving: a wrong frame order or offset
+    /// would put the two greens of a point (from different frames) a pixel apart and flag most of the picture.
+    #[test]
+    fn corpus_pentax_k3_iii_pixel_shift_merges_four_frames() {
+        let Some(bytes) = corpus_file("pef-pentax-k3m3-pixelshift.pef") else { return };
+        let (img, moving) = decode_report(&bytes, Mode::Full).unwrap();
+        assert_eq!((img.cpp, img.cfa.is_none(), img.format), (3, true, RawFormat::Pef));
+        assert_eq!((img.width, img.height), (6304, 4224));
+        assert_eq!(img.data.len(), 6304 * 4224 * 3);
+        let share = moving as f64 / (img.width * img.height) as f64;
+        assert!(share < 0.01, "{:.3}% of the picture called moving", share * 100.0);
+        // the header probe describes the same picture
+        assert_eq!(decode_report(&bytes, Mode::Header).unwrap().0.info(), img.info());
+    }
 
     /// Our own prefix code for categories 0..=14: lengths 2,2,3,3,4,5,..., codes assigned canonically.
     fn test_table() -> (Vec<u8>, Vec<(u16, u8)>) {

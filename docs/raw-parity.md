@@ -1,6 +1,6 @@
 # RAW parity: cameras, formats, demosaic, colour and lens profiles
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-17 · **Change:** minor (Hasselblad 3FR / FFF checked on four CC0 files, #171 and #172; GoPro GPR (VC-5) decoded, #170; raw-domain denoise wired through the loaders, one decode per settled strength, #201; upstream absorb 2026-10-14: Hasselblad Lunar verified and Leaf MOS recognised, 236 verified and 232 preview; Nikon D4 and D90 image areas; Nikon in-file distortion)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-17 · **Change:** minor (Pixel shift merged: Sony ARQ and Pentax, #165 and #167; Hasselblad 3FR / FFF checked on four CC0 files, #171 and #172; GoPro GPR (VC-5) decoded, #170; raw-domain denoise wired through the loaders, one decode per settled strength, #201; upstream absorb 2026-10-14: Hasselblad Lunar verified and Leaf MOS recognised, 236 verified and 232 preview; Nikon D4 and D90 image areas; Nikon in-file distortion)
 
 Raw processing is the deepest single dimension of reference editor parity: a photographer whose camera
 does not decode, or decodes with the wrong colour, cannot switch. This document measures it model by
@@ -126,7 +126,7 @@ checked, and Canon, the largest bucket, is the weakest of the big four.
 | ARW | ARW6 Compressed / HQ (compression 32766; ILCE-7RM6) | ✅ | 8 CC0 files; 12-bit mode unsupported; `docs/arw6-compression.md` |
 | ARW | 12-bit compressed of DSLR-A200…A390 | ⬜ | preview (#535) [#163](https://github.com/Orthic-Labs/ember/issues/163) |
 | ARW | A100 ARW; SRF (F828, V3) | ⬜ | recognised as Sony raws since #702 (`probe` in `lib.rs`), so they import as preview only: `arw.rs` finds no CFA image IFD ("old ARW or SR2") and the raw data is not decoded; SRF V3 not looked at [#164](https://github.com/Orthic-Labs/ember/issues/164) |
-| ARW | ARQ pixel shift | ⬜ | no code [#165](https://github.com/Orthic-Labs/ember/issues/165) |
+| ARW | ARQ pixel shift | 🟡 | decoded and merged (`pixelshift.rs`, `arw.rs`): the raw IFD (photometric 32892, uncompressed, 4 samples R, G1, G2, B per pixel, registered by the camera) becomes full-colour RGB with no demosaic, G the mean of the two greens; where they differ beyond a noise model fitted from the image itself the point comes from a demosaic of the unshifted frame rebuilt from the planes. Synthetic tests (exact RGB recovery, fallback, noise) and a corpus test on the CC0 ILCE-7RM3 file (`arw-sony-a7rm3-arq.arq`); CI verification pending [#165](https://github.com/Orthic-Labs/ember/issues/165) |
 | SR2 | DSC-R1 | ✅ | CC0 3221 sample |
 | RAF | uncompressed, lossless and lossy compressed; Bayer and X-Trans; GFX 14/16-bit | ✅ | 24 files from 13 bodies exact |
 | RAF | pre-X FinePix without a raw IFD | ⬜ | `raf.rs` refuses (26 reference publisher models, estimated split) [#166](https://github.com/Orthic-Labs/ember/issues/166) |
@@ -134,7 +134,7 @@ checked, and Canon, the largest bucket, is the weakest of the big four.
 | ORF | **compressed** (every Olympus / OM body since ~2008) | ⬜ | `orf.rs` refuses; the E-M1 and E-M10 III corpus files are `KNOWN_UNSUPPORTED` |
 | RW2 / RWL / RAW | formats 2, 4, 5, 6, 7, 8 and 16-bit words | ✅ | 118 bodies (#215) |
 | PEF | uncompressed, Huffman, packed 12-bit | ✅ | K10D, K-3, K-5 IIs |
-| PEF / DNG | Pentax pixel shift | ⬜ | frames not combined [#167](https://github.com/Orthic-Labs/ember/issues/167) |
+| PEF / DNG | Pentax pixel shift | 🟡 | the four frames are decoded and merged (`pixelshift.rs`; `pef.rs`, `dng.rs`): each point takes R, G, G, B from the frames shifted by (0,0), (1,0), (1,1), (0,1) with no demosaic, and moving points come from a demosaic of frame 0. Frame order from the maker-note block `0x0243`. Offsets measured on 6 CC0 tripod files (K-1 II PEF and DNG, K-3 III PEF); synthetic tests (exact RGB recovery for all four Bayer layouts, frame order, fallback) and corpus tests on the K-3 III PEF and K-1 II DNG; CI verification pending [#167](https://github.com/Orthic-Labs/ember/issues/167) |
 | SRW | uncompressed, 12-bit packed | ✅ | EX1 corpus; NX10, NX20 |
 | SRW | compressed 32770 / 32772 / 32773 | ⬜ | refused [#168](https://github.com/Orthic-Labs/ember/issues/168) |
 | DNG | uncompressed, LJ92, lossy JPEG / Smart Preview, Deflate incl. float, LinearRaw, tiles / strips, row / column interleave | ✅ | 6 corpus DNGs; 4 ILCE-6400 JXL DNGs |
@@ -147,6 +147,32 @@ checked, and Canon, the largest bucket, is the weakest of the big four.
 | IIQ, MOS, MRW, ERF, KDC, X3F | all | ⬜ | preview; an uncompressed MOS, whose IFD0 is the mosaic itself with no Make tag, is recognised by Leaf's data block `0x8606` (upstream #1275) [#173](https://github.com/Orthic-Labs/ember/issues/173) |
 | IIQ, MOS, MRW, ERF, KDC, X3F | all | ⬜ | preview [#174](https://github.com/Orthic-Labs/ember/issues/174) |
 | DCR, MEF, MFW, DXO, TIFF raws | all | ⬜ | not imported; the TIFF raws that are decoded have their own rows (Hasselblad 3FR / FFF above, Kodak DCS520C `vendor/kodak.rs`, GoPro GPR) [#175](https://github.com/Orthic-Labs/ember/issues/175) |
+
+### Pixel shift: what the files settled (#165, #167)
+
+Clean-room: our own black-box analysis of CC0 files from raw.pixls.us (Sony ILCE-7RM3 ARQ; Pentax K-1, K-1 II and
+K-3 III pixel-shift PEF and DNG); no third-party decoder source consulted. The merge lives in
+`crates/raw/src/pixelshift.rs`; its module comment holds the derivation. In short:
+
+- **Pentax.** Four complete Bayer frames, each in sensor coordinates (same CFA phase in every frame; the scene moves).
+  PEF: IFD0's raw plus three raw `SubIFDs`. DNG: four top-level IFDs, each with its raw in a `SubIFD`, in frame
+  order. Registering tripod shots (phase correlation of the interpolated green plane over 70 to 80 tiles) gave scene
+  shifts against frame 0 of (0,0), (+1,0), (+1,+1), (0,+1) in (rows, columns). Against every other assignment of the
+  four offsets to the frames, those leave 20 times less mismatch between the two greens of a point (which come from
+  different frames) on the K-3 III and K-1 II files, in PEF and DNG. Maker-note block `0x0243`: byte 0 = 1, byte 2 =
+  4 frames, byte 7 = the frame index (all zero on a three-frame bracket, `00 00 01 ..` on a single frame). The
+  hand-held K-1 files (`IMGP8552`, `_K1I9781`) moved by several pixels between frames and fit no model; they take the
+  motion fallback for most of the picture.
+- **Sony ARQ.** Already merged by the camera: four registered samples per pixel (R, G1, G2, B). The brightness drift of
+  the four exposures survives in the means of each plane's four parity classes and fits the same offsets (residual
+  2e-4 against 1.2e-3 with no model); it also fixes which green plane is which, so the unshifted frame's mosaic is
+  recoverable from the planes (R even/even, G1 even/odd, G2 odd/even, B odd/odd) for the fallback.
+- **Motion.** The two greens of a point come from different frames; they differ beyond `5 σ` of a noise model (variance
+  linear in the level, fitted from the image from the lower quartile of each level band's differences) at moving
+  points, which (grown by 2 pixels) take a PPG demosaic of the unshifted frame. Static tripod files flag 0.001% (ARQ)
+  to 1% (K-1 II foliage) of the picture in a numpy model of the same algorithm.
+
+Not done: OM high-res and Nikon pixel shift (#243); `.ARQ` is not yet in the import extension lists.
 
 ### Compressed ORF: a clean-room starting point
 
@@ -207,7 +233,7 @@ scratch tools are not committed.
 | X-Trans demosaic | ✅ | in-house edge-weighted directional | 🟡 unmeasured |
 | Foveon | ✅ (older bodies) | — | ⬜ |
 | Monochrome / LinearRaw | ✅ | handled, no demosaic | ✅ |
-| Pixel shift (Sony ARQ, Pentax, OM high-res, Nikon) | ✅ (Sony, Pentax, Nikon) | — | ⬜ |
+| Pixel shift (Sony ARQ, Pentax, OM high-res, Nikon) | ✅ (Sony, Pentax, Nikon) | — | 🟡 (Sony ARQ, Pentax: merged, CI pending; OM high-res and Nikon ⬜, #243) |
 | Black and white levels | per model, calibrated | read from each file (masked columns, maker notes, SR2SubIFD, CMP1) | 🟡 per-body bugs keep surfacing: A450–A700 SR2 black level and M/S ARW pedestal (#535, fixed); 5D Mark IV CR2 renders dark (#455, open); white-level pile-up in phone DNGs (#548, fixed) [#181](https://github.com/Orthic-Labs/ember/issues/181) |
 | Crop masks and aspect | ✅ | DefaultCrop, Sony recorded size, Canon AspectInfo, Panasonic in-camera crops, Nikon CropArea, measured Nikon bodies without it (D4, D90, D5000, D600, D610) | 🟡 7RM3 / 7RM4 crop origin 8–32 px off (cosmetic) |
 | Lens metadata | ✅ read for profile selection | EXIF lens fields read; used only for the in-file corrections below | 🟡 |
@@ -304,6 +330,7 @@ Beyond decoding:
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-17 | minor | Pixel shift (#165, #167): Sony ARQ and Pentax Pixel Shift Resolution (PEF and DNG) decoded and merged to full-colour RGB without demosaic, with a single-frame fallback where the frames disagree; rows ⬜ to 🟡 pending CI; offsets measured on CC0 files, three of them added to the corpus list |
 | 2026-10-17 | minor | Compressed ORF (#178): analysis note only, container facts and ruled-out hypotheses recorded; no decoder, no status change |
 | 2026-10-17 | minor | Audit of the open raw-parity rows against main: ARW A100 / SRF and the TIFF-raw row described as refused or not imported although they are recognised (preview only) or have decoded members; no decode status changed |
 | 2026-10-17 | minor | Hasselblad 3FR / FFF rows to ✅ (#171, #172): four CC0 files (X1D uncompressed, H3D and CFV-50c 3FR, H4D-50 FFF) pinned by sha256 in the corpus list and checked against the RGB preview in IFD0; the corpus test accepts an RGB-only preview for them. Per-model counts (Hasselblad row, medium-format bucket) not re-measured |

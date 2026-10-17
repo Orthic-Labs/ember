@@ -40,6 +40,7 @@ pub mod kelvin_presets;
 pub mod ljpeg;
 pub(crate) mod llvc;
 pub mod opcodes;
+mod pixelshift;
 pub mod plane;
 mod preview;
 pub mod profile;

@@ -384,6 +384,12 @@ const RAW_SAMPLES: &[(&str, &str, &str)] = &[
         "https://raw.pixls.us/data/Sony/ILCE-7M4/ILCE-7M4_DSC06676_FullFrame-LossLess-Compressed-Small.ARW",
         "cbbd0930c7d8706dff84c68a2004454266e6fd0d8354f5f76a106b5d776e0223",
     ),
+    // Sony ARQ (Pixel Shift Multi Shooting, ILCE-7RM3): 14-bit uncompressed, four registered samples (R, G, G, B) per pixel; 341 MB
+    (
+        "arw-sony-a7rm3-arq.arq",
+        "https://raw.pixls.us/download/data/Sony/ILCE-7RM3/Indoor_Multi-20190712-094102.ARQ",
+        "67af1f9f4cff82bd182f3fc48e95d39ae7d8352595e3c72f3386c9dee114f27d",
+    ),
     // ILCE-7CR (61 MP), one scene in three codings: lossless compressed L (2×2 CFA cells per LJ92 sample) and M
     // (subsampled YCbCr), and compressed ARW2
     (
@@ -616,6 +622,12 @@ const RAW_SAMPLES: &[(&str, &str, &str)] = &[
         "https://raw.pixls.us/getfile.php/2206/nice/Google%20-%20Pixel%202%20XL%20-%2016bit%20%284:3%29.dng",
         "5541093a369f0487fef92bcd1f5fef1be6e4e3cec2aa4d52ad38d2211f3309d7",
     ),
+    // Pentax K-1 II Pixel Shift Resolution DNG: four DNGs (lossless JPEG, one per top-level IFD) of a tripod shot; 169 MB
+    (
+        "dng-pentax-k1m2-pixelshift.dng",
+        "https://raw.pixls.us/download/data/Pentax/K-1%20Mark%20II/_IMG2390.DNG",
+        "94d65bc3c44c108df67f0016afc1a116f22ca13f0b1007a25dd97ea44c703a9b",
+    ),
     (
         "dng-ricoh-gr3.dng",
         "https://raw.pixls.us/getfile.php/3115/nice/Ricoh%20-%20GR%20III%20-%2014bit%20%283:2%29.DNG",
@@ -700,6 +712,12 @@ const RAW_SAMPLES: &[(&str, &str, &str)] = &[
         "pef-pentax-k5iis.pef",
         "https://raw.pixls.us/getfile.php/1198/nice/Pentax%20-%20K-5%20II%20s%20-%2014bit%20%283:2%29.PEF",
         "e579e7360c35e512f9c3a5c0eb9519575b87b489c6f86be82590f7706a7ed17b",
+    ),
+    // Pentax K-3 III Pixel Shift Resolution PEF: IFD0's raw and three SubIFD raws (Huffman), a tripod shot; 121 MB
+    (
+        "pef-pentax-k3m3-pixelshift.pef",
+        "https://raw.pixls.us/download/data/Pentax/K-3%20Mark%20III/IMGP9855.PEF",
+        "dbcbd2848c0635c3bc035034b9860ef72c1de855b78e03749c65fd31e77e227e",
     ),
     // Samsung SRW, one file per packing: 12-bit MSB-first (NX10), 12-bit LSB-first (NX20), 16-bit words (EX1).
     (

@@ -44,6 +44,7 @@
 //! through the generic TIFF path.
 
 use super::arw6;
+use crate::pixelshift;
 use crate::tiffraw::{Packing, check_image, read_image_in};
 use crate::{BlackLevel, Cfa, ColorData, Mode, OpcodeLists, RawData, RawError, RawFormat, RawImage, Rect, Result, ljpeg};
 use lightcraft_geom::Orientation;
@@ -627,6 +628,11 @@ pub(crate) fn declared_full_crop(bytes: &[u8]) -> Result<Option<Rect>> {
 }
 
 pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
+    decode_report(bytes, mode).map(|(img, _)| img)
+}
+
+/// [`decode`], and how many points of a merged ARQ came from the single-frame demosaic (0 for any other file).
+fn decode_report(bytes: &[u8], mode: Mode) -> Result<(RawImage, usize)> {
     let tiff = Tiff::parse(bytes)?;
     let ifd0 = &tiff.ifds[0];
     let raw = raw_ifd(&tiff).ok_or_else(|| RawError::Unsupported("ARW without a CFA image IFD (old ARW or SR2)".into()))?;
@@ -636,6 +642,13 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
     let sample_count_u64 = sample_count as u64;
     let bits = info.bits() as u32;
     let linear_rgb = info.compression == 7 && info.photometric == photometric::YCBCR;
+    // ARQ (Sony Pixel Shift Multi Shooting): uncompressed, four samples per pixel R, G, G, B already merged by the camera
+    let arq = info.photometric == pixelshift::ARQ_PHOTOMETRIC
+        && info.samples_per_pixel == 4
+        && info.compression == 1
+        && info.planar == 1
+        && info.sample_format != 3
+        && bits <= 16;
     let chunks = info.chunks(bytes.len() as u64);
     let strip_len = chunks.iter().try_fold(0u64, |total, c| total.checked_add(c.len)).ok_or(RawError::Limit("raw image data too large"))?;
     // This ARW2 layout stores exactly one byte per sample in one strip; other packed layouts
@@ -643,6 +656,7 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
     let one_byte_per_sample = chunks.len() == 1 && strip_len == sample_count_u64;
     let packed12 = info.compression == 32767 && is_packed12(&info, chunks.len(), strip_len);
     let (data, out_bits) = match info.compression {
+        1 if arq => (read_image_in(mode, bytes, &info, tiff.order, Packing::Word16)?, bits),
         7 if linear_rgb => (RawData::U16(read_ycbcr_tiles(bytes, &info, raw, mode)?), 14),
         32767 if one_byte_per_sample && mode == Mode::Header => {
             chunk_bytes(bytes, &chunks[0]).ok_or_else(|| RawError::Corrupt("raw strip outside file".into()))?;
@@ -769,6 +783,23 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
             if crop == Rect::new(0, 0, w, h) { sr2().and_then(|s| sr2_old_crop(s, w, h)).unwrap_or(crop) } else { crop }
         }
     };
+    // an ARQ's registered planes become full-colour samples: R, G (mean of the two) and B, with what moved taken from
+    // the unshifted frame (see `pixelshift`)
+    let mut black = black;
+    let mut moving = 0;
+    let data = if arq && mode == Mode::Full {
+        let RawData::U16(quads) = data else { return Err(RawError::Unsupported("float ARQ".into())) };
+        let planes = match black.values.as_slice() {
+            [a, b, c, d] => [*a, *b, *c, *d],
+            _ => [black.mean(); 4],
+        };
+        let merged = pixelshift::merge_arq(quads, w, h, planes, white)?;
+        black = BlackLevel::uniform(merged.black);
+        moving = merged.moving;
+        RawData::U16(merged.data)
+    } else {
+        data
+    };
     let mut metadata = lightcraft_meta::from_tiff(&tiff);
     metadata.width = Some(crop.width as u32);
     metadata.height = Some(crop.height as u32);
@@ -776,9 +807,9 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         format: RawFormat::Arw,
         width: w,
         height: h,
-        cpp: if linear_rgb { 3 } else { 1 },
+        cpp: if linear_rgb || arq { 3 } else { 1 },
         data,
-        cfa: if linear_rgb { None } else { Some(cfa) },
+        cfa: if linear_rgb || arq { None } else { Some(cfa) },
         bits: out_bits,
         black,
         white: vec![white],
@@ -809,12 +840,40 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         metadata,
     };
     img.validate_for(mode)?;
-    Ok(img)
+    Ok((img, moving))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `corpus/raw/<name>` (`LIGHTCRAFT_CORPUS` overrides the corpus root), `None` when the file is absent.
+    fn corpus_file(name: &str) -> Option<Vec<u8>> {
+        let root = std::env::var_os("LIGHTCRAFT_CORPUS")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus"));
+        let bytes = std::fs::read(root.join("raw").join(name)).ok();
+        if bytes.is_none() {
+            eprintln!("skip: corpus/raw/{name} absent");
+        }
+        bytes
+    }
+
+    /// The CC0 Sony ILCE-7RM3 ARQ (`arw-sony-a7rm3-arq.arq`, an indoor still life): four registered samples per pixel,
+    /// merged to R, G, B with almost nothing called moving (the two greens come from different frames of the shift).
+    #[test]
+    fn corpus_sony_arq_merges_its_four_planes() {
+        let Some(bytes) = corpus_file("arw-sony-a7rm3-arq.arq") else { return };
+        let (img, moving) = decode_report(&bytes, Mode::Full).unwrap();
+        assert_eq!((img.cpp, img.cfa.is_none(), img.format), (3, true, RawFormat::Arw));
+        assert_eq!((img.width, img.height), (8000, 5320));
+        assert_eq!(img.data.len(), 8000 * 5320 * 3);
+        assert_eq!((img.crop.width, img.crop.height), (7952, 5304));
+        assert!(img.wb_multipliers.is_some_and(|m| m[0] > 1.5 && m[2] > 1.5 && m[1] == 1.0), "{:?}", img.wb_multipliers);
+        let share = moving as f64 / (img.width * img.height) as f64;
+        assert!(share < 0.001, "{:.4}% of the picture called moving", share * 100.0);
+        assert_eq!(decode_report(&bytes, Mode::Header).unwrap().0.info(), img.info());
+    }
 
     fn procedural_arw(width: u32, height: u32, rows_per_strip: u32, offsets: Vec<u64>, counts: Vec<u64>) -> Vec<u8> {
         use lightcraft_tiff::{ByteOrder, IfdBuilder, TiffWriter, Value};

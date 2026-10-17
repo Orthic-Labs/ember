@@ -2,6 +2,7 @@
 //! linearization, black/white levels, active area, default crop, CFA description, colour tags, opcode lists.
 
 use crate::gaintable::GainTableMap;
+use crate::pixelshift;
 use crate::profile::{HsvTable, ProfileLook, ToneCurve};
 use crate::tiffraw::{Packing, check_image, read_image_in};
 use crate::{BlackLevel, Cfa, ColorData, Mat3, Mode, RawData, RawError, RawFormat, RawImage, Rect, Result, opcodes};
@@ -222,11 +223,32 @@ fn read_vc5(bytes: &[u8], raw: &Ifd, info: &ImageInfo) -> Result<Vec<u16>> {
 /// which). They differ in one respect: when the raw IFD states no `CFAPattern`, the layout is RGGB
 /// anchored at the sensor origin.
 pub(crate) fn decode_as(bytes: &[u8], mode: Mode, format: RawFormat) -> Result<RawImage> {
+    decode_as_report(bytes, mode, format).map(|(img, _)| img)
+}
+
+/// [`decode_as`], and how many points of a merged pixel-shift picture came from the single-frame demosaic (0 for any other file).
+fn decode_as_report(bytes: &[u8], mode: Mode, format: RawFormat) -> Result<(RawImage, usize)> {
     let tiff = Tiff::parse(bytes)?;
     let ifd0 = &tiff.ifds[0];
-    let raw = raw_ifd(&tiff).ok_or_else(|| RawError::Corrupt("DNG without a raw image IFD".into()))?;
+    // Pentax Pixel Shift Resolution DNG: four frames, one per top-level IFD (see `pixelshift`); frame 0's raw is read below
+    // like any other and the other three are merged into it at the end
+    let shift = if format == RawFormat::Dng { pixelshift::dng_frames(&tiff, bytes) } else { None };
+    let raw = match shift {
+        Some([first, ..]) => first,
+        None => raw_ifd(&tiff).ok_or_else(|| RawError::Corrupt("DNG without a raw image IFD".into()))?,
+    };
     let info = raw.image()?;
     let (w, h, cpp) = (info.width as usize, info.height as usize, info.samples_per_pixel as usize);
+    // only plain one-sample integer Bayer frames are merged: nothing between the stored samples and the mosaic to undo
+    let shift = shift.filter(|_| {
+        cpp == 1
+            && info.sample_format != 3
+            && info.photometric == photometric::CFA
+            && info.compression != t::compression::VC5
+            && !raw.contains(t::LINEARIZATION_TABLE)
+            && raw.u16(t::ROW_INTERLEAVE_FACTOR).unwrap_or(1) <= 1
+            && raw.u16(t::COLUMN_INTERLEAVE_FACTOR).unwrap_or(1) <= 1
+    });
     // one sample (CFA or monochrome), RGB or four colours; two are neither and can't be developed (issue #1511)
     if !matches!(cpp, 1 | 3 | 4) {
         return Err(RawError::Unsupported(format!("{cpp} samples per pixel")));
@@ -344,6 +366,40 @@ pub(crate) fn decode_as(bytes: &[u8], mode: Mode, format: RawFormat) -> Result<R
         None
     };
 
+    // merge the four frames of a pixel-shift file into full-colour samples
+    let mut black = black;
+    let mut moving = 0;
+    if let Some(frames) = shift
+        && mode == Mode::Full
+    {
+        let (Some(layout), RawData::U16(first)) = (cfa.as_ref(), &data) else {
+            return Err(RawError::Unsupported("pixel-shift DNG without 16-bit Bayer samples".into()));
+        };
+        let mut others: Vec<Vec<u16>> = Vec::with_capacity(3);
+        for ifd in frames.iter().skip(1) {
+            let finfo = ifd.image()?;
+            if (finfo.width, finfo.height, finfo.compression, finfo.samples_per_pixel)
+                != (info.width, info.height, info.compression, info.samples_per_pixel)
+            {
+                return Err(RawError::Corrupt("pixel-shift frames of different size or coding".into()));
+            }
+            match read_image_in(Mode::Full, bytes, &finfo, tiff.order, Packing::Msb)? {
+                RawData::U16(v) => others.push(v),
+                RawData::F32(_) => return Err(RawError::Unsupported("float pixel-shift frames".into())),
+            }
+        }
+        let [Some(b), Some(c), Some(d)] = [others.first(), others.get(1), others.get(2)] else {
+            return Err(RawError::Corrupt("pixel-shift file without four frames".into()));
+        };
+        let per_colour = pixelshift::black_per_colour(&black, &layout.shifted(active_area.x, active_area.y));
+        let merged = pixelshift::merge_frames([first, b, c, d], w, h, layout, per_colour, white.first().copied().unwrap_or(default_white), true)?;
+        black = BlackLevel::uniform(merged.black);
+        moving = merged.moving;
+        data = RawData::U16(merged.data);
+    }
+    // merged frames are full-colour samples: three per pixel, no CFA
+    let (cpp, cfa) = if shift.is_some() { (3, None) } else { (cpp, cfa) };
+
     let opcode_list = |tag| raw.bytes(tag).map(opcodes::parse_list).unwrap_or_default();
     let opcodes =
         crate::OpcodeLists { list1: opcode_list(t::OPCODE_LIST_1), list2: opcode_list(t::OPCODE_LIST_2), list3: opcode_list(t::OPCODE_LIST_3) };
@@ -371,12 +427,38 @@ pub(crate) fn decode_as(bytes: &[u8], mode: Mode, format: RawFormat) -> Result<R
         metadata,
     };
     img.validate_for(mode)?;
-    Ok(img)
+    Ok((img, moving))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `corpus/raw/<name>` (`LIGHTCRAFT_CORPUS` overrides the corpus root), `None` when the file is absent.
+    fn corpus_file(name: &str) -> Option<Vec<u8>> {
+        let root = std::env::var_os("LIGHTCRAFT_CORPUS")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus"));
+        let bytes = std::fs::read(root.join("raw").join(name)).ok();
+        if bytes.is_none() {
+            eprintln!("skip: corpus/raw/{name} absent");
+        }
+        bytes
+    }
+
+    /// The CC0 Pentax K-1 II pixel-shift DNG (`dng-pentax-k1m2-pixelshift.dng`: four DNGs in one file, lossless JPEG
+    /// frames in IFD order) merges into one full-colour picture in which little is called moving (some foliage).
+    #[test]
+    fn corpus_pentax_k1_ii_pixel_shift_dng_merges_four_frames() {
+        let Some(bytes) = corpus_file("dng-pentax-k1m2-pixelshift.dng") else { return };
+        let (img, moving) = decode_as_report(&bytes, Mode::Full, RawFormat::Dng).unwrap();
+        assert_eq!((img.cpp, img.cfa.is_none(), img.format), (3, true, RawFormat::Dng));
+        assert_eq!((img.width, img.height), (7392, 4950));
+        assert_eq!(img.data.len(), 7392 * 4950 * 3);
+        let share = moving as f64 / (img.width * img.height) as f64;
+        assert!(share < 0.03, "{:.3}% of the picture called moving", share * 100.0);
+        assert_eq!(decode_as_report(&bytes, Mode::Header, RawFormat::Dng).unwrap().0.info(), img.info());
+    }
 
     /// Store `image` the way DNG 1.7 interleaves it: row `r` of the image is written to stored row
     /// `(r % rows) * (h / rows) + r / rows`, and columns likewise. This is the inverse of
