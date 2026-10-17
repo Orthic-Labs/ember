@@ -238,10 +238,7 @@ pub fn show(app: &mut LightcraftApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.label(crate::i18n::tr("The book has no pages yet: auto layout photos into it first (book.autoLayout)."));
     } else {
         let picked = match run.view {
-            View::Overview => overview(app, ctx, ui, &mut run).map(|page| {
-                run.view = View::Page;
-                page
-            }),
+            View::Overview => overview(app, ctx, ui, &mut run).inspect(|_| run.view = View::Page),
             View::Page | View::Spread => draw_pages(app, ctx, ui, &mut run),
         };
         if let Some(page) = picked {

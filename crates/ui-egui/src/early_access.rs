@@ -125,7 +125,7 @@ pub fn on(settings: &AppSettings, key: &str) -> bool {
 
 /// Whether `f` owns `command` (listed or prefixed).
 fn claims(f: &Feature, command: &str) -> bool {
-    f.commands.iter().any(|c| *c == command) || f.prefixes.iter().any(|p| command.starts_with(*p))
+    f.commands.contains(&command) || f.prefixes.iter().any(|p| command.starts_with(*p))
 }
 
 /// The feature whose whole command (or module) `command` is.

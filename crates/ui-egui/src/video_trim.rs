@@ -76,19 +76,19 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, canvas: Rect, photo: &Ph
         if app.session.video.photo() == Some(photo.id) { app.session.video_position_now() } else { lightcraft_engine::video::poster_secs_of(photo) };
     let mut set = None;
     let w_in = widths.first().copied().unwrap_or(60.0);
-    if button(ui, &p, &t, at(x, w_in), "loupe:trimIn", &labels[0], crate::i18n::tr("Start the clip at the frame on screen")) {
+    if button(ui, &p, &t, at(x, w_in), "loupe:trimIn", labels[0], crate::i18n::tr("Start the clip at the frame on screen")) {
         set = Some(json!({"id": photo.id.0, "in": now}));
     }
     x += w_in + gap;
     let w_out = widths.get(1).copied().unwrap_or(60.0);
-    if button(ui, &p, &t, at(x, w_out), "loupe:trimOut", &labels[1], crate::i18n::tr("End the clip at the frame on screen")) {
+    if button(ui, &p, &t, at(x, w_out), "loupe:trimOut", labels[1], crate::i18n::tr("End the clip at the frame on screen")) {
         set = Some(json!({"id": photo.id.0, "out": now}));
     }
     x += w_out + gap;
     let mut clear = false;
     if trimmed {
         let w_clear = widths.get(2).copied().unwrap_or(80.0);
-        clear = button(ui, &p, &t, at(x, w_clear), "loupe:trimClear", &labels[2], crate::i18n::tr("Keep the whole clip again"));
+        clear = button(ui, &p, &t, at(x, w_clear), "loupe:trimClear", labels[2], crate::i18n::tr("Keep the whole clip again"));
     }
     let result = match (set, clear) {
         (Some(params), _) => Some(app.run("video.setTrim", params)),
