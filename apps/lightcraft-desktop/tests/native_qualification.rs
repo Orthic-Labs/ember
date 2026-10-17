@@ -440,6 +440,10 @@ fn assert_workspace_design(control: &rightkit_qa::control::Control) {
 }
 
 fn assert_workspace_surfaces_unclipped(control: &rightkit_qa::control::Control) {
+    wait_for_dom(
+        control,
+        "return (() => { const scroll = document.querySelector('.lc-filmstrip-scroll'); const viewport = scroll?.getBoundingClientRect(); return Boolean(viewport && viewport.width > 0 && viewport.height > 0 && [...scroll.querySelectorAll('.lc-filmstrip-item')].some((item) => { const rect = item.getBoundingClientRect(); return rect.right > viewport.left + 4 && rect.left < viewport.right - 4; })); })();",
+    );
     let bounds = control.eval(r#"return (() => {
         const side = document.querySelector('.rk-side')?.getBoundingClientRect();
         const foot = document.querySelector('.rk-side__foot')?.getBoundingClientRect();
@@ -1108,11 +1112,30 @@ fn assert_grid_generation_refresh_retains_preview(control: &rightkit_qa::control
             const cell = document.querySelector('.lc-photo-cell.is-active');
             const frame = cell?.querySelector('.photo-preview-frame');
             const image = frame?.querySelector('img.lc-photo-preview');
-            if (!api || typeof api.invoke !== 'function' || !workspace || !cell || !frame || !image || !image.complete || image.naturalWidth < 1) return {{installed:false, reason:'invoke seam or decoded active grid frame missing'}};
+            if (!api || !(api.callbacks instanceof Map) || typeof api.runCallback !== 'function' || !workspace || !cell || !frame || !image || !image.complete || image.naturalWidth < 1) return {{installed:false, reason:'callback seam or decoded active grid frame missing'}};
             if (Object.prototype.hasOwnProperty.call(window, key)) return {{installed:false, reason:'probe key collision'}};
             const scroll = document.querySelector('.lc-grid-scroll');
             const scrollTop = scroll?.scrollTop ?? 0;
-            const state = {{api, original:api.invoke, workspace, cell, frame, scroll, scrollTop, held:[], targetGeneration:null, targetHeldAt:null, calls:0, targetSamples:0, samples:0, removed:false, frameRemoved:false, gap:false, scrollChanged:false, stopped:false, armed:true}};
+            const callbacks = api.callbacks;
+            const getDescriptor = Object.getOwnPropertyDescriptor(callbacks, 'get');
+            const state = {{callbacks, getDescriptor, originalGet:callbacks.get, workspace, cell, frame, scroll, scrollTop, held:[], targetGeneration:null, targetHeldAt:null, calls:0, targetSamples:0, samples:0, removed:false, frameRemoved:false, gap:false, scrollChanged:false, stopped:false, armed:true}};
+            // Tauri freezes invoke & runCallback. Its exposed callback Map remains mutable;
+            // intercept dispatch so genuine native slice responses stay pending in renderer.
+            state.interceptGet = function(id) {{
+                const callback = state.originalGet.call(this, id);
+                if (typeof callback !== 'function') return callback;
+                return function(response) {{
+                    if (state.armed && response && Number.isSafeInteger(response.generation) && Number.isSafeInteger(response.offset) && Number.isSafeInteger(response.total) && Array.isArray(response.photos)) {{
+                        state.calls++;
+                        const generation = response.generation;
+                        state.held.push({{generation, release:() => callback(response)}});
+                        if (generation === state.targetGeneration && state.targetHeldAt === null) state.targetHeldAt = performance.now();
+                        return;
+                    }}
+                    return callback(response);
+                }};
+            }};
+            if (!Reflect.defineProperty(callbacks, 'get', {{value:state.interceptGet, writable:true, configurable:true}}) || callbacks.get !== state.interceptGet) return {{installed:false, reason:'callback dispatch interception unavailable'}};
             state.check = () => {{
                 const images = [...frame.querySelectorAll('img.lc-photo-preview')];
                 if (!cell.isConnected || !frame.isConnected || frame.closest('.lc-photo-cell') !== cell || !images.some(img => img.isConnected && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0)) state.gap = true;
@@ -1125,17 +1148,6 @@ fn assert_grid_generation_refresh_retains_preview(control: &rightkit_qa::control
                 state.check();
             }});
             state.observer.observe(workspace, {{childList:true, subtree:true, attributes:true, attributeFilter:['src']}});
-            api.invoke = function(command, args) {{
-                if (command === 'lc_view_slice' && state.armed) {{
-                    state.calls++;
-                    const generation = args?.generation;
-                    return new Promise((resolve, reject) => {{
-                        state.held.push({{generation, release:() => state.original.call(api, command, args).then(resolve, reject)}});
-                        if (generation === state.targetGeneration && state.targetHeldAt === null) state.targetHeldAt = performance.now();
-                    }});
-                }}
-                return state.original.call(api, command, args);
-            }};
             state.sample = () => {{
                 if (state.stopped) return;
                 state.samples++;
@@ -1193,16 +1205,19 @@ fn assert_grid_generation_refresh_retains_preview(control: &rightkit_qa::control
             const key={key:?}, state=window[key];
             if (!state) return {{cleaned:false}};
             state.armed=false;
-            state.api.invoke=state.original;
+            const seamOwned=state.callbacks.get===state.interceptGet;
+            const seamRestored=seamOwned && (state.getDescriptor ? Reflect.defineProperty(state.callbacks, 'get', state.getDescriptor) : Reflect.deleteProperty(state.callbacks, 'get')) && state.callbacks.get===state.originalGet;
             state.observer.disconnect(); state.stopped=true; clearTimeout(state.timer);
             state.check();
             const images=[...state.frame.querySelectorAll('img.lc-photo-preview')];
-            const result={{calls:state.calls,targetCalls:state.held.filter(request=>request.generation===state.targetGeneration).length,targetSamples:state.targetSamples,targetHeldAt:state.targetHeldAt,targetHoldMs:state.targetHeldAt===null?0:performance.now()-state.targetHeldAt,removed:state.removed,frameRemoved:state.frameRemoved,gap:state.gap,scrollTop:state.scrollTop,scrollChanged:state.scrollChanged,cellConnected:state.cell.isConnected,frameConnected:state.frame.isConnected,activeFrameSame:document.querySelector('.lc-photo-cell.is-active .photo-preview-frame')===state.frame,decodedImages:images.filter(img=>img.isConnected&&img.complete&&img.naturalWidth>0&&img.naturalHeight>0).length}};
+            const result={{seamOwned,seamRestored,calls:state.calls,targetCalls:state.held.filter(request=>request.generation===state.targetGeneration).length,targetSamples:state.targetSamples,targetHeldAt:state.targetHeldAt,targetHoldMs:state.targetHeldAt===null?0:performance.now()-state.targetHeldAt,removed:state.removed,frameRemoved:state.frameRemoved,gap:state.gap,scrollTop:state.scrollTop,scrollChanged:state.scrollChanged,cellConnected:state.cell.isConnected,frameConnected:state.frame.isConnected,activeFrameSame:document.querySelector('.lc-photo-cell.is-active .photo-preview-frame')===state.frame,decodedImages:images.filter(img=>img.isConnected&&img.complete&&img.naturalWidth>0&&img.naturalHeight>0).length}};
             for (const request of state.held.splice(0)) request.release();
             delete window[key]; result.cleaned=!Object.prototype.hasOwnProperty.call(window,key); return result;
         }})();"#))
         .expect("grid refresh continuity probe must release queued slices");
     assert_eq!(trace["cleaned"].as_bool(), Some(true), "grid continuity probe must clean up its owned state: {trace}");
+    assert_eq!(trace["seamOwned"].as_bool(), Some(true), "grid continuity probe must retain its callback seam through dwell: {trace}");
+    assert_eq!(trace["seamRestored"].as_bool(), Some(true), "grid continuity probe must restore original callback dispatch: {trace}");
     assert!(
         held["targetCalls"].as_u64().is_some_and(|calls| calls > 0)
             && held["targetSamples"].as_u64().is_some_and(|samples| samples >= 4)
@@ -1926,23 +1941,27 @@ fn native_hidden_control_journeys() {
                     assert_eq!(modal_state["rootHidden"].as_str(), Some("true"), "application background must be hidden from assistive technology");
                     assert_eq!(modal_state["activeInside"].as_bool(), Some(true));
 
-                    // Settings contains a real select: changing it must retain focused control through React rerender.
-                    for _ in 0..24 {
-                        if control.eval("return document.activeElement?.tagName === 'SELECT';").expect("focused control must be readable").as_bool() == Some(true) {
-                            break;
-                        }
-                        control.key("Tab").expect("native Tab must reach settings select");
-                    }
-                    assert_eq!(control.eval("return document.activeElement?.tagName;").expect("settings select focus query must execute").as_str(), Some("SELECT"));
-                    control.key("Down").expect("native select change must execute");
-                    assert_eq!(wait_for_dom(control, "return document.activeElement?.tagName === 'SELECT';").as_bool(), Some(true), "focused settings select must survive rerender");
-
+                    // Wait for General's async settings load before measuring and traversing native tab stops.
+                    wait_for_dom(control, "return document.querySelector('.lc-dialog h2')?.textContent === 'Settings' && document.querySelector('.lc-dialog .rk-settings__loading') === null && (() => { const select = document.querySelector('.lc-dialog select[aria-label=\"Open in\"]'); return Boolean(select && !select.disabled); })();");
                     let focusable_count = control
                         .eval("return Array.from(document.querySelectorAll('.lc-dialog button,.lc-dialog [href],.lc-dialog input,.lc-dialog select,.lc-dialog textarea,.lc-dialog [tabindex]:not([tabindex=\"-1\"])')).filter((node) => !node.disabled).length;")
                         .expect("settings focusable count query must execute")
                         .as_u64()
                         .expect("settings modal must expose focusable controls");
                     assert!(focusable_count > 5, "settings modal must expose native tab stops");
+                    let mut reached_select = false;
+                    for _ in 0..focusable_count {
+                        if control.eval("return document.activeElement?.tagName === 'SELECT';").expect("focused control must be readable").as_bool() == Some(true) {
+                            reached_select = true;
+                            break;
+                        }
+                        control.key("Tab").expect("native Tab must reach settings select");
+                    }
+                    assert!(reached_select || control.eval("return document.activeElement?.tagName === 'SELECT';").expect("focused control must be readable").as_bool() == Some(true), "native Tab must reach a real settings select within modal tab stops");
+                    assert_eq!(control.eval("return document.activeElement?.tagName;").expect("settings select focus query must execute").as_str(), Some("SELECT"));
+                    control.key("Down").expect("native select change must execute");
+                    assert_eq!(wait_for_dom(control, "return document.activeElement?.tagName === 'SELECT';").as_bool(), Some(true), "focused settings select must survive rerender");
+
                     let focus_index = control
                         .eval("return (() => { const dialog = document.querySelector('.lc-dialog'); const nodes = Array.from(dialog?.querySelectorAll('button,input,select,textarea,[href],[tabindex]:not([tabindex=\"-1\"])') || []).filter((node) => !node.disabled); return nodes.indexOf(document.activeElement); })();")
                         .expect("settings current focus query must execute")
