@@ -35,8 +35,8 @@ use crate::media::ProbeInfo;
 
 /// File extensions Ember imports (lower case).
 pub const EXTENSIONS: &[&str] = &[
-    "jpg", "jpeg", "png", "tif", "tiff", "webp", "dng", "cr2", "cr3", "nef", "nrw", "arw", "arq", "raf", "orf", "rw2", "rwl", "raw", "pef", "srw", "psd",
-    "jxl", "gif", "bmp",
+    "jpg", "jpeg", "png", "tif", "tiff", "webp", "dng", "cr2", "cr3", "nef", "nrw", "arw", "arq", "raf", "orf", "rw2", "rwl", "raw", "pef", "srw",
+    "psd", "jxl", "gif", "bmp",
     // HEIC/HEIF decode when built with the codecs' `heif` feature; otherwise the import reports them as
     // failed with the reason ("HEIC/HEIF support isn't included in this build").
     "heic", "heif", "avif", // AVIF is decoded (rav1d) on native targets with the `avif` feature, else reported as failed too
