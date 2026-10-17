@@ -68,11 +68,10 @@ impl FsStore {
         self.dir.join(name)
     }
     fn sync_dir(&self) {
-        // Makes the rename durable on POSIX; opening a directory fails on Windows (where
-        // `rename` is already journaled by NTFS), so errors are ignored.
-        if let Ok(d) = std::fs::File::open(&self.dir) {
-            let _ = d.sync_all();
-        }
+        // Makes the new name durable on POSIX (a no-op on Windows, where NTFS journals it); the
+        // folder sync is `rightkit-fs`'s and errors are ignored.
+        #[cfg(not(target_arch = "wasm32"))]
+        rightkit_fs::atomic::sync_dir(&self.dir);
     }
 }
 

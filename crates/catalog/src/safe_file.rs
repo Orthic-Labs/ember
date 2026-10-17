@@ -14,16 +14,15 @@
 //!   goes to a new temp file in the same folder (unique name, `create_new`), is synced to disk and
 //!   renamed over the target; then the folder is synced (POSIX). Any failure removes the temp
 //!   file and leaves the target as it was. The replace itself is `rightkit-fs`
-//!   (`atomic_write_with`: temp naming, sync order, the Windows replace); only the new-file
-//!   writers below still make their own temp file.
+//!   (`atomic_write_with`: temp naming, sync order, the Windows replace); the new-file writers
+//!   below make their own temp file and publish it with `rightkit-fs` (`publish_file_with`).
 //! - [`write_atomic_nosync`] is the same temp file + rename without the two syncs, for
 //!   recreatable outputs only: a failed write still removes the temp file and leaves the target as
 //!   it was, but after a power cut the new file may be lost (on some file systems left empty) —
 //!   it is then simply exported again.
 //! - [`write_new`] / [`write_new_unique`] write a file that must not exist yet: the same temp file
 //!   and sync, plus a read-back check, and the file then appears under its final name **without
-//!   replacing anything** (a hard link, which fails on a taken name; where the volume has no hard
-//!   links, an exclusive create that claims the name, then a rename over that placeholder).
+//!   replacing anything** (an exclusive publish through `rightkit-fs`, which fails on a taken name).
 //! - [`same_file`] tells whether two paths name the same file on disk (device + inode on Unix,
 //!   resolved paths elsewhere), for "is this target an original?" checks.
 
@@ -102,12 +101,14 @@ fn parent_of(path: &Path) -> &Path {
     path.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."))
 }
 
-/// Make a rename or a new name in `dir` durable (POSIX). Opening a directory fails on Windows,
-/// where NTFS journals the rename itself, so errors are ignored.
+/// Make a rename or a new name in `dir` durable (POSIX; a no-op on Windows, where NTFS journals the
+/// rename itself). Errors are ignored. The folder sync is `rightkit-fs`'s.
 pub fn sync_dir(dir: &Path) {
-    if let Ok(d) = File::open(dir) {
-        let _ = sync_file(&d);
-    }
+    SYNCS.with(|c| c.set(c.get() + 1));
+    #[cfg(not(target_arch = "wasm32"))]
+    rightkit_fs::atomic::sync_dir(dir);
+    #[cfg(target_arch = "wasm32")]
+    let _ = dir;
 }
 
 /// A new, empty temp file next to `path` (hidden, unique in this process and folder).
@@ -275,27 +276,27 @@ pub fn write_new_unique(candidates: &mut dyn Iterator<Item = PathBuf>, data: &[u
     r
 }
 
-/// Give the complete temp file `tmp` the name `path`, unless that is taken.
+/// Give the complete temp file `tmp` the name `path`, unless that is taken (`AlreadyExists`): an
+/// exclusive publish through `rightkit-fs` (`NoReplace`: the kernel's no-replace rename, link then
+/// unlink where there is none), so a file that appears at the same time is never replaced. The
+/// caller syncs the folder.
+#[cfg(not(target_arch = "wasm32"))]
 fn publish_new(tmp: &Path, path: &Path) -> io::Result<()> {
-    match fs::hard_link(tmp, path) {
+    let options = rightkit_fs::AtomicWriteOptions { durable: false, replace: rightkit_fs::ReplaceMode::NoReplace, ..rightkit_fs::AtomicWriteOptions::default() };
+    match rightkit_fs::publish_file_with(tmp, path, options) {
         Ok(()) => Ok(()),
-        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(e),
-        // no hard links on this volume (FAT/exFAT, some shares)
-        Err(_) => publish_new_by_rename(tmp, path, &|| {}),
+        Err(e) if e.target_replaced() => {
+            log::warn!("{}: published, but a step after the publish failed: {e}", path.display());
+            Ok(())
+        }
+        Err(e) => Err(e.into()),
     }
 }
 
-/// Fallback of [`publish_new`]: reserve the name with an exclusive create (atomic, so a file that
-/// appears at the same time is never replaced), then rename the complete temp file over our own
-/// empty placeholder. `before_claim` runs just before the name is claimed (a test hook).
-fn publish_new_by_rename(tmp: &Path, path: &Path, before_claim: &dyn Fn()) -> io::Result<()> {
-    before_claim();
-    OpenOptions::new().write(true).create_new(true).open(path)?;
-    if let Err(e) = fs::rename(tmp, path) {
-        let _ = fs::remove_file(path);
-        return Err(e);
-    }
-    Ok(())
+/// A browser build has no file system to publish a file in.
+#[cfg(target_arch = "wasm32")]
+fn publish_new(_tmp: &Path, _path: &Path) -> io::Result<()> {
+    Err(io::Error::new(io::ErrorKind::Unsupported, "this build has no file system"))
 }
 
 /// Does the file at `path` hold exactly `data`?
@@ -321,23 +322,22 @@ fn same_content(path: &Path, data: &[u8]) -> io::Result<bool> {
     }
 }
 
-/// Do `a` and `b` name the same existing file (through links, `..`, case-insensitive names)?
+/// Do `a` and `b` name the same existing file (through links, `..`, case-insensitive names)? The
+/// identity is `rightkit-fs`'s (`FileKey`: device + inode on Unix, volume + file index on Windows).
+/// When either file cannot be opened for it, the resolved paths decide, so an unavailable identity
+/// never reads as "different" (callers use this to refuse overwriting an original).
 pub fn same_file(a: &Path, b: &Path) -> bool {
     let (Ok(ma), Ok(mb)) = (fs::metadata(a), fs::metadata(b)) else { return false };
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        ma.dev() == mb.dev() && ma.ino() == mb.ino()
+    #[cfg(not(target_arch = "wasm32"))]
+    if let (Ok(x), Ok(y)) = (rightkit_fs::FileKey::of_path(a), rightkit_fs::FileKey::of_path(b)) {
+        return x == y;
     }
-    #[cfg(not(unix))]
-    {
-        if ma.len() != mb.len() {
-            return false;
-        }
-        match (fs::canonicalize(a), fs::canonicalize(b)) {
-            (Ok(x), Ok(y)) => x == y || x.to_string_lossy().to_lowercase() == y.to_string_lossy().to_lowercase(),
-            _ => false,
-        }
+    if ma.len() != mb.len() {
+        return false;
+    }
+    match (fs::canonicalize(a), fs::canonicalize(b)) {
+        (Ok(x), Ok(y)) => x == y || x.to_string_lossy().to_lowercase() == y.to_string_lossy().to_lowercase(),
+        _ => false,
     }
 }
 
@@ -358,19 +358,35 @@ mod tests {
         v
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
-    fn fallback_publish_never_replaces_a_file_that_appears_at_the_same_time() {
-        let d = temp("nolink-race");
+    fn publish_through_rightkit_fs_never_replaces_an_existing_file() {
+        let d = temp("publish-new");
         let tmp = d.join(".tmp-new");
         let dest = d.join("IMG_1.dng");
         fs::write(&tmp, b"new").unwrap();
-        let e = publish_new_by_rename(&tmp, &dest, &|| fs::write(&dest, b"other writer").unwrap()).unwrap_err();
+        fs::write(&dest, b"other writer").unwrap();
+        let e = publish_new(&tmp, &dest).unwrap_err();
         assert_eq!(e.kind(), io::ErrorKind::AlreadyExists);
         assert_eq!(fs::read(&dest).unwrap(), b"other writer");
+        assert!(tmp.exists(), "a refused publish leaves the temp file to its owner");
         fs::remove_file(&dest).unwrap();
-        publish_new_by_rename(&tmp, &dest, &|| {}).unwrap();
+        publish_new(&tmp, &dest).unwrap();
         assert_eq!(fs::read(&dest).unwrap(), b"new");
         assert!(!tmp.exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn same_file_sees_hard_links_and_not_copies() {
+        let d = temp("same-link");
+        let p = d.join("a.dng");
+        fs::write(&p, b"x").unwrap();
+        fs::copy(&p, d.join("copy.dng")).unwrap();
+        assert!(!same_file(&p, &d.join("copy.dng")), "a copy is another file");
+        if fs::hard_link(&p, d.join("link.dng")).is_ok() {
+            assert!(same_file(&p, &d.join("link.dng")));
+        }
         let _ = fs::remove_dir_all(&d);
     }
 
