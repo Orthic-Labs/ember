@@ -490,5 +490,6 @@ fn a_callers_user_agent_replaces_the_default() {
     assert_eq!(agents, vec!["user-agent: Ember/9 (+https://example.test/contact)"], "{named}");
     let plain = request_head(&[]);
     let agents: Vec<&str> = plain.lines().filter(|l| l.to_ascii_lowercase().starts_with("user-agent:")).collect();
-    assert_eq!(agents, vec![format!("User-Agent: Ember/{}", env!("CARGO_PKG_VERSION"))], "{plain}");
+    let agents: Vec<String> = agents.iter().map(|l| l.to_ascii_lowercase()).collect();
+    assert_eq!(agents, vec![format!("user-agent: ember/{}", env!("CARGO_PKG_VERSION").to_ascii_lowercase())], "{plain}");
 }

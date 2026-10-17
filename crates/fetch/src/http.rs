@@ -464,8 +464,10 @@ mod tests {
                 }
             }
             assert!(head.starts_with("POST /test HTTP/1.1\r\n"));
-            assert!(head.contains("Content-Length: 2\r\n"));
-            assert!(head.contains("Content-Type: application/json\r\n"));
+            // header names are case-insensitive and the client sends them lower-case
+            let lower = head.to_ascii_lowercase();
+            assert!(lower.contains("content-length: 2\r\n"));
+            assert!(lower.contains("content-type: application/json\r\n"));
             let mut body = [0; 2];
             reader.read_exact(&mut body).unwrap();
             assert_eq!(&body, b"{}");

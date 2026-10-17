@@ -1199,7 +1199,8 @@ mod tests {
         assert!(plain.data == paint(vec![1.0, 1.0]).data, "full pressure is the brush as set");
     }
 
-    /// A pen going from firm to light narrows the stroke where it is light.
+    /// A pen going from firm to light narrows the stroke where it is light. Size only: the flow a light
+    /// pen also loses would keep the thin end under the half-alpha the height is measured at.
     #[test]
     fn a_pressure_ramp_narrows_the_stroke() {
         let (w, h) = (200, 100);
@@ -1207,7 +1208,15 @@ mod tests {
         let img = Rgb32f::new(w, h);
         let l = Plane::new(w, h);
         let points = vec![Point::new(0.1, 0.5), Point::new(0.9, 0.5)];
-        let stroke = BrushStroke { points, size: 0.06, feather: 0.0, flow: 100.0, pressure: vec![1.0, 0.1], ..Default::default() };
+        let stroke = BrushStroke {
+            points,
+            size: 0.06,
+            feather: 0.0,
+            flow: 100.0,
+            pressure: vec![1.0, 0.1],
+            pressure_flow: false,
+            ..Default::default()
+        };
         let a = shape_alpha(&MaskShape::Brush { strokes: vec![stroke] }, &f, w, h, &img, &l, 0.0, None);
         let height = |x: usize| (0..h).filter(|&y| a.get(x, y) > 0.5).count();
         let (firm, light) = (height(30), height(170));
