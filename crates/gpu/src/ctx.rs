@@ -3,8 +3,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use wgpu::util::DeviceExt;
-
 /// A kernel module: WGSL source, its storage bindings (name, writable, element type) after the
 /// parameter block `P` (binding 0), and its entry points.
 struct Module {
@@ -611,12 +609,21 @@ impl Gpu {
             return;
         };
         assert_eq!(bufs.len(), k.nbuf, "{name}: binding count");
-        let params = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::cast_slice(if p.is_empty() { &[0u32] } else { p }),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-        let mut entries = vec![wgpu::BindGroupEntry { binding: 0, resource: params.as_entire_binding() }];
+        // Parameter blocks can run out of device memory too. Never map an invalid buffer at
+        // creation: checked uploads preserve the recoverable OOM instead of panicking here.
+        let params = {
+            #[cfg(test)]
+            let fault = PARAMETER_OOM.with(|c| c.get());
+            #[cfg(test)]
+            let _oom = (fault == Some(false)).then(SimulatedOom::new);
+            #[cfg(test)]
+            let _upload_oom = (fault == Some(true)).then(SimulatedUploadOom::new);
+            self.upload(if p.is_empty() { &[0u32] } else { p })
+        };
+        if failed() {
+            return; // a failed upload's placeholder must never enter a bind group
+        }
+        let mut entries = vec![wgpu::BindGroupEntry { binding: 0, resource: params.raw().as_entire_binding() }];
         for (i, b) in bufs.iter().enumerate() {
             let buf = b.map(|b| b.raw()).unwrap_or(&self.dummy);
             entries.push(wgpu::BindGroupEntry { binding: i as u32 + 1, resource: buf.as_entire_binding() });
@@ -748,6 +755,31 @@ impl LimitOverride {
 impl Drop for LimitOverride {
     fn drop(&mut self) {
         let _ = LIMIT.try_with(|l| l.set(None));
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Fail only parameter uploads: false = destination, true = queue staging (tests).
+    static PARAMETER_OOM: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+
+/// Restricts an OOM fault to the parameter upload in [`Gpu::run`].
+#[cfg(test)]
+pub(crate) struct SimulatedParameterOom;
+
+#[cfg(test)]
+impl SimulatedParameterOom {
+    pub fn new(staging: bool) -> SimulatedParameterOom {
+        PARAMETER_OOM.with(|c| c.set(Some(staging)));
+        SimulatedParameterOom
+    }
+}
+
+#[cfg(test)]
+impl Drop for SimulatedParameterOom {
+    fn drop(&mut self) {
+        let _ = PARAMETER_OOM.try_with(|c| c.set(None));
     }
 }
 
@@ -890,6 +922,33 @@ pub fn groups1(n: usize) -> [u32; 3] {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn parameter_allocation_oom_is_recoverable_before_binding() {
+        let Some(gpu) = crate::device() else {
+            eprintln!("skipped: no GPU adapter ({:?})", crate::unavailable_reason());
+            return;
+        };
+        for staging in [false, true] {
+            let _ = super::take_failure();
+            let _render = super::RenderScope::new(gpu);
+            let errors = super::ErrorScopes::push(gpu);
+            // Other allocations succeed: the fault must reach the parameter block itself.
+            let src = gpu.upload(&[0.2f32; 3]);
+            let dst = gpu.buffer(3);
+            assert!(!super::failed());
+            let mut enc = gpu.encoder();
+            {
+                let _fault = super::SimulatedParameterOom::new(staging);
+                gpu.run(&mut enc, "orient", &[1, 1, 1, 1, 1, 0, 0, 0, 1, 0], &[Some(&src), Some(&dst), None], [1, 1, 1]);
+            }
+            let failure = super::take_failure().expect("parameter allocation must report OOM");
+            assert_eq!(failure.kind, super::FailKind::OutOfMemory);
+            assert!(errors.pop().is_none(), "no invalid parameter binding may reach wgpu");
+            assert!(crate::available(), "parameter OOM must leave the GPU available");
+            drop(enc);
+        }
+    }
+
     #[test]
     fn limits_override_parses() {
         assert_eq!(super::parse_limits("webgpu"), Some((128 << 20, 256 << 20)));
