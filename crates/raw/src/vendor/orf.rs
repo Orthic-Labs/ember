@@ -27,7 +27,14 @@
 //!   to right. The layout was first recalled only roughly ("ten pixels, then a skipped byte"); the pad position
 //!   (last), the bit order and the pixel order were fixed by measurement on the CC0 files 2878 (E-300), 3540 (E-500)
 //!   and 3624 (E-330), as was the sensor-origin RGGB anchoring (the maker-note crop offsets are odd). The E-M5 Mark II
-//!   and PEN-F files were only checked for smoothness, not for CFA anchoring or black level.
+//!   High Res Shot file (CC0 CB252215, 9280 x 6932, 102926336 strip bytes = exactly 12.8 bpp, #243) is the camera's
+//!   merged mosaic, a true Bayer pattern: same-colour neighbours two samples apart differ by about a tenth of what
+//!   adjacent samples do; the two greens (main diagonal of the 2 x 2 cell) have equal means, the Exif `CFAPattern`
+//!   states GRBG, the ImageProcessing crop is (10, 10, 9216, 6912) and its black level 254 against a darkest sample of
+//!   253. With the stated white balance red and blue sit within 10% of the greens only in that GRBG order
+//!   (`corpus_orf_em5m2_high_res`). The E-M1 Mark II, E-M1 Mark III, OM-1, OM-3 and OM-5 Mark II high-res files are
+//!   compressed ORF (under 12 bits per pixel), so they wait for the compressed decoder (#178). The PEN-F was not
+//!   available to check.
 //! - Olympus's compressed ORF (most interchangeable-lens bodies since ~2008) is not decoded: no permissively
 //!   licensed description exists. It reports [`RawError::Unsupported`]; the embedded preview still works.
 //! - The colour-filter layout is the file's Exif `CFAPattern`: GRBG on the E-1 and E-400, RGGB on the XZ-2, where
@@ -761,6 +768,10 @@ mod tests {
         assert!(is_block16(3360, 3360 * 2504, 13461504, 1));
         assert!(!is_block16(3360, 3360 * 2504, 3360 * 2504 * 12 / 8, 1)); // XZ-2: exactly 12.0 bpp
         assert!(!is_block16(3360, 3360 * 2504, 13461504, 2));
+        // E-M5 Mark II High Res Shot: 9280 x 6932 at exactly 12.8 bpp
+        assert!(is_block16(9280, 9280 * 6932, 102926336, 1));
+        // the E-M1 Mark II high-res file (10400 x 7792, 60996963 bytes) is compressed
+        assert!(!is_block16(10400, 10400 * 7792, 60996963, 1));
         assert!(!is_block16(3365, 3365 * 100, 3365 * 100 * 16 / 10, 1));
         // the 12.0 bpp layout still decodes through its own branch
         let bytes = orf_with(8, 2, 12, vec![0u8; 8 * 2 * 12 / 8], Some(RGGB));

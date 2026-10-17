@@ -799,6 +799,46 @@ fn corpus_orf_cfa_patterns() {
     eprintln!("ORF CFA layouts checked on {seen} files");
 }
 
+/// Olympus high-resolution ORF of the E-M5 Mark II (`orf-olympus-em5m2-hires.orf`, #243): the camera merges eight
+/// shifted exposures into one larger Bayer mosaic and writes it uncompressed at 12.8 bits per pixel (16-byte blocks of ten
+/// samples), so the ordinary ORF path decodes it. Pins the size, framing, depth, black level and layout, and checks that the
+/// layout is the right way round: with the as-shot white balance the red and blue sites average within a factor of two of
+/// the greens, which a swapped red and blue would miss by about three.
+#[test]
+fn corpus_orf_em5m2_high_res() {
+    let name = "orf-olympus-em5m2-hires.orf";
+    let Ok(bytes) = std::fs::read(corpus_root().join("raw").join(name)) else {
+        eprintln!("skip: {name} absent");
+        return;
+    };
+    let img = decode(&bytes).unwrap_or_else(|e| panic!("{name}: {e}"));
+    assert_eq!(img.format, RawFormat::Orf);
+    assert_eq!((img.width, img.height), (9280, 6932), "stored size");
+    let a = img.active_area;
+    assert_eq!((a.x, a.y, a.width, a.height), (10, 10, 9216, 6912), "active area");
+    assert_eq!(img.bits, 12);
+    assert_eq!(img.cfa.as_ref().map(|c| c.name()).as_deref(), Some("GRBG"), "CFA layout");
+    assert!(green_on_main_diagonal(&img), "mosaic statistics disagree with GRBG");
+    let black = img.black.mean();
+    assert!((240.0..270.0).contains(&black), "black level {black}");
+    let wb = img.wb_multipliers.unwrap_or_else(|| panic!("{name}: no as-shot white balance"));
+    let lightcraft_raw::RawData::U16(d) = &img.data else { panic!("float data") };
+    // mean of each site of the 2x2 cell (the active area starts at even offsets), black removed
+    let mut sums = [0f64; 4];
+    for y in a.y..a.y + a.height {
+        let row = &d[y * img.width + a.x..y * img.width + a.x + a.width];
+        for (x, &v) in row.iter().enumerate() {
+            sums[(y & 1) * 2 + (x & 1)] += f64::from(v);
+        }
+    }
+    let n = (a.width * a.height / 4) as f64;
+    let m = sums.map(|s| s / n - f64::from(black));
+    // GRBG: G at (0,0) and (1,1), R at (0,1), B at (1,0)
+    let (g, r, b) = ((m[0] + m[3]) / 2.0, m[1] * f64::from(wb[0]), m[2] * f64::from(wb[2]));
+    eprintln!("{name}: G {g:.1}, R {r:.1}, B {b:.1} after white balance");
+    assert!(g > 20.0 && r / g > 0.5 && r / g < 2.0 && b / g > 0.5 && b / g < 2.0, "colour sites out of balance: G {g}, R {r}, B {b}");
+}
+
 /// Samsung SRW (`crates/raw/src/vendor/srw.rs`): the 12-bit packings of the NX10 and NX20 generations (opposite bit
 /// orders, told apart from the samples) and the 16-bit words of the EX1 and WB2000 decode to the image of the camera's own
 /// JPEG, with the layout, framing, levels and white balance the file's maker note states.

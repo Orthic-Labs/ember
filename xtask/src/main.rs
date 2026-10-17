@@ -698,6 +698,12 @@ const RAW_SAMPLES: &[(&str, &str, &str)] = &[
         "https://raw.pixls.us/getfile.php/1787/nice/Olympus%20-%20E-M10%20Mark%20III%20-%2016bit%20%284:3%29.ORF",
         "11d90cbb564ad2c660c7a8d5d81d99c2c018aa27fdec45ed6c461fa5d24f942b",
     ),
+    // Olympus E-M5 Mark II High Res Shot: the camera's merged 9280 x 6932 mosaic, uncompressed (12.8 bpp); 104 MB
+    (
+        "orf-olympus-em5m2-hires.orf",
+        "https://raw.pixls.us/data/Olympus/E-M5%20Mark%20II/CB252215.ORF",
+        "5c42fa75d6b549514b722e2c50726c03e34fac4909ec3640e147ea7fa825fc8d",
+    ),
     (
         "orf-olympus-xz2.orf",
         "https://raw.pixls.us/getfile.php/1432/nice/Olympus%20-%20XZ-2%20-%2012bit%20%284:3%29.orf",
