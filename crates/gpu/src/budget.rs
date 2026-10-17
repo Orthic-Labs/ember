@@ -35,6 +35,8 @@ struct State {
     used: u64,
     /// Renders in flight.
     running: u32,
+    /// A retry holds the device exclusively until its permit drops.
+    exclusive: bool,
     /// Bytes renders may hold together now.
     limit: u64,
     /// What the budget grows back to.
@@ -53,17 +55,18 @@ pub(crate) struct Budget {
 pub(crate) struct Permit<'a> {
     budget: &'a Budget,
     bytes: u64,
+    alone: bool,
 }
 
 impl Budget {
     pub fn new(ceiling: u64) -> Budget {
         Budget {
-            state: Mutex::new(State { used: 0, running: 0, limit: ceiling, ceiling, queue: VecDeque::new(), next_ticket: 0 }),
+            state: Mutex::new(State { used: 0, running: 0, exclusive: false, limit: ceiling, ceiling, queue: VecDeque::new(), next_ticket: 0 }),
             room: Condvar::new(),
         }
     }
 
-    /// Wait for room for `bytes`; `alone` waits until nothing else is in flight (the retry of a
+    /// Wait for room for `bytes`; `alone` holds the device exclusively (the retry of a
     /// render that ran out of memory). `None` when `stop` turns true while waiting (the process is
     /// ending): the caller renders on the CPU.
     pub fn admit(&self, bytes: u64, alone: bool, stop: impl Fn() -> bool) -> Option<Permit<'_>> {
@@ -71,7 +74,7 @@ impl Budget {
         let ticket = st.next_ticket;
         st.next_ticket = st.next_ticket.wrapping_add(1);
         st.queue.push_back(ticket);
-        while st.queue.front() != Some(&ticket) || (st.running > 0 && (alone || st.used.saturating_add(bytes) > st.limit)) {
+        while st.queue.front() != Some(&ticket) || st.exclusive || (st.running > 0 && (alone || st.used.saturating_add(bytes) > st.limit)) {
             if stop() {
                 st.queue.retain(|t| *t != ticket);
                 // the render behind may be the next to fit
@@ -85,7 +88,8 @@ impl Budget {
         self.room.notify_all();
         st.used = st.used.saturating_add(bytes);
         st.running += 1;
-        Some(Permit { budget: self, bytes })
+        st.exclusive = alone;
+        Some(Permit { budget: self, bytes, alone })
     }
 
     /// A render ran out of device memory: halve the budget (not below what one render needs).
@@ -113,6 +117,9 @@ impl Drop for Permit<'_> {
         let mut st = self.budget.state.lock().unwrap_or_else(PoisonError::into_inner);
         st.used = st.used.saturating_sub(self.bytes);
         st.running = st.running.saturating_sub(1);
+        if self.alone {
+            st.exclusive = false;
+        }
         self.budget.room.notify_all();
     }
 }
@@ -160,6 +167,22 @@ mod tests {
         assert_eq!(b.snapshot().1, 1, "the retry must not run beside another render, even with room");
         drop(small);
         assert!(retry.join().unwrap());
+    }
+
+    #[test]
+    fn an_active_retry_excludes_later_renders_until_its_permit_drops() {
+        let b = Budget::new(4 * GIB);
+        let retry = b.admit(GIB, true, || false).unwrap();
+        // Stop immediately if blocked: this tests admission without sleeps or a hung waiter.
+        assert!(b.admit(GIB, false, || true).is_none(), "a later render must wait even when its estimate fits");
+        assert_eq!(b.snapshot(), (GIB, 1, 4 * GIB), "a refused render must hold nothing");
+        drop(retry);
+        let later = b.admit(GIB, false, || true).expect("dropping the exclusive permit must reopen admission");
+        // Normal permits still share available room.
+        let beside = b.admit(GIB, false, || true).expect("normal renders may run together");
+        assert_eq!(b.snapshot(), (2 * GIB, 2, 4 * GIB));
+        drop((later, beside));
+        assert_eq!(b.snapshot(), (0, 0, 4 * GIB));
     }
 
     #[test]

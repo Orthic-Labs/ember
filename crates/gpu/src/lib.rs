@@ -157,6 +157,8 @@ pub enum Fault {
     /// Every buffer the render asks for finds the device out of memory, on the first attempt
     /// only: the retry with the device to itself succeeds.
     OutOfMemory,
+    /// Only upload staging runs out of memory, after destination creation; the retry succeeds.
+    UploadOutOfMemory,
 }
 
 thread_local! {
@@ -571,7 +573,7 @@ pub fn try_render(
                             gpu.trim(0);
                             budget.out_of_memory();
                             if !alone {
-                                fault = fault.filter(|f| *f != Fault::OutOfMemory);
+                                fault = fault.filter(|f| !matches!(f, Fault::OutOfMemory | Fault::UploadOutOfMemory));
                                 log::info!("gpu: {what}: {}; retrying with the device to this render alone", f.reason);
                                 alone = true;
                                 continue;
