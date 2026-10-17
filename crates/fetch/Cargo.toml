@@ -11,7 +11,10 @@ workspace = true
 # downloads run natively only (the web build fetches no models)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 log = { workspace = true }
-rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
-rustls-rustcrypto = "0.0.2-alpha"
-webpki-roots = "1"
+# The owner HTTP client (M17): blocking ureq + rustls with the OS trust store. No optional features.
+rightkit-http = { version = "=0.3.0", default-features = false }
 sha2 = { version = "0.11", default-features = false }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+# The loopback test server is allowed by the owner's `testing` helpers only.
+rightkit-http = { version = "=0.3.0", default-features = false, features = ["testing"] }

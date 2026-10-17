@@ -3,7 +3,7 @@
 //! a size cap, progress and cancellation, and checked (exact size, SHA-256 where pinned) before
 //! each file is moved into the model folder. Runs on whatever thread calls [`download`] (the
 //! engine uses a background thread; the UI thread never waits for the network). Pure Rust: the
-//! HTTPS client is rustls with the RustCrypto provider (see [`http`]).
+//! HTTPS client is the rightkit-http owner client (rustls, OS trust store; see [`http`]).
 //!
 //! Files are written to `<name>.part` next to their final place and renamed when verified, so a
 //! model folder never holds a half-written file under a real name, and an interrupted download

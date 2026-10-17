@@ -1,19 +1,20 @@
-//! A small HTTP/1.1 client for model downloads & bounded JSON requests, in pure Rust: `std::net` sockets and, for
-//! `https://`, rustls with the RustCrypto provider (`rustls-rustcrypto`; no `ring` or
-//! `aws-lc-rs`, so nothing is compiled from C or assembly) and the Mozilla root certificates
-//! (`webpki-roots`).
+//! A small HTTP/1.1 client for model downloads & bounded JSON requests, native only.
 //!
-//! Only what a large-file download needs: one request per connection (`Connection: close`),
-//! `Range` requests for resuming, redirects (followed by the caller), `Content-Length`,
-//! chunked and read-to-close bodies. Every read waits at most `stall` for data and checks the
-//! cancel flag at least twice a second, so a dead server or a cancelled download never hangs
-//! the downloading thread. No proxies (see docs/ai-masks.md).
+//! The transfer is `rightkit-http` (the Right Suite HTTP owner, M17): blocking `ureq` with rustls and the
+//! operating system's trust store. This module keeps Ember's own surface ([`Url`], [`Limits`], [`Response`],
+//! [`get`], [`post_json`], [`HttpError`]) so the downloader, map tiles and AI callers do not change.
+//!
+//! The policy is Ember's: no redirects (the caller follows them, one hop at a time), no retries (the caller
+//! owns those), no proxies, `Accept-Encoding: identity`. Each request builds its owner client, so the TLS roots
+//! and the address policy are the owner's public-web defaults. A response body streams in on a helper thread,
+//! so every read checks the cancel flag and the stall limit at least four times a second.
 
-use std::io::{ErrorKind, Read, Write};
-use std::net::{TcpStream, ToSocketAddrs};
-use std::sync::Arc;
+use std::io::{self, Read};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::{Duration, Instant};
+
+use rightkit_http::{Client, ClientConfig, Phase, Request, RetryPolicy};
 
 /// Why a request failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,6 +152,14 @@ impl Url {
     }
 }
 
+impl Url {
+    /// The full URL with its query, as the owner client takes it (credentials are never present).
+    fn request_url(&self) -> String {
+        let scheme = if self.tls { "https" } else { "http" };
+        format!("{scheme}://{}{}", self.host_header(), self.path)
+    }
+}
+
 /// Timeouts and the cancel flag for one request.
 pub struct Limits<'a> {
     pub connect: Duration,
@@ -174,309 +183,173 @@ impl Limits<'_> {
 
 /// How often a blocked read wakes up to check the cancel flag.
 const TICK: Duration = Duration::from_millis(250);
-/// Longest status line + headers accepted.
-const MAX_HEAD: usize = 64 * 1024;
 
-enum Stream {
-    Plain(TcpStream),
-    Tls(Box<rustls::ClientConnection>, TcpStream),
-}
+/// A response body arrives as chunks from the helper thread: data, a read error, or an empty chunk at the end.
+type Chunk = io::Result<Vec<u8>>;
 
-fn is_timeout(e: &std::io::Error) -> bool {
-    matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut | ErrorKind::Interrupted)
-}
-
-fn tls_config() -> Result<Arc<rustls::ClientConfig>, HttpError> {
-    let roots = rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() };
-    let config = rustls::ClientConfig::builder_with_provider(Arc::new(rustls_rustcrypto::provider()))
-        .with_safe_default_protocol_versions()
-        .map_err(|e| HttpError::Tls(e.to_string()))?
-        .with_root_certificates(roots)
-        .with_no_client_auth();
-    Ok(Arc::new(config))
-}
-
-impl Stream {
-    fn connect(url: &Url, limits: &Limits) -> Result<Stream, HttpError> {
-        limits.check()?;
-        let addrs: Vec<_> = (url.host.as_str(), url.port).to_socket_addrs().map_err(|e| HttpError::Connect(format!("{}: {e}", url.host)))?.collect();
-        if addrs.is_empty() {
-            return Err(HttpError::Connect(format!("{}: no address", url.host)));
-        }
-        let mut last = String::new();
-        let mut sock = None;
-        for a in addrs {
-            limits.check()?;
-            match TcpStream::connect_timeout(&a, limits.connect) {
-                Ok(s) => {
-                    sock = Some(s);
-                    break;
-                }
-                Err(e) => last = format!("{}: {e}", url.host),
-            }
-        }
-        let sock = sock.ok_or(HttpError::Connect(last))?;
-        sock.set_read_timeout(Some(TICK)).map_err(|e| HttpError::Io(e.to_string()))?;
-        sock.set_write_timeout(Some(TICK)).map_err(|e| HttpError::Io(e.to_string()))?;
-        let _ = sock.set_nodelay(true);
-        if !url.tls {
-            return Ok(Stream::Plain(sock));
-        }
-        let name = rustls::pki_types::ServerName::try_from(url.host.clone()).map_err(|e| HttpError::Tls(format!("{}: {e}", url.host)))?;
-        let conn = rustls::ClientConnection::new(tls_config()?, name).map_err(|e| HttpError::Tls(e.to_string()))?;
-        let mut s = Stream::Tls(Box::new(conn), sock);
-        s.handshake(limits)?;
-        Ok(s)
-    }
-
-    /// Wait for `f` to make progress, retrying timeouts until `stall` passes without any.
-    fn retry<T>(limits: &Limits, mut f: impl FnMut() -> std::io::Result<T>) -> Result<T, HttpError> {
-        let start = Instant::now();
-        loop {
-            limits.check()?;
-            match f() {
-                Ok(v) => return Ok(v),
-                Err(e) if is_timeout(&e) => {
-                    if start.elapsed() >= limits.stall {
-                        return Err(HttpError::Stalled);
-                    }
-                }
-                Err(e) if e.kind() == ErrorKind::InvalidData => return Err(HttpError::Tls(e.to_string())),
-                Err(e) => return Err(HttpError::Io(e.to_string())),
-            }
-        }
-    }
-
-    fn handshake(&mut self, limits: &Limits) -> Result<(), HttpError> {
-        let Stream::Tls(conn, sock) = self else { return Ok(()) };
-        while conn.is_handshaking() {
-            Self::retry(limits, || conn.complete_io(sock))?;
-        }
-        Ok(())
-    }
-
-    fn write_all(&mut self, data: &[u8], limits: &Limits) -> Result<(), HttpError> {
-        limits.check()?;
-        match self {
-            Stream::Plain(sock) => {
-                let mut rest = data;
-                while !rest.is_empty() {
-                    let n = Self::retry(limits, || sock.write(rest))?;
-                    if n == 0 {
-                        return Err(HttpError::Io("connection closed while sending the request".into()));
-                    }
-                    rest = rest.get(n..).unwrap_or_default();
-                }
-                Ok(())
-            }
-            Stream::Tls(conn, sock) => {
-                // Drain each bounded chunk; a multi-MiB POST cannot fit rustls' send buffer.
-                let mut rest = data;
-                while !rest.is_empty() {
-                    limits.check()?;
-                    let chunk = rest.get(..rest.len().min(16 * 1024)).ok_or_else(|| HttpError::Protocol("invalid request chunk".into()))?;
-                    let n = conn.writer().write(chunk).map_err(|e| HttpError::Tls(e.to_string()))?;
-                    if n == 0 {
-                        return Err(HttpError::Io("TLS connection stopped accepting request bytes".into()));
-                    }
-                    while conn.wants_write() {
-                        Self::retry(limits, || conn.write_tls(sock))?;
-                    }
-                    rest = rest.get(n..).ok_or_else(|| HttpError::Protocol("invalid TLS write length".into()))?;
-                }
-                Ok(())
-            }
-        }
-    }
-
-    /// Read some bytes (0 at the end of the stream), waiting at most `stall` for them.
-    fn read(&mut self, buf: &mut [u8], limits: &Limits) -> Result<usize, HttpError> {
-        match self {
-            Stream::Plain(sock) => Self::retry(limits, || sock.read(buf)),
-            Stream::Tls(conn, sock) => {
-                let start = Instant::now();
-                loop {
-                    limits.check()?;
-                    match conn.reader().read(buf) {
-                        Ok(n) => return Ok(n),
-                        // closed without close_notify: the caller checks the length it got
-                        Err(e) if e.kind() == ErrorKind::UnexpectedEof => return Ok(0),
-                        Err(e) if e.kind() == ErrorKind::WouldBlock => {}
-                        Err(e) => return Err(HttpError::Tls(e.to_string())),
-                    }
-                    // no plaintext buffered: more TLS records from the socket
-                    match conn.read_tls(sock) {
-                        Ok(0) => return Ok(0),
-                        Ok(_) => {
-                            conn.process_new_packets().map_err(|e| HttpError::Tls(e.to_string()))?;
-                            while conn.wants_write() {
-                                Self::retry(limits, || conn.write_tls(sock))?;
-                            }
-                        }
-                        Err(e) if is_timeout(&e) => {
-                            if start.elapsed() >= limits.stall {
-                                return Err(HttpError::Stalled);
-                            }
-                        }
-                        Err(e) => return Err(HttpError::Io(e.to_string())),
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// The connection with a read buffer (headers and chunk sizes are read line by line).
-struct Conn {
-    stream: Stream,
-    buf: Vec<u8>,
-    pos: usize,
-}
-
-impl Conn {
-    fn fill(&mut self, limits: &Limits) -> Result<usize, HttpError> {
-        if self.pos >= self.buf.len() {
-            self.buf.clear();
-            self.pos = 0;
-        }
-        let mut tmp = [0u8; 64 * 1024];
-        let n = self.stream.read(&mut tmp, limits)?;
-        self.buf.extend_from_slice(tmp.get(..n).unwrap_or_default());
-        Ok(n)
-    }
-
-    /// One line without its CRLF; at most `max` bytes.
-    fn line(&mut self, max: usize, limits: &Limits) -> Result<String, HttpError> {
-        loop {
-            let avail = self.buf.get(self.pos..).unwrap_or_default();
-            if let Some(i) = avail.iter().position(|b| *b == b'\n') {
-                let line = avail.get(..i).unwrap_or_default();
-                let line = line.strip_suffix(b"\r").unwrap_or(line);
-                let s = String::from_utf8_lossy(line).into_owned();
-                self.pos = self.pos.saturating_add(i + 1);
-                return Ok(s);
-            }
-            if avail.len() > max {
-                return Err(HttpError::Protocol("header line too long".into()));
-            }
-            // keep the partial line, read more after it
-            if self.pos > 0 {
-                self.buf.drain(..self.pos.min(self.buf.len()));
-                self.pos = 0;
-            }
-            let mut tmp = [0u8; 16 * 1024];
-            let n = self.stream.read(&mut tmp, limits)?;
-            if n == 0 {
-                return Err(HttpError::Protocol("connection closed in the middle of the response".into()));
-            }
-            self.buf.extend_from_slice(tmp.get(..n).unwrap_or_default());
-        }
-    }
-
-    /// Up to `out.len()` body bytes (0 at the end of the stream).
-    fn read(&mut self, out: &mut [u8], limits: &Limits) -> Result<usize, HttpError> {
-        if self.pos >= self.buf.len() && self.fill(limits)? == 0 {
-            return Ok(0);
-        }
-        let avail = self.buf.get(self.pos..).unwrap_or_default();
-        let n = avail.len().min(out.len());
-        if let (Some(dst), Some(src)) = (out.get_mut(..n), avail.get(..n)) {
-            dst.copy_from_slice(src);
-        }
-        self.pos = self.pos.saturating_add(n);
-        Ok(n)
-    }
-}
-
-/// A response's status, headers and body.
+/// A response: its status and headers are known, its body is read with [`Response::read`].
 pub struct Response {
     pub status: u16,
     headers: Vec<(String, String)>,
-    conn: Conn,
-    body: BodyMode,
-}
-
-enum BodyMode {
-    Length(u64),
-    Chunked { left: u64, done: bool },
-    Close,
-    Done,
+    chunks: mpsc::Receiver<Chunk>,
+    pending: Vec<u8>,
+    at: usize,
+    /// The `Content-Length` the server announced (absent for chunked and read-to-close bodies).
+    expected: Option<u64>,
+    received: u64,
+    done: bool,
+    last_data: Instant,
 }
 
 impl Response {
     /// The first header named `name` (case-insensitive).
     pub fn header(&self, name: &str) -> Option<&str> {
-        self.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str())
+        find(&self.headers, name)
     }
 
     /// The body's length when the server announced it.
     pub fn content_length(&self) -> Option<u64> {
-        match self.body {
-            BodyMode::Length(n) => Some(n),
-            _ => None,
-        }
+        self.expected
     }
 
     /// Read body bytes into `out` (0 at the end of the body).
     pub fn read(&mut self, out: &mut [u8], limits: &Limits) -> Result<usize, HttpError> {
         limits.check()?;
-        match &mut self.body {
-            BodyMode::Done => Ok(0),
-            BodyMode::Length(left) => {
-                if *left == 0 {
-                    self.body = BodyMode::Done;
-                    return Ok(0);
-                }
-                let want = usize::try_from(*left).unwrap_or(usize::MAX).min(out.len());
-                let n = self.conn.read(out.get_mut(..want).unwrap_or_default(), limits)?;
-                if n == 0 {
-                    return Err(HttpError::Protocol("the connection closed before the end of the file".into()));
-                }
-                *left = left.saturating_sub(n as u64);
-                Ok(n)
+        let rest = self.pending.get(self.at..).unwrap_or_default();
+        if !rest.is_empty() {
+            let n = rest.len().min(out.len());
+            if let (Some(dst), Some(src)) = (out.get_mut(..n), rest.get(..n)) {
+                dst.copy_from_slice(src);
             }
-            BodyMode::Close => {
-                let n = self.conn.read(out, limits)?;
-                if n == 0 {
-                    self.body = BodyMode::Done;
-                }
-                Ok(n)
-            }
-            BodyMode::Chunked { left, done } => {
-                if *done {
-                    return Ok(0);
-                }
-                if *left == 0 {
-                    let line = self.conn.line(1024, limits)?;
-                    let hex = line.split(';').next().unwrap_or_default().trim();
-                    let size = u64::from_str_radix(hex, 16).map_err(|_| HttpError::Protocol(format!("bad chunk size `{hex}`")))?;
-                    if size == 0 {
-                        // trailers, up to the empty line
-                        let mut n = 0;
-                        while !self.conn.line(MAX_HEAD, limits)?.is_empty() {
-                            n += 1;
-                            if n > 100 {
-                                return Err(HttpError::Protocol("too many trailers".into()));
-                            }
-                        }
-                        *done = true;
-                        return Ok(0);
+            self.at = self.at.saturating_add(n);
+            return Ok(n);
+        }
+        if self.done || out.is_empty() {
+            return Ok(0);
+        }
+        loop {
+            limits.check()?;
+            match self.chunks.recv_timeout(TICK) {
+                Ok(Ok(chunk)) if chunk.is_empty() => {
+                    self.done = true;
+                    if self.expected.is_some_and(|n| self.received < n) {
+                        return Err(HttpError::Protocol("the connection closed before the end of the file".into()));
                     }
-                    *left = size;
+                    return Ok(0);
                 }
-                let want = usize::try_from(*left).unwrap_or(usize::MAX).min(out.len());
-                let n = self.conn.read(out.get_mut(..want).unwrap_or_default(), limits)?;
-                if n == 0 {
-                    return Err(HttpError::Protocol("the connection closed in the middle of a chunk".into()));
+                Ok(Ok(chunk)) => {
+                    self.last_data = Instant::now();
+                    self.received = self.received.saturating_add(chunk.len() as u64);
+                    self.pending = chunk;
+                    self.at = 0;
+                    return self.read(out, limits);
                 }
-                *left = left.saturating_sub(n as u64);
-                if *left == 0 && !self.conn.line(16, limits)?.is_empty() {
-                    return Err(HttpError::Protocol("missing CRLF after a chunk".into()));
+                Ok(Err(error)) => {
+                    self.done = true;
+                    return Err(body_error(error));
                 }
-                Ok(n)
+                Err(RecvTimeoutError::Timeout) => {
+                    if self.last_data.elapsed() >= limits.stall {
+                        return Err(HttpError::Stalled);
+                    }
+                }
+                Err(RecvTimeoutError::Disconnected) => {
+                    self.done = true;
+                    return Err(HttpError::Protocol("the response stream ended unexpectedly".into()));
+                }
             }
         }
     }
+}
+
+fn find<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+    headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str())
+}
+
+fn body_error(error: io::Error) -> HttpError {
+    match error.kind() {
+        io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock => HttpError::Stalled,
+        io::ErrorKind::UnexpectedEof => HttpError::Protocol("the connection closed in the middle of the body".into()),
+        _ => HttpError::Io(error.to_string()),
+    }
+}
+
+/// Read `body` on a helper thread, handing chunks over through a small bounded channel. The thread ends at the
+/// end of the body, on a read error, or when the response is dropped (the next send fails).
+fn stream_body(mut body: Box<dyn Read + Send>) -> Result<mpsc::Receiver<Chunk>, HttpError> {
+    let (sender, receiver) = mpsc::sync_channel::<Chunk>(2);
+    std::thread::Builder::new()
+        .name("fetch-body".into())
+        .spawn(move || {
+            let mut buffer = vec![0u8; 64 * 1024];
+            loop {
+                match body.read(&mut buffer) {
+                    Ok(0) => {
+                        let _ = sender.send(Ok(Vec::new()));
+                        break;
+                    }
+                    Ok(n) => {
+                        let data = buffer.get(..n).unwrap_or_default().to_vec();
+                        if sender.send(Ok(data)).is_err() {
+                            break;
+                        }
+                    }
+                    Err(error) => {
+                        let _ = sender.send(Err(error));
+                        break;
+                    }
+                }
+            }
+        })
+        .map_err(|e| HttpError::Io(format!("could not start the download thread: {e}")))?;
+    Ok(receiver)
+}
+
+/// Owner errors to Ember's error classes; callers match on these.
+fn map_error(error: rightkit_http::HttpError) -> HttpError {
+    use rightkit_http::HttpError as Owner;
+    let text = error.to_string();
+    match error {
+        Owner::Cancelled => HttpError::Cancelled,
+        Owner::Timeout { phase: Phase::Connect, .. } => HttpError::Connect(text),
+        Owner::Timeout { .. } => HttpError::Stalled,
+        Owner::Transport { connect_phase: true, message, .. } => {
+            let lower = message.to_ascii_lowercase();
+            if lower.contains("tls") || lower.contains("certificate") || lower.contains("handshake") {
+                HttpError::Tls(message)
+            } else {
+                HttpError::Connect(message)
+            }
+        }
+        Owner::Transport { message, .. } => HttpError::Io(message),
+        Owner::AddressDenied { .. } | Owner::HttpsRequired { .. } | Owner::InvalidRequest(_) => HttpError::BadUrl(text),
+        Owner::Stream(message) | Owner::Json(message) => HttpError::Protocol(message),
+        _ => HttpError::Io(text),
+    }
+}
+
+/// The owner client's configuration for one Ember request: no retries, no redirects, and the caller's connect
+/// and stall limits (a response head or a silent body is bounded by the stall limit).
+fn client_config(user_agent: Option<String>, limits: &Limits) -> ClientConfig {
+    let mut config = base_config();
+    config.user_agent = user_agent.unwrap_or_else(|| format!("Ember/{}", env!("CARGO_PKG_VERSION")));
+    config.connect_timeout = Some(limits.connect);
+    config.response_timeout = Some(limits.stall);
+    config.idle_timeout = Some(limits.stall);
+    config.retry = RetryPolicy::none();
+    config.max_redirects = 0;
+    config
+}
+
+#[cfg(not(test))]
+fn base_config() -> ClientConfig {
+    ClientConfig::default()
+}
+
+/// Tests talk to a loopback server; the owner's public-web address policy would refuse it.
+#[cfg(test)]
+fn base_config() -> ClientConfig {
+    rightkit_http::testing::loopback_config()
 }
 
 /// Send `GET url` with extra `headers` and read the status line and headers.
@@ -493,72 +366,49 @@ pub fn post_json(url: &Url, headers: &[(&str, String)], body: &[u8], limits: &Li
 }
 
 fn request(url: &Url, headers: &[(&str, String)], limits: &Limits, method: &str, body: &[u8]) -> Result<Response, HttpError> {
-    // a caller that names itself (a tile server's usage policy asks for a contact address) replaces the default
-    let user_agent = if headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("user-agent")) {
-        None
-    } else {
-        Some(format!("User-Agent: Ember/{}\r\n", env!("CARGO_PKG_VERSION")))
-    };
-    let mut req = format!(
-        "{method} {} HTTP/1.1\r\nHost: {}\r\n{}Accept: */*\r\nAccept-Encoding: identity\r\nConnection: close\r\n",
-        url.path,
-        url.host_header(),
-        user_agent.unwrap_or_default()
-    );
-    if method == "POST" {
-        req.push_str(&format!("Content-Type: application/json\r\nContent-Length: {}\r\n", body.len()));
-    }
+    // A caller that names itself (a tile server's usage policy asks for a contact address) replaces the default.
+    let mut user_agent = None;
+    let mut extra: Vec<(String, String)> = Vec::new();
     for (k, v) in headers {
         if v.chars().any(|c| c == '\r' || c == '\n') || k.chars().any(|c| c == '\r' || c == '\n' || c == ':') {
             return Err(HttpError::BadUrl("header with a line break".into()));
         }
-        req.push_str(&format!("{k}: {v}\r\n"));
-    }
-    req.push_str("\r\n");
-    let mut stream = Stream::connect(url, limits)?;
-    stream.write_all(req.as_bytes(), limits)?;
-    if !body.is_empty() {
-        stream.write_all(body, limits)?;
-    }
-    let mut conn = Conn { stream, buf: Vec::new(), pos: 0 };
-    let status_line = conn.line(MAX_HEAD, limits)?;
-    let mut parts = status_line.split_whitespace();
-    let version = parts.next().unwrap_or_default();
-    if !version.starts_with("HTTP/1.") {
-        return Err(HttpError::Protocol(format!("not an HTTP/1.x response: {}", status_line.chars().take(60).collect::<String>())));
-    }
-    let status = parts.next().and_then(|s| s.parse::<u16>().ok()).ok_or_else(|| HttpError::Protocol("bad status line".into()))?;
-    let mut headers = Vec::new();
-    let mut total = status_line.len();
-    loop {
-        let line = conn.line(MAX_HEAD, limits)?;
-        if line.is_empty() {
-            break;
-        }
-        total = total.saturating_add(line.len());
-        if total > MAX_HEAD || headers.len() > 200 {
-            return Err(HttpError::Protocol("response headers too large".into()));
-        }
-        if let Some((k, v)) = line.split_once(':') {
-            headers.push((k.trim().to_string(), v.trim().to_string()));
+        if k.eq_ignore_ascii_case("user-agent") {
+            user_agent = Some(v.clone());
+        } else {
+            extra.push((k.to_string(), v.clone()));
         }
     }
-    let find = |name: &str| headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str());
-    let body = if status == 204 || status == 304 || (100..200).contains(&status) {
-        BodyMode::Done
-    } else if find("transfer-encoding").is_some_and(|v| v.to_ascii_lowercase().contains("chunked")) {
-        BodyMode::Chunked { left: 0, done: false }
-    } else if let Some(n) = find("content-length") {
-        BodyMode::Length(n.trim().parse::<u64>().map_err(|_| HttpError::Protocol(format!("bad Content-Length `{n}`")))?)
-    } else {
-        BodyMode::Close
+    limits.check()?;
+    let client = Client::try_new(client_config(user_agent, limits)).map_err(map_error)?;
+    let mut req = if method == "POST" { Request::post(url.request_url()).body(body.to_vec()) } else { Request::get(url.request_url()) };
+    req = req.header("Accept", "*/*").header("Accept-Encoding", "identity");
+    if method == "POST" {
+        req = req.header("Content-Type", "application/json");
+    }
+    for (k, v) in extra {
+        req = req.header(k, v);
+    }
+    if let Some(deadline) = limits.deadline {
+        req = req.deadline(deadline.saturating_duration_since(Instant::now()));
+    }
+    let response = client.stream_any(&req).map_err(map_error)?;
+    let status = response.status;
+    let headers = response.headers.clone();
+    let chunked = find(&headers, "transfer-encoding").is_some_and(|v| v.to_ascii_lowercase().contains("chunked"));
+    let bodyless = status == 204 || status == 304 || (100..200).contains(&status);
+    let expected = match find(&headers, "content-length") {
+        Some(n) if !chunked && !bodyless => Some(n.trim().parse::<u64>().map_err(|_| HttpError::Protocol(format!("bad Content-Length `{n}`")))?),
+        _ => None,
     };
-    Ok(Response { status, headers, conn, body })
+    let chunks = stream_body(response.into_reader())?;
+    Ok(Response { status, headers, chunks, pending: Vec::new(), at: 0, expected, received: 0, done: false, last_data: Instant::now() })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{BufRead, BufReader, Write};
 
     #[test]
     fn rejects_oversized_and_control_character_urls() {
@@ -571,6 +421,7 @@ mod tests {
         let u = Url::parse("https://cdn.example.com/models/sam3/model.safetensors?sig=1#x").unwrap();
         assert_eq!((u.tls, u.host.as_str(), u.port, u.path.as_str()), (true, "cdn.example.com", 443, "/models/sam3/model.safetensors?sig=1"));
         assert_eq!(u.display(), "https://cdn.example.com/models/sam3/model.safetensors");
+        assert_eq!(u.request_url(), "https://cdn.example.com/models/sam3/model.safetensors?sig=1");
         let u = Url::parse("http://127.0.0.1:8080").unwrap();
         assert_eq!((u.tls, u.port, u.path.as_str()), (false, 8080, "/"));
         let u = Url::parse("http://[::1]:9/a").unwrap();
@@ -597,13 +448,7 @@ mod tests {
     }
 
     #[test]
-    fn the_tls_config_builds_with_the_pure_rust_provider() {
-        assert!(tls_config().is_ok());
-    }
-
-    #[test]
     fn post_sends_exact_bounded_body_once() {
-        use std::io::{BufRead, BufReader};
         let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = server.local_addr().unwrap();
         let worker = std::thread::spawn(move || {
