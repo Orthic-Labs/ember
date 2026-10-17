@@ -16,6 +16,14 @@
   },
   "ciAllOs": false,
   "ciIncremental": true,
+  "devArtifact": {
+    "mac": "sign",
+    "windows": "unsigned",
+    "parallel": true,
+    "buildScript": "desktop:artifact:build",
+    "macAppPath": "target/aarch64-apple-darwin/debug/bundle/macos/Ember.app",
+    "windowsGlob": "target/x86_64-pc-windows-msvc/debug/bundle/nsis/**"
+  },
   "packageManager": "pnpm@11.24.0",
   "templateVersion": "1.8.0",
   "profile": "rust-hybrid",

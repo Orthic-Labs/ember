@@ -17,6 +17,7 @@
     "dev:build:mac": "right-release dev --platform mac",
     "dev:build:win": "right-release dev --platform win",
     "desktop:static": "node scripts/desktop/static-check.mjs",
+    "desktop:artifact:build": "node scripts/desktop/dev-artifact.mjs",
     "desktop:fixtures": "node --test scripts/desktop/fixtures-contract.test.mjs",
     "release:admit": "node scripts/desktop/admit.mjs",
     "release:stage-summary": "node scripts/desktop/stage-summary.mjs",

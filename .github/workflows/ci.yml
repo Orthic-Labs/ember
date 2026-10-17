@@ -155,3 +155,153 @@ jobs:
         with:
           path: ~/.right-git-last-green
           key: lightcraft-desktop-workspace-last-green-${{ matrix.os }}-${{ matrix.node }}-${{ github.ref_name }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+  dev-artifact-mac:
+    # macOS dev app: builds devArtifact.buildScript and stages it. Runs beside the
+    # QA gate job, not after it, and never reaches a secret.
+    needs: [private-repo-guard]
+    if: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "26.8.1"
+          package-manager-cache: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.24.0
+      - run: pnpm install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@f8be11a05b1d4f3fcebe6410cc16743212b999b0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            . -> target
+          shared-key: lightcraft-desktop-workspace-rust
+          add-job-id-key: false
+          cache-workspace-crates: true
+          cache-on-failure: true
+          save-if: true
+      - name: Build dev app
+        run: pnpm run desktop:artifact:build
+      - name: Package unsigned dev app (macOS)
+        shell: bash
+        env:
+          DEV_APP_PATH: "target/aarch64-apple-darwin/debug/bundle/macos/Ember.app"
+        run: |
+          set -euo pipefail
+          test -d "$DEV_APP_PATH"
+          mkdir -p "$RUNNER_TEMP/dev-unsigned"
+          ditto -c -k --keepParent "$DEV_APP_PATH" "$RUNNER_TEMP/dev-unsigned/app.zip"
+      - name: Upload unsigned dev app for signing (macOS)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dev-unsigned-mac-${{ github.sha }}
+          path: ${{ runner.temp }}/dev-unsigned/app.zip
+          retention-days: 1
+          if-no-files-found: error
+
+  dev-artifact-windows:
+    # Windows dev app: builds devArtifact.buildScript and stages it. Runs beside the
+    # QA gate job, not after it, and never reaches a secret.
+    needs: [private-repo-guard]
+    if: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "26.8.1"
+          package-manager-cache: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.24.0
+      - run: pnpm install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@f8be11a05b1d4f3fcebe6410cc16743212b999b0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            . -> target
+          shared-key: lightcraft-desktop-workspace-rust
+          add-job-id-key: false
+          cache-workspace-crates: true
+          cache-on-failure: true
+          save-if: true
+      - name: Build dev app
+        run: pnpm run desktop:artifact:build
+      - name: Upload unsigned dev build (Windows)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dev-windows-${{ github.sha }}
+          path: target/x86_64-pc-windows-msvc/debug/bundle/nsis/**
+          retention-days: 7
+          if-no-files-found: error
+
+  dev-mac-sign:
+    # Push to the default branch only. The release environment's protection
+    # rules (required reviewers, branch policy) apply to this job.
+    needs: [ci, dev-artifact-mac]
+    if: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
+    environment: release
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - name: Download unsigned dev app
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dev-unsigned-mac-${{ github.sha }}
+          path: ${{ runner.temp }}/dev-unsigned
+      - name: Install Apple signing identity in temporary keychain
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          certificate_path="$RUNNER_TEMP/apple-signing.p12"
+          keychain_path="$RUNNER_TEMP/apple-signing.keychain-db"
+          printf '%s' "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$certificate_path"
+          security create-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+          security import "$certificate_path" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+          security set-key-partition-list -S apple-tool:,apple: -k "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+          security list-keychain -d user -s "$keychain_path"
+      - name: Developer ID sign dev app (no notarization)
+        shell: bash
+        env:
+          APPLE_DEVELOPER_ID: ${{ vars.APPLE_DEVELOPER_ID }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/dev-sign"
+          rm -rf "$work" && mkdir -p "$work"
+          ditto -x -k "$RUNNER_TEMP/dev-unsigned/app.zip" "$work"
+          app="$(find "$work" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$app"
+          codesign --force --deep --strict --options runtime --timestamp --sign "$APPLE_DEVELOPER_ID" "$app"
+          codesign --verify --deep --strict "$app"
+          mkdir -p "$RUNNER_TEMP/dev-signed"
+          ditto -c -k --keepParent "$app" "$RUNNER_TEMP/dev-signed/$(basename "$app").zip"
+      - name: Upload signed (not notarized) dev app
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dev-mac-${{ github.sha }}
+          path: ${{ runner.temp }}/dev-signed/*.zip
+          retention-days: 7
+          if-no-files-found: error
+      - name: Remove Apple signing material
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/apple-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/apple-signing.p12"
