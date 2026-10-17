@@ -119,19 +119,6 @@ fn virtual_copies_are_independent_and_persist() {
     let r3 = s.execute("photo.virtualCopy", &json!({"ids": [c1.0]})).unwrap();
     let c3 = s.catalog.photo(lightcraft_catalog::PhotoId(r3["ids"][0].as_u64().unwrap())).unwrap().clone();
     assert_eq!((c3.copy_of, c3.copy_name.as_deref()), (Some(src), Some("Copy 3")));
-    // a Proof Copy carries the soft-proof profile it was made for; a copy of it does not
-    assert_eq!(a.proof, None);
-    let tag = json!({"profile": "Fogra39", "path": "/p/fogra39.icc", "intent": "relative", "paperInk": true, "blackPoint": false});
-    let r4 = s.execute("photo.virtualCopy", &json!({"ids": [src.0], "name": "Proof Copy (Fogra39)", "proof": tag})).unwrap();
-    let c4 = s.catalog.photo(lightcraft_catalog::PhotoId(r4["ids"][0].as_u64().unwrap())).unwrap().clone();
-    let pt = c4.proof.clone().expect("tagged");
-    assert_eq!(
-        (pt.profile.as_str(), pt.path.as_deref(), pt.intent.as_str(), pt.paper_ink, pt.black_point),
-        ("Fogra39", Some("/p/fogra39.icc"), "relative", true, false)
-    );
-    let r5 = s.execute("photo.virtualCopy", &json!({"ids": [c4.id.0]})).unwrap();
-    assert_eq!(s.catalog.photo(lightcraft_catalog::PhotoId(r5["ids"][0].as_u64().unwrap())).unwrap().proof, None);
-    assert!(s.execute("photo.virtualCopy", &json!({"ids": [src.0], "proof": 7})).is_err());
     // independent settings
     s.execute("library.select", &json!({"ids": [c1.0]})).unwrap();
     s.execute("develop.set", &json!({"control": "light.exposure", "value": -1.0})).unwrap();
@@ -149,8 +136,22 @@ fn virtual_copies_are_independent_and_persist() {
     assert!(s.catalog.photo(c3.id).is_none());
     let expect = s.catalog.to_snapshot();
     drop(s);
-    let s2 = open(&dir);
+    let mut s2 = open(&dir);
     assert_eq!(s2.catalog.to_snapshot(), expect);
+    // Proof Copies (made last, so they sit apart from the stack order above): a Proof Copy carries the soft-proof profile it was made for; a copy of it does not
+    assert_eq!(a.proof, None);
+    s2.execute("library.select", &json!({"ids": [src.0]})).unwrap();
+    let tag = json!({"profile": "Fogra39", "path": "/p/fogra39.icc", "intent": "relative", "paperInk": true, "blackPoint": false});
+    let r4 = s2.execute("photo.virtualCopy", &json!({"ids": [src.0], "name": "Proof Copy (Fogra39)", "proof": tag})).unwrap();
+    let c4 = s2.catalog.photo(lightcraft_catalog::PhotoId(r4["ids"][0].as_u64().unwrap())).unwrap().clone();
+    let pt = c4.proof.clone().expect("tagged");
+    assert_eq!(
+        (pt.profile.as_str(), pt.path.as_deref(), pt.intent.as_str(), pt.paper_ink, pt.black_point),
+        ("Fogra39", Some("/p/fogra39.icc"), "relative", true, false)
+    );
+    let r5 = s2.execute("photo.virtualCopy", &json!({"ids": [c4.id.0]})).unwrap();
+    assert_eq!(s2.catalog.photo(lightcraft_catalog::PhotoId(r5["ids"][0].as_u64().unwrap())).unwrap().proof, None);
+    assert!(s2.execute("photo.virtualCopy", &json!({"ids": [src.0], "proof": 7})).is_err());
     let _ = std::fs::remove_dir_all(&dir);
 }
 

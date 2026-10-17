@@ -166,7 +166,10 @@ mod tests {
     }
 
     /// The photos the library shows under `filter` (a partial Filter), in id order.
+    /// The photos one `library.filter` patch shows: the location, GPS and place filters start clear (a patch merges into the
+    /// current filter, so a filter left by an earlier call would narrow this one).
     fn shown(s: &mut Session, filter: Value) -> Vec<PhotoId> {
+        s.execute("library.filter", &json!({"savedLocation": null, "hasGps": null, "namedPlace": null})).unwrap();
         s.execute("library.filter", &filter).unwrap();
         let mut ids = s.visible_cloned();
         ids.sort();

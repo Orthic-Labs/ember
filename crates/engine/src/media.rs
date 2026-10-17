@@ -2004,6 +2004,9 @@ mod thumbnail_hash_tests {
         let op = s.develop_op(PhotoId(1), d, "Detail on").unwrap();
         s.catalog.apply(op).unwrap();
         assert_eq!(key_of(&s, 1), SourceKey::default());
+        // the next lookup brings the photo's recorded key up to its settings (the strength 40 it last loaded at is dropped
+        // here, not under the sources inserted below); strength 0 loads as it always did
+        assert_eq!(width(&mut s, 1), 8);
         // decoded sources: a changed strength drops this photo's, never another's
         for id in [1, 2] {
             s.media.insert(PhotoId(id), SourceLevel::Preview, Arc::new(Rgb32f::new(8, 8)));

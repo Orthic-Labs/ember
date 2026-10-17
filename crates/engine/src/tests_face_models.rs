@@ -470,7 +470,8 @@ fn installing_a_model_chooses_it_and_switches_recognition_on() {
     let a_id = a["installed"]["id"].as_str().unwrap().to_string();
     assert_eq!(a["active"], json!({"embedder": a_id, "enabled": true}));
     assert_eq!(a["installed"]["selected"], true);
-    assert_eq!(settings_of(&d), json!({"enabled": true, "embedder": a_id}));
+    // the other keys keep their defaults: faces are detected, the match threshold is the model's own
+    assert_eq!(settings_of(&d), json!({"enabled": true, "embedder": a_id, "detect": true, "threshold": null}));
     // a second model takes over (the newest is the one the user just asked for); the first stays installed
     let b = s.execute("faces.models.install", &json!({"path": model_file(&d, "Second.onnx", 96), "acknowledged": true})).unwrap();
     let b_id = b["installed"]["id"].as_str().unwrap().to_string();

@@ -133,7 +133,7 @@ fn a_failing_download_ends_with_an_error_and_never_blocks() {
     assert!(!st.finished);
     assert!(!st.cancelled, "a failure is not a cancel");
     let e = st.error.unwrap();
-    assert!(e.contains("not found"), "{e}");
+    assert!(e.contains("404"), "{e}");
     assert!(!s.segmenter.installed());
     // nothing was left behind under a real name, and no error page was saved
     for f in [

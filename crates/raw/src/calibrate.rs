@@ -37,12 +37,14 @@ const CLIP: f64 = 0.98;
 
 /// Which printing of the chart the reference values are for.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+// (`rename_all = "kebab-case"` would write `after2014`: it breaks words at capitals, not at digits)
 pub enum ChartEdition {
     /// Charts made before November 2014 (the GretagMacbeth 2005 values).
+    #[serde(rename = "before-2014", alias = "before2014")]
     Before2014,
     /// Charts made after November 2014 (current Calibrite / X-Rite charts).
     #[default]
+    #[serde(rename = "after-2014", alias = "after2014")]
     After2014,
 }
 
