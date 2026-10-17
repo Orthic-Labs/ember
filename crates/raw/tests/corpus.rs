@@ -835,7 +835,11 @@ fn corpus_orf_maker_matrix_follows_the_jpeg() {
             let rgb = [rgb[0] / k[0], rgb[1] / k[1], rgb[2] / k[2]];
             let balanced = [rgb[0] * f64::from(wb[0]), rgb[1] * f64::from(wb[1]), rgb[2] * f64::from(wb[2])];
             let out = to_srgb.apply(t.matrix.apply(std::array::from_fn(|i| rgb[i] * f64::from(t.wb[i]))));
-            if rgb.iter().all(|v| *v > 1.0) && j.iter().all(|v| (0.002..0.9).contains(v)) && out.iter().all(|v| *v > 0.0) && balanced.iter().all(|v| *v > 0.0) {
+            if rgb.iter().all(|v| *v > 1.0)
+                && j.iter().all(|v| (0.002..0.9).contains(v))
+                && out.iter().all(|v| *v > 0.0)
+                && balanced.iter().all(|v| *v > 0.0)
+            {
                 let err = |c: [f64; 3]| ((c[0] / c[1]).ln() - (j[0] / j[1]).ln()).abs() + ((c[2] / c[1]).ln() - (j[2] / j[1]).ln()).abs();
                 own += err(out);
                 plain += err(balanced);

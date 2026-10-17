@@ -1208,15 +1208,8 @@ mod tests {
         let img = Rgb32f::new(w, h);
         let l = Plane::new(w, h);
         let points = vec![Point::new(0.1, 0.5), Point::new(0.9, 0.5)];
-        let stroke = BrushStroke {
-            points,
-            size: 0.06,
-            feather: 0.0,
-            flow: 100.0,
-            pressure: vec![1.0, 0.1],
-            pressure_flow: false,
-            ..Default::default()
-        };
+        let stroke =
+            BrushStroke { points, size: 0.06, feather: 0.0, flow: 100.0, pressure: vec![1.0, 0.1], pressure_flow: false, ..Default::default() };
         let a = shape_alpha(&MaskShape::Brush { strokes: vec![stroke] }, &f, w, h, &img, &l, 0.0, None);
         let height = |x: usize| (0..h).filter(|&y| a.get(x, y) > 0.5).count();
         let (firm, light) = (height(30), height(170));

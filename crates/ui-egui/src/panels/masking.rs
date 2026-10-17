@@ -1117,7 +1117,11 @@ mod tests {
         app.session.set_develop(id, d, "setup").unwrap();
         update_ai(&mut app, id, Some(2));
         let (source, geometry) = app.session.ai_stamps(id);
-        assert_eq!(stale_mask_ids(&app.session.develop_of(id).unwrap(), source, geometry, app.session.ai_model_now()), [3], "mask 2 is current, mask 3 still stale");
+        assert_eq!(
+            stale_mask_ids(&app.session.develop_of(id).unwrap(), source, geometry, app.session.ai_model_now()),
+            [3],
+            "mask 2 is current, mask 3 still stale"
+        );
         let widgets = panel_widgets(&mut app, id);
         assert!(!widgets.contains(&"maskUpdate:2".to_string()) && widgets.contains(&"maskUpdate:3".to_string()), "{widgets:?}");
 

@@ -343,7 +343,11 @@ mod tests {
         let bleed = strokes.iter().find_map(|g| if let Guide::Bleed(r) = g { Some(*r) } else { None }).unwrap();
         assert_eq!(bleed, egui::Rect::from_min_max(egui::pos2(97.0, 47.0), egui::pos2(313.0, 350.0)), "3 mm beyond the trim on each side");
         assert!(strokes.contains(&Guide::Trim(page)), "the trim is the page");
-        assert_eq!(strokes.iter().filter(|g| matches!(g, Guide::Tick { .. })).count(), 22 + 30, "rulers every 10 mm, 0 to 210 across and 0 to 290 down");
+        assert_eq!(
+            strokes.iter().filter(|g| matches!(g, Guide::Tick { .. })).count(),
+            22 + 30,
+            "rulers every 10 mm, 0 to 210 across and 0 to 290 down"
+        );
         assert_eq!(strokes.iter().filter(|g| matches!(g, Guide::Cell(_))).count(), 1, "the cell outline");
         // switched off in the settings, only the trim is left
         m.guides = print::Guides { rulers: false, dimensions: false, bleed_mm: 0.0, show: true };

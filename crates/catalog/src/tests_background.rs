@@ -281,12 +281,8 @@ fn fs_store_background_snapshot() {
     assert_eq!((j2.snapshot_seq(), j2.log_records()), (n, j2.seq() - n));
     // the snapshot's own temp file is gone: the only temp left is the planted one, whose legacy name
     // `rightkit-fs` neither writes nor sweeps (its temps are `.<name>.rktmp-*`)
-    let leftovers: Vec<String> = std::fs::read_dir(&dir)
-        .unwrap()
-        .flatten()
-        .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| n.contains("tmp"))
-        .collect();
+    let leftovers: Vec<String> =
+        std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.contains("tmp")).collect();
     assert_eq!(leftovers, vec![format!("{SNAPSHOT}.tmp")], "no temp file of the snapshot remains");
     edit(&mut j2, &mut live, 999);
     drop(j2);

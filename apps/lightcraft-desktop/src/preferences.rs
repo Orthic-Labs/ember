@@ -42,7 +42,11 @@ struct State {
 /// The empty-object defaults provider keeps a missing file missing: without it the store treats a missing
 /// document as dirty and creates it on open. With it, the first patch that changes a value writes the file.
 fn store_options() -> StoreOptions {
-    StoreOptions::new(Schema::new("ember", SCHEMA_VERSION)).format(FileFormat::Flat).trailing_newline(true).max_bytes(MAX_BYTES as u64).defaults_provider(|| Value::Object(Map::new()))
+    StoreOptions::new(Schema::new("ember", SCHEMA_VERSION))
+        .format(FileFormat::Flat)
+        .trailing_newline(true)
+        .max_bytes(MAX_BYTES as u64)
+        .defaults_provider(|| Value::Object(Map::new()))
 }
 
 fn open_store(path: &Path) -> Result<Store<PrefMap>, StoreError> {
