@@ -1,0 +1,111 @@
+{
+  "schema": 1,
+  "policy": "Only CC0 / CC-BY / similarly permissive data may train a shipped model. Share-alike, non-commercial, research-only, no-derivatives and unlicensed data are not accepted. 'verified_on' is the date the licence page was fetched and read for this manifest; a status of 'unverified' means the licence could not be established from a fetched page and the source is blocked.",
+  "decision": "Adrian 2026-10-17: train our own NAFNet width16 on publicly available data; no Megvii correspondence and no Megvii weights (issue #200).",
+  "sources": [
+    {
+      "id": "ember-corpus-pixls",
+      "name": "Ember corpus: CC0 raw samples from raw.pixls.us (cargo run -p xtask -- corpus --download)",
+      "kind": "raw",
+      "status": "accepted",
+      "licence": "CC0-1.0",
+      "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source_url": "https://raw.pixls.us/",
+      "verified_on": "2026-10-17",
+      "evidence": "raw.pixls.us upload form: 'I hereby release it under the CC0 licence into the public domain'; the licence link is titled 'Creative Commons Zero - Public Domain Dedication'. The site also lists non-CC0 samples; only the files pinned (URL + SHA-256) in xtask/src/main.rs RAW_SAMPLES are used, each recorded there as CC0.",
+      "use": "clean source (train / val / held-out by content hash)",
+      "notes": "Small and many cameras but few scenes; Bayer only (X-Trans and linear DNG skipped); sources recorded above ISO 800 are skipped as not clean. Keep one frame per scene so a burst cannot straddle splits."
+    },
+    {
+      "id": "mit-adobe-fivek",
+      "name": "MIT-Adobe FiveK (5,000 raw DNGs)",
+      "kind": "raw",
+      "status": "rejected",
+      "licence": "Adobe research-only licences (LicenseAdobe.txt, LicenseAdobeMIT.txt)",
+      "licence_url": "https://data.csail.mit.edu/graphics/fivek/legal/LicenseAdobe.txt",
+      "source_url": "https://data.csail.mit.edu/graphics/fivek/",
+      "verified_on": "2026-10-17",
+      "evidence": "Both licence files grant rights 'solely for your own research purposes' and forbid exercising them 'in any manner that is intended for or directed toward commercial advantage'. Second file: https://data.csail.mit.edu/graphics/fivek/legal/LicenseAdobeMIT.txt (same research-only grant). The licence applies to derivative use, so a shipped model is excluded.",
+      "use": "none",
+      "notes": "Rejected: non-commercial / research-only."
+    },
+    {
+      "id": "raise",
+      "name": "RAISE (8,156 raw images)",
+      "kind": "raw",
+      "status": "rejected",
+      "licence": "non-commercial research and educational use only",
+      "licence_url": "https://loki.disi.unitn.it/RAISE/download.html",
+      "source_url": "https://loki.disi.unitn.it/RAISE/",
+      "verified_on": "2026-10-17",
+      "evidence": "Download page: 'The RAISE dataset is to be used for non-commercial research and educational purposes.' No grant for commercial use or for shipped models.",
+      "use": "none",
+      "notes": "Rejected: non-commercial."
+    },
+    {
+      "id": "ppr10k",
+      "name": "PPR10K (portrait photo retouching pairs)",
+      "kind": "raw",
+      "status": "rejected",
+      "licence": "non-commercial research purposes only (code Apache-2.0)",
+      "licence_url": "https://github.com/csjliang/PPR10K",
+      "source_url": "https://github.com/csjliang/PPR10K",
+      "verified_on": "2026-10-17",
+      "evidence": "README agreement: 'All files in the PPR10K dataset are available for non-commercial research purposes only.' and no reproduction or exploitation for commercial purposes. Only the code is Apache-2.0. It is also a retouching dataset, not a noise one.",
+      "use": "none",
+      "notes": "Rejected: non-commercial."
+    },
+    {
+      "id": "sidd",
+      "name": "SIDD (smartphone raw noisy/clean pairs and noise-level functions)",
+      "kind": "raw",
+      "status": "unverified",
+      "licence": "MIT (stated on the project page only)",
+      "licence_url": "https://abdokamel.github.io/sidd/index.html",
+      "source_url": "https://abdokamel.github.io/sidd/index.html",
+      "verified_on": "2026-10-17",
+      "evidence": "Project page: 'The dataset and the associated code repositories are under the MIT License.' No LICENSE file or per-image grant was seen, and the page does not address commercial use. Five small smartphone sensors only; ground truth is a burst average, not a base-ISO capture.",
+      "use": "none until verified; possible calibration reference only (its per-image noise level functions are the only public per-sensor (a, b) data found)",
+      "notes": "Not accepted. Read the dataset repository's LICENSE file before any use, including calibration."
+    },
+    {
+      "id": "nind",
+      "name": "Natural Image Noise Dataset (NIND), Wikimedia Commons",
+      "kind": "jpeg-png",
+      "status": "unverified",
+      "licence": "per-file on Commons (not read)",
+      "licence_url": "https://commons.wikimedia.org/wiki/Natural_Image_Noise_Dataset",
+      "source_url": "https://commons.wikimedia.org/wiki/Natural_Image_Noise_Dataset",
+      "verified_on": "2026-10-17",
+      "evidence": "The Commons page says files are available under licences on their description pages and names no dataset licence. Per its download script the images are 8-bit JPG / 16-bit PNG, i.e. already developed, not raw mosaics.",
+      "use": "none: not a raw mosaic, so unusable for this pipeline; at most a real-noise eval set after per-file licences are read",
+      "notes": "Not accepted."
+    },
+    {
+      "id": "rawnind",
+      "name": "Raw Natural Image Noise Dataset (rawNIND), UCLouvain Dataverse",
+      "kind": "raw",
+      "status": "unverified",
+      "licence": "unknown (the Dataverse landing page did not render its licence field)",
+      "licence_url": "https://doi.org/10.14428/DVN/DEQCIM",
+      "source_url": "https://dataverse.uclouvain.be/dataset.xhtml?persistentId=doi:10.14428/DVN/DEQCIM",
+      "verified_on": "2026-10-17",
+      "evidence": "The landing page fetched with title only; no licence text was obtained. The paper (arXiv 2501.08924) describes it as paired noisy/clean raws from several sensors. Issue #200's survey found the rawNIND CODE is GPL-3.0; that says nothing about the data.",
+      "use": "none until the Dataverse licence field is read; a real-noise raw eval and noise-prior calibration set if it is CC0 / CC-BY",
+      "notes": "Not accepted. Best candidate to calibrate the (a, b) prior on real high-ISO raws."
+    },
+    {
+      "id": "wikimedia-commons-raws",
+      "name": "Raw files uploaded to Wikimedia Commons",
+      "kind": "raw",
+      "status": "unverified",
+      "licence": "per file; Commons allows CC0, CC-BY, CC-BY-SA and PD",
+      "licence_url": "https://commons.wikimedia.org/wiki/Commons:Licensing",
+      "source_url": "https://commons.wikimedia.org/wiki/Commons:Licensing",
+      "verified_on": "2026-10-17",
+      "evidence": "Commons:Licensing: licensing is per file, NC and ND are not accepted, and CC-BY-SA is accepted, so a Commons file is only usable here if its own description page shows CC0 or CC-BY (never -SA). No category listing raw camera files could be fetched.",
+      "use": "none until individual files are read and added as their own accepted entries with file URL, licence and attribution",
+      "notes": "Not accepted as a bulk source. CC-BY files would need attribution carried into the model card."
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+# Pinned for the Vast training run (docs/train-denoise.md). UNVERIFIED against the Vast image: before launch, run
+# `pip install --dry-run -r requirements.txt` on the instance and confirm each pin exists for its Python and CUDA.
+# torch is installed from the Vast PyTorch template image (CUDA build); do not let pip replace it. The line below
+# documents the version the code was written against and is skipped when the image already provides torch 2.5.x.
+torch==2.5.1
+numpy==2.1.3
+safetensors==0.4.5
+rawpy==0.23.2
+ExifRead==3.0.0
+pytest==8.3.4

@@ -77,7 +77,7 @@ Build and run the binary (`-p lightcraft-denoise-train`, bin `denoise-train`) th
 
 `model.rs` is NAFNet on candle with the reference parameter names and PyTorch layouts: `intro`, `ending`, `encoders.{i}.{j}`, `middle_blks.{j}`, `decoders.{i}.{j}`, `downs.{i}`, `ups.{i}.0`, per block `norm1/2`, `conv1..5`, `sca.1`, `beta`, `gamma`. Width 16, encoder `[1,1,1,2]`, 3 middle, decoder `[1,1,1,1]`: 2 190 947 parameters (a test checks this against the closed form `7c²+33c` per block). Differences from the reference: 6 input channels (the global skip adds the first three), and the final convolution starts at zero weights so training starts from the identity. Weights are plain F32 safetensors with a `contract.json` beside them (architecture config, input/output contract, noise prior, split counts).
 
-**Correction to the delivery plan:** `crates/denoise`'s ONNX path loads plain U-Nets (no depthwise convolution, channel attention or LayerNorm), so it cannot run this network. Training is Rust on candle, not PyTorch as `local-ai-delivery.md` first sketched.
+**Correction to the delivery plan:** `crates/denoise`'s ONNX path loads plain U-Nets (no depthwise convolution, channel attention or LayerNorm), so it cannot run this network. Training is Rust on candle, not PyTorch as `local-ai-delivery.md` first sketched. 2026-10-17 addendum: because the candle trainer has no CUDA build, the GPU run on the Vast 3090 uses a PyTorch trainer, `tools/train-denoise`, that writes the same tensor names and `contract.json`; see [`train-denoise.md`](train-denoise.md) for the licensed-data manifest, the runbook and the gates.
 
 ### Inference backend (#200, second half)
 
