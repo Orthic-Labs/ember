@@ -272,8 +272,10 @@ fn unnamed_faces(s: &Session) -> Vec<(u64, usize, lightcraft_geom::Rect)> {
 
 /// Most unnamed faces `faces.clusters` groups in one call (the first in photo order). Grouping looks at every pair of
 /// the faces in a pass, so a refresh stays near half a gigaflop: faces beyond this wait for the next call.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 const MAX_GROUPED: usize = 2000;
 /// Faces grouped per pass: the first `GROUP_PASS` together, then the next, and so on (groups never span two passes).
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 const GROUP_PASS: usize = 1000;
 /// Most groups `faces.clusters` lists, largest first.
 const MAX_GROUPS: usize = 40;
@@ -966,9 +968,7 @@ mod imp {
                 }
             }
         }
-        let cannot = |i: usize, j: usize| {
-            marked.get(i).is_some_and(|m| m.iter().any(|n| resembles.get(j).is_some_and(|r| r.contains(n))))
-        };
+        let cannot = |i: usize, j: usize| marked.get(i).is_some_and(|m| m.iter().any(|n| resembles.get(j).is_some_and(|r| r.contains(n))));
         let embs: Vec<&[f32]> = faces.iter().map(|(_, e)| &e[..]).collect();
         let grouped = lightcraft_faces::cluster::cluster(&embs, threshold, super::GROUP_PASS, &cannot);
         let groups: Vec<Vec<(u64, usize, Rect)>> =

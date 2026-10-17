@@ -375,7 +375,12 @@ mod tests {
         let undo_before = s.undo.len();
         let found = |s: &mut Session, q: &str| -> Vec<(String, String)> {
             let r = s.execute("map.search", &json!({"query": q})).unwrap();
-            r["results"].as_array().unwrap().iter().map(|h| (h["kind"].as_str().unwrap().to_string(), h["name"].as_str().unwrap().to_string())).collect()
+            r["results"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|h| (h["kind"].as_str().unwrap().to_string(), h["name"].as_str().unwrap().to_string()))
+                .collect()
         };
         assert_eq!(
             found(&mut s, "paris"),
@@ -384,7 +389,8 @@ mod tests {
         );
         let r = s.execute("map.search", &json!({"query": "PARIS"})).unwrap();
         let centre = &r["results"][0];
-        assert_eq!((centre["lat"].as_f64(), centre["lon"].as_f64()), (Some(48.85), Some(2.35)), "the centre of the two photos");
+        let (lat, lon) = (centre["lat"].as_f64().unwrap(), centre["lon"].as_f64().unwrap());
+        assert!((lat - 48.85).abs() < 1e-9 && (lon - 2.35).abs() < 1e-9, "the centre of the two photos: {lat}, {lon}");
         assert_eq!(found(&mut s, "48.85, 2.35")[0].0, "position");
         assert!(found(&mut s, "madrid").iter().all(|(k, _)| k == "place"), "Madrid is a place name too");
         assert!(found(&mut s, "atlantis").is_empty());

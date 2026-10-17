@@ -74,10 +74,7 @@ pub enum AutoMeasured {
     BwMix([f64; 8]),
     /// `None`: no flat tiles to fit (the sliders then come from the ISO).
     Noise(Option<NoiseEstimate>),
-    WhiteBalance {
-        temp: f64,
-        tint: f64,
-    },
+    WhiteBalance { temp: f64, tint: f64 },
 }
 
 impl AutoMeasured {

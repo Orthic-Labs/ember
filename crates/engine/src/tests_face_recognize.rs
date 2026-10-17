@@ -356,8 +356,9 @@ fn the_saved_match_strictness_decides_how_many_faces_are_suggested() {
     };
     s.execute("faces.preferences", &json!({"threshold": -1.0})).unwrap();
     assert_eq!(suggested(&mut s), 3, "every unnamed face is suggested a name at -1");
-    s.execute("faces.preferences", &json!({"threshold": 2.0})).unwrap();
-    assert_eq!(suggested(&mut s), 0, "nothing reaches 2");
+    // a threshold above any cosine score (given with the call: the saved preference only accepts -1..1) suggests nobody
+    let r = s.execute("faces.suggest", &json!({"ids": [b.0], "threshold": 2.0, "margin": -2.0, "budgetMs": 60_000})).unwrap();
+    assert!(r["photos"][0]["faces"].as_array().unwrap().iter().all(|f| !f["suggestion"].is_object()), "nothing reaches 2: {r}");
     // a threshold given with the call wins over the saved one
     let r = s.execute("faces.suggest", &json!({"ids": [b.0], "threshold": -1.0, "margin": -2.0, "budgetMs": 60_000})).unwrap();
     assert_eq!(r["threshold"], json!(-1.0), "{r}");

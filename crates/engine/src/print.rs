@@ -200,19 +200,13 @@ impl Default for Job {
 /// A user print template: the layout, image and picture-package settings a template sets (the job and
 /// page options stay). Built-in templates are [`builtin_templates`]; the user's are saved with the
 /// library preferences.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PrintTemplate {
     pub name: String,
     pub layout: Layout,
     pub image: ImageSettings,
     pub package: Vec<CellSize>,
-}
-
-impl Default for PrintTemplate {
-    fn default() -> Self {
-        Self { name: String::new(), layout: Layout::default(), image: ImageSettings::default(), package: Vec::new() }
-    }
 }
 
 /// A rectangle in millimetres on the page.
@@ -616,7 +610,7 @@ pub fn prepare(session: &mut Session, m: &Model, photos: &[PhotoId], ppi: f64, o
             prepared.push(prepare_cell(session, m, id, cell_px(cell, ppi), proof, ppi)?);
         }
         let first = page.iter().flatten().next().and_then(|i| photos.get(*i)).copied();
-        let fields = first.and_then(|id| session.catalog.photo(id)).map(Fields::of).unwrap_or_default();
+        let fields = first.and_then(|id| session.catalog.photo(id)).map(|p| Fields::of(p)).unwrap_or_default();
         out.push(Some(PreparedPage {
             cells: prepared,
             identity: slideshow::expand(&m.page.identity_plate, &fields),
@@ -809,7 +803,7 @@ mod tests {
         let prepared = prepare(&mut s, &m, &ids, 72.0, None).unwrap();
         assert_eq!(prepared.pages(), plan(&m, ids.len()).unwrap().len());
         assert_eq!(prepared.render(0).unwrap(), render_page(&mut s, &m, &ids, 0, 72.0).unwrap(), "the same page as the session render");
-        assert_eq!(prepared.pdf(&mut |done, _| done < 1), Err(CANCELLED.to_string()), "a cancelled print writes nothing");
+        assert_eq!(prepared.pdf(&mut |_, _| false), Err(CANCELLED.to_string()), "a cancelled print writes nothing");
         let only = prepare(&mut s, &m, &ids, 72.0, Some(0)).unwrap();
         assert!(only.render(0).is_ok(), "the page that was asked for renders");
     }
@@ -944,7 +938,7 @@ mod tests {
         assert_eq!(g.paper, (210.0, 297.0));
         assert_eq!(g.bleed.map(|b| (b.x, b.y, b.w)), Some((-3.0, -3.0, 216.0)), "3 mm beyond the trim");
         assert_eq!(g.ruler_x.first(), Some(&0.0));
-        assert_eq!(g.ruler_x.last(), Some(&200.0), "ticks every 10 mm up to the paper's width");
+        assert_eq!(g.ruler_x.last(), Some(&210.0), "ticks every 10 mm up to the paper's width");
         assert_eq!(g.ruler_y.len(), 30);
         assert_eq!(g.cells.len(), 1);
         assert_eq!(g.cells[0].1, "190 × 277 mm");
