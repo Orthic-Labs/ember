@@ -29,6 +29,8 @@ serde_json = { workspace = true }
 # probing the window's renderer before it opens (`window_gpu`)
 pollster = { workspace = true }
 log = { workspace = true }
+# Log file sink, rotation and generation names (M15, owner `rightkit-logs`); no tracing or network features.
+rightkit-logs = { version = "=0.3.0", default-features = false }
 
 [build-dependencies]
 # Icon + VERSIONINFO for lightcraft.exe; build.rs only uses it when targeting Windows.

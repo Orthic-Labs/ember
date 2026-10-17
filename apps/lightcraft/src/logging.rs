@@ -1,12 +1,13 @@
 //! The desktop app's logger: `log::` records go to standard error and to a log file.
 //!
-//! It replaces the stderr-only `StderrLog` that `main.rs` used to install. A launch from a
-//! desktop menu or the Dock has no terminal, so the file is what a bug report can attach:
-//! `<settings folder>/logs/lightcraft.log`, next to `ui.json` (`config_dir` in `main.rs`; Linux
-//! `$XDG_CONFIG_HOME/lightcraft/logs`, by default `~/.config/lightcraft/logs`). Never in the
-//! library folder. Each start moves the previous log to `lightcraft.1.log` (and that one to `.2`),
-//! so the log of a run that crashed survives the next launch. Runs with `LIGHTCRAFT_NO_PREFS`
-//! (tests, scripts) log to standard error only, so they don't rotate away the user's own logs.
+//! The file sink is `rightkit-logs` ([`rightkit_logs::RotatingTextWriter`], M15 `rightkit-logs`): rotation, the
+//! generation names and the failure counts are the owner's. A launch from a desktop menu or the Dock has no
+//! terminal, so the file is what a bug report can attach: `<settings folder>/logs/lightcraft.log`, next to
+//! `ui.json` (`config_dir` in `main.rs`; Linux `$XDG_CONFIG_HOME/lightcraft/logs`, by default
+//! `~/.config/lightcraft/logs`). Never in the library folder. Each start moves the previous log to
+//! `lightcraft.1.log` (and that one to `.2`), so the log of a run that crashed survives the next launch. Runs
+//! with `LIGHTCRAFT_NO_PREFS` (tests, scripts) log to standard error only, so they don't rotate away the user's
+//! own logs. A file that grows past [`MAX_FILE_BYTES`] rolls to a numbered generation as well.
 //!
 //! Levels ([`filter_spec`]): `info` for Ember's own crates, `warn` for everything else (wgpu
 //! and naga are chatty). `LIGHTCRAFT_LOG` keeps the meaning it had with the old logger: `info` or
@@ -22,22 +23,23 @@
 //!
 //! This is the desktop app's logger only; `lightcraft-cli` doesn't share a process with it.
 
-use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError, TryLockError};
 use std::time::SystemTime;
 
 use log::LevelFilter;
+use rightkit_logs::{RotatedNaming, RotatingTextWriter};
 
 /// The current log file's name inside the log folder.
 pub const LOG_FILE: &str = "lightcraft.log";
 /// How many previous logs are kept (`lightcraft.1.log` … `lightcraft.<KEEP>.log`).
-pub const KEEP: usize = 2;
-/// The log file stops growing past this size (a runaway warning can't fill the disk).
+pub const KEEP: u32 = 2;
+/// The log file rolls to a numbered generation past this size (a runaway warning can't fill the disk).
 pub const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;
 /// Records kept in memory until the log file is attached.
 pub const MAX_PENDING: usize = 512;
+
 /// The built-in filter when neither `LIGHTCRAFT_LOG` nor `RUST_LOG` says otherwise.
 pub const DEFAULT_FILTER: &str = "warn,lightcraft*=info";
 
@@ -137,67 +139,52 @@ fn civil_from_days(days: u64) -> (u64, u64, u64) {
     (y, m, d)
 }
 
-fn numbered(dir: &Path, n: usize) -> PathBuf {
-    if n == 0 { dir.join(LOG_FILE) } else { dir.join(format!("lightcraft.{n}.log")) }
-}
-
-/// Shift the previous logs up one (`.log` → `.1.log` → … → `.<KEEP>.log`, the oldest dropped)
-/// and create a fresh, empty log file in `dir` (created if missing).
-pub fn rotate(dir: &Path) -> std::io::Result<(PathBuf, File)> {
-    std::fs::create_dir_all(dir)?;
-    for n in (1..=KEEP).rev() {
-        match std::fs::rename(numbered(dir, n - 1), numbered(dir, n)) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
-            _ => {}
-        }
-    }
-    let path = numbered(dir, 0);
-    let file = File::create(&path)?;
-    Ok((path, file))
-}
-
 /// One formatted log line: `<timestamp> <LEVEL> [<thread>] <target>: <message>\n`.
 pub fn format_line(ts: &str, level: log::Level, thread: &str, target: &str, message: &str) -> String {
     let message = message.strip_suffix('\n').unwrap_or(message);
     format!("{ts} {level:<5} [{thread}] {target}: {message}\n")
 }
 
-/// Where formatted lines go besides standard error: kept in memory until a file is attached,
-/// then appended to it until it reaches its size cap.
+/// Where formatted lines go besides standard error: kept in memory until a log file is attached, then
+/// appended to it through the rotating writer.
 pub struct Sink {
-    file: Option<File>,
+    file: Option<RotatingTextWriter>,
     pending: Vec<String>,
     dropped: usize,
-    written: u64,
-    max_bytes: u64,
-    capped: bool,
+    /// No file is coming ([`Sink::no_file`], or a failed append): standard error is the only sink.
+    disabled: bool,
+}
+
+impl Default for Sink {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Sink {
-    pub fn new(max_bytes: u64) -> Sink {
-        Sink { file: None, pending: Vec::new(), dropped: 0, written: 0, max_bytes, capped: false }
+    pub fn new() -> Sink {
+        Sink { file: None, pending: Vec::new(), dropped: 0, disabled: false }
     }
 
     /// Append `line` to the file, or keep it until [`Sink::attach`].
     pub fn write(&mut self, line: &str) {
         if self.file.is_none() {
-            if self.capped {
-                // No file is coming ([`Sink::no_file`]): standard error had the line.
-            } else if self.pending.len() < MAX_PENDING {
-                self.pending.push(line.to_owned());
-            } else {
-                self.dropped = self.dropped.saturating_add(1);
+            if !self.disabled {
+                if self.pending.len() < MAX_PENDING {
+                    self.pending.push(line.to_owned());
+                } else {
+                    self.dropped = self.dropped.saturating_add(1);
+                }
             }
             return;
         }
         self.append(line);
     }
 
-    /// Start writing to `file` (a fresh one: the size cap starts over), first the lines kept so far.
-    pub fn attach(&mut self, file: File) {
-        self.file = Some(file);
-        self.written = 0;
-        self.capped = false;
+    /// Start writing to `writer` (a fresh log file), first the lines kept so far.
+    pub fn attach(&mut self, writer: RotatingTextWriter) {
+        self.file = Some(writer);
+        self.disabled = false;
         for line in std::mem::take(&mut self.pending) {
             self.append(&line);
         }
@@ -213,28 +200,28 @@ impl Sink {
         self.file = None;
         self.pending = Vec::new();
         self.dropped = 0;
-        self.capped = true;
+        self.disabled = true;
     }
 
     fn append(&mut self, line: &str) {
-        if self.capped {
-            return;
-        }
-        let Some(file) = self.file.as_mut() else { return };
-        let len = u64::try_from(line.len()).unwrap_or(u64::MAX);
-        let text = if self.written.saturating_add(len) > self.max_bytes {
-            self.capped = true;
-            format!("log file reached {} bytes; later records go to standard error only\n", self.max_bytes)
-        } else {
-            self.written = self.written.saturating_add(len);
-            line.to_owned()
-        };
-        // A full disk or a vanished file must not take the app down: drop the file sink.
-        if file.write_all(text.as_bytes()).is_err() {
+        let Some(writer) = self.file.as_ref() else { return };
+        let text = line.strip_suffix('\n').unwrap_or(line);
+        // A full disk or a vanished folder must not take the app down: drop the file sink.
+        if writer.write_line(text).is_err() {
             self.file = None;
-            self.capped = true;
+            self.disabled = true;
         }
     }
+}
+
+/// Open a fresh log in `dir` (created if missing): the previous `lightcraft.log` rolls into `lightcraft.1.log`,
+/// older generations shift up, and the oldest beyond [`KEEP`] is dropped. An error leaves nothing open.
+pub fn open_log(dir: &Path) -> std::io::Result<(PathBuf, RotatingTextWriter)> {
+    std::fs::create_dir_all(dir)?;
+    let path = dir.join(LOG_FILE);
+    let writer = RotatingTextWriter::new(path.clone(), MAX_FILE_BYTES).with_generations(KEEP).with_naming(RotatedNaming::StemNumbered);
+    writer.rotate_now()?;
+    Ok((path, writer))
 }
 
 /// The installed logger: a [`Filter`], standard error and a [`Sink`].
@@ -246,17 +233,17 @@ pub struct AppLogger {
 
 impl AppLogger {
     pub fn new(filter: Filter, stderr: bool) -> AppLogger {
-        AppLogger { filter, stderr, sink: Mutex::new(Sink::new(MAX_FILE_BYTES)) }
+        AppLogger { filter, stderr, sink: Mutex::new(Sink::new()) }
     }
 
-    /// Rotate the logs in `dir` and send records to the fresh file; returns its path. On an error
-    /// standard error stays the only sink.
+    /// Start a fresh log in `dir` and send records to it; returns its path. On an error standard error stays
+    /// the only sink.
     pub fn attach_dir(&self, dir: &Path) -> Result<PathBuf, String> {
         // A thread that panicked while logging leaves the sink usable: take it back.
         let mut sink = self.sink.lock().unwrap_or_else(PoisonError::into_inner);
-        match rotate(dir) {
-            Ok((path, file)) => {
-                sink.attach(file);
+        match open_log(dir) {
+            Ok((path, writer)) => {
+                sink.attach(writer);
                 Ok(path)
             }
             Err(e) => {
@@ -339,6 +326,21 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{Duration, UNIX_EPOCH};
+
+    #[test]
+    fn rotation_keeps_the_previous_logs_and_starts_a_fresh_file() {
+        let dir = temp_dir("rotate");
+        for run in 1..=4 {
+            let (path, writer) = open_log(&dir).expect("open");
+            assert_eq!(path, dir.join(LOG_FILE));
+            writer.write_line(&format!("run {run}")).expect("write");
+        }
+        assert_eq!(read(&dir.join(LOG_FILE)), "run 4\n");
+        assert_eq!(read(&dir.join("lightcraft.1.log")), "run 3\n");
+        assert_eq!(read(&dir.join("lightcraft.2.log")), "run 2\n");
+        assert!(!dir.join("lightcraft.3.log").exists(), "only {KEEP} old logs are kept");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn temp_dir(tag: &str) -> PathBuf {
         static N: AtomicUsize = AtomicUsize::new(0);
@@ -496,38 +498,22 @@ mod tests {
     }
 
     #[test]
-    fn rotation_keeps_the_previous_logs_and_starts_an_empty_file() {
-        let dir = temp_dir("rotate");
-        for run in 1..=4 {
-            let (path, _file) = rotate(&dir).expect("rotate");
-            assert_eq!(path, dir.join(LOG_FILE));
-            assert_eq!(read(&path), "");
-            std::fs::write(&path, format!("run {run}")).expect("write");
-        }
-        assert_eq!(read(&dir.join(LOG_FILE)), "run 4");
-        assert_eq!(read(&dir.join("lightcraft.1.log")), "run 3");
-        assert_eq!(read(&dir.join("lightcraft.2.log")), "run 2");
-        assert!(!dir.join("lightcraft.3.log").exists(), "only {KEEP} old logs are kept");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
     fn rotation_into_an_unusable_directory_is_an_error_not_a_panic() {
         let dir = temp_dir("blocked");
         std::fs::create_dir_all(dir.parent().expect("parent")).expect("tmp");
         std::fs::write(&dir, "a file where the directory should be").expect("block");
-        assert!(rotate(&dir).is_err());
+        assert!(open_log(&dir).is_err());
         let _ = std::fs::remove_file(&dir);
     }
 
     #[test]
     fn lines_logged_before_the_file_exists_are_written_when_it_is_attached() {
         let dir = temp_dir("pending");
-        let (path, file) = rotate(&dir).expect("rotate");
-        let mut sink = Sink::new(MAX_FILE_BYTES);
+        let (path, writer) = open_log(&dir).expect("rotate");
+        let mut sink = Sink::new();
         sink.write("early 1\n");
         sink.write("early 2\n");
-        sink.attach(file);
+        sink.attach(writer);
         sink.write("late\n");
         assert_eq!(read(&path), "early 1\nearly 2\nlate\n");
         let _ = std::fs::remove_dir_all(&dir);
@@ -536,12 +522,12 @@ mod tests {
     #[test]
     fn the_pending_buffer_is_bounded_and_says_how_much_it_dropped() {
         let dir = temp_dir("bounded");
-        let (path, file) = rotate(&dir).expect("rotate");
-        let mut sink = Sink::new(MAX_FILE_BYTES);
+        let (path, writer) = open_log(&dir).expect("rotate");
+        let mut sink = Sink::new();
         for i in 0..MAX_PENDING + 5 {
             sink.write(&format!("line {i}\n"));
         }
-        sink.attach(file);
+        sink.attach(writer);
         let text = read(&path);
         assert_eq!(text.lines().filter(|l| l.starts_with("line ")).count(), MAX_PENDING);
         assert!(text.contains("5 earlier log lines were dropped"), "{text}");
@@ -552,12 +538,12 @@ mod tests {
     #[test]
     fn exactly_a_full_pending_buffer_drops_nothing() {
         let dir = temp_dir("full");
-        let (path, file) = rotate(&dir).expect("rotate");
-        let mut sink = Sink::new(MAX_FILE_BYTES);
+        let (path, writer) = open_log(&dir).expect("rotate");
+        let mut sink = Sink::new();
         for i in 0..MAX_PENDING {
             sink.write(&format!("line {i}\n"));
         }
-        sink.attach(file);
+        sink.attach(writer);
         let text = read(&path);
         assert_eq!(text.lines().count(), MAX_PENDING);
         assert!(!text.contains("dropped"), "{text}");
@@ -566,26 +552,11 @@ mod tests {
 
     #[test]
     fn without_a_file_nothing_is_kept_in_memory() {
-        let mut sink = Sink::new(MAX_FILE_BYTES);
+        let mut sink = Sink::new();
         sink.write("early\n");
         sink.no_file();
         sink.write("late\n");
         assert!(sink.pending.is_empty() && sink.dropped == 0);
-    }
-
-    #[test]
-    fn the_file_stops_at_its_size_cap_with_one_note() {
-        let dir = temp_dir("cap");
-        let (path, file) = rotate(&dir).expect("rotate");
-        let mut sink = Sink::new(100);
-        sink.attach(file);
-        for i in 0..50 {
-            sink.write(&format!("line {i:02} with some padding\n"));
-        }
-        let text = read(&path);
-        assert_eq!(text.lines().filter(|l| l.starts_with("line ")).count(), 3, "{text}");
-        assert_eq!(text.matches("log file reached").count(), 1, "{text}");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
