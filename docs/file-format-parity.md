@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-17 · **Change:** minor (AVIF import and `photo.renderToAvif`, #188)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-17 · **Change:** minor (lossy JPEG DNG for Render to DNG, #188)
 
 Every format reference editor reads or writes, with our support, fidelity and tests. Camera raw formats are
 deep enough to have their own document: [raw-parity.md](raw-parity.md).
@@ -25,7 +25,7 @@ import and export formats. Ours come from `crates/codecs/src/sniff.rs`, `crates/
 | WebP | not in its document types | ⬜ | ✅ | ✅ | beyond target |
 | GIF, BMP | ⬜ | ⬜ | ✅ | ⬜ | beyond target |
 | DNG (from raw) | ✅ | ✅ incl. lossy, embedded original | ✅ | ✅ uncompressed, LJ92 or deflate; ⬜ lossy raw (CFA) DNG, embedded original | `crates/raw/src/dngwrite.rs`; lossy CFA needs the DNG 1.7 interleaved layout (1-plane JPEG XL tiles of a stacked-field image, `RowInterleaveFactor` / `ColumnInterleaveFactor`), which neither the writer nor the reader has and the spec text could not be checked here |
-| Render to DNG (15.5) | — | ✅ | — | ✅ export format "Rendered DNG" and the catalog command `photo.renderToDng` (linear float DNG, edit baked in, added next to the original and stacked); lossy JPEG XL option (`dngCompression: lossy`, DNG 1.7 Compression 52546 tiles via `jixel`, native only, CI verification pending) | `crates/raw/src/dngwrite.rs` (`write_rendered_dng_with`) |
+| Render to DNG (15.5) | — | ✅ | — | ✅ export format "Rendered DNG" and the catalog command `photo.renderToDng` (linear float DNG, edit baked in, added next to the original and stacked); lossy JPEG XL option (`dngCompression: lossy`, DNG 1.7 Compression 52546 tiles via `jixel`, native only, CI verification pending); lossy JPEG option (`dngCompression: lossyJpeg`, DNG 1.4 Compression 34892: 8-bit sRGB-coded baseline JPEG tiles, 4:4:4, restored by a 256-entry `LinearizationTable`, `WhiteLevel` 65535, any platform; `photo.renderToDng` takes `dngCompression` and `quality`; test `lossy_jpeg_dng_has_the_dng_14_tags_and_reads_back_close_to_the_source`, unverified until CI runs) | `crates/raw/src/dngwrite.rs` (`write_rendered_dng_with`), `crates/raw/tests/rendered_dng.rs`, `crates/engine/src/tests_xmp.rs` (`render_to_dng_lossy_jpeg_writes_a_dng_14_that_reads_back`) |
 | Original + sidecar | — | ✅ | — | ✅ | |
 | HDR gain map JPEG (ISO 21496-1) | ✅ | ✅ | ✅ (gain map read) | ✅ | `crates/codecs/src/gainmap.rs` |
 | PQ / HLG HDR | ✅ | ✅ AVIF, JXL, TIFF | — | 🟡 PQ AVIF, PQ JPEG XL, float TIFF; no HLG | |
@@ -83,4 +83,5 @@ Remaining: **18–32 h** (PSD write 4–8 h; lossy raw (CFA) DNG 3–6 h; HLG 3�
 | 2026-10-16 | minor | Lossy JPEG XL DNG for Render to DNG (`dngCompression: lossy`, DNG 1.7 tags JXLDistance/Effort/DecodeSpeed); raw (CFA) lossy DNG still open |
 | 2026-10-17 | minor | DNG export: embedded JPEG preview option (`dngPreview`: none / medium / full), a SubIFD with NewSubFileType 1 |
 | 2026-10-17 | minor | Blockers recorded for lossy raw (CFA) DNG and AVIF decode / `photo.renderToAvif` (#79, #188); no behaviour change |
+| 2026-10-17 | minor | Lossy JPEG DNG (#188): `DngCompression::JpegLossy`, DNG 1.4 Compression 34892 tiles through a `LinearizationTable`, for Render to DNG (`dngCompression: lossyJpeg`, `quality`); `photo.renderToDng` gains both params. Unverified until CI runs |
 | 2026-10-17 | minor | AVIF import (#188): ISOBMFF/HEIF item parser (`crates/codecs/src/avif.rs`), AV1 decode through rav1d 1.1.0 behind the isolated `crates/av1dec` crate, YCbCr to RGB with the `nclx` matrix and range, `irot`/`imir`/`clap`, grids, alpha; `photo.renderToAvif` catalog command. Unverified until CI runs |

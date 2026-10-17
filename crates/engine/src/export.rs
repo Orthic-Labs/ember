@@ -1072,7 +1072,7 @@ impl ExportOptions {
                 "jxlEffort" => one_of(k, v, &["fast", "normal"])?,
                 "dngCompression" => {
                     serde_json::from_value::<DngCompression>(v.clone())
-                        .map_err(|_| bad(format!("`{k}` must be one of lossless|deflate|uncompressed|lossy")))?;
+                        .map_err(|_| bad(format!("`{k}` must be one of lossless|deflate|uncompressed|lossy|lossyJpeg")))?;
                 }
                 "dngPreview" => {
                     serde_json::from_value::<DngPreviewSize>(v.clone()).map_err(|_| bad(format!("`{k}` must be one of none|medium|full")))?;
@@ -1618,6 +1618,7 @@ pub fn encode_deep(img: &DeepImage, o: &ExportOptions, meta: Option<&Metadata>) 
             let m = meta_src.cloned().unwrap_or_default();
             let compression = match o.dng_compression {
                 DngCompression::Lossy => lightcraft_raw::DngCompression::JxlLossy { tile: 256, quality: o.quality },
+                DngCompression::LossyJpeg => lightcraft_raw::DngCompression::JpegLossy { tile: 256, quality: o.quality },
                 DngCompression::Uncompressed => lightcraft_raw::DngCompression::Uncompressed,
                 // the render's floats are 16-bit half Deflate tiles, whichever lossless choice was made
                 DngCompression::Lossless | DngCompression::Deflate => lightcraft_raw::DngCompression::Deflate { tile: 256, half: true },
@@ -2013,7 +2014,9 @@ pub fn export_file(
         DngCompression::Lossless => lightcraft_raw::DngCompression::Lj92 { tile: 256 },
         DngCompression::Deflate => lightcraft_raw::DngCompression::Deflate { tile: 256, half: false },
         DngCompression::Uncompressed => lightcraft_raw::DngCompression::Uncompressed,
-        DngCompression::Lossy => return Err(format!("{label}: lossy DNG is for Render to DNG; a raw DNG export is lossless")),
+        DngCompression::Lossy | DngCompression::LossyJpeg => {
+            return Err(format!("{label}: lossy DNG is for Render to DNG; a raw DNG export is lossless"));
+        }
     };
     let preview = preview()?;
     let dng = lightcraft_raw::write_dng_with_preview(
@@ -2148,6 +2151,10 @@ pub enum DngCompression {
     /// Lossy JPEG XL tiles (DNG 1.7; quality from [`ExportOptions::quality`]). Render to DNG only: a
     /// raw (CFA) DNG export refuses it. Highlights above white are clipped.
     Lossy,
+    /// Lossy baseline-JPEG tiles (DNG 1.4: 8-bit through a linearization table; quality from
+    /// [`ExportOptions::quality`]). Render to DNG only, like [`DngCompression::Lossy`]; readers
+    /// from DNG 1.4 on (rather than 1.7) open it.
+    LossyJpeg,
 }
 
 /// The JPEG preview a DNG export embeds (Lightroom's "Embedded Preview"): other apps show it before

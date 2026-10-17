@@ -128,9 +128,23 @@ fn render_to_dng(s: &mut Session, p: &Value) -> Result<Value> {
         "rec2020" => lightcraft_pipeline::OutputSpace::Rec2020,
         c => return Err(bad(C, format!("colorSpace {c:?}: use srgb, displayP3, adobeRgb, prophoto or rec2020"))),
     };
+    let dng_compression = match p.get("dngCompression") {
+        None | Some(Value::Null) => crate::export::DngCompression::Deflate,
+        Some(v) => serde_json::from_value::<crate::export::DngCompression>(v.clone())
+            .map_err(|_| bad(C, format!("dngCompression {v}: use deflate, uncompressed, lossy (JPEG XL) or lossyJpeg")))?,
+    };
+    let quality = match p.get("quality") {
+        None | Some(Value::Null) => 90,
+        Some(v) => match v.as_u64() {
+            Some(q @ 1..=100) => q as u8,
+            _ => return Err(bad(C, format!("quality {v}: use 1 to 100"))),
+        },
+    };
     let opts = crate::export::ExportOptions {
         format: crate::export::ExportFormat::RenderedDng,
         color_space: space,
+        dng_compression,
+        quality,
         hdr: bool_or(p, "hdr", false),
         naming: "{name}-Rendered".into(),
         conflict: crate::export::Conflict::Unique,
@@ -201,7 +215,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Render to DNG",
             ["Photo"],
             None,
-            "{ids?, colorSpace=prophoto|srgb|displayP3|adobeRgb|rec2020, hdr=false, dir? (demo photos)} — render each photo with its edits as a linear 16-bit float DNG next to the original, add it to the library and stack it on the original → {path, id, original, copies}",
+            "{ids?, colorSpace=prophoto|srgb|displayP3|adobeRgb|rec2020, dngCompression=deflate|uncompressed|lossy|lossyJpeg (lossy: JPEG XL, DNG 1.7; lossyJpeg: baseline JPEG, DNG 1.4; both clip above white), quality=90 (1..100, lossy only), hdr=false, dir? (demo photos)} — render each photo with its edits as a linear DNG (16-bit float by default) next to the original, add it to the library and stack it on the original → {path, id, original, copies}",
             has_selection,
             render_to_dng
         ),

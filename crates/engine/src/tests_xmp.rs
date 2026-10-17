@@ -1134,6 +1134,32 @@ fn render_to_dng_adds_a_linear_dng_next_to_the_original() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Render to DNG with lossy JPEG tiles (#188): `dngCompression: lossyJpeg` writes a DNG 1.4 file
+/// that Ember's own reader opens with the source's size, and bad options are errors.
+#[test]
+fn render_to_dng_lossy_jpeg_writes_a_dng_14_that_reads_back() {
+    let dir = temp_dir("renderdnglossy");
+    let src = dir.join("beach.png");
+    write_png(&src, 9);
+    let mut s = Session::new().with_fs();
+    s.execute("library.import", &json!({"paths": [src.to_string_lossy()]})).unwrap();
+    let orig = s.active().unwrap();
+    let r = s.execute("photo.renderToDng", &json!({"colorSpace": "srgb", "dngCompression": "lossyJpeg", "quality": 85})).unwrap();
+    let path = r["path"].as_str().unwrap().to_string();
+    let bytes = std::fs::read(&path).unwrap();
+    let tiff = lightcraft_tiff::Tiff::parse(&bytes).unwrap();
+    let ifd0 = tiff.ifds.first().unwrap();
+    assert_eq!(ifd0.u16(lightcraft_tiff::tags::COMPRESSION), Some(34892));
+    assert_eq!(ifd0.bytes(lightcraft_tiff::tags::DNG_VERSION), Some(&[1u8, 4, 0, 0][..]));
+    let raw = lightcraft_raw::decode(&bytes).unwrap();
+    let ph = s.catalog.photo(orig).unwrap().clone();
+    assert_eq!((raw.width, raw.height, raw.cpp), (ph.width as usize, ph.height as usize, 3));
+    // bad input
+    assert!(s.execute("photo.renderToDng", &json!({"dngCompression": "zip"})).is_err());
+    assert!(s.execute("photo.renderToDng", &json!({"dngCompression": "lossyJpeg", "quality": 0})).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Render to AVIF (#188): the edit is baked into an sRGB AVIF next to the original, which decodes
 /// back (rav1d), is added to the library and stacked on the original; a second render never
 /// overwrites the first; bad input is an error, not a panic.

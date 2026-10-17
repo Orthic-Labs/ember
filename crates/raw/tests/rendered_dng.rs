@@ -110,3 +110,60 @@ fn lossy_jxl_dng_with_a_malformed_tile_fails_to_decode() {
     let lossy = DngCompression::JxlLossy { tile: 64, quality: 80 };
     assert!(write_rendered_dng_with(0, 4, &[], &SRGB, &m, None, lossy).is_err());
 }
+
+/// Lossy JPEG DNG (DNG 1.4, Compression 34892): 8-bit baseline JPEG tiles restored to 16-bit linear
+/// by a 256-entry LinearizationTable. Write, re-read with Ember's own decoder, compare to the source.
+#[test]
+fn lossy_jpeg_dng_has_the_dng_14_tags_and_reads_back_close_to_the_source() {
+    use lightcraft_raw::{DngCompression, RawData, write_rendered_dng_with};
+    use lightcraft_tiff::{Tiff, tags as t};
+    let (w, h) = (100usize, 45usize); // several tiles, edge tiles included
+    let rgb: Vec<f32> = (0..w * h)
+        .flat_map(|i| {
+            let (x, y) = ((i % w) as f32 / w as f32, (i / w) as f32 / h as f32);
+            [x * 0.8 + 0.1, y * 0.7 + 0.1, 0.5 + 0.3 * ((x + y) * 6.0).sin() * 0.5]
+        })
+        .collect();
+    let meta = lightcraft_meta::Metadata::default();
+    let bytes = write_rendered_dng_with(w, h, &rgb, &SRGB, &meta, None, DngCompression::JpegLossy { tile: 32, quality: 95 }).unwrap();
+    let tiff = Tiff::parse(&bytes).unwrap();
+    let ifd = &tiff.ifds[0];
+    assert_eq!(ifd.u16(t::COMPRESSION), Some(34892));
+    assert_eq!(ifd.u16(t::PHOTOMETRIC), Some(34892));
+    assert_eq!(ifd.u16(t::SAMPLES_PER_PIXEL), Some(3));
+    assert_eq!(ifd.u16(t::BITS_PER_SAMPLE), Some(8));
+    assert_eq!(ifd.u32(t::TILE_WIDTH), Some(32));
+    assert_eq!(ifd.u64s(t::TILE_OFFSETS).map(|v| v.len()), Some(4 * 2));
+    assert_eq!(ifd.bytes(t::DNG_VERSION), Some(&[1u8, 4, 0, 0][..]));
+    assert_eq!(ifd.bytes(t::DNG_BACKWARD_VERSION), Some(&[1u8, 4, 0, 0][..]));
+    let table = ifd.u64s(t::LINEARIZATION_TABLE).unwrap();
+    assert_eq!((table.len(), table[0], table[255]), (256, 0, 65535));
+    assert!(table.windows(2).all(|p| p[0] < p[1]), "the table is strictly increasing");
+    let raw = lightcraft_raw::decode(&bytes).unwrap();
+    assert_eq!((raw.width, raw.height, raw.cpp, raw.cfa.is_none()), (w, h, 3, true));
+    assert_eq!(raw.white_at(0), 65535.0);
+    let RawData::U16(px) = &raw.data else { panic!("integer samples") };
+    assert_eq!(px.len(), rgb.len());
+    let errs: Vec<f32> = rgb.iter().zip(px).map(|(a, &b)| (a - f32::from(b) / 65535.0).abs()).collect();
+    let mean = errs.iter().sum::<f32>() / errs.len() as f32;
+    let max = errs.iter().copied().fold(0.0f32, f32::max);
+    assert!(mean < 0.01 && max < 0.08, "mean {mean}, max {max}");
+    // smaller than the lossless Deflate rendering of the same image
+    let plain = lightcraft_raw::write_rendered_dng(w, h, &rgb, &SRGB, &meta, None).unwrap();
+    assert!(bytes.len() < plain.len(), "{} vs {}", bytes.len(), plain.len());
+}
+
+#[test]
+fn lossy_jpeg_dng_clips_and_refuses_bad_input_without_panicking() {
+    use lightcraft_raw::{DngCompression, RawData, write_rendered_dng_with};
+    let m = lightcraft_meta::Metadata::default();
+    let lossy = DngCompression::JpegLossy { tile: 16, quality: 90 };
+    assert!(write_rendered_dng_with(0, 4, &[], &SRGB, &m, None, lossy).is_err());
+    assert!(write_rendered_dng_with(4, 4, &[0.5; 10], &SRGB, &m, None, lossy).is_err());
+    // NaN, infinity, negative and above-white samples clip into range; a tile size out of range is clamped
+    let odd = [f32::NAN, f32::INFINITY, -2.0, 70000.0, 0.5, 1.0];
+    let bytes = write_rendered_dng_with(2, 1, &odd, &SRGB, &m, None, DngCompression::JpegLossy { tile: 0, quality: 0 }).unwrap();
+    let raw = lightcraft_raw::decode(&bytes).unwrap();
+    let RawData::U16(px) = &raw.data else { panic!("integer samples") };
+    assert_eq!(px.len(), 6);
+}
