@@ -1,212 +1,402 @@
-//! Rendered thumbnails on disk: `<dir>/<2 hex>/<32 hex>.jpg`, bounded in bytes.
+//! Rendered thumbnails on disk, bounded in bytes. Native builds keep them in a `rightkit-cache`
+//! `DiskCache` (the RightKit disk-cache owner): `<dir>/<2 hex>/<64 hex>-<16 hex>.jpg`, written via
+//! temp + rename (readers never see partial files) but not fsynced, evicted least recently used
+//! first on every write so the folder never stays above its budget, recency kept across restarts.
+//! Unreadable entries are deleted and re-rendered.
 //!
-//! The cache is disposable: files are written via temp + rename (readers never see partial
-//! files) but not fsynced; unreadable files are deleted and re-rendered. When the total size
-//! exceeds the budget, the least recently used files (by modification time, refreshed on read)
-//! are removed down to 80 % of the budget.
+//! The cache only ever lists, counts or deletes files of its own name shape: the directory may be
+//! shared with other files (e.g. a library opened on a photo folder that already has a `thumbs/`
+//! folder), and those are never touched (issue #98). A shard directory that is a symlink or junction
+//! is not followed (issue #1504).
 //!
-//! The cache only ever lists, counts or deletes files of its own name shape
-//! (`<2 hex>/<32 hex>.jpg` and the `<32 hex>.tmp…` temp files of [`DiskCache::put`], see
-//! [`is_cache_file`]): the directory may be shared with other files (e.g. a library opened on a
-//! photo folder that already has a `thumbs/` folder), and those are never touched (issue #98).
-//! A shard directory that is a symlink or junction is not followed (issue #1504).
-
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
+//! **Older folders.** Before the RightKit cache the files were `<2 hex>/<32 hex>.jpg`. Opening a
+//! folder renames each of them (newest first, up to the budget) into the cache's layout, so the
+//! thumbnails stay valid; what does not fit the budget is deleted, as the old pruning did.
+//!
+//! wasm32 has no file system: there the cache is an inert stand-in (every lookup misses).
 
 use lightcraft_raster::Rgba8;
 
-use crate::Hash128;
-
 const QUALITY: u8 = 90;
 
-pub struct DiskCache {
-    dir: PathBuf,
-    /// Bytes the cache may hold (changed in place by [`DiskCache::set_budget`]).
-    budget: AtomicU64,
-    /// Bytes on disk (`None` until first scanned).
-    total: Mutex<Option<u64>>,
-    pub hits: AtomicU64,
-    pub misses: AtomicU64,
-    pub writes: AtomicU64,
-}
+#[cfg(not(target_arch = "wasm32"))]
+pub use native::DiskCache;
+#[cfg(target_arch = "wasm32")]
+pub use stub::DiskCache;
 
-impl DiskCache {
-    pub fn new(dir: &Path, budget: u64) -> DiskCache {
-        DiskCache {
-            dir: dir.to_path_buf(),
-            budget: AtomicU64::new(budget),
-            total: Mutex::new(None),
-            hits: AtomicU64::new(0),
-            misses: AtomicU64::new(0),
-            writes: AtomicU64::new(0),
-        }
+#[cfg(not(target_arch = "wasm32"))]
+mod native {
+    use std::fs;
+    use std::io;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Mutex, PoisonError};
+    use std::time::SystemTime;
+
+    use lightcraft_raster::Rgba8;
+    use rightkit_cache::{Config, Key, PutOutcome};
+
+    use super::{decode_jpeg, encode_jpeg, is_cache_file, is_lower_hex, is_real_dir, is_shard_name};
+    use crate::Hash128;
+
+    pub struct DiskCache {
+        dir: PathBuf,
+        /// Bytes the cache may hold (changed by [`DiskCache::set_budget`]).
+        budget: AtomicU64,
+        /// The RightKit cache over `dir`, opened on first use: opening indexes the folder and trims
+        /// it to the budget, which `new` must not do (it is also used to look at a folder).
+        store: Mutex<Option<rightkit_cache::DiskCache>>,
+        pub hits: AtomicU64,
+        pub misses: AtomicU64,
+        pub writes: AtomicU64,
     }
 
-    pub fn dir(&self) -> &Path {
-        &self.dir
-    }
-
-    /// Bytes the cache may hold.
-    pub fn budget(&self) -> u64 {
-        self.budget.load(Ordering::Relaxed)
-    }
-
-    /// Change the budget in place: the files stay valid (they are keyed by content), so a resize
-    /// keeps them; a smaller budget is enforced by the next write, like any other overflow.
-    pub fn set_budget(&self, bytes: u64) {
-        self.budget.store(bytes, Ordering::Relaxed);
-    }
-
-    fn path(&self, key: Hash128) -> PathBuf {
+    /// The cache key of a thumbnail: the content key's hex, so the same key always lands in the same slot.
+    fn key_of(key: Hash128) -> Key {
         let hex = key.to_string();
-        self.dir.join(&hex[..2]).join(format!("{hex}.jpg"))
+        Key::new(&[hex.as_str()])
     }
 
-    pub fn get(&self, key: Hash128) -> Option<Rgba8> {
-        let p = self.path(key);
-        let Some(bytes) = p.parent().filter(|d| is_real_dir(d)).and_then(|_| std::fs::read(&p).ok()) else {
-            self.misses.fetch_add(1, Ordering::Relaxed);
-            return None;
-        };
-        match decode_jpeg(&bytes) {
-            Some(img) => {
-                self.hits.fetch_add(1, Ordering::Relaxed);
-                // refresh recency for pruning
-                if let Ok(f) = std::fs::File::options().write(true).open(&p) {
-                    let _ = f.set_modified(std::time::SystemTime::now());
+    impl DiskCache {
+        pub fn new(dir: &Path, budget: u64) -> DiskCache {
+            DiskCache {
+                dir: dir.to_path_buf(),
+                budget: AtomicU64::new(budget),
+                store: Mutex::new(None),
+                hits: AtomicU64::new(0),
+                misses: AtomicU64::new(0),
+                writes: AtomicU64::new(0),
+            }
+        }
+
+        pub fn dir(&self) -> &Path {
+            &self.dir
+        }
+
+        /// Bytes the cache may hold.
+        pub fn budget(&self) -> u64 {
+            self.budget.load(Ordering::Relaxed)
+        }
+
+        /// Change the budget: the files stay valid (they are keyed by content), so a resize keeps
+        /// them; the cache is reopened under the new cap by the next use, which trims it to the cap.
+        pub fn set_budget(&self, bytes: u64) {
+            self.budget.store(bytes, Ordering::Relaxed);
+            *self.store.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        }
+
+        /// The RightKit cache, opened (and older-layout files migrated) when not yet. `create` false
+        /// never creates a folder that is gone (a drive that is not connected): that is a miss.
+        fn open(&self, create: bool) -> Option<rightkit_cache::DiskCache> {
+            let mut slot = self.store.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some(store) = slot.as_ref() {
+                return Some(store.clone());
+            }
+            if !create && !self.dir.is_dir() {
+                return None;
+            }
+            match open_migrated(&self.dir, self.budget()) {
+                Ok(store) => {
+                    *slot = Some(store.clone());
+                    Some(store)
                 }
-                Some(img)
+                Err(e) => {
+                    log::warn!("preview cache: cannot open {}: {e}", self.dir.display());
+                    None
+                }
             }
-            None => {
-                log::warn!("preview cache: dropping unreadable {}", p.display());
-                let _ = std::fs::remove_file(&p);
+        }
+
+        /// The cache for clearing or moving: the open one, else one opened with no cap, so looking
+        /// after a folder never trims it. `None` when the folder is not there.
+        fn manage(&self) -> Option<rightkit_cache::DiskCache> {
+            let slot = self.store.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some(store) = slot.as_ref() {
+                return Some(store.clone());
+            }
+            drop(slot);
+            if !self.dir.is_dir() {
+                return None;
+            }
+            match open_migrated(&self.dir, u64::MAX) {
+                Ok(store) => Some(store),
+                Err(e) => {
+                    log::warn!("preview cache: cannot open {}: {e}", self.dir.display());
+                    None
+                }
+            }
+        }
+
+        pub fn get(&self, key: Hash128) -> Option<Rgba8> {
+            let k = key_of(key);
+            let Some(bytes) = self.open(false).and_then(|s| s.get(&k)) else {
                 self.misses.fetch_add(1, Ordering::Relaxed);
-                None
+                return None;
+            };
+            match decode_jpeg(&bytes) {
+                Some(img) => {
+                    self.hits.fetch_add(1, Ordering::Relaxed);
+                    Some(img)
+                }
+                None => {
+                    log::warn!("preview cache: dropping unreadable entry of {key} in {}", self.dir.display());
+                    if let Some(s) = self.open(false) {
+                        let _ = s.remove(&k);
+                    }
+                    self.misses.fetch_add(1, Ordering::Relaxed);
+                    None
+                }
             }
         }
+
+        pub fn put(&self, key: Hash128, img: &Rgba8) {
+            let Some(bytes) = encode_jpeg(img) else { return };
+            let Some(store) = self.open(true) else { return };
+            match store.put(&key_of(key), &bytes) {
+                Ok(PutOutcome::Stored) => {
+                    self.writes.fetch_add(1, Ordering::Relaxed);
+                }
+                // larger than the whole budget: the image stays in memory only
+                Ok(_) => {}
+                Err(e) => log::warn!("preview cache: could not store {key} in {}: {e}", self.dir.display()),
+            }
+        }
+
+        /// The stored file of `key` (tests).
+        #[doc(hidden)]
+        pub fn entry_path(&self, key: Hash128) -> Option<PathBuf> {
+            self.open(false)?.get_path(&key_of(key))
+        }
+
+        /// Bytes on disk: the cache's entries, and any older-layout files not migrated yet.
+        pub fn size(&self) -> u64 {
+            let open = self.store.lock().unwrap_or_else(PoisonError::into_inner).clone();
+            let held = match open {
+                Some(store) => store.stats().bytes,
+                // a look at the folder: nothing is created, trimmed or removed
+                None => rightkit_cache::DiskCache::open_read_only(&self.dir).map_or(0, |s| s.stats().bytes),
+            };
+            held.saturating_add(legacy_files(&self.dir).iter().map(|f| f.len).sum())
+        }
+
+        pub fn clear(&self) {
+            if let Some(store) = self.manage() {
+                let _ = store.clear();
+            }
+            for f in legacy_files(&self.dir) {
+                let _ = fs::remove_file(&f.path);
+            }
+        }
+
+        /// Move this cache's files into `to`, in the same layout: the thumbnails stay valid (they are
+        /// keyed by content). Only cache files are touched. Returns how many moved and what failed.
+        pub fn move_to(&self, to: &Path) -> (usize, Vec<String>) {
+            // older-layout files are brought into the cache's layout first
+            if self.manage().is_none() {
+                return (0, Vec::new());
+            }
+            let (mut moved, mut failed) = (0, Vec::new());
+            for (p, shard, name) in entry_files(&self.dir) {
+                let dir = to.join(&shard);
+                let dst = dir.join(&name);
+                let done = fs::create_dir_all(&dir).and_then(|()| {
+                    if dst.exists() {
+                        // the same key is there already (same content): the old copy is redundant
+                        fs::remove_file(&p)
+                    } else if fs::rename(&p, &dst).is_ok() {
+                        Ok(())
+                    } else {
+                        fs::copy(&p, &dst).and_then(|_| fs::remove_file(&p))
+                    }
+                });
+                match done {
+                    Ok(()) => moved += 1,
+                    Err(e) => failed.push(format!("{}: {e}", p.display())),
+                }
+            }
+            // the moved files are gone from the index's folder: it is rebuilt on the next use
+            *self.store.lock().unwrap_or_else(PoisonError::into_inner) = None;
+            (moved, failed)
+        }
     }
 
-    pub fn put(&self, key: Hash128, img: &Rgba8) {
-        let Some(bytes) = encode_jpeg(img) else { return };
-        let p = self.path(key);
-        let Some(parent) = p.parent() else { return };
-        if std::fs::create_dir_all(parent).is_err() || !is_real_dir(parent) {
-            return;
-        }
-        // Serialize the file replacement and its size accounting. A repeated render of
-        // the same key replaces its JPEG; it must not count as another cache entry.
-        let mut total = self.total.lock().unwrap_or_else(|e| e.into_inner());
-        let used = total.get_or_insert_with(|| self.scan().iter().map(|f| f.1).sum());
-        let old_len = std::fs::metadata(&p).map_or(0, |m| m.len());
-        let tmp = p.with_extension(format!("tmp{:?}", std::thread::current().id()).replace(['(', ')'], ""));
-        if std::fs::write(&tmp, &bytes).is_err() || std::fs::rename(&tmp, &p).is_err() {
-            let _ = std::fs::remove_file(&tmp);
-            return;
-        }
-        self.writes.fetch_add(1, Ordering::Relaxed);
-        *used = used.saturating_sub(old_len).saturating_add(bytes.len() as u64);
-        let over = *used > self.budget();
-        drop(total);
-        if over {
-            self.prune();
-        }
+    /// Open the RightKit cache over `dir` at `budget`, then bring older-layout files into it.
+    fn open_migrated(dir: &Path, budget: u64) -> io::Result<rightkit_cache::DiskCache> {
+        let store = rightkit_cache::DiskCache::open(dir, Config::new(budget))?;
+        migrate_legacy(&store, dir, budget);
+        Ok(store)
     }
 
-    /// All cache files (only names of the cache's own shape, see [`is_cache_file`]):
-    /// (path, size, modified).
-    fn scan(&self) -> Vec<(PathBuf, u64, std::time::SystemTime)> {
+    /// A file of the layout before the RightKit cache: `<2 hex>/<32 hex>.jpg`, or a `.tmp…` leftover.
+    struct Legacy {
+        path: PathBuf,
+        len: u64,
+        modified: SystemTime,
+        /// The content key's 32 hex digits.
+        hex: String,
+        temp: bool,
+    }
+
+    /// The older-layout files in `dir` (only names of that shape; shards that are links are skipped).
+    fn legacy_files(dir: &Path) -> Vec<Legacy> {
         let mut out = Vec::new();
-        let Ok(rd) = std::fs::read_dir(&self.dir) else { return out };
+        let Ok(rd) = fs::read_dir(dir) else { return out };
         for sub in rd.flatten() {
-            let sub_name = sub.file_name();
-            let Some(sub_name) = sub_name.to_str() else { continue };
-            if !is_shard_name(sub_name) {
+            let shard = sub.file_name();
+            let Some(shard) = shard.to_str() else { continue };
+            if !is_shard_name(shard) || !is_real_dir(&sub.path()) {
                 continue;
             }
-            // a shard that is a symlink (or junction) leads outside the cache: never walk it
-            if !is_real_dir(&sub.path()) {
-                continue;
-            }
-            let Ok(files) = std::fs::read_dir(sub.path()) else { continue };
+            let Ok(files) = fs::read_dir(sub.path()) else { continue };
             for f in files.flatten() {
                 let name = f.file_name();
                 let Some(name) = name.to_str() else { continue };
-                if !is_cache_file(sub_name, name) {
+                if !is_cache_file(shard, name) {
                     continue;
                 }
                 // `DirEntry::metadata` does not follow symlinks: a link is never a cache file
-                if let Ok(m) = f.metadata()
-                    && m.is_file()
-                {
-                    out.push((f.path(), m.len(), m.modified().unwrap_or(std::time::UNIX_EPOCH)));
+                let Ok(m) = f.metadata() else { continue };
+                if !m.is_file() {
+                    continue;
+                }
+                let Some((hex, ext)) = name.split_once('.') else { continue };
+                out.push(Legacy {
+                    path: f.path(),
+                    len: m.len(),
+                    modified: m.modified().unwrap_or(SystemTime::UNIX_EPOCH),
+                    hex: hex.to_string(),
+                    temp: ext != "jpg",
+                });
+            }
+        }
+        out
+    }
+
+    /// Rename each older-layout thumbnail into the cache (newest first, while they fit `budget`); delete
+    /// the rest and the temp leftovers. A file that cannot be brought over stays where it is.
+    fn migrate_legacy(store: &rightkit_cache::DiskCache, dir: &Path, budget: u64) {
+        let mut files = legacy_files(dir);
+        if files.is_empty() {
+            return;
+        }
+        files.sort_by_key(|f| std::cmp::Reverse(f.modified));
+        let mut kept = 0u64;
+        let (mut moved, mut dropped) = (0usize, 0usize);
+        for f in files {
+            if f.temp || kept.saturating_add(f.len) > budget {
+                let _ = fs::remove_file(&f.path);
+                dropped += 1;
+                continue;
+            }
+            match migrate_one(store, &f) {
+                Ok(()) => {
+                    kept += f.len;
+                    moved += 1;
+                }
+                Err(e) => log::warn!("preview cache: could not bring {} into the new layout: {e}", f.path.display()),
+            }
+        }
+        log::info!("preview cache: {} brought into the new layout ({moved} thumbnails kept, {dropped} dropped)", dir.display());
+    }
+
+    fn migrate_one(store: &rightkit_cache::DiskCache, f: &Legacy) -> io::Result<()> {
+        let reservation = store.reserve_path(&Key::new(&[f.hex.as_str()]), "jpg")?;
+        // the reserved path is inside the cache folder, so this is a rename on one volume
+        fs::rename(&f.path, reservation.path())?;
+        // (`TooLarge`, larger than the whole budget, is not an error: the commit removed the file)
+        reservation.commit().map(|_: PutOutcome| ())
+    }
+
+    /// The files of the cache's own layout in `dir`: (path, shard folder name, file name). Shards that
+    /// are links are skipped.
+    fn entry_files(dir: &Path) -> Vec<(PathBuf, String, String)> {
+        let mut out = Vec::new();
+        let Ok(rd) = fs::read_dir(dir) else { return out };
+        for sub in rd.flatten() {
+            let shard = sub.file_name();
+            let Some(shard) = shard.to_str() else { continue };
+            if !is_shard_name(shard) || !is_real_dir(&sub.path()) {
+                continue;
+            }
+            let Ok(files) = fs::read_dir(sub.path()) else { continue };
+            for f in files.flatten() {
+                let name = f.file_name();
+                let Some(name) = name.to_str() else { continue };
+                if !is_entry_file(shard, name) {
+                    continue;
+                }
+                if f.metadata().is_ok_and(|m| m.is_file()) {
+                    out.push((f.path(), shard.to_string(), name.to_string()));
                 }
             }
         }
         out
     }
 
-    /// Remove least recently used files until the cache is at most 80 % of its budget.
-    pub fn prune(&self) {
-        let mut files = self.scan();
-        let mut total: u64 = files.iter().map(|f| f.1).sum();
-        let target = self.budget() / 5 * 4;
-        files.sort_by_key(|f| f.2);
-        for (p, len, _) in files {
-            if total <= target {
-                break;
-            }
-            if std::fs::remove_file(&p).is_ok() {
-                total -= len;
-            }
+    /// Whether `name` inside shard `shard` is an entry of the `rightkit-cache` layout
+    /// (`<64 hex>-<16 hex>[.<1-8 alphanumerics>]`, the hash starting with the shard).
+    fn is_entry_file(shard: &str, name: &str) -> bool {
+        let (base, ext) = match name.split_once('.') {
+            Some((base, ext)) => (base, Some(ext)),
+            None => (name, None),
+        };
+        if ext.is_some_and(|e| e.is_empty() || e.len() > 8 || !e.bytes().all(|b| b.is_ascii_alphanumeric())) {
+            return false;
         }
-        *self.total.lock().unwrap_or_else(|e| e.into_inner()) = Some(total);
+        let Some((hash, group)) = base.split_once('-') else { return false };
+        hash.len() == 64 && is_lower_hex(hash) && hash.starts_with(shard) && group.len() == 16 && is_lower_hex(group)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+mod stub {
+    use std::path::Path;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    use lightcraft_raster::Rgba8;
+
+    use crate::Hash128;
+
+    /// A browser build has no file system: every lookup misses and nothing is stored.
+    pub struct DiskCache {
+        dir: std::path::PathBuf,
+        budget: AtomicU64,
+        pub hits: AtomicU64,
+        pub misses: AtomicU64,
+        pub writes: AtomicU64,
     }
 
-    /// Bytes on disk (scans if not yet known).
-    pub fn size(&self) -> u64 {
-        let mut t = self.total.lock().unwrap_or_else(|e| e.into_inner());
-        *t.get_or_insert_with(|| self.scan().iter().map(|f| f.1).sum())
-    }
-
-    pub fn clear(&self) {
-        for (p, _, _) in self.scan() {
-            let _ = std::fs::remove_file(p);
+    impl DiskCache {
+        pub fn new(dir: &Path, budget: u64) -> DiskCache {
+            DiskCache { dir: dir.to_path_buf(), budget: AtomicU64::new(budget), hits: AtomicU64::new(0), misses: AtomicU64::new(0), writes: AtomicU64::new(0) }
         }
-        *self.total.lock().unwrap_or_else(|e| e.into_inner()) = Some(0);
-    }
-
-    /// Move this cache's files into `to`, in the same layout: the thumbnails stay valid (they are
-    /// keyed by content). Only cache files are touched. Returns how many moved and what failed.
-    pub fn move_to(&self, to: &Path) -> (usize, Vec<String>) {
-        let (mut moved, mut failed) = (0, Vec::new());
-        for (p, _, _) in self.scan() {
-            let (Some(shard), Some(name)) = (p.parent().and_then(Path::file_name), p.file_name()) else { continue };
-            let dir = to.join(shard);
-            let dst = dir.join(name);
-            let done = std::fs::create_dir_all(&dir).and_then(|()| {
-                if dst.exists() {
-                    // the same key is there already (same content): the old copy is redundant
-                    std::fs::remove_file(&p)
-                } else if std::fs::rename(&p, &dst).is_ok() {
-                    Ok(())
-                } else {
-                    std::fs::copy(&p, &dst).and_then(|_| std::fs::remove_file(&p))
-                }
-            });
-            match done {
-                Ok(()) => moved += 1,
-                Err(e) => failed.push(format!("{}: {e}", p.display())),
-            }
+        pub fn dir(&self) -> &Path {
+            &self.dir
         }
-        *self.total.lock().unwrap_or_else(|e| e.into_inner()) = None;
-        (moved, failed)
+        pub fn budget(&self) -> u64 {
+            self.budget.load(Ordering::Relaxed)
+        }
+        pub fn set_budget(&self, bytes: u64) {
+            self.budget.store(bytes, Ordering::Relaxed);
+        }
+        pub fn get(&self, _key: Hash128) -> Option<Rgba8> {
+            self.misses.fetch_add(1, Ordering::Relaxed);
+            None
+        }
+        pub fn put(&self, _key: Hash128, _img: &Rgba8) {}
+        pub fn size(&self) -> u64 {
+            0
+        }
+        pub fn clear(&self) {}
+        pub fn move_to(&self, _to: &Path) -> (usize, Vec<String>) {
+            (0, Vec::new())
+        }
     }
 }
 
 /// Whether `p` is a directory itself, not a symlink or Windows reparse point to one.
-fn is_real_dir(p: &Path) -> bool {
+#[cfg(not(target_arch = "wasm32"))]
+fn is_real_dir(p: &std::path::Path) -> bool {
     std::fs::symlink_metadata(p).is_ok_and(|m| m.is_dir())
 }
 
@@ -219,9 +409,10 @@ fn is_shard_name(s: &str) -> bool {
     s.len() == 2 && is_lower_hex(s)
 }
 
-/// Whether `name` inside shard directory `shard` is a file this cache wrote: `<32 hex>.jpg`
-/// (whose first two digits are the shard) or a `<32 hex>.tmp<alphanumeric>` temp file of
-/// [`DiskCache::put`]. Anything else in the cache directory belongs to someone else.
+/// Whether `name` inside shard directory `shard` is a file of the layout this cache had before the
+/// RightKit cache: `<32 hex>.jpg` (whose first two digits are the shard) or a
+/// `<32 hex>.tmp<alphanumeric>` temp file. Such files are brought into the new layout (or deleted)
+/// when a folder is opened; anything else in the folder belongs to someone else.
 pub fn is_cache_file(shard: &str, name: &str) -> bool {
     if !is_shard_name(shard) {
         return false;

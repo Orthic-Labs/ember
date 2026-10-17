@@ -113,14 +113,75 @@ fn disk_cache_roundtrip_and_prune() {
     // a corrupt file is a miss and gets removed
     let k2 = hash_bytes(b"corrupt");
     d.put(k2, &img);
-    let hex = k2.to_string();
-    let p = dir.join(&hex[..2]).join(format!("{hex}.jpg"));
+    let p = d.entry_path(k2).expect("stored");
     std::fs::write(&p, b"not a jpeg").unwrap();
     assert!(d.get(k2).is_none());
     assert!(!p.exists());
     d.clear();
     assert_eq!(d.size(), 0);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Folders written before the RightKit cache hold `<2 hex>/<32 hex>.jpg`: the thumbnails are brought into the
+/// new layout when the folder is opened (renamed, newest first, while they fit the budget), not re-rendered.
+#[test]
+fn disk_cache_brings_older_layout_files_into_the_cache() {
+    let dir = temp_dir("older-layout");
+    let k = hash_bytes(b"older thumbnail");
+    let bytes = encode_jpeg(&gradient(32, 24, 5)).unwrap();
+    let hex = k.to_string();
+    let old = dir.join(&hex[..2]).join(format!("{hex}.jpg"));
+    std::fs::create_dir_all(old.parent().unwrap()).unwrap();
+    std::fs::write(&old, &bytes).unwrap();
+    let d = DiskCache::new(&dir, 1 << 30);
+    assert_eq!(d.size(), bytes.len() as u64, "counted before the folder is opened");
+    let back = d.get(k).expect("the older file is served");
+    assert_eq!((back.width, back.height), (32, 24));
+    assert!(!old.exists(), "renamed into the new layout, not copied");
+    assert_eq!(d.size(), bytes.len() as u64, "counted once");
+    // it is a cache entry now: it moves with the folder like any other
+    let to = temp_dir("older-layout-to");
+    assert_eq!(d.move_to(&to), (1, Vec::new()));
+    assert!(DiskCache::new(&to, 1 << 30).get(k).is_some());
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&to);
+}
+
+/// Older-layout files that do not fit the budget are dropped (the oldest first), as the old pruning did, and
+/// not left in the folder as clutter.
+#[test]
+fn older_layout_files_over_the_budget_are_dropped_oldest_first() {
+    let dir = temp_dir("older-layout-budget");
+    let bytes = encode_jpeg(&gradient(32, 24, 5)).unwrap();
+    let (new, old) = (hash_bytes(b"newer older-layout"), hash_bytes(b"older older-layout"));
+    for (key, age) in [(new, 10u64), (old, 1000)] {
+        let hex = key.to_string();
+        let p = dir.join(&hex[..2]).join(format!("{hex}.jpg"));
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, &bytes).unwrap();
+        let f = std::fs::File::options().write(true).open(&p).unwrap();
+        f.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(age)).unwrap();
+    }
+    let d = DiskCache::new(&dir, bytes.len() as u64 + 1);
+    assert!(d.get(new).is_some(), "the newer thumbnail fits and is kept");
+    assert!(d.get(old).is_none(), "the older one does not fit");
+    assert_eq!(d.size(), bytes.len() as u64);
+    let leftovers = |key: Hash128| {
+        let hex = key.to_string();
+        dir.join(&hex[..2]).join(format!("{hex}.jpg")).exists()
+    };
+    assert!(!leftovers(new) && !leftovers(old), "no older-layout file is left behind");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A folder that is gone (a drive that is not connected) is a miss and is never recreated by a lookup.
+#[test]
+fn disk_cache_lookup_does_not_recreate_a_missing_folder() {
+    let dir = temp_dir("missing-folder");
+    let d = DiskCache::new(&dir, 1 << 20);
+    assert!(d.get(hash_bytes(b"nothing")).is_none());
+    assert_eq!(d.size(), 0);
+    assert!(!dir.exists());
 }
 
 #[test]
@@ -158,10 +219,7 @@ fn disk_cache_overwrite_accounts_for_replaced_jpeg_only_once() {
 
     // A replacement with a different encoded size must also update the total.
     cache.put(a, &gradient(120, 90, 9));
-    let path = |key: Hash128| {
-        let hex = key.to_string();
-        dir.join(&hex[..2]).join(format!("{hex}.jpg"))
-    };
+    let path = |key: Hash128| cache.entry_path(key).expect("stored");
     let actual = std::fs::metadata(path(a)).unwrap().len() + std::fs::metadata(path(b)).unwrap().len();
     assert_eq!(cache.size(), actual);
     cache.clear();
@@ -422,10 +480,10 @@ fn disk_cache_ignores_symlinked_shard_directories() {
     let sentinel = outside.join(format!("{hex}.jpg"));
     std::fs::write(&sentinel, vec![7u8; 50_000]).unwrap();
     std::os::unix::fs::symlink(&outside, dir.join(&hex[..2])).unwrap();
-    let d = DiskCache::new(&dir, 10);
+    let d = DiskCache::new(&dir, 1 << 20);
     assert_eq!(d.size(), 0, "files behind the link are not the cache's");
-    d.prune();
-    assert!(sentinel.exists(), "prune followed the link");
+    assert!(d.get(hash_bytes(&[8, 8])).is_none());
+    assert!(sentinel.exists(), "opening the folder followed the link");
     assert!(d.get(key).is_none(), "get read through the link");
     d.put(key, &gradient(16, 16, 1));
     assert_eq!(std::fs::metadata(&sentinel).unwrap().len(), 50_000, "put wrote through the link");

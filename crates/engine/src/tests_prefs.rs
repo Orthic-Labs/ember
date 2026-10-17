@@ -287,7 +287,7 @@ fn the_thumbnail_cache_folder_moves_refuses_the_originals_and_falls_back_when_go
     let r = s.execute("library.cacheLocation", &json!({"path": other.display().to_string(), "existing": "move"})).unwrap();
     assert_eq!((r["custom"].as_bool(), r["handled"].as_u64()), (Some(true), Some(1)));
     assert_eq!(s.media.rendered.disk().unwrap().dir(), other.as_path());
-    assert!(lightcraft_preview::DiskCache::new(&other, 0).get(key).is_some());
+    assert!(lightcraft_preview::DiskCache::new(&other, 1 << 30).get(key).is_some());
     assert_eq!(lightcraft_preview::DiskCache::new(&thumbs, 0).size(), 0);
     drop(s);
     let mut again = Session::new().with_fs();

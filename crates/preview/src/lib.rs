@@ -3,7 +3,8 @@
 //! - [`hash`]: 128-bit content hashes (file bytes → duplicate detection and cache keys).
 //! - [`Lru`]: a cost-bounded memory LRU (decoded sources, rendered thumbnails).
 //! - [`DiskCache`]: rendered thumbnails as JPEG files keyed by `(content hash, settings hash,
-//!   size, renderer version)`, bounded in bytes (least recently used files are pruned).
+//!   size, renderer version)`, bounded in bytes (least recently used files are evicted; the
+//!   store is the RightKit disk cache, `rightkit-cache`).
 //! - [`PreviewCache`]: memory LRU in front of the disk cache; shared by render workers.
 //! - [`JobPool`]: worker threads with per-slot de-duplication and priorities (visible thumbnails
 //!   before off-screen prefetch); runs jobs inline on wasm.
