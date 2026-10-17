@@ -337,7 +337,7 @@ impl Headless {
                     self.window_maximized = on;
                     self.window_commands.push(c);
                 }
-                ViewportCommand::StartDrag => self.window_commands.push(c),
+                ViewportCommand::StartDrag | ViewportCommand::Minimized(_) => self.window_commands.push(c),
                 _ => {}
             }
         }

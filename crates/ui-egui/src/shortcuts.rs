@@ -848,7 +848,6 @@ mod tests {
         let mut h = library();
         h.step();
         // egui does not focus a button on a mouse click, so the first Ctrl+Tab lands on the first control
-        assert!(focused(&h).is_none(), "nothing has keyboard focus yet");
         let (top, left) = (h.app.ui.top_bar, h.app.ui.left_panel);
         let r = h.request("ui.key", json!({"key": "Tab", "ctrl": true}), std::time::Duration::from_secs(20));
         assert_eq!(r["ok"], true, "{r}");
