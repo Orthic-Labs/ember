@@ -319,6 +319,14 @@ fn output_names(first: &str, suffix: &str) -> impl Iterator<Item = std::path::Pa
     (1u64..).map(move |k| dir.join(if k == 1 { format!("{stem}-{suffix}.dng") } else { format!("{stem}-{suffix}-{k}.dng") }))
 }
 
+fn catalog_owns_path(s: &Session, path: &str) -> bool {
+    let key = lightcraft_catalog::query::folder_key(path);
+    s.catalog.photos().any(|p| match &p.source {
+        Source::File { path } => lightcraft_catalog::query::folder_key(path) == key,
+        _ => false,
+    })
+}
+
 /// Parse `merge.*` command parameters into a kind and finishing options.
 pub fn parse(id: &str, p: &Value) -> Result<(MergeKind, MergeFinish)> {
     let bad = |m: String| EngineError::BadParams { cmd: id.into(), msg: m };
@@ -398,6 +406,16 @@ impl Session {
                 bytes.is_some_and(|bytes| lightcraft_preview::hash_bytes(&bytes).to_string() == output_hash)
             })
             .cloned();
+        // Missing and deleted catalog rows still own their paths. Import may restore one if a
+        // newly generated merge is published there, so reserve every catalogued file path.
+        let catalogued_paths: std::collections::HashSet<String> = self
+            .catalog
+            .photos()
+            .filter_map(|p| match &p.source {
+                Source::File { path } => Some(lightcraft_catalog::query::folder_key(path)),
+                _ => None,
+            })
+            .collect();
         let (id, path, reused, promote_local) = if let Some((id, path, _, local)) = valid_existing {
             (id, path, true, local)
         } else if let Some((id, path, deleted, _)) = candidates.first() {
@@ -407,21 +425,27 @@ impl Session {
             )));
         } else {
             // A new file under a free name (never replacing one), complete and synced before it appears.
-            let path = lightcraft_catalog::safe_file::write_new_unique(&mut output_names(first, job.kind.suffix()), &out.dng)
+            let mut names = output_names(first, job.kind.suffix())
+                .filter(|candidate| !catalogued_paths.contains(&lightcraft_catalog::query::folder_key(&candidate.to_string_lossy())));
+            let path = lightcraft_catalog::safe_file::write_new_unique(&mut names, &out.dng)
                 .map_err(|e| EngineError::Other(format!("could not write the merged DNG next to {first}: {e}")))?
                 .to_string_lossy()
                 .to_string();
             let report = match crate::import::import(self, std::slice::from_ref(&path), crate::import::ImportMode::Add) {
                 Ok(report) => report,
                 Err(e) => {
-                    let _ = std::fs::remove_file(&path);
+                    if !catalog_owns_path(self, &path) {
+                        let _ = std::fs::remove_file(&path);
+                    }
                     return Err(e);
                 }
             };
             if let Some(id) = report.imported.first().copied().map(PhotoId) {
                 (id, path, false, false)
             } else {
-                let _ = std::fs::remove_file(&path);
+                if !catalog_owns_path(self, &path) {
+                    let _ = std::fs::remove_file(&path);
+                }
                 return Err(EngineError::Other(format!("the merged file {path} could not be imported: {:?}", report.failed)));
             }
         };

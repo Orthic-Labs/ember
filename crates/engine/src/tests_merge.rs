@@ -144,6 +144,58 @@ fn hdr_merge_refuses_stale_result_before_writing() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[test]
+fn hdr_merge_does_not_reuse_a_deleted_result_path_for_a_new_result() {
+    let dir = temp_dir("hdr-deleted-path");
+    let mut paths = Vec::new();
+    for (i, b) in lightcraft_merge::synth::bracket_dngs(240, 160, &[-2.0, 0.0, 2.0]).unwrap().into_iter().enumerate() {
+        let p = dir.join(format!("IMG_{i}.dng"));
+        std::fs::write(&p, b).unwrap();
+        paths.push(p.to_string_lossy().to_string());
+    }
+    let mut s = Session::new().with_fs();
+    let ids = import(&mut s, paths);
+    let first = s.execute("merge.hdr", &json!({"ids": ids, "autoSettings": false, "stack": false})).unwrap();
+    let deleted_id = lightcraft_catalog::PhotoId(first["id"].as_u64().unwrap());
+    let deleted_path = first["path"].as_str().unwrap().to_string();
+
+    s.execute("photo.delete", &json!({"ids": [deleted_id.0]})).unwrap();
+    std::fs::remove_file(&deleted_path).unwrap();
+
+    let fresh = s.execute("merge.hdr", &json!({"ids": ids, "autoSettings": false, "stack": true})).unwrap();
+    let fresh_id = lightcraft_catalog::PhotoId(fresh["id"].as_u64().unwrap());
+    let fresh_path = fresh["path"].as_str().unwrap();
+    assert_ne!(fresh_id, deleted_id);
+    assert_ne!(fresh_path, deleted_path);
+    assert!(s.catalog.photo(deleted_id).unwrap().deleted, "the deleted result must stay deleted");
+    assert_eq!(s.catalog.photo(fresh_id).unwrap().source, lightcraft_catalog::Source::File { path: fresh_path.to_string() });
+    assert!(std::path::Path::new(fresh_path).is_file(), "new result must own an existing file");
+    assert!(s.catalog.stack_of(fresh_id).is_some(), "requested stack should be created on the fresh result");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn hdr_merge_removes_output_when_import_probe_fails_without_cataloging_it() {
+    let dir = temp_dir("hdr-import-fails");
+    let mut paths = Vec::new();
+    for (i, b) in lightcraft_merge::synth::bracket_dngs(240, 160, &[-2.0, 0.0, 2.0]).unwrap().into_iter().enumerate() {
+        let p = dir.join(format!("IMG_{i}.dng"));
+        std::fs::write(&p, b).unwrap();
+        paths.push(p.to_string_lossy().to_string());
+    }
+    let mut s = Session::new().with_fs();
+    let ids = import(&mut s, paths);
+    let count_before = s.catalog.photos().count();
+    s.media.file_probe = Some(std::sync::Arc::new(|path: &str| Err(format!("synthetic probe failure: {path}"))));
+
+    let failed = s.execute("merge.hdr", &json!({"ids": ids, "autoSettings": false})).unwrap_err();
+    let output = dir.join("IMG_0-HDR.dng");
+    assert!(failed.to_string().contains("could not be imported"), "{failed}");
+    assert!(!output.exists(), "failed import left an unowned merge output");
+    assert_eq!(s.catalog.photos().count(), count_before, "failed import changed the catalog");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Raws without colour matrices of their own (CR2, NEF, ARW…) merge into a DNG with the colour they open with,
 /// not with no colour at all (issue #965: an HDR merge of CR2s rendered green and dark).
 #[test]
