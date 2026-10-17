@@ -210,13 +210,16 @@ mod tests {
     fn damaged_file_is_quarantined_and_preferences_recover() -> TestResult {
         let dir = test_dir("corrupt")?;
         let path = dir.join("ui.json");
-        fs::write(&path, b"{ not json")?;
+        let damaged = b"{ not json";
+        fs::write(&path, damaged)?;
         let preferences = Preferences::load(path.clone());
         assert!(preferences.warning().is_some_and(|warning| warning.contains("invalid")));
         assert_eq!(preferences.get()?, json!({}));
-        let quarantined = fs::read_dir(&dir)?.filter_map(Result::ok).any(|entry| entry.file_name().to_string_lossy().contains(".corrupt"));
-        assert!(quarantined, "the damaged bytes are kept beside the file");
         preferences.patch(Some(json!({"theme": "dark"})))?;
+        let quarantined =
+            fs::read_dir(&dir)?.filter_map(Result::ok).find(|entry| entry.file_name().to_string_lossy().starts_with("ui.json.corrupt-"));
+        let quarantined = quarantined.expect("the damaged file is kept beside the recovered file");
+        assert_eq!(fs::read(quarantined.path())?, damaged, "quarantine preserves the original bytes");
         assert_eq!(Preferences::load(path).get()?, json!({"theme": "dark"}));
         fs::remove_dir_all(dir)?;
         Ok(())

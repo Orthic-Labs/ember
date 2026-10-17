@@ -179,7 +179,12 @@ mod tests {
     fn put(s: &mut Session, id: PhotoId, gps: Option<(f64, f64)>, city: &str) {
         let mut meta = s.catalog.photo(id).unwrap().meta.clone();
         meta.gps = gps;
+        // Demo scenes carry a `location` (sublocation); clear every place field so this fixture
+        // controls `namedPlace` through `city` alone.
+        meta.location.clear();
         meta.city = city.into();
+        meta.state.clear();
+        meta.country.clear();
         s.commit("test", Op::SetMeta { id, meta: Box::new(meta) }).unwrap();
     }
 
