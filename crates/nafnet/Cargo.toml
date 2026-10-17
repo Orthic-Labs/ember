@@ -18,3 +18,8 @@ candle-nn = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Candle's rand 0.9 dependency uses getrandom on wasm. Enable its supported JS backend
+# for browser builds; `.cargo/config.toml` selects that backend for wasm32-unknown-unknown.
+getrandom = { version = "0.3.4", features = ["wasm_js"] }

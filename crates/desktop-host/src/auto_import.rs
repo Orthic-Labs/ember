@@ -5,6 +5,7 @@ use std::sync::mpsc::{Receiver, TryRecvError, sync_channel};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+#[cfg(not(target_arch = "wasm32"))]
 use rightkit_file_watch::{DirWatchSet, EventFilter, WatchEventKind, WatchOptions};
 use serde_json::json;
 
@@ -17,14 +18,18 @@ use crate::tasks::Tasks;
 const SETTLE: Duration = Duration::from_secs(1);
 /// Safety rescan while a folder watch is armed (covers a lost event, a network folder, a Windows
 /// buffer overflow that notify cannot report).
+#[cfg(not(target_arch = "wasm32"))]
 const SAFETY_ARMED: Duration = Duration::from_secs(30);
 /// Rescan period while no watch is armed (folder missing, unsupported or the arm failed): the
 /// previous polling cadence.
 const SAFETY_UNARMED: Duration = Duration::from_secs(3);
 /// How often an unarmed folder is retried for a watch.
+#[cfg(not(target_arch = "wasm32"))]
 const ARM_RETRY: Duration = Duration::from_secs(10);
 /// rightkit-file-watch quiet window and forced-flush deadline for a burst of events.
+#[cfg(not(target_arch = "wasm32"))]
 const WATCH_QUIET: Duration = Duration::from_millis(400);
+#[cfg(not(target_arch = "wasm32"))]
 const WATCH_MAX_WAIT: Duration = Duration::from_secs(2);
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -47,9 +52,12 @@ pub(crate) struct AutoImport {
     generation: u64,
     folder: Option<PathBuf>,
     /// rightkit-file-watch owner: debounced directory events for the watched folder.
+    #[cfg(not(target_arch = "wasm32"))]
     watch: DirWatchSet,
     /// The folder `watch` is armed on, when armed.
+    #[cfg(not(target_arch = "wasm32"))]
     armed: Option<PathBuf>,
+    #[cfg(not(target_arch = "wasm32"))]
     next_arm: Instant,
     /// Set by watch events (and by scans that left work pending); cleared when a scan starts.
     dirty: Arc<AtomicBool>,
@@ -66,8 +74,11 @@ impl AutoImport {
             stopped: false,
             generation: 0,
             folder: None,
+            #[cfg(not(target_arch = "wasm32"))]
             watch: new_watch_set(),
+            #[cfg(not(target_arch = "wasm32"))]
             armed: None,
+            #[cfg(not(target_arch = "wasm32"))]
             next_arm: Instant::now(),
             dirty: Arc::new(AtomicBool::new(false)),
             next_scan: Instant::now() + SETTLE,
@@ -112,7 +123,11 @@ impl AutoImport {
             self.start_worker()?;
             let now = Instant::now();
             self.next_scan = now + SETTLE;
-            self.safety_at = now + if self.armed.is_some() { SAFETY_ARMED } else { SAFETY_UNARMED };
+            #[cfg(not(target_arch = "wasm32"))]
+            let safety_interval = if self.armed.is_some() { SAFETY_ARMED } else { SAFETY_UNARMED };
+            #[cfg(target_arch = "wasm32")]
+            let safety_interval = SAFETY_UNARMED;
+            self.safety_at = now + safety_interval;
         }
         Ok(())
     }
@@ -145,7 +160,10 @@ impl AutoImport {
         self.cancel_worker();
         self.generation = self.generation.saturating_add(1);
         self.folder = configured;
-        self.next_arm = Instant::now();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.next_arm = Instant::now();
+        }
         self.next_scan = Instant::now();
         // a new folder is scanned at once for what is already in it
         self.dirty.store(self.folder.is_some(), Ordering::Release);
@@ -153,6 +171,7 @@ impl AutoImport {
 
     /// Arm the folder watch when a folder is configured and none is armed. A failure (missing
     /// folder, unsupported filesystem) leaves the 3 s polling cadence in place and retries later.
+    #[cfg(not(target_arch = "wasm32"))]
     fn try_arm(&mut self) {
         let Some(folder) = self.folder.clone() else { return };
         if self.armed.is_some() || Instant::now() < self.next_arm {
@@ -175,11 +194,20 @@ impl AutoImport {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    fn try_arm(&mut self) {
+        // Browser builds retain coordinator behavior, but have no native filesystem watch.
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn disarm(&mut self) {
         if let Some(folder) = self.armed.take() {
             self.watch.unwatch(&folder);
         }
     }
+
+    #[cfg(target_arch = "wasm32")]
+    fn disarm(&mut self) {}
 
     fn start_worker(&mut self) -> Result<(), String> {
         let Some(folder) = self.folder.clone() else { return Ok(()) };
@@ -305,6 +333,7 @@ impl AutoImport {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn new_watch_set() -> DirWatchSet {
     DirWatchSet::with_options(
         1,
@@ -398,6 +427,7 @@ mod tests {
     /// watch marks the folder dirty, 20 writes do not become 20 batches, and nothing arrives after
     /// unwatch. Real backend, bounded waits.
     #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn watch_burst_marks_dirty_and_coalesces_and_unwatch_stops_it() {
         let folder = temp_folder("burst");
         assert!(fs::create_dir_all(&folder).is_ok());

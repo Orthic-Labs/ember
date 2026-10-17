@@ -15,7 +15,6 @@ workspace = true
 [dependencies]
 lightcraft-engine = { workspace = true }
 lightcraft-catalog = { workspace = true }
-rightkit-file-watch = { version = "=0.4.0", default-features = false }
 lightcraft-develop = { workspace = true }
 lightcraft-preview = { workspace = true }
 lightcraft-pipeline = { workspace = true }
@@ -28,3 +27,6 @@ log = { workspace = true }
 png = { workspace = true }
 rayon = { workspace = true }
 image = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rightkit-file-watch = { version = "=0.4.0", default-features = false }
