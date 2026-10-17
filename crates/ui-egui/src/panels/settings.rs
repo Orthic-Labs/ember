@@ -774,7 +774,8 @@ fn display_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
         // Auto / sRGB / a file: with no profile chosen, previews follow the screen's own profile
         // where the host knows it; "Use sRGB" overrides that
         use lightcraft_engine::display::{DisplayChoice, SRGB_SETTING};
-        let choice = DisplayChoice::from_setting(&app.ui.settings.display_profile);
+        let setting = app.ui.settings.display_profile.clone();
+        let choice = DisplayChoice::from_setting(&setting);
         if app.services.screen_profile.is_some() {
             let r = ui.add_enabled(choice != DisplayChoice::Auto, egui::Button::new(crate::i18n::tr("Use Screen Profile")));
             register(ui.ctx(), "button:settingsDisplayProfileNone", r.rect);

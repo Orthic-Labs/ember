@@ -461,7 +461,7 @@ mod tests {
             ("develop.wb", json!({"mode": "auto"})),
             ("develop.auto", json!({"dryRun": true})),
         ] {
-            app.run(id, params).unwrap_or_else(|e| panic!("{id}: {}", e.message));
+            app.run(id, params).unwrap_or_else(|e| panic!("{id}: {e}"));
             assert!(app.auto_tasks.is_empty(), "{id}");
         }
         // with a host, a dry run answers with the values (later) and writes nothing
@@ -544,7 +544,7 @@ mod tests {
             let (mut app, taken) = app_with_host();
             let mut native = LightcraftApp::new(lightcraft_engine::Session::with_demo(), crate::Services::default());
             let before = develop(&app);
-            native.run(id, params.clone()).unwrap_or_else(|e| panic!("{id}: {}", e.message));
+            native.run(id, params.clone()).unwrap_or_else(|e| panic!("{id}: {e}"));
             assert_eq!(app.run(id, params).unwrap(), json!({"background": true}), "{id}");
             assert_eq!(develop(&app), before, "{id}: nothing is applied until the values are back");
             assert_eq!(taken.borrow().len(), 1, "{id}");

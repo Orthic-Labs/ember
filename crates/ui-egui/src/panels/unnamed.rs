@@ -423,7 +423,7 @@ fn cluster_expanded(app: &mut LightcraftApp, ui: &mut egui::Ui, cluster: &Cluste
     let n = crate::i18n::tr_format!("{n} faces", n = cluster.faces.len());
     ui.painter().text(pos2(r.left() + name_w + 112.0, r.top() + EXPANDED_HEAD_H / 2.0), Align2::LEFT_CENTER, n, t.font(12.0), t.text_dim);
     let step = edge + super::people::TILE_GAP;
-    for (j, face) in cluster.faces.iter().enumerate() {
+    for j in 0..cluster.faces.len() {
         let min = r.min + vec2((j % cols) as f32 * step, EXPANDED_HEAD_H + (j / cols) as f32 * step);
         tile(app, ui, &cluster.faces, j, Rect::from_min_size(min, vec2(edge, edge)), ppp, "unnamed-group");
     }

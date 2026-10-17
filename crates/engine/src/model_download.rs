@@ -368,7 +368,7 @@ mod tests {
         assert_eq!(std::fs::read(path).unwrap(), bytes);
         let mut names: Vec<String> = std::fs::read_dir(&staging).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
         names.sort();
-        assert_eq!(names, [spec.file_name.clone()]);
+        assert_eq!(names, std::slice::from_ref(&spec.file_name));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

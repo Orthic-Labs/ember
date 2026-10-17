@@ -595,7 +595,7 @@ mod tests {
     fn a_long_track_is_thinned_evenly_keeping_its_ends() {
         let view = View::new(10.0, 10.0, 8.0);
         let long: Vec<(f64, f64)> = (0..1000).map(|i| (10.0 + f64::from(i) * 1e-4, 10.0)).collect();
-        let lines = track_lines(&view, &[long.clone()], 50);
+        let lines = track_lines(&view, std::slice::from_ref(&long), 50);
         assert_eq!(lines[0].len(), 50);
         assert_eq!(lines[0][0], view.offset(long[0].0, long[0].1));
         assert_eq!(lines[0][49], view.offset(long[999].0, long[999].1));

@@ -1179,7 +1179,7 @@ fn render_to_avif_adds_a_decodable_avif_next_to_the_original() {
     assert_eq!(lightcraft_codecs::sniff(&bytes), Some(lightcraft_codecs::Format::Avif));
     let d = lightcraft_codecs::decode(&bytes, Default::default()).unwrap();
     let ph = s.catalog.photo(orig).unwrap().clone();
-    assert_eq!((d.width, d.height), (ph.width as u32, ph.height as u32));
+    assert_eq!((d.width, d.height), (ph.width, ph.height));
     let new = lightcraft_catalog::PhotoId(r["id"].as_u64().unwrap());
     assert_eq!(s.active(), Some(new));
     let added = s.catalog.photo(new).unwrap();

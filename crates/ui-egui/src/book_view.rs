@@ -36,7 +36,7 @@ pub enum View {
 }
 
 /// The view's state: how the book is shown, the current page and the text being edited. Not saved.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct Run {
     /// Index of the current page: the page the text fields refer to, and the one a click selects.
     pub page: usize,
@@ -56,6 +56,13 @@ pub struct Run {
     thumbs: Vec<Option<TextureHandle>>,
     /// Thumbnails whose render failed since the book last changed.
     failed_thumbs: Vec<usize>,
+}
+
+// by hand: the page renders (`TextureHandle`) have no Debug
+impl std::fmt::Debug for Run {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Run").field("page", &self.page).field("view", &self.view).field("guides", &self.guides).finish_non_exhaustive()
+    }
 }
 
 impl Run {
