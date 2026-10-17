@@ -5,13 +5,15 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::process::Stdio;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 use tauri::{WebviewWindow, Wry};
 
 use rfd::{AsyncFileDialog, FileHandle};
+use rightkit_child_process::reveal::{self as rk_reveal, PathScope};
+use rightkit_child_process::OwnedCommand;
 
 const MAX_PATHS: usize = 512;
 const MAX_PREFERENCES_BYTES: usize = 4 * 1024 * 1024;
@@ -376,54 +378,73 @@ fn required_string(params: &Value, key: &str) -> Result<String, String> {
     Ok(value.to_string())
 }
 
+/// How long an opener may run before it is left to hand off to the desktop.
+const OPENER_WAIT: Duration = Duration::from_secs(5);
+/// Desktop-session variables a Linux launcher needs beside the default allowlist.
+const OPENER_ENV: &[&str] = &["DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE", "XDG_DATA_DIRS"];
+
+/// Scope covering the volume that holds `canonical`: the user chooses photo and editor paths anywhere on disk, so the
+/// check that matters here is that the path exists and canonicalises, as `rightkit-child-process` enforces.
+fn volume_scope(canonical: &Path) -> Result<PathScope, String> {
+    let root = canonical.ancestors().last().ok_or_else(|| "path has no root".to_string())?;
+    PathScope::new([root]).map_err(|error| error.to_string())
+}
+
+/// Starts an opener through `rightkit-child-process` (hidden window, detached from the app's job) and gives it a short
+/// bounded wait so an immediate failure is reported. `explorer` reports exit code 1 even on success on Windows.
+fn run_opener(mut command: OwnedCommand) -> Result<(), String> {
+    command.command_mut().stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    let mut child = command.spawn_uncontained_detached().map_err(|error| error.to_string())?;
+    match child.wait_timeout(OPENER_WAIT).map_err(|error| error.to_string())? {
+        Some(status) if !status.success() && !cfg!(windows) => Err(format!("the opener exited with {status}")),
+        _ => Ok(()),
+    }
+}
+
 fn open_external(params: &Value) -> Result<(), String> {
     let path = required_string(params, "path")?;
     let app = params.get("app").and_then(Value::as_str).unwrap_or("").trim();
+    let wrap = |error: String| format!("opening external editor: {error}");
+    if app.is_empty() {
+        let canonical = fs::canonicalize(&path).map_err(|error| wrap(error.to_string()))?;
+        let scope = volume_scope(&canonical).map_err(wrap)?;
+        return rk_reveal::open(&canonical, &scope).map_err(|error| wrap(error.to_string()));
+    }
     let mut command = if cfg!(target_os = "macos") {
-        let mut command = Command::new("open");
-        if !app.is_empty() {
-            command.args(["-a", app]);
-        }
+        let mut command = OwnedCommand::new("open");
+        command.command_mut().args(["-a", app]);
         command
-    } else if cfg!(target_os = "windows") && app.is_empty() {
-        let mut command = Command::new("cmd");
-        command.args(["/C", "start", ""]);
-        command
-    } else if cfg!(target_os = "windows") {
-        Command::new(app)
-    } else if app.is_empty() {
-        Command::new("xdg-open")
     } else {
-        Command::new(app)
+        OwnedCommand::new(app)
     };
-    command.arg(path).spawn().map(|_| ()).map_err(|error| format!("opening external editor: {error}"))
+    command.command_mut().arg(path);
+    // The editor is the user's own program: it keeps the app's environment and outlives it.
+    command.command_mut().stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    command.spawn_uncontained_detached().map(|_| ()).map_err(|error| wrap(error.to_string()))
 }
 
 fn open_url(url: &str) -> Result<(), String> {
     if !url.starts_with("https://") {
         return Err("only https URLs may be opened".into());
     }
-    let status = if cfg!(target_os = "macos") {
-        Command::new("open").arg(url).status()
+    let program = if cfg!(target_os = "macos") {
+        "open"
     } else if cfg!(target_os = "windows") {
-        Command::new("explorer").arg(url).status()
+        "explorer"
     } else {
-        Command::new("xdg-open").arg(url).status()
+        "xdg-open"
     };
-    status.map_err(|error| format!("opening URL: {error}"))?.success().then_some(()).ok_or_else(|| "external URL opener failed".into())
+    let mut command = OwnedCommand::new(program);
+    command.command_mut().arg(url);
+    command.env_allowlist_with_defaults(OPENER_ENV);
+    run_opener(command).map_err(|error| format!("opening URL: {error}"))
 }
 
 fn reveal(path: &str) -> Result<(), String> {
-    let candidate = Path::new(path);
-    let status = if cfg!(target_os = "macos") {
-        Command::new("open").args(["-R", path]).status()
-    } else if cfg!(target_os = "windows") {
-        Command::new("explorer").arg(format!("/select,{path}")).status()
-    } else {
-        let directory = candidate.parent().unwrap_or_else(|| Path::new("."));
-        Command::new("xdg-open").arg(directory).status()
-    };
-    status.map_err(|error| format!("revealing path: {error}"))?.success().then_some(()).ok_or_else(|| "reveal failed".into())
+    let wrap = |error: String| format!("revealing path: {error}");
+    let canonical = fs::canonicalize(path).map_err(|error| wrap(error.to_string()))?;
+    let scope = volume_scope(&canonical).map_err(wrap)?;
+    rk_reveal::reveal(&canonical, &scope).map_err(|error| wrap(error.to_string()))
 }
 
 #[cfg(test)]
