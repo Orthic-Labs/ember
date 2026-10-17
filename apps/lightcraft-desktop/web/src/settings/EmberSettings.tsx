@@ -7,6 +7,7 @@ import {
   mergeSections,
   standardSections,
   type SettingsContext,
+  type SettingsEntry,
   type SettingsSection,
 } from '@rightkit/settings-ui';
 import '@rightkit/settings-ui/settings.css';
@@ -295,7 +296,7 @@ function LanguageBody({ ctx }: { ctx: SettingsContext }) {
   );
 }
 
-const ENTRIES = {
+const ENTRIES: Record<'general' | 'interface' | 'import' | 'performance' | 'language', SettingsEntry[]> = {
   general: [
     { id: 'general.library', label: 'Library', keywords: ['catalog'] },
     { id: 'general.startupView', label: 'Open in', keywords: ['startup'] },
@@ -331,7 +332,7 @@ const ENTRIES = {
     { id: 'performance.smartPath', label: 'Smart previews' },
   ],
   language: [{ id: 'language.locale', label: 'Language' }],
-} as const;
+};
 
 function sectionsFor(desktop: Desktop, backend: EmberSettingsBackend, about: { version: string; deviceId: string }): SettingsSection[] {
   const app: SettingsSection[] = [
