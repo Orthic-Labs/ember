@@ -14,7 +14,9 @@
       "26.8.1"
     ]
   },
-  "ciAllOs": false,
+  "ciAllOs": true,
+  "qaEvidencePath": "ember-native-e2e/qa-evidence",
+  "qaEvidenceRetentionDays": 7,
   "ciIncremental": true,
   "devArtifact": {
     "mac": "sign",

@@ -70,8 +70,8 @@ importers:
         specifier: 0.1.6
         version: 0.1.6
       '@rightkit/release':
-        specifier: 0.2.174
-        version: 0.2.174
+        specifier: 0.3.0
+        version: 0.3.0
       '@tauri-apps/cli':
         specifier: 2.12.3
         version: 2.12.3
@@ -158,8 +158,8 @@ packages:
       '@tauri-apps/plugin-os':
         optional: true
 
-  '@rightkit/release@0.2.174':
-    resolution: {integrity: sha512-qVc8k9NKLt4bHvCarDxc2dykkNZeJkVUVX4iicty/1HRCbYDTjh1OnixfmYw5sdq0lYeTcLMRkJLyEaxJRKDOQ==}
+  '@rightkit/release@0.3.0':
+    resolution: {integrity: sha512-f2MKQYwE/Vec6TGbGZEy9PoC4sg7t6+kKT9YO+pIVx5ri6g9CRCdz4qbHdWURyopxd92nuB+4CG0gd+l8/gr3A==}
     hasBin: true
 
   '@rightkit/settings-ui@0.4.4':
@@ -639,7 +639,7 @@ snapshots:
     optionalDependencies:
       '@tauri-apps/plugin-os': 2.4.0
 
-  '@rightkit/release@0.2.174':
+  '@rightkit/release@0.3.0':
     dependencies:
       smol-toml: 1.9.1
 

@@ -1570,6 +1570,92 @@ fn set_dialog_field(control: &rightkit_qa::control::Control, label: &str, value:
     );
 }
 
+/// Start and finish an HDR merge through the installed app's command palette and dialog.
+fn run_hdr_merge_from_ui(control: &rightkit_qa::control::Control) -> Value {
+    let before = snapshot(control);
+    let prior_tasks = before["status"]["completedJobs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|job| job["id"].as_str().map(str::to_string))
+        .collect::<std::collections::HashSet<_>>();
+    click_dom(control, ".rk-search--trigger", "HDR repeat command palette must open");
+    wait_for_dom(control, "return document.querySelector('.rk-palette') !== null;");
+    for key in ["h", "d", "r"] {
+        control.key(key).expect("HDR repeat search input must accept keys");
+    }
+    click_dom(control, "[data-command=\"dialog.mergeHdr\"]", "HDR repeat command must open dialog");
+    wait_for_dom(control, "return document.querySelector('.lc-dialog h2')?.textContent === 'HDR Merge Preview';");
+    wait_for_rendered_preview(control, ".lc-merge-preview img", None);
+    set_dialog_field(control, "Deghost amount", "medium");
+    wait_for_rendered_preview(control, ".lc-merge-preview img", None);
+    click_dom(control, ".lc-dialog-actions .lc-button-primary", "HDR repeat submit must execute");
+    wait_for_dom(control, "return document.querySelector('.lc-dialog h2')?.textContent === 'Merging Photos';");
+    let task_id = (0..200)
+        .find_map(|_| {
+            let current = snapshot(control);
+            let task = current["status"]["jobs"]
+                .as_array()
+                .and_then(|jobs| {
+                    jobs.iter().find(|job| job["kind"].as_str() == Some("merge") && job["id"].as_str().is_some_and(|id| !prior_tasks.contains(id)))
+                })
+                .and_then(|job| job["id"].as_str())
+                .or_else(|| {
+                    current["status"]["completedJobs"].as_array().and_then(|jobs| {
+                        jobs.iter()
+                            .find(|job| job["kind"].as_str() == Some("merge") && job["id"].as_str().is_some_and(|id| !prior_tasks.contains(id)))
+                            .and_then(|job| job["id"].as_str())
+                    })
+                })
+                .map(str::to_string);
+            if task.is_none() {
+                sleep(Duration::from_millis(50));
+            }
+            task
+        })
+        .expect("HDR repeat must publish merge task id");
+    let finished = wait_task(control, &task_id);
+    let receipt = completed_task(&finished, &task_id).clone();
+    assert_eq!(receipt["state"].as_str(), Some("done"), "HDR repeat must complete: {receipt}");
+    wait_for_dom(
+        control,
+        "return [...document.querySelectorAll('.lc-dialog-actions button')].some((button) => button.textContent === 'Close' && !button.disabled);",
+    );
+    click_dom(control, ".lc-dialog-actions .lc-button", "completed HDR repeat dialog must close");
+    wait_for_dom(control, "return document.querySelector('.lc-dialog') === null;");
+    receipt
+}
+
+fn set_exposure_with_native_pointer(control: &rightkit_qa::control::Control, target: f64) -> f64 {
+    wait_for_dom(control, "return document.querySelector('input[aria-label=Exposure]') !== null;");
+    let before = snapshot(control)["develop"]["light"]["exposure"].as_f64().expect("Exposure baseline must be numeric");
+    let slider = control.eval(r#"return (() => { const e=document.querySelector('input[aria-label="Exposure"]'); if(!e)return null; const r=e.getBoundingClientRect(); return {x:r.x,y:r.y+r.height/2,width:r.width,min:Number(e.min),max:Number(e.max),value:Number(e.value)}; })();"#)
+        .expect("Exposure geometry must be readable");
+    let x = slider["x"].as_f64().expect("Exposure slider x must be numeric");
+    let y = slider["y"].as_f64().expect("Exposure slider y must be numeric");
+    let width = slider["width"].as_f64().expect("Exposure slider width must be numeric");
+    let min = slider["min"].as_f64().expect("Exposure minimum must be numeric");
+    let max = slider["max"].as_f64().expect("Exposure maximum must be numeric");
+    let value = slider["value"].as_f64().expect("Exposure value must be numeric");
+    assert!(max > min && target >= min && target <= max, "Exposure pointer target must be in rendered slider range: {slider}");
+    let ratio = |v: f64| ((v - min) / (max - min)).clamp(0.02, 0.98);
+    control.drag((x + width * ratio(value), y), (x + width * ratio(target), y), 4).expect("native pointer drag must change Exposure");
+    let final_value = control
+        .eval("return Number(document.querySelector('input[aria-label=Exposure]')?.value);")
+        .expect("dragged Exposure must remain readable")
+        .as_f64()
+        .expect("dragged Exposure must be numeric");
+    assert!((final_value - before).abs() >= 0.05, "native drag must make a distinctive edit");
+    for _ in 0..200 {
+        let current = snapshot(control)["develop"]["light"]["exposure"].as_f64();
+        if current.is_some_and(|value| (value - final_value).abs() < 0.001) {
+            return current.expect("changed Exposure must be numeric");
+        }
+        sleep(Duration::from_millis(50));
+    }
+    panic!("rendered Exposure slider change must settle away from {before}");
+}
+
 fn top_left_magenta_pixels(path: &Path) -> usize {
     let mut decoder = png::Decoder::new(Cursor::new(fs::read(path).expect("watermark PNG must be readable")));
     decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
@@ -2187,6 +2273,91 @@ fn native_hidden_control_journeys() {
                     let merged_dom = wait_for_rendered_preview(control, "img.stage-preview", None);
                     assert!(merged_dom["naturalWidth"].as_u64().is_some_and(|width| width > 0), "merged DNG WebView preview must decode");
                     assert!(merged_dom["naturalHeight"].as_u64().is_some_and(|height| height > 0), "merged DNG WebView preview must decode");
+
+                    // Make a visible edit in the installed UI, then repeat the exact merge
+                    // options (including stack=false) and require reuse of the same output.
+                    let preserved_exposure = set_exposure_with_native_pointer(control, 1.25);
+                    let edited_snapshot = snapshot(control);
+                    assert!((edited_snapshot["develop"]["light"]["exposure"].as_f64().unwrap_or(f64::NAN) - preserved_exposure).abs() < 0.02,
+                        "HDR edit must reach settled library state: {edited_snapshot}");
+                    run(control, "library.select", json!({"ids": ids, "active": ids[0], "mode": "replace"}));
+                    let output_count_before_repeat = fs::read_dir(output.parent().expect("HDR output parent exists")).expect("HDR output directory must read")
+                        .flatten().filter(|entry| entry.path().extension().is_some_and(|extension| extension.to_string_lossy().eq_ignore_ascii_case("dng"))).count();
+                    let repeated = run_hdr_merge_from_ui(control);
+                    let repeated_result = &repeated["result"];
+                    assert_eq!(repeated_result["id"].as_u64(), Some(merged_id), "identical HDR merge must reuse catalog id: {repeated_result}");
+                    assert_eq!(repeated_result["path"].as_str(), Some(output_path), "identical HDR merge must reuse output path: {repeated_result}");
+                    assert_eq!(snapshot(control)["counts"]["catalog"], finished["counts"]["catalog"], "identical HDR merge must not add catalog membership");
+                    let output_count_after_repeat = fs::read_dir(output.parent().expect("HDR output parent exists")).expect("HDR output directory must read")
+                        .flatten().filter(|entry| entry.path().extension().is_some_and(|extension| extension.to_string_lossy().eq_ignore_ascii_case("dng"))).count();
+                    assert_eq!(output_count_after_repeat, output_count_before_repeat, "identical HDR merge must not leave another DNG");
+                    assert_eq!(fs::read(&output).expect("reused HDR output remains readable"), bytes, "repeat must preserve existing DNG bytes");
+                    run(control, "library.select", json!({"ids": [merged_id], "active": merged_id, "mode": "replace"}));
+                    assert!((snapshot(control)["develop"]["light"]["exposure"].as_f64().unwrap_or(0.0) - preserved_exposure).abs() < 0.02,
+                        "reuse must preserve result edits");
+
+                    // A moved prior result remains intact; another UI merge must create a fresh,
+                    // separately catalogued and renderable DNG rather than replacing it.
+                    let moved_first = scenario.dir().join("merge-hdr-preserved-first.dng");
+                    fs::rename(&output, &moved_first).expect("stale HDR output must be moved aside");
+                    let moved_bytes = fs::read(&moved_first).expect("moved HDR bytes must remain readable");
+                    run(control, "library.select", json!({"ids": ids, "active": ids[0], "mode": "replace"}));
+                    let stale_repeat = run_hdr_merge_from_ui(control);
+                    let stale_result = &stale_repeat["result"];
+                    let stale_id = stale_result["id"].as_u64().expect("stale fallback must return new id");
+                    let stale_path = stale_result["path"].as_str().expect("stale fallback must return path");
+                    assert_ne!(stale_id, merged_id, "moved result must not be reused");
+                    assert_ne!(stale_path, output_path, "moved result path must remain reserved");
+                    assert_eq!(snapshot(control)["counts"]["catalog"].as_u64(), finished["counts"]["catalog"].as_u64().map(|count| count + 1), "stale fallback must add exactly one library result");
+                    assert_eq!(fs::read(&moved_first).expect("preserved moved bytes remain readable"), moved_bytes, "stale recovery must not rewrite moved file");
+                    run(control, "library.select", json!({"ids": [stale_id], "active": stale_id, "mode": "replace"}));
+                    control.key("D").expect("new stale fallback result must open in Develop");
+                    wait_for_dom(control, "return document.querySelector('.stage-workspace.stage-detail') !== null;");
+                    let stale_rendered = wait_for_rendered_preview(control, "img.stage-preview", None);
+                    assert!(stale_rendered["naturalWidth"].as_u64().is_some_and(|width| width > 0), "stale fallback DNG must render: {stale_rendered}");
+
+                    // Seed a matching Local candidate through the public browse workflow before
+                    // the next merge. finish_merge must promote and reuse this candidate.
+                    let local_root = scenario.dir().join("hdr-local-candidate");
+                    fs::create_dir_all(&local_root).expect("HDR Local fixture directory must exist");
+                    let stale_file = PathBuf::from(stale_path);
+                    let stale_bytes = fs::read(&stale_file).expect("fresh HDR output must remain readable");
+                    let moved_stale = scenario.dir().join("merge-hdr-preserved-stale-fallback.dng");
+                    fs::rename(&stale_file, &moved_stale).expect("second HDR output must be moved to exercise Local promotion");
+                    let local_candidate = local_root.join("local-hdr-copy.dng");
+                    fs::write(&local_candidate, &stale_bytes).expect("matching HDR Local candidate must be written");
+                    let browsed = run(control, "library.browse", json!({"path": local_root, "subfolders": false}));
+                    assert!(browsed["photos"].as_u64().is_some_and(|count| count > 0), "HDR Local candidate must appear in browse results: {browsed}");
+                    control.key("G").expect("Local browse must open library route");
+                    wait_for_dom(control, "return document.querySelector('.lc-library-workspace') !== null;");
+                    let local_generation = snapshot(control)["viewGeneration"].as_u64().expect("Local view generation must be numeric");
+                    let local_slice = control.command("lc_view_slice", &json!({"generation": local_generation, "offset": 0, "limit": 512})).expect("Local candidate slice must reply");
+                    let local_row = local_slice["photos"].as_array().and_then(|photos| photos.iter().find(|photo| photo["fileName"] == "local-hdr-copy.dng"))
+                        .expect("Local candidate must be visible in rendered library slice");
+                    let local_id = local_row["id"].as_u64().expect("Local candidate id must be numeric");
+                    assert_eq!(run(control, "photo.inspect", json!({"id": local_id}))["local"].as_bool(), Some(true), "browse must create a genuine Local catalog photo");
+                    run(control, "library.select", json!({"ids": [local_id], "active": local_id, "mode": "replace"}));
+                    wait_for_rendered_preview(control, ".lc-photo-cell.is-active img.lc-photo-preview", None);
+                    control.key("D").expect("Local HDR candidate must open in Develop before promotion");
+                    let local_exposure = set_exposure_with_native_pointer(control, 0.75);
+                    assert!((snapshot(control)["develop"]["light"]["exposure"].as_f64().unwrap_or(f64::NAN) - local_exposure).abs() < 0.02,
+                        "Local candidate edit must settle before promotion");
+                    run(control, "library.select", json!({"ids": ids, "active": ids[0], "mode": "replace"}));
+                    let promoted = run_hdr_merge_from_ui(control);
+                    assert_eq!(promoted["result"]["id"].as_u64(), Some(local_id), "matching Local result must be promoted and reused");
+                    assert_eq!(promoted["result"]["path"].as_str(), Some(local_candidate.to_string_lossy().as_ref()), "promotion must retain Local file path");
+                    assert!(!run(control, "photo.inspect", json!({"id": local_id}))["local"].as_bool().unwrap_or(false), "merge must promote Local photo into library");
+                    let persisted_exposure = snapshot(control)["develop"]["light"]["exposure"].as_f64().expect("promoted HDR exposure must persist");
+                    assert!((persisted_exposure - local_exposure).abs() < 0.02, "merge promotion must preserve pre-existing Local edit");
+                    run(control, "edit.undo", json!({}));
+                    assert_eq!(run(control, "photo.inspect", json!({"id": local_id}))["local"].as_bool(), Some(true), "undo must restore Local state of promoted result");
+                    assert!((snapshot(control)["develop"]["light"]["exposure"].as_f64().unwrap_or(f64::NAN) - local_exposure).abs() < 0.02,
+                        "undoing promotion must retain Local candidate edit");
+                    run(control, "edit.redo", json!({}));
+                    assert!(!run(control, "photo.inspect", json!({"id": local_id}))["local"].as_bool().unwrap_or(false), "redo must restore promoted library state");
+                    assert!((snapshot(control)["develop"]["light"]["exposure"].as_f64().unwrap_or(f64::NAN) - local_exposure).abs() < 0.02,
+                        "redoing promotion must retain edited HDR result");
+
                     let receipt_path = scenario.dir().join("merge-hdr.json");
                     fs::write(&receipt_path, serde_json::to_vec_pretty(&json!({
                         "schema": 1,
@@ -2201,11 +2372,44 @@ fn native_hidden_control_journeys() {
                         "outputDng": output,
                         "decodedMergedPreview": decoded,
                         "renderedMergedPreview": merged_dom,
+                        "repeatedResult": repeated,
+                        "staleFallbackResult": stale_repeat,
+                        "preservedMovedOutput": moved_first,
+                        "preservedStaleFallbackOutput": moved_stale,
+                        "localPromotionResult": promoted,
+                        "preservedExposure": preserved_exposure,
+                        "persistedResult": {"id": local_id, "path": local_candidate, "exposure": persisted_exposure},
                     })).expect("HDR merge receipt must serialize")).expect("HDR merge receipt must write");
                     scenario.keep("merge-hdr-preview-initial.png", &first_screenshot);
                     scenario.keep("merge-hdr-preview-deghost.png", &second_screenshot);
                     scenario.keep("merge-hdr.json", &receipt_path);
                 });
+                // Reopening the same isolated workspace must recover the completed library row
+                // and render it through the installed app's normal startup path.
+                let receipt_path = scenario.dir().join("merge-hdr.json");
+                let saved: Value = serde_json::from_slice(&fs::read(&receipt_path).expect("HDR receipt must survive app shutdown"))
+                    .expect("HDR receipt must remain valid JSON");
+                let merged_id = saved["persistedResult"]["id"].as_u64().expect("HDR receipt must record persisted merged id");
+                let merged_path = saved["persistedResult"]["path"].as_str().expect("HDR receipt must record persisted merged path").to_string();
+                let persisted_exposure = saved["persistedResult"]["exposure"].as_f64().expect("HDR receipt must record persisted edit");
+                let merged_bytes = fs::read(&merged_path).expect("persisted HDR DNG must remain readable after shutdown");
+                with_control(&binary, scenario, &inputs.catalog, |control, _data| {
+                    let reopened = snapshot(control);
+                    assert!(reopened["counts"]["catalog"].as_u64().is_some_and(|count| count >= 3), "reopened library must retain HDR membership: {reopened}");
+                    run(control, "library.select", json!({"ids": [merged_id], "active": merged_id, "mode": "replace"}));
+                    assert!((snapshot(control)["develop"]["light"]["exposure"].as_f64().unwrap_or(f64::NAN) - persisted_exposure).abs() < 0.02,
+                        "reopened HDR result must retain edited exposure");
+                    control.key("D").expect("reopened HDR result must open in Develop");
+                    wait_for_dom(control, "return document.querySelector('.stage-workspace.stage-detail') !== null;");
+                    let rendered = wait_for_rendered_preview(control, "img.stage-preview", None);
+                    assert!(rendered["naturalWidth"].as_u64().is_some_and(|width| width > 0), "reopened HDR result must render: {rendered}");
+                    assert_eq!(fs::read(&merged_path).expect("reopened DNG must remain readable"), merged_bytes, "reopening and rendering must preserve merged source bytes");
+                });
+                for (label, path) in source_paths.iter().filter(|(label, _)| label.starts_with("mergePng")) {
+                    let expected = source_hashes.iter().find(|(source_label, _)| source_label == label).map(|(_, hash)| hash)
+                        .expect("HDR fixture source must have a recorded initial hash");
+                    assert_eq!(&source_fingerprint(path), expected, "HDR source bytes must remain unchanged for {label}");
+                }
             } else if name == "catalogRecovery" {
                 run_catalog_recovery(&binary, scenario, &inputs.catalog, &inputs.png, &baseline_capture, &revision, &installed_hash);
             } else {

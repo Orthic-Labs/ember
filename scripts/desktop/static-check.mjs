@@ -70,7 +70,7 @@ function checkPins() {
     "@rightkit/theme": "0.2.3",
     "@rightkit/qa-chrome": "0.1.6",
     "@rightkit/ci": "0.2.45",
-    "@rightkit/release": "0.2.162",
+    "@rightkit/release": "0.3.0",
     "@rightkit/app-update": "0.2.5",
   };
   for (const [name, version] of Object.entries(pins)) {

@@ -72,6 +72,16 @@
       "assert": "read decoded exported bytes; source hash unchanged"
     },
     {
+      "id": "mergeHdr",
+      "control": "native UI",
+      "assert": "native UI creates HDR DNG; same-option repeat reuses id/path/count and preserves edit; moved result remains byte-identical while repeat creates distinct renderable result; browse a matching candidate into Local then merge promotes and reuses it; restart preserves promoted membership, edit & render; fixture source hashes unchanged"
+    },
+    {
+      "id": "cullReview",
+      "control": "native UI + lc_view_slice",
+      "assert": "read-only cull analysis preserves catalog flags, selection, counts & undo state; explicit accepted suggestion changes flag in one undo step; undo restores baseline; cancel leaves state unchanged"
+    },
+    {
       "id": "catalogRecovery",
       "control": "lc_run",
       "params": {
@@ -86,6 +96,11 @@
         "id": "library.importPreview"
       },
       "assert": "normalized extension/subfolder filters, explicit-file override & provisional preview lease"
+    },
+    {
+      "id": "editingTools",
+      "control": "native UI + lc_run",
+      "assert": "crop command changes geometry and renders; masking panel shows radial mask; pointer brush paints one undoable stroke with redo; spot removal & red-eye corrections render in their tools"
     },
     {
       "id": "modelSetup",

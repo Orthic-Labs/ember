@@ -52,6 +52,22 @@ function bootstrapLockfile(lockfile) {
 if (process.env.GITHUB_ACTIONS !== "true") fail("desktop CI gate is GitHub Actions-only; use node scripts/desktop/static-check.mjs locally");
 if (process.env.RIGHT_GIT_RUST_REQUIRED !== "true") fail("right-git manifest must set rustCache.requiredForGate=true for desktop gate");
 
+const expectedPlatform = process.platform === "darwin" ? "macos" : process.platform === "win32" ? "windows" : null;
+if (!expectedPlatform) fail(`native desktop E2E requires macOS or Windows runner; received ${process.platform}`);
+const expectedArchitecture = process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x86_64" : null;
+if (!expectedArchitecture) fail(`native desktop E2E does not support runner architecture ${process.arch}`);
+const revision = process.env.GITHUB_SHA;
+if (!/^[0-9a-f]{40}$/.test(revision ?? "")) fail("GITHUB_SHA must be an exact 40-character commit SHA");
+const runnerTemp = process.env.RUNNER_TEMP;
+if (!runnerTemp?.trim()) fail("RUNNER_TEMP is required for native desktop E2E artifacts");
+const nativeEnv = {
+  ...process.env,
+  RIGHT_GIT_SOURCE_REVISION: revision,
+  RIGHT_GIT_RELEASE_PLATFORM: expectedPlatform,
+  RIGHT_GIT_RELEASE_ARCHITECTURE: expectedArchitecture,
+  RIGHT_GIT_ARTIFACT_ROOT: path.join(runnerTemp, "ember-native-e2e"),
+};
+
 run(process.execPath, ["scripts/desktop/static-check.mjs"], "static contracts");
 run("pnpm", ["run", "typecheck"], "React typecheck");
 run(process.execPath, ["--test", "scripts/desktop/mask-geometry.test.mjs"], "mask geometry regression tests");
@@ -64,4 +80,6 @@ run("cargo", ["run", "--locked", "-p", "xtask", "--", "ci"], "Rust fmt, clippy, 
 run("cargo", ["run", "--locked", "-p", "lightcraft-engine", "--example", "import_bench"], "1,300-file procedural import benchmark", {
   ...process.env, COUNT: "1300", JPEG_EDGE: "512", RAW_EDGE: "512",
 });
+run("pnpm", ["run", "release:candidate:build"], "native installed-app E2E build", nativeEnv);
+run("pnpm", ["run", "release:candidate:check"], "native installed-app E2E qualification", nativeEnv);
 console.log("desktop CI gate: PASS");

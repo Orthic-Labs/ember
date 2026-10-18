@@ -22,9 +22,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Full validation stays on one declared runner; prefer configured
-        # Windows when available, otherwise preserve first configured OS.
-        os: ["windows-2025"]
+        # ciAllOs: the gate runs on every matrix.os runner, in declared order.
+        os: ["macos-15", "windows-2025"]
         node: ["26.8.1"]
     runs-on: ${{ matrix.os }}
     steps:
@@ -155,6 +154,14 @@ jobs:
         with:
           path: ~/.right-git-last-green
           key: lightcraft-desktop-workspace-last-green-${{ matrix.os }}-${{ matrix.node }}-${{ github.ref_name }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: qa-evidence-${{ matrix.os || runner.os }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ember-native-e2e/qa-evidence
+          retention-days: 7
+          if-no-files-found: ignore
 
   dev-artifact-mac:
     # macOS dev app: builds devArtifact.buildScript and stages it. Runs beside the
