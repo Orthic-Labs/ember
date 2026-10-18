@@ -82,6 +82,11 @@
       "assert": "read-only cull analysis preserves catalog flags, selection, counts & undo state; explicit accepted suggestion changes flag in one undo step; undo restores baseline; cancel leaves state unchanged"
     },
     {
+      "id": "ratingsPersistence",
+      "control": "native UI + lc_run queries",
+      "assert": "native pointer five-star control and supported reject shortcut; undo removes reject while preserving rating; redo restores reject; invalid rating fails unchanged; grid and filmstrip badges and decoded previews survive process restart and catalog reopen; source bytes unchanged"
+    },
+    {
       "id": "catalogRecovery",
       "control": "lc_run",
       "params": {

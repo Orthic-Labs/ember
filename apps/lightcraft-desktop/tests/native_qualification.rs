@@ -1933,6 +1933,7 @@ fn native_hidden_control_journeys() {
         "engineExport",
         "mergeHdr",
         "cullReview",
+        "ratingsPersistence",
         "ipc",
         "stalePreview",
         "cache",
@@ -2410,6 +2411,59 @@ fn native_hidden_control_journeys() {
                         .expect("HDR fixture source must have a recorded initial hash");
                     assert_eq!(&source_fingerprint(path), expected, "HDR source bytes must remain unchanged for {label}");
                 }
+            } else if name == "ratingsPersistence" {
+                let source_bytes = fs::read(&inputs.png).expect("rating source must be readable");
+                let mut photo_id = 0;
+                let mut library_path = String::new();
+                let assert_rendered_rating = |control: &rightkit_qa::control::Control| {
+                    control.key("G").expect("ratings library route must open");
+                    wait_for_dom(control, "return document.querySelector('.lc-library-workspace') !== null;");
+                    enable_grid_info(control);
+                    wait_for_dom(control, "return document.querySelector('.lc-photo-cell.is-active .lc-photo-stars')?.textContent === '★★★★★' && document.querySelector('.lc-photo-cell.is-active .lc-badge-reject')?.getAttribute('title') === 'Rejected';");
+                    wait_for_rendered_preview(control, ".lc-photo-cell.is-active img.lc-photo-preview", None);
+                    wait_for_dom(control, "return document.querySelector('.lc-filmstrip-item.is-active .lc-filmstrip-meta span[aria-label]')?.getAttribute('aria-label') === '5 stars, rejected' && document.querySelector('.lc-filmstrip-item.is-active .lc-filmstrip-meta')?.textContent?.includes('× 5★');");
+                    wait_for_rendered_preview(control, ".lc-filmstrip-item.is-active img.lc-filmstrip-preview", None);
+                };
+                with_control(&binary, scenario, &inputs.catalog, |control, _data| {
+                    let imported = import_file(control, &inputs.png);
+                    photo_id = imported["active"].as_u64().expect("rating import must select photo");
+                    library_path = imported["libraryPath"].as_str().expect("rating catalog path must be exposed").to_string();
+                    control.key("G").expect("rating library route must open");
+                    wait_for_dom(control, "return document.querySelector('.lc-library-workspace') !== null;");
+                    enable_grid_info(control);
+                    wait_for_rendered_preview(control, ".lc-photo-cell.is-active img.lc-photo-preview", None);
+                    let cell = control.eval("return (() => { const rect = document.querySelector('.lc-photo-cell.is-active')?.getBoundingClientRect(); return rect ? {x: rect.x + rect.width / 2, y: rect.y + rect.height / 2} : null; })();")
+                        .expect("active photo native context menu coordinates must be readable");
+                    control.click(cell["x"].as_f64().expect("photo x required"), cell["y"].as_f64().expect("photo y required"), "right", 1)
+                        .expect("native right click must open photo context menu");
+                    click_dom(control, ".lc-menu-rating button[aria-label='5 stars']", "native pointer must choose five stars");
+                    wait_for_dom(control, "return document.querySelector('.lc-photo-cell.is-active .lc-photo-stars')?.textContent === '★★★★★' && document.querySelector('.lc-menu-rating') === null;");
+                    control.key("X").expect("supported reject shortcut must execute");
+                    let rated = run(control, "photo.inspect", json!({"id": photo_id}));
+                    assert_eq!(rated["rating"], 5);
+                    assert_eq!(rated["flag"], "reject");
+                    control.key(if cfg!(target_os = "macos") { "Cmd+Z" } else { "Ctrl+Z" }).expect("rating journey undo must execute");
+                    let undone = run(control, "photo.inspect", json!({"id": photo_id}));
+                    assert_eq!(undone["rating"], 5);
+                    assert_eq!(undone["flag"], "none", "undo must remove reject while preserving five stars");
+                    control.key(if cfg!(target_os = "macos") { "Cmd+Shift+Z" } else { "Ctrl+Shift+Z" }).expect("rating journey redo must execute");
+                    let redone = run(control, "photo.inspect", json!({"id": photo_id}));
+                    assert_eq!(redone["rating"], 5);
+                    assert_eq!(redone["flag"], "reject");
+                    assert!(control.command("lc_run", &json!({"id": "photo.rate", "params": {"rating": 7, "ids": [photo_id]}})).is_err(), "rating seven must fail");
+                    assert_eq!(run(control, "photo.inspect", json!({"id": photo_id})), redone, "invalid rating must preserve complete photo state");
+                    assert_rendered_rating(control);
+                });
+                with_control(&binary, scenario, &inputs.catalog, |control, _data| {
+                    let reopened = control.command("lc_native", &json!({"action": "openLibrary", "params": {"path": library_path}})).expect("ratings catalog must reopen after process restart");
+                    assert_eq!(reopened["path"].as_str(), Some(library_path.as_str()));
+                    run(control, "library.select", json!({"ids": [photo_id], "active": photo_id, "mode": "replace"}));
+                    let persisted = run(control, "photo.inspect", json!({"id": photo_id}));
+                    assert_eq!(persisted["rating"], 5);
+                    assert_eq!(persisted["flag"], "reject");
+                    assert_rendered_rating(control);
+                });
+                assert_eq!(fs::read(&inputs.png).expect("rating source must remain readable"), source_bytes);
             } else if name == "catalogRecovery" {
                 run_catalog_recovery(&binary, scenario, &inputs.catalog, &inputs.png, &baseline_capture, &revision, &installed_hash);
             } else {
