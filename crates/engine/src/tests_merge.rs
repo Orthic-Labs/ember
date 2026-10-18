@@ -69,6 +69,25 @@ fn hdr_merge_command_creates_and_imports_a_dng() {
     assert_eq!(s.undo.len(), undo_before, "reusing merge content added an undo step");
     assert_eq!(s.develop_of(id).unwrap().as_ref(), &edited, "reusing merge content changed edits");
     assert_eq!(s.catalog.stack_of(id), Some(&stack_before), "reusing merge content changed stack");
+
+    // A matching Local result is reused & promoted into the library as one undoable catalog op.
+    s.commit("Mark Local", lightcraft_catalog::Op::SetLocal { id, local: true }).unwrap();
+    assert!(s.catalog.photo(id).unwrap().local);
+    let local_undo_before = s.undo.len();
+    let r3 = s.execute("merge.hdr", &json!({"ids": ids, "autoSettings": true, "stack": true})).unwrap();
+    assert_eq!(r3["id"].as_u64(), Some(id.0));
+    assert_eq!(r3["path"].as_str(), Some(path));
+    assert!(!s.catalog.photo(id).unwrap().local);
+    assert_eq!(s.catalog.photos().count(), 4, "repeat merge duplicated the Local result");
+    assert_eq!(s.undo.len(), local_undo_before + 1, "promotion should be undoable");
+    assert_eq!(s.develop_of(id).unwrap().as_ref(), &edited, "promoting merge result changed edits");
+    assert_eq!(s.catalog.stack_of(id), Some(&stack_before), "promoting merge result changed stack");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.catalog.photo(id).unwrap().local, "undo should restore Local status");
+    assert_eq!(s.develop_of(id).unwrap().as_ref(), &edited, "undoing promotion changed edits");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(!s.catalog.photo(id).unwrap().local, "redo should restore library status");
+    assert_eq!(s.develop_of(id).unwrap().as_ref(), &edited, "redoing promotion changed edits");
     // the type filter finds merge results (and only them)
     s.execute("library.filter", &json!({"merged": "hdr"})).unwrap();
     let found: std::collections::HashSet<_> = s.catalog.query(&s.filter, &Default::default()).into_iter().collect();

@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use lightcraft_catalog::{PhotoId, Source};
+use lightcraft_catalog::{Op, PhotoId, Source};
 use lightcraft_develop::DevelopSettings;
 use lightcraft_merge::pano::MAX_MEGAPIXELS;
 use lightcraft_merge::{Deghost, Frame, HdrOptions, PanoOptions, Projection};
@@ -446,7 +446,7 @@ impl Session {
                 Some(read) => read(path).ok(),
                 None => std::fs::read(path).ok(),
             };
-            bytes.is_some_and(|bytes| lightcraft_preview::hash_bytes(&bytes).to_string() == output_hash).then(|| (p.id, path.clone()))
+            bytes.is_some_and(|bytes| lightcraft_preview::hash_bytes(&bytes).to_string() == output_hash).then(|| (p.id, path.clone(), p.local))
         });
         // A missing or deleted catalog row still owns its path. Do not let a new merge
         // publish there: import may otherwise restore that row instead of adding this result.
@@ -458,8 +458,8 @@ impl Session {
                 _ => None,
             })
             .collect();
-        let (id, path, reused) = if let Some((id, path)) = valid_existing {
-            (id, path, true)
+        let (id, path, reused, promote_local) = if let Some((id, path, local)) = valid_existing {
+            (id, path, true, local)
         } else {
             // A new file under a free name (never replacing one), complete and synced before it appears.
             let mut names = output_names(first, job.kind.suffix())
@@ -494,7 +494,7 @@ impl Session {
                 }
             };
             if let Some(id) = report.imported.first().copied().map(PhotoId) {
-                (id, path, false)
+                (id, path, false, false)
             } else {
                 if !catalog_owns_path(self, &path) {
                     remove_merge_output(&path);
@@ -502,6 +502,9 @@ impl Session {
                 return Err(EngineError::Other(format!("the merged file {path} could not be imported: {:?}", report.failed)));
             }
         };
+        if promote_local {
+            self.commit("Add to My Photos", Op::SetLocal { id, local: false })?;
+        }
         if !reused && job.finish.stack {
             let sources: Vec<PhotoId> = job.sources.iter().map(|(p, _)| *p).collect();
             if let Some(op) = self.catalog.stack_with_ops(id, &sources) {
