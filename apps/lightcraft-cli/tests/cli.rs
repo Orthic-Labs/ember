@@ -944,3 +944,211 @@ fn hdr_merge_promotes_local_result_and_recovers_from_stale_match() {
     assert!(ok, "{err}");
     assert_eq!(info[0]["result"]["photos"], 5, "unexpected orphan or lost catalog row");
 }
+
+/// Candidate CLI-process coverage for recursive duplicate import and copy persistence.
+#[test]
+fn recursive_copy_import_deduplicates_and_renders_after_reopen() {
+    let root = tmp("recursive-copy-import-e2e");
+    let _ = std::fs::remove_dir_all(&root);
+    let source = root.join("source");
+    std::fs::create_dir_all(source.join("nested/deep")).unwrap();
+    let make_png = |path: &std::path::Path, seed: u8| {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let image = lightcraft_raster::Rgba8::from_fn(48, 32, |x, y| [(x * 3) as u8, (y * 5) as u8, seed, 255]);
+        let bytes = lightcraft_codecs::encode_png(&lightcraft_codecs::EncodeImage::rgba8(&image), &Default::default()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    };
+    let first = source.join("one.png");
+    let second = source.join("nested/one.png");
+    let third = source.join("nested/deep/three.PNG");
+    let duplicate = source.join("nested/copy.png");
+    make_png(&first, 91);
+    make_png(&second, 173);
+    make_png(&third, 217);
+    std::fs::copy(&first, &duplicate).unwrap();
+    std::fs::create_dir_all(source.join(".hidden")).unwrap();
+    make_png(&source.join(".hidden/hidden.png"), 33);
+    std::fs::write(source.join("notes.txt"), b"not an image").unwrap();
+    std::fs::write(source.join("nested/broken.jpg"), b"not a JPEG").unwrap();
+    let source_first = std::fs::read(&first).unwrap();
+    let source_second = std::fs::read(&second).unwrap();
+    let source_third = std::fs::read(&third).unwrap();
+    let source_duplicate = std::fs::read(&duplicate).unwrap();
+    let library = root.join("library");
+
+    let write_script = |name: &str, commands: &[Value]| {
+        let path = root.join(name);
+        let contents = commands.iter().map(Value::to_string).collect::<Vec<_>>().join("\n") + "\n";
+        std::fs::write(&path, contents).unwrap();
+        path
+    };
+    let run_script = |script: &std::path::Path| {
+        let output = Command::new(BIN).args(["run", "--library"]).arg(&library).args(["--script"]).arg(script).output().unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let lines: Vec<Value> = stdout.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+        assert!(output.status.success(), "{}\n{stdout}", String::from_utf8_lossy(&output.stderr));
+        assert!(lines.iter().all(|line| line["ok"] == true), "{lines:?}");
+        lines
+    };
+
+    let import_paths = json!([source.to_string_lossy()]);
+    let no_library_script =
+        write_script("copy-without-library.jsonl", &[json!({"command":"library.import", "params":{"paths":import_paths.clone(),"mode":"copy"}})]);
+    let no_library = Command::new(BIN).args(["run", "--script"]).arg(&no_library_script).output().unwrap();
+    let no_library_stdout = String::from_utf8_lossy(&no_library.stdout);
+    assert!(!no_library.status.success(), "copy import without a library unexpectedly succeeded: {no_library_stdout}");
+    assert!(no_library_stdout.contains("needs a destination folder or an open library"), "{no_library_stdout}");
+    let add_script = write_script(
+        "add.jsonl",
+        &[
+            json!({"command":"library.import", "params":{"paths":import_paths.clone()}}),
+            json!({"command":"photo.inspect"}),
+            json!({"command":"catalog.query", "params":{"limit":20}}),
+            json!({"command":"library.import", "params":{"paths":import_paths.clone()}}),
+            json!({"command":"catalog.query", "params":{"limit":20}}),
+            json!({"command":"edit.undo"}),
+            json!({"command":"catalog.query", "params":{"limit":20}}),
+            json!({"command":"edit.redo"}),
+            json!({"command":"catalog.query", "params":{"limit":20}}),
+        ],
+    );
+    let add_output = Command::new(BIN).args(["run", "--script"]).arg(&add_script).output().unwrap();
+    let add_stdout = String::from_utf8_lossy(&add_output.stdout);
+    let add: Vec<Value> = add_stdout.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+    assert!(add_output.status.success(), "{}\n{add_stdout}", String::from_utf8_lossy(&add_output.stderr));
+    assert!(add.iter().all(|line| line["ok"] == true), "{add:?}");
+    assert_eq!(add[0]["result"]["scanned"], 5, "{add:?}");
+    assert_eq!(add[0]["result"]["imported"].as_array().unwrap().len(), 3, "{add:?}");
+    assert_eq!(add[0]["result"]["duplicates"].as_array().unwrap().len(), 1, "{add:?}");
+    assert_eq!(add[0]["result"]["duplicates"][0]["reason"], "content", "{add:?}");
+    assert_eq!(add[0]["result"]["failed"].as_array().unwrap().len(), 1, "{add:?}");
+    let added_path = std::path::PathBuf::from(add[1]["result"]["source"]["path"].as_str().unwrap());
+    assert!(added_path.starts_with(&source) && added_path.is_file(), "default Add should reference source: {}", added_path.display());
+    assert_eq!(add[1]["result"]["width"], 48);
+    assert_eq!(add[1]["result"]["height"], 32);
+    assert_eq!(add[2]["result"]["total"], 3);
+    assert_eq!(add[3]["result"]["imported"].as_array().unwrap().len(), 0, "{add:?}");
+    let add_repeat_duplicates = add[3]["result"]["duplicates"].as_array().unwrap();
+    assert_eq!(add_repeat_duplicates.len(), 4, "{add:?}");
+    assert_eq!(add_repeat_duplicates.iter().filter(|duplicate| duplicate["reason"] == "path").count(), 3, "{add:?}");
+    assert_eq!(add_repeat_duplicates.iter().filter(|duplicate| duplicate["reason"] == "content").count(), 1, "{add:?}");
+    assert_eq!(add[3]["result"]["failed"].as_array().unwrap().len(), 1, "{add:?}");
+    assert_eq!(add[4]["result"]["total"], 3);
+    assert_eq!(add[6]["result"]["total"], 0, "{add:?}");
+    assert_eq!(add[8]["result"]["total"], 3, "{add:?}");
+    assert_eq!(std::fs::read(&first).unwrap(), source_first);
+    assert_eq!(std::fs::read(&second).unwrap(), source_second);
+    assert_eq!(std::fs::read(&third).unwrap(), source_third);
+    assert_eq!(std::fs::read(&duplicate).unwrap(), source_duplicate);
+    let first_script = write_script(
+        "import.jsonl",
+        &[
+            json!({"command":"library.import", "params":{"paths":import_paths.clone(),"mode":"copy"}}),
+            json!({"command":"catalog.query", "params":{"limit":20}}),
+            json!({"command":"library.info"}),
+            json!({"command":"library.import", "params":{"paths":import_paths.clone(),"mode":"copy"}}),
+            json!({"command":"catalog.query", "params":{"limit":20}}),
+            json!({"command":"library.info"}),
+            json!({"command":"edit.undo"}),
+            json!({"command":"catalog.query", "params":{"limit":20}}),
+            json!({"command":"edit.redo"}),
+            json!({"command":"catalog.query", "params":{"limit":20}}),
+        ],
+    );
+    let initial = run_script(&first_script);
+    let report = &initial[0]["result"];
+    assert_eq!(report["scanned"], 5, "hidden and nonimage files are ignored; invalid supported image is counted: {initial:?}");
+    assert_eq!(report["imported"].as_array().unwrap().len(), 3, "{initial:?}");
+    assert_eq!(report["duplicates"].as_array().unwrap().len(), 1, "{initial:?}");
+    assert_eq!(report["duplicates"][0]["reason"], "content", "{initial:?}");
+    assert_eq!(report["failed"].as_array().unwrap().len(), 1, "{initial:?}");
+    assert_eq!(initial[1]["result"]["total"], 3);
+    assert_eq!(initial[2]["result"]["photos"], 3);
+    assert_eq!(initial[3]["result"]["imported"].as_array().unwrap().len(), 0, "{initial:?}");
+    assert_eq!(initial[3]["result"]["duplicates"].as_array().unwrap().len(), 4, "{initial:?}");
+    assert!(initial[3]["result"]["duplicates"].as_array().unwrap().iter().all(|duplicate| duplicate["reason"] == "content"), "{initial:?}");
+    assert_eq!(initial[3]["result"]["failed"].as_array().unwrap().len(), 1, "{initial:?}");
+    assert_eq!(initial[4]["result"]["total"], 3);
+    assert_eq!(initial[5]["result"]["photos"], 3);
+    assert_eq!(initial[7]["result"]["total"], 0, "undo should remove initial import as one step: {initial:?}");
+    assert_eq!(initial[9]["result"]["total"], 3, "redo should restore initial import: {initial:?}");
+    let photos = initial[1]["result"]["photos"].as_array().unwrap();
+    let ids: Vec<u64> = photos.iter().map(|photo| photo["id"].as_u64().unwrap()).collect();
+    assert_eq!(ids.len(), 3);
+
+    let inspect_script =
+        write_script("inspect.jsonl", &ids.iter().map(|id| json!({"command":"photo.inspect", "params":{"id":id}})).collect::<Vec<_>>());
+    let inspected = run_script(&inspect_script);
+    let originals = library.join("Originals");
+    let mut imported_bytes = Vec::new();
+    let mut imported_paths = Vec::new();
+    for line in &inspected {
+        let path = std::path::PathBuf::from(line["result"]["source"]["path"].as_str().unwrap());
+        assert!(path.starts_with(&originals), "copy import escaped Originals: {}", path.display());
+        assert!(path.is_file(), "copied original missing: {}", path.display());
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(bytes == source_first || bytes == source_second || bytes == source_third, "unexpected imported bytes at {}", path.display());
+        assert_eq!(line["result"]["width"], 48);
+        assert_eq!(line["result"]["height"], 32);
+        assert_eq!(line["result"]["content_hash"].as_str().unwrap().len(), 32);
+        imported_paths.push(path);
+        imported_bytes.push(bytes);
+    }
+    imported_paths.sort();
+    assert_eq!(imported_paths.iter().collect::<std::collections::HashSet<_>>().len(), 3, "same-basename sources need distinct safe library paths");
+    imported_bytes.sort();
+    let mut expected_bytes = vec![source_first.clone(), source_second.clone(), source_third.clone()];
+    expected_bytes.sort();
+    assert_eq!(imported_bytes, expected_bytes, "copied images must stay byte-identical");
+    assert_eq!(std::fs::read(&duplicate).unwrap(), source_duplicate, "import changed source duplicate");
+    assert_eq!(std::fs::read(&first).unwrap(), source_first, "import changed first source");
+    assert_eq!(std::fs::read(&second).unwrap(), source_second, "import changed second source");
+    assert_eq!(std::fs::read(&third).unwrap(), source_third, "import changed third source");
+
+    let repeat_script = write_script(
+        "repeat.jsonl",
+        &[
+            json!({"command":"library.import", "params":{"paths":import_paths.clone(),"mode":"copy"}}),
+            json!({"command":"catalog.query", "params":{"limit":20}}),
+            json!({"command":"library.info"}),
+        ],
+    );
+    let repeat = run_script(&repeat_script);
+    assert_eq!(repeat[0]["result"]["imported"].as_array().unwrap().len(), 0, "{repeat:?}");
+    assert_eq!(
+        repeat[0]["result"]["duplicates"].as_array().unwrap().len(),
+        4,
+        "copied records point at Originals, so each source path deduplicates by content: {repeat:?}"
+    );
+    assert!(repeat[0]["result"]["duplicates"].as_array().unwrap().iter().all(|duplicate| duplicate["reason"] == "content"), "{repeat:?}");
+    assert_eq!(repeat[0]["result"]["failed"].as_array().unwrap().len(), 1, "invalid supported image remains a failure on repeat: {repeat:?}");
+    assert_eq!(repeat[1]["result"]["total"], 3);
+    assert_eq!(repeat[2]["result"]["photos"], 3);
+
+    std::fs::remove_dir_all(&source).unwrap();
+    let exports = [root.join("first.png"), root.join("second.png"), root.join("third.png")];
+    let mut reopen_commands = vec![json!({"command":"catalog.query", "params":{"limit":20}})];
+    reopen_commands.push(json!({"command":"library.import", "params":{"paths":[library.to_string_lossy()],"mode":"copy"}}));
+    for (id, output) in ids.iter().zip(&exports) {
+        reopen_commands.push(json!({"command":"library.select", "params":{"ids":[id]}}));
+        reopen_commands.push(json!({"command":"app.export", "params":{"path":output.to_string_lossy(),"longEdge":48,"format":"png"}}));
+    }
+    reopen_commands.push(json!({"command":"library.info"}));
+    let reopen_script = write_script("reopen-export.jsonl", &reopen_commands);
+    let reopened = run_script(&reopen_script);
+    assert_eq!(reopened[0]["result"]["total"], 3, "fresh process did not reopen catalog rows: {reopened:?}");
+    assert_eq!(reopened[1]["result"]["scanned"], 0, "library directory should not be recursively re-imported: {reopened:?}");
+    assert_eq!(reopened.last().unwrap()["result"]["photos"], 3);
+    let mut rendered = Vec::new();
+    for (index, output) in exports.iter().enumerate() {
+        let exported = &reopened[3 + index * 2]["result"];
+        assert_eq!(exported["path"], output.to_string_lossy().as_ref(), "{reopened:?}");
+        assert_eq!((exported["width"].as_u64(), exported["height"].as_u64()), (Some(48), Some(32)), "{reopened:?}");
+        assert!(output.is_file(), "missing rendered export: {}", output.display());
+        let decoded = lightcraft_codecs::decode(&std::fs::read(output).unwrap(), Default::default()).unwrap();
+        assert_eq!((decoded.width, decoded.height), (48, 32));
+        rendered.push(decoded.to_srgb8().data);
+    }
+    assert_eq!(rendered.iter().collect::<std::collections::HashSet<_>>().len(), 3, "each retained source should render its own pixel content");
+    std::fs::remove_dir_all(&root).unwrap();
+}
