@@ -380,32 +380,18 @@ impl Session {
     pub fn finish_merge(&mut self, job: &MergeJob, out: MergeOutput) -> Result<Value> {
         let first = &job.sources.first().ok_or_else(|| EngineError::Other("nothing merged".into()))?.1;
         let output_hash = lightcraft_preview::hash_bytes(&out.dng).to_string();
-        // Import deduplicates by content. Reuse an existing merge only while its live source has
-        // matching bytes; stale, missing or deleted rows fail before another file is published.
-        let candidates: Vec<(PhotoId, String, bool, bool)> = self
-            .catalog
-            .photos()
-            .filter_map(|p| {
-                if p.content_hash.as_deref() != Some(output_hash.as_str()) {
-                    return None;
-                }
-                let Source::File { path } = &p.source else { return None };
-                Some((p.id, path.clone(), p.deleted, p.local))
-            })
-            .collect();
-        let valid_existing = candidates
-            .iter()
-            .find(|(_, path, deleted, _)| {
-                if *deleted {
-                    return false;
-                }
-                let bytes = match &self.media.file_bytes {
-                    Some(read) => read(path).ok(),
-                    None => std::fs::read(path).ok(),
-                };
-                bytes.is_some_and(|bytes| lightcraft_preview::hash_bytes(&bytes).to_string() == output_hash)
-            })
-            .cloned();
+        // Reuse only a live catalogued result whose bytes still match the merge. A matching
+        // stored hash is not enough: its file may have been changed, moved, deleted or trashed.
+        let valid_existing = self.catalog.photos().filter(|p| !p.deleted && p.content_hash.as_deref() == Some(output_hash.as_str())).find_map(|p| {
+            let Source::File { path } = &p.source else {
+                return None;
+            };
+            let bytes = match &self.media.file_bytes {
+                Some(read) => read(path).ok(),
+                None => std::fs::read(path).ok(),
+            };
+            bytes.is_some_and(|bytes| lightcraft_preview::hash_bytes(&bytes).to_string() == output_hash).then(|| (p.id, path.clone(), p.local))
+        });
         // Missing and deleted catalog rows still own their paths. Import may restore one if a
         // newly generated merge is published there, so reserve every catalogued file path.
         let catalogued_paths: std::collections::HashSet<String> = self
@@ -416,13 +402,8 @@ impl Session {
                 _ => None,
             })
             .collect();
-        let (id, path, reused, promote_local) = if let Some((id, path, _, local)) = valid_existing {
+        let (id, path, reused, promote_local) = if let Some((id, path, local)) = valid_existing {
             (id, path, true, local)
-        } else if let Some((id, path, deleted, _)) = candidates.first() {
-            let state = if *deleted { "deleted" } else { "missing or changed" };
-            return Err(EngineError::Other(format!(
-                "existing merge result {id:?} has a {state} source at {path}; relink or remove it before repeating the merge"
-            )));
         } else {
             // A new file under a free name (never replacing one), complete and synced before it appears.
             let mut names = output_names(first, job.kind.suffix())
@@ -431,11 +412,27 @@ impl Session {
                 .map_err(|e| EngineError::Other(format!("could not write the merged DNG next to {first}: {e}")))?
                 .to_string_lossy()
                 .to_string();
-            let report = match crate::import::import(self, std::slice::from_ref(&path), crate::import::ImportMode::Add) {
+            // Generic imports deduplicate by stored content hash. For this generated result,
+            // prepare with Local's no-content-dedup scan behavior, then commit as a library photo.
+            // The unique output path still goes through normal path checks; old rows stay intact.
+            let mut opts = crate::import::ImportOptions { mode: crate::import::ImportMode::Add, local: true, ..Default::default() };
+            let probes = std::mem::take(&mut self.import_probes);
+            let mut import_job = match crate::import::ImportJob::new(self, opts.clone()) {
+                Ok(job) => job,
+                Err(e) => {
+                    self.import_probes = probes;
+                    remove_merge_output(&path);
+                    return Err(e);
+                }
+            };
+            self.import_probes = probes;
+            let prepared = import_job.prepare(std::slice::from_ref(&path), &std::sync::atomic::AtomicBool::new(false));
+            opts.local = false;
+            let report = match crate::import::commit_prepared(self, &opts, import_job.now(), prepared) {
                 Ok(report) => report,
                 Err(e) => {
                     if !catalog_owns_path(self, &path) {
-                        let _ = std::fs::remove_file(&path);
+                        remove_merge_output(&path);
                     }
                     return Err(e);
                 }
@@ -444,7 +441,7 @@ impl Session {
                 (id, path, false, false)
             } else {
                 if !catalog_owns_path(self, &path) {
-                    let _ = std::fs::remove_file(&path);
+                    remove_merge_output(&path);
                 }
                 return Err(EngineError::Other(format!("the merged file {path} could not be imported: {:?}", report.failed)));
             }
@@ -483,4 +480,8 @@ impl Session {
         let out = job.run(&|_, _| true).map_err(EngineError::Other)?;
         self.finish_merge(&job, out)
     }
+}
+
+fn remove_merge_output(path: &str) {
+    let _ = crate::rename::MoveFs::remove_file(&crate::rename::RealFs, std::path::Path::new(path));
 }
