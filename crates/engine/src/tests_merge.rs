@@ -111,6 +111,7 @@ fn hdr_merge_fresh_imports_when_matching_stored_hash_has_stale_source() {
         let old_id = lightcraft_catalog::PhotoId(first["id"].as_u64().unwrap());
         let old_path = first["path"].as_str().unwrap().to_string();
         let old_hash = s.catalog.photo(old_id).unwrap().content_hash.clone();
+        assert!(old_hash.is_some(), "{stale}: initial result should have a stored content hash");
         s.execute("develop.set", &json!({"control": "light.exposure", "value": 0.73})).unwrap();
         let edited = s.develop_of(old_id).unwrap().as_ref().clone();
         let stack_before = s.catalog.stack_of(old_id).cloned();
@@ -135,7 +136,7 @@ fn hdr_merge_fresh_imports_when_matching_stored_hash_has_stale_source() {
         let sentinel_probe = format!("probe-sentinel-{stale}");
         s.import_probes.insert(sentinel_probe.clone(), Default::default());
 
-        let fresh = s.execute("merge.hdr", &json!({"ids": ids, "autoSettings": false, "stack": true})).unwrap();
+        let fresh = s.execute("merge.hdr", &json!({"ids": ids, "autoSettings": false, "stack": false})).unwrap();
         let fresh_id = lightcraft_catalog::PhotoId(fresh["id"].as_u64().unwrap());
         let fresh_path = fresh["path"].as_str().unwrap().to_string();
         assert_ne!(fresh_id, old_id, "{stale}");
@@ -143,6 +144,7 @@ fn hdr_merge_fresh_imports_when_matching_stored_hash_has_stale_source() {
         assert!(std::path::Path::new(&fresh_path).is_file(), "{stale}");
         let old = s.catalog.photo(old_id).unwrap();
         assert_eq!(old.content_hash, old_hash, "{stale}: retained the stored hash");
+        assert_eq!(s.catalog.photo(fresh_id).unwrap().content_hash, old_hash, "{stale}: fresh bytes should match old stored hash");
         assert_eq!(old.deleted, stale == "trashed", "{stale}: stale catalog row changed");
         assert!(!s.catalog.photo(fresh_id).unwrap().local, "{stale}: generated result must be a library photo");
         assert!(s.import_probes.contains_key(&sentinel_probe), "{stale}: unrelated import probe was lost");
@@ -154,10 +156,8 @@ fn hdr_merge_fresh_imports_when_matching_stored_hash_has_stale_source() {
             ("missing", None) => assert!(!std::path::Path::new(&old_path).exists()),
             _ => unreachable!(),
         }
-        assert!(s.catalog.stack_of(fresh_id).is_some(), "{stale}: fresh result should be stacked");
-
         let photo_count = s.catalog.photos().count();
-        let repeated = s.execute("merge.hdr", &json!({"ids": ids, "autoSettings": true, "stack": true})).unwrap();
+        let repeated = s.execute("merge.hdr", &json!({"ids": ids, "autoSettings": true, "stack": false})).unwrap();
         assert_eq!(repeated["id"].as_u64(), Some(fresh_id.0), "{stale}: live fresh result should be reused");
         assert_eq!(repeated["path"].as_str(), Some(fresh_path.as_str()), "{stale}");
         assert_eq!(s.catalog.photos().count(), photo_count, "{stale}: repeat merge duplicated the fresh result");
