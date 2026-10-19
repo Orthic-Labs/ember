@@ -285,6 +285,11 @@ fn read_state(dir: &Path) -> Option<State> {
 }
 
 /// Save atomically: write beside, then rename over.
+///
+/// The temp file is named here (not by `rightkit_fs::AtomicWriter`) because candle's `VarMap::save` writes the file itself,
+/// by path, and offers no writer to stream into. The finished file is then published with `rightkit_fs::publish_file`
+/// (synced, replace, folder synced), so the checkpoint name never holds a partial file. A save that fails or is killed leaves
+/// only this `.tmp` beside it, which the next save of the same checkpoint overwrites.
 fn save_atomic(varmap: &VarMap, path: &Path) -> Result<()> {
     let tmp = path.with_extension("safetensors.tmp");
     varmap.save(&tmp)?;

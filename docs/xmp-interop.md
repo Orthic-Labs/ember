@@ -59,7 +59,7 @@ the only copy of those edits outside that application's catalog. Saving never dr
   `rdf:Description` of their own; owned properties written by another application (in attribute or element form) are
   removed from its description, which otherwise stays as it was.
 - A sidecar that can't be read as XMP (not well-formed, not UTF-8, no `rdf:RDF`) is first copied to
-  `<name>.xmp.bak-<date><time>` (`-1`, `-2`… if taken — a backup is never overwritten), then replaced. A sidecar that
+  `<name>.xmp.bak-<date><time>` (`<name>.xmp (1).bak-<date><time>`, `(2)`… if taken — a backup is never overwritten), then replaced. A sidecar that
   can't be read at all (permissions) is left alone and the save fails.
 
 Limits: Ember writes keywords to `dc:subject` only, so another application's `lr:hierarchicalSubject` is kept as

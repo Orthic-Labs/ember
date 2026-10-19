@@ -510,14 +510,18 @@ mod tests {
         // current selection rather than restoring a stale start-of-task snapshot.
         assert!(session.execute("library.select", &json!({"ids": [], "mode": "replace"})).is_ok());
         let selected = session.selection.clone();
-        for _ in 0..2_000 {
+        // The import and the preview build it queues make durable writes; a hosted Windows runner needs seconds for
+        // them, so wait on a deadline rather than a fixed number of polls.
+        let deadline = Instant::now() + Duration::from_secs(90);
+        while Instant::now() < deadline {
             tasks.poll(&mut session);
             if !tasks.running() {
                 break;
             }
-            std::thread::sleep(Duration::from_millis(1));
+            std::thread::sleep(Duration::from_millis(5));
         }
-        assert!(!tasks.running(), "auto import should finish");
+        let still_running: Vec<String> = tasks.statuses().iter().map(|job| job.kind.clone()).collect();
+        assert!(!tasks.running(), "auto import should finish; still running: {still_running:?}");
         assert_eq!(session.catalog.len(), 2);
         assert_eq!(session.selection, selected);
         let _ = fs::remove_file(seed);

@@ -20,12 +20,19 @@ export function BackgroundActivity() {
     catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setCancelling((current) => current.filter((value) => value !== id)); }
   };
+  // WebKit does not focus a button on click, so Popover's opener is body; hand focus back to the trigger ourselves when
+  // focus was lost or is inside the panel (never when the user pressed elsewhere).
+  const closePanel = () => {
+    const active = document.activeElement;
+    if (!active || active === document.body || active.closest('#lc-background-jobs')) trigger.current?.focus({ preventScroll: true });
+    setOpen(false);
+  };
   return <div className="lc-background-activity">
     <Button ref={trigger} size="sm" variant="ghost" aria-expanded={open} aria-controls="lc-background-jobs" aria-label={t('Background activity')} onClick={() => setOpen((value) => !value)}>
       {jobs.length > 0 && <span className="lc-job-indicator" aria-hidden="true" />}
       {t('Tasks')}{jobs.length > 0 && <span className="lc-job-count">{jobs.length}</span>}
     </Button>
-    {open && <Popover anchor={trigger.current} label={t('Background activity')} placement="bottom-end" width={360} onClose={() => setOpen(false)}>
+    {open && <Popover anchor={trigger.current} label={t('Background activity')} placement="bottom-end" width={360} onClose={closePanel}>
       <div id="lc-background-jobs" className="lc-background-jobs">
       <h2>{t('Background activity')}</h2>
       {jobs.length === 0 && <p>{t('No tasks running.')}</p>}

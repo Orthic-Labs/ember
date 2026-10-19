@@ -64,7 +64,7 @@ fn hdr_merge_command_creates_and_imports_a_dng() {
     let r2 = s.execute("merge.hdr", &json!({"ids": ids, "autoSettings": true, "stack": true})).unwrap();
     assert_eq!(r2["id"].as_u64(), Some(id.0));
     assert_eq!(r2["path"].as_str(), Some(path));
-    assert!(!dir.join("IMG_0-HDR-2.dng").exists(), "duplicate merge left an orphan");
+    assert!(!dir.join("IMG_0-HDR (1).dng").exists(), "duplicate merge left an orphan");
     assert_eq!(s.catalog.photos().count(), 4);
     assert_eq!(s.undo.len(), undo_before, "reusing merge content added an undo step");
     assert_eq!(s.develop_of(id).unwrap().as_ref(), &edited, "reusing merge content changed edits");
@@ -140,7 +140,7 @@ fn hdr_merge_fresh_imports_when_matching_stored_hash_has_stale_source() {
         let fresh_id = lightcraft_catalog::PhotoId(fresh["id"].as_u64().unwrap());
         let fresh_path = fresh["path"].as_str().unwrap().to_string();
         assert_ne!(fresh_id, old_id, "{stale}");
-        assert_eq!(fresh_path, dir.join("IMG_0-HDR-2.dng").to_string_lossy(), "{stale}");
+        assert_eq!(fresh_path, dir.join("IMG_0-HDR (1).dng").to_string_lossy(), "{stale}");
         assert!(std::path::Path::new(&fresh_path).is_file(), "{stale}");
         let old = s.catalog.photo(old_id).unwrap();
         assert_eq!(old.content_hash, old_hash, "{stale}: retained the stored hash");

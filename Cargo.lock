@@ -4625,8 +4625,10 @@ version = "0.7.0"
 dependencies = [
  "eframe",
  "egui",
+ "getrandom 0.3.4",
  "lightcraft-codecs",
  "lightcraft-engine",
+ "lightcraft-mcp",
  "lightcraft-raster",
  "lightcraft-sysmem",
  "lightcraft-ui-egui",
@@ -4996,6 +4998,7 @@ dependencies = [
  "lightcraft-engine",
  "lightcraft-raster",
  "log",
+ "rightkit-fs",
  "serde_json",
 ]
 

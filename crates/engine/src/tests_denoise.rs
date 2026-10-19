@@ -140,6 +140,58 @@ fn failed_model_replacement_preserves_the_installed_model() {
     let _ = std::fs::remove_dir_all(x.dir);
 }
 
+/// The model's folder holds exactly `names` (no staged temp file, no scratch file).
+fn folder_names(home: &Path) -> Vec<String> {
+    let mut v: Vec<String> =
+        std::fs::read_dir(home).map(|d| d.flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect()).unwrap_or_default();
+    v.sort();
+    v
+}
+
+#[test]
+fn a_model_that_fails_its_check_never_appears_at_its_final_name() {
+    let mut x = setup("rejected", false);
+    let home = x.dir.join("denoise-models/stand-in");
+    // refused by the loader (the self-test stage of the check)
+    x.s.denoise.loader = Arc::new(|_, _| Err("this does not load".to_string()));
+    let source = model_files(&x.dir, "stand-in");
+    assert!(x.s.execute("denoise.models.install", &json!({"path": source, "acknowledged": true})).is_err());
+    assert!(!home.join("model.onnx").exists(), "{:?}", folder_names(&home));
+    assert!(folder_names(&home).is_empty(), "no staged file left: {:?}", folder_names(&home));
+    // a file that is not the one its description names (the hash stage of the check)
+    let mut m = manifest("stand-in");
+    m.sha256 = Some("0".repeat(64));
+    std::fs::write(source.with_file_name("denoise-model.json"), serde_json::to_vec(&m).unwrap()).unwrap();
+    x.s.denoise.loader = dim_loader(&x.runs);
+    let e = x.s.execute("denoise.models.install", &json!({"path": source, "acknowledged": true})).unwrap_err();
+    assert!(e.to_string().contains("SHA-256"), "{e}");
+    assert!(!home.join("model.onnx").exists());
+    assert!(folder_names(&home).is_empty(), "no staged file left: {:?}", folder_names(&home));
+    assert_eq!(std::fs::read(&source).unwrap(), std::fs::read(model_files(&x.dir, "stand-in")).unwrap(), "the source file is never touched");
+    drop(x.s);
+    let _ = std::fs::remove_dir_all(x.dir);
+}
+
+#[test]
+fn a_model_installed_while_this_one_is_checked_is_never_replaced_or_cleaned_up() {
+    let mut x = setup("raced", false);
+    let home = x.dir.join("denoise-models/stand-in");
+    let theirs = home.clone();
+    let runs = x.runs.clone();
+    // while the staged file is being checked, another installation puts its model in place
+    x.s.denoise.loader = Arc::new(move |_, _| {
+        std::fs::write(theirs.join("model.onnx"), b"the other installation's model").map_err(|e| e.to_string())?;
+        Ok(Arc::new(Dim { runs: runs.clone() }))
+    });
+    let source = model_files(&x.dir, "stand-in");
+    let e = x.s.execute("denoise.models.install", &json!({"path": source, "acknowledged": true})).unwrap_err();
+    assert!(e.to_string().contains("already installed"), "{e}");
+    assert_eq!(std::fs::read(home.join("model.onnx")).unwrap(), b"the other installation's model");
+    assert_eq!(folder_names(&home), ["model.onnx"], "no staged file left, nothing of theirs removed");
+    drop(x.s);
+    let _ = std::fs::remove_dir_all(x.dir);
+}
+
 /// A Bayer DNG that is a smooth ramp, big enough for a 64-cell tile and a second one.
 fn ramp_dng(w: usize, h: usize, cfa: &str) -> Vec<u8> {
     let data: Vec<u16> = (0..w * h).map(|i| 600 + ((i % w) * 30 + (i / w) * 35) as u16).collect();

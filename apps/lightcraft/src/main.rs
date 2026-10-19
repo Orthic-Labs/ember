@@ -14,6 +14,8 @@
 //! `--control <port>` (or `LIGHTCRAFT_CONTROL_PORT`) starts a localhost JSON-lines control server:
 //! `{"id":1,"method":"ui.inspect","params":{}}` → `{"id":1,"ok":true,"result":…}`.
 //! See `lightcraft_ui_egui::control` for the methods.
+//! Every connection must first authenticate with a per-launch secret (see `control_server` and
+//! `docs/control-protocol.md`).
 //!
 //! On Windows, every build is a GUI-subsystem program: launching the app opens no console window
 //! (issue #7). Its `--help` / `--version` output and diagnostics then have no console to go to; use
@@ -91,6 +93,8 @@ impl eframe::App for App {
         }
     }
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        // the control token belongs to this launch only
+        control_server::shutdown();
         if !self.startup_frame_pending {
             lightcraft_engine::gpu::backend::startup_succeeded();
         }
@@ -663,6 +667,7 @@ OPTIONS:
   --version, --help
 
 ENVIRONMENT:
+  LIGHTCRAFT_CONTROL_TOKEN=SECRET   (clients) control-channel secret; the app writes its own to <settings folder>/control/PORT.token
   LIGHTCRAFT_CONFIG_DIR=DIR   use this settings folder instead of the platform default (empty = no settings folder)
   LIGHTCRAFT_GPU_BACKEND=dx12|vulkan|metal|auto|off   graphics backend (default: DX12 on Windows, Metal on macOS,
                    Vulkan on Linux; off = render on the CPU); else WGPU_BACKEND. LIGHTCRAFT_GPU=0: CPU rendering.

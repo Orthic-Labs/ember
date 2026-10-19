@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Checkbox, Field, IconButton, Input, ModalShell, Notice, ProgressBar, Select } from '@rightkit/react-shell/react';
 import { useInertSiblings } from './inertSiblings';
+import { useFocusHistory, useReturnFocus } from './focusReturn';
 import { acknowledgePreview, cancelMergePreview, convertFileSrc, requestMergePreview } from '../api';
 import { useDesktop } from '../desktop';
 import { ImportCandidatePreview } from '../preview/ImportCandidatePreview';
@@ -37,6 +38,7 @@ type JobTerminal = 'done' | 'failed' | 'cancelled';
 function Frame({ title, children, actions, onClose, wide = false, busy = false, dismissible = true }: { title: string; children: React.ReactNode; actions?: React.ReactNode; onClose: () => void; wide?: boolean; busy?: boolean; dismissible?: boolean }) {
   const content = useRef<HTMLDivElement>(null);
   useInertSiblings(content);
+  useReturnFocus();
   const frame = <ModalShell label={title} labelledBy="lc-dialog-title" width={wide ? 860 : 560} onClose={onClose} dismissible={dismissible} overlayClassName="lc-dialog-backdrop" className="lc-dialog">
     <div className="lc-dialog-header"><h2 id="lc-dialog-title" className="rk-modal__title">{title}</h2>{dismissible && <IconButton label="Close" onClick={onClose}>×</IconButton>}</div>
     <div ref={content} className="lc-dialog-body">{children}</div>
@@ -768,7 +770,7 @@ function LightroomResult({ d, desktop }: { d: DialogState; desktop: DesktopConte
 }
 
 export default function DialogHost({ desktop: provided }: HostProps = {}) {
-  const hookContext = useDesktop(); const context = provided || hookContext; const { dialog } = context; if (!dialog) return null; const kind = dialog.kind.toLowerCase();
+  useFocusHistory(); const hookContext = useDesktop(); const context = provided || hookContext; const { dialog } = context; if (!dialog) return null; const kind = dialog.kind.toLowerCase();
   if (kind === 'unsavedquit') return <UnsavedQuitDialog d={dialog} desktop={context} />;
   if (kind === 'confirmdelete' || kind === 'confirm-delete') return <ConfirmDeleteDialog d={dialog} desktop={context} />;
   if (kind === 'import' || kind === 'importphotos' || kind === 'importfolder' || kind === 'importdevice') return <ImportDialog d={dialog} desktop={context} />;

@@ -128,7 +128,7 @@ fn identify(path: &Path, c: &str, sha_known: Option<&str>) -> Result<Source> {
 }
 
 /// Install the model in `src`. A model that passes its self-test becomes the one in use (`activate`, the default): installing
-/// a model is how someone says they want it. `verified` is for a download whose hash was already checked.
+/// a model is how someone says they want it.
 fn install_file(
     dir: &Path,
     loader: &crate::denoise::Loader,
@@ -137,7 +137,6 @@ fn install_file(
     c: &str,
     src: &Path,
     acknowledged: bool,
-    verified: bool,
 ) -> Result<(Value, Arc<dyn crate::denoise::Model>)> {
     let ident = identify(src, c, None)?;
     let m = ident.manifest.clone();
@@ -154,45 +153,58 @@ fn install_file(
     }
     std::fs::create_dir_all(&home).map_err(|e| fail("could not create the model's folder", e))?;
     let mut cleanup = InstallCleanup { home: home.clone(), armed: true };
-    let (part, final_path) = (home.join("model.onnx.part"), home.join("model.onnx"));
-    let _ = std::fs::remove_file(&part);
-    let placed: Result<()> = match ident.entry {
+    let final_path = home.join("model.onnx");
+    // The archive reader writes by path, so an archive's model is taken out to a scratch file first; either way the bytes are
+    // then streamed into the staged file and only a checked file is published (`install_checked`).
+    let scratch = home.join(".model-extract.tmp");
+    let from = match ident.entry {
         Some(entry) => {
-            archive::extract(src, entry, &part, MAX_MODEL_BYTES).map(|_| ()).map_err(|e| fail("could not take the model out of the archive", e))
+            let _ = std::fs::remove_file(&scratch);
+            archive::extract(src, entry, &scratch, MAX_MODEL_BYTES).map_err(|e| fail("could not take the model out of the archive", e))?;
+            scratch.clone()
         }
-        None if verified && std::fs::rename(src, &part).is_ok() => Ok(()),
-        None => std::fs::copy(src, &part).map(|_| ()).map_err(|e| fail("could not copy the model (is the disk full?)", e)),
+        None => src.to_path_buf(),
     };
-    let sha256 = placed.and_then(|_| sha256_file(&part).map_err(|e| fail("could not check the model", e))).and_then(|h| match &m.sha256 {
-        Some(want) if *want != h => Err(EngineError::Other("the model file is not the one its description names (its SHA-256 differs)".into())),
-        _ => Ok(h),
-    });
-    let sha256 = match sha256 {
-        Ok(h) => h,
-        Err(e) => {
-            let _ = std::fs::remove_file(&part);
-            return Err(e);
+    // Runs on the staged file before it can appear as model.onnx: the hash it names, then the self-test.
+    let verify = |staged: &Path| -> Result<(String, Value, Arc<dyn crate::denoise::Model>)> {
+        let h = sha256_file(staged).map_err(|e| fail("could not check the model", e))?;
+        if let Some(want) = &m.sha256
+            && *want != h
+        {
+            return Err(EngineError::Other("the model file is not the one its description names (its SHA-256 differs)".into()));
         }
+        let model = loader(staged, &m).map_err(|e| bad(c, e))?;
+        let test = model.self_test(run_on).map_err(|e| bad(c, e))?;
+        Ok((h, test, model))
     };
-    // Test the staged file first. A failed replacement preserves the installed model.
-    let model = loader(&part, &m).map_err(|e| bad(c, e))?;
-    let test = match model.self_test(run_on) {
-        Ok(t) => t,
-        Err(e) => {
-            let _ = std::fs::remove_file(&part);
-            return Err(bad(c, e));
-        }
-    };
+    let (mut verdict, mut rejected) = (None, None);
     // An installed id is immutable: installing again must never destroy a usable model. The name is taken exclusively, so a model
-    // installed meanwhile is refused here too (no check-then-rename gap).
-    if let Err(e) = crate::model_download::publish_staged(&part, &final_path, false) {
-        let _ = std::fs::remove_file(&part);
-        return Err(if e.kind() == std::io::ErrorKind::AlreadyExists {
-            bad(c, "that model is already installed; remove it before installing a replacement")
-        } else {
-            fail("could not finish the copy", e)
-        });
+    // installed meanwhile is refused too (no check-then-rename gap).
+    let outcome = crate::model_download::install_checked(&from, &final_path, false, |staged| match verify(staged) {
+        Ok(v) => {
+            verdict = Some(v);
+            Ok(())
+        }
+        Err(e) => {
+            rejected = Some(e);
+            Err(std::io::Error::other("the staged model was rejected"))
+        }
+    });
+    let _ = std::fs::remove_file(&scratch);
+    if let Err(e) = outcome {
+        if let Some(why) = rejected {
+            return Err(why);
+        }
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            // the other installation's files are in this folder: ours must not remove them
+            cleanup.armed = false;
+            return Err(bad(c, "that model is already installed; remove it before installing a replacement"));
+        }
+        return Err(fail("could not install the model (is the disk full?)", e));
     }
+    let Some((sha256, test, model)) = verdict else {
+        return Err(EngineError::Other("the model was not checked".into()));
+    };
     write_atomic(&home.join("denoise-model.json"), &serde_json::to_vec_pretty(&m).map_err(|e| fail("manifest", e))?).map_err(EngineError::Other)?;
     let accepted = json!({
         "acceptedAt": accepted_at,
@@ -215,7 +227,7 @@ struct InstallCleanup {
 impl Drop for InstallCleanup {
     fn drop(&mut self) {
         if self.armed {
-            for name in ["model.onnx.part", "model.onnx", "denoise-model.json", "installed.json"] {
+            for name in [".model-extract.tmp", "model.onnx", "denoise-model.json", "installed.json"] {
                 let _ = std::fs::remove_file(self.home.join(name));
             }
             let _ = std::fs::remove_dir(&self.home);
@@ -266,7 +278,7 @@ fn start_install(s: &mut Session, src: PathBuf, id: String, activate: bool, veri
         .spawn(move || {
             let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 let _held = crate::memory::work_gate().acquire(512 * 1024 * 1024);
-                install_file(&dir, &loader, run_on, at, C, &src, true, verified).map_err(|e| plain(&e))
+                install_file(&dir, &loader, run_on, at, C, &src, true).map_err(|e| plain(&e))
             }))
             .unwrap_or_else(|_| Err("the model installation stopped unexpectedly".into()));
             if verified {
@@ -295,7 +307,7 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "another model is being installed"));
     }
     let (result, model) =
-        install_file(&models_dir(s, C)?, &s.denoise.loader, s.denoise.settings.run_on(), (s.clock)(), C, Path::new(path), acknowledged, false)?;
+        install_file(&models_dir(s, C)?, &s.denoise.loader, s.denoise.settings.run_on(), (s.clock)(), C, Path::new(path), acknowledged)?;
     activate_install(s, &result, model, activate)
 }
 

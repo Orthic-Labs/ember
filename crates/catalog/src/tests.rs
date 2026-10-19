@@ -255,6 +255,8 @@ fn merge_results_are_recognised() {
     assert_eq!(merged_kind("IMG_1-Pano.dng"), Some("panorama"));
     assert_eq!(merged_kind("IMG_1-HDR-Pano.dng"), Some("hdrPanorama"));
     assert_eq!(merged_kind("IMG_1-HDR-2.dng"), Some("hdr"), "a second merge of the same photo");
+    assert_eq!(merged_kind("IMG_1-HDR (1).dng"), Some("hdr"), "a numbered_candidates name for a second merge");
+    assert_eq!(merged_kind("IMG_1-HDR-Pano (12).dng"), Some("hdrPanorama"));
     assert_eq!(merged_kind("hdr.jpg"), None);
     assert_eq!(merged_kind("panorama.jpg"), None);
 }

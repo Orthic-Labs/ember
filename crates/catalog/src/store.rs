@@ -245,7 +245,10 @@ mod tests_append {
         store.append("catalog.log", b"one\n").unwrap();
         let first = seams::take_sync_counts();
         assert!(first.file_syncs >= 1, "the appended bytes are flushed: {first:?}");
-        assert!(first.dir_syncs >= 1, "the folder entry of a new file is flushed: {first:?}");
+        // rightkit-fs flushes a new file's folder entry on Unix; Windows has no folder sync (try_sync_dir is a no-op).
+        if cfg!(unix) {
+            assert!(first.dir_syncs >= 1, "the folder entry of a new file is flushed: {first:?}");
+        }
         store.append("catalog.log", b"two\n").unwrap();
         assert!(seams::take_sync_counts().file_syncs >= 1);
         // a torn record (a full disk cut it short): the journal cuts the file back to the length it had, then appends again

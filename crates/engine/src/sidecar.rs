@@ -447,13 +447,14 @@ pub const OWNED_IF_STATED: &[&str] = &["exif:DateTimeOriginal", "photoshop:DateC
 const OWNED_IF_STATED_OR_NEW_REGIONS: &[&str] =
     &["exif:DateTimeOriginal", "photoshop:DateCreated", "exif:GPSLatitude", "exif:GPSLongitude", "mwg-rs:Regions"];
 
-/// Copy `path` to a new `<name>.bak-<stamp>` (`-1`, `-2`… if taken; never overwriting).
+/// Copy `path` to a new `<name>.bak-<stamp>`, or the next of `rightkit_fs::names::numbered_candidates` if taken
+/// (`<name> (1).bak-<stamp>`, `<name> (2).bak-<stamp>`…); never overwriting.
 fn backup(path: &Path, stamp: &str) -> std::io::Result<PathBuf> {
     let bytes = std::fs::read(path)?;
     let stamp: String = stamp.chars().filter(char::is_ascii_alphanumeric).collect();
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-    for k in 0..1000 {
-        let b = path.with_file_name(if k == 0 { format!("{name}.bak-{stamp}") } else { format!("{name}.bak-{stamp}-{k}") });
+    for candidate in lightcraft_catalog::written::numbered(&format!("{name}.bak-{stamp}"), 1000) {
+        let b = path.with_file_name(candidate);
         // published exclusively, so an existing backup (or one that appears meanwhile) is never overwritten
         match lightcraft_catalog::written::write_exclusive(&b, &bytes, true) {
             Ok(()) => return Ok(b),

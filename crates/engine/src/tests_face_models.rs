@@ -455,6 +455,13 @@ fn failed_replacement_keeps_the_installed_model_and_records() {
     }
     assert_eq!(std::fs::read(models.join("settings.json")).unwrap(), settings);
     assert!(!home.join("model.onnx.part").exists());
+    let mut left: Vec<String> = std::fs::read_dir(&home).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+    left.sort();
+    assert_eq!(
+        left,
+        ["face-model.json", "installed.json", "model.onnx"],
+        "a rejected replacement leaves no staged temp file beside the installed model"
+    );
     let _ = std::fs::remove_dir_all(d);
 }
 

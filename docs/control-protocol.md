@@ -11,16 +11,57 @@
 
 Requests are answered on the UI thread between frames (timeout 60 s).
 
-**Only requests are read.** Every line must be a JSON object with a string `method` (`id` and `params` are
+**Only requests are read** (once the connection has [authenticated](#authentication)). Every line must be a JSON object with a string `method` (`id` and `params` are
 optional; blank lines are skipped). Anything else — text that isn't JSON, a JSON array or number, an object without
 `method`, invalid UTF-8, or a line longer than 4 MiB — gets one error reply
 (`{"ok": false, "error": "… closing the connection"}`) and the server **closes the connection**; nothing sent after
 it on that connection runs. This keeps an HTTP request (for example a web page's cross-origin `fetch` to
 `127.0.0.1:<port>`) from smuggling a command in its body: its request line is rejected first. Junk never reaches the
 UI thread, and at most 16 connections are served at once (further ones get an error line and are closed). Clients
-that hit an error reply should reconnect. The port has no authentication, so only enable it when you need it. The MCP server's connect
+that hit an error reply should reconnect. Connections must [authenticate](#authentication) first; still, only enable the port when you need it. The MCP server's connect
 mode ([mcp.md](mcp.md)) is a thin layer over this channel. Implementation:
 `crates/ui-egui/src/control.rs` (methods) and `apps/lightcraft/src/control_server.rs` (transport).
+
+## Authentication
+
+The channel is loopback only, but any local process (or a web page's `fetch`) can reach a loopback port, so every
+connection must **authenticate first**. Nothing is executed before it does.
+
+1. At start the app makes a fresh **256-bit random secret** (OS CSPRNG, 64 hex digits). It is new on every launch.
+2. It writes the secret to an owner-only file, `<settings folder>/control/<port>.token` (see `LIGHTCRAFT_CONFIG_DIR`;
+   macOS `~/Library/Application Support/Ember/`, Windows `%APPDATA%\Ember\`, Linux `~/.config/ember/`). The file is
+   replaced atomically every launch (a leftover or a widened file is never reused) and removed on a clean exit.
+   If the secret or the file cannot be created, **the server does not start**. The secret is never logged, never
+   sent over the channel, and never reaches the UI or a webview.
+3. The first non-blank line of every connection must be the hello line:
+
+```text
+→ {"hello": {"token": "<64 hex digits>"}}
+← {"ok": true, "result": {"hello": "ember-control", "protocol": 1}}
+```
+
+   A first line that is anything else (a request, an HTTP request line, junk), a hello without a string `token`, or a
+   wrong token (compared in constant time) gets one error reply (`authentication required: …` / `authentication
+   failed: …`) and the connection is **closed**; no line after it runs. The hello line is limited to 1 KiB and a
+   connection has 10 s to send it. After the `ok`, requests flow as described above.
+
+**Permissions of the token file.** Unix: file `0600`, folder `0700` (macOS: and no extended ACL entry). Windows: a
+protected owner-only DACL (written through `rightkit-fs`, `write_private_file` / `ensure_private_dir`). A client
+**refuses** a token file that other users can read or that someone else owns (it does not repair it); the app
+**repairs** such a file on its next launch by replacing it with a fresh owner-only file.
+
+**Clients.** Read the secret from `$LIGHTCRAFT_CONTROL_TOKEN` if set (for a process that launches the client itself;
+keep it out of command lines), else from the token file for the port. `lightcraft-cli --connect`, the MCP connect
+mode (`lightcraft_mcp::Remote`) and `docs/showcase/run.py` do this and send the hello line on every (re)connect;
+the app restarting changes the secret, so they re-read it each time. Shared code: `lightcraft_mcp::control_auth`.
+
+**Peer check: unavailable.** The OS offers no practical check of the connecting process for loopback TCP:
+`SO_PEERCRED`/`LOCAL_PEERCRED` exist only for Unix sockets, and mapping a TCP client port to its process
+(`GetExtendedTcpTable`, `lsof`) is racy and needs `unsafe`, which Ember forbids outside `crates/sysmem`/`crates/av1dec`.
+So the secret is the only gate: any process running as the same user can read the token file and drive the app,
+exactly as it could read the user's library. What the secret stops is other users, sandboxed or web-page code, and
+anything that cannot read the owner's settings folder. Silent connections cannot fill the 16 connection slots for
+more than 10 s each.
 
 ## Isolated automation profiles
 

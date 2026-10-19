@@ -64,6 +64,7 @@ USAGE:
         --library DIR     headless, open (or create) an Ember library; edits are saved
         --import PATH     headless, import a file or folder first (repeatable)
         --connect [ADDR]  drive the running app (`lightcraft --control 7980`; default 127.0.0.1:7980)
+                          (authenticates with the app's owner-only token file, or LIGHTCRAFT_CONTROL_TOKEN)
         --script FILE|-   also run JSON lines {\"command\": id, \"params\": {…}} (or {\"method\": …})
         --keep-going      continue after a failed command
   lightcraft-cli look extract SAMPLE… -o look.json [--force]
@@ -75,6 +76,7 @@ USAGE:
       MCP server (JSON-RPC 2.0 over stdio). Headless by default: an in-process session with the
       given files imported. Options:
         --connect [ADDR]  drive a running app instead (`lightcraft --control 7980`; default 127.0.0.1:7980)
+                          (authenticates with the app's owner-only token file, or LIGHTCRAFT_CONTROL_TOKEN)
         --demo            headless: start with the procedurally generated demo library
         --library DIR     headless: open (or create) a persistent Ember library; edits are saved
         --compact         list only the helper tools (every command stays reachable via run_command)

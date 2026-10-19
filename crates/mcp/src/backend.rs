@@ -30,19 +30,30 @@ pub struct Remote {
     addr: String,
     conn: Option<(BufReader<TcpStream>, TcpStream)>,
     next_id: u64,
+    /// Secret to authenticate with; `None` looks it up for the port at every (re)connect
+    /// (`LIGHTCRAFT_CONTROL_TOKEN`, else the app's owner-only token file), because a restarted app
+    /// has a new one. See [`crate::control_auth`].
+    token: Option<String>,
 }
 
 impl Remote {
     /// Connect to `addr` (e.g. `127.0.0.1:7980`), failing fast when nothing is listening.
     pub fn connect(addr: &str) -> std::io::Result<Self> {
-        let mut r = Self { addr: addr.to_string(), conn: None, next_id: 1 };
+        let mut r = Self::lazy(addr);
         r.reconnect()?;
         Ok(r)
     }
 
     /// A remote that connects on first use (the app may start after the MCP server).
     pub fn lazy(addr: &str) -> Self {
-        Self { addr: addr.to_string(), conn: None, next_id: 1 }
+        Self { addr: addr.to_string(), conn: None, next_id: 1, token: None }
+    }
+
+    /// Authenticate with this secret instead of looking one up.
+    #[must_use]
+    pub fn with_token(mut self, token: &str) -> Self {
+        self.token = Some(token.to_string());
+        self
     }
 
     pub fn addr(&self) -> &str {
@@ -59,13 +70,40 @@ impl Remote {
                     // The app answers within 60 s (its own timeout); leave headroom.
                     s.set_read_timeout(Some(Duration::from_secs(90))).ok();
                     let read = s.try_clone()?;
-                    self.conn = Some((BufReader::new(read), s));
+                    let mut conn = (BufReader::new(read), s);
+                    self.authenticate(&mut conn, sa.port())?;
+                    self.conn = Some(conn);
                     return Ok(());
                 }
                 Err(e) => last = e,
             }
         }
         Err(last)
+    }
+
+    /// Open a connection with the hello line carrying the secret and require the app's `ok`. With no
+    /// secret available nothing is sent: the app refuses the first request and its error reply (which
+    /// says how to authenticate) reaches the caller.
+    fn authenticate(&self, conn: &mut (BufReader<TcpStream>, TcpStream), port: u16) -> std::io::Result<()> {
+        let denied = |message: String| std::io::Error::new(std::io::ErrorKind::PermissionDenied, message);
+        let token = match &self.token {
+            Some(t) => Some(t.clone()),
+            None => crate::control_auth::client_token(port).map_err(denied)?,
+        };
+        let Some(token) = token else { return Ok(()) };
+        let (reader, writer) = conn;
+        let mut line = crate::control_auth::hello_line(&token).into_bytes();
+        line.push(b'\n');
+        writer.write_all(&line)?;
+        writer.flush()?;
+        let reply = read_reply(reader, 64 * 1024)?;
+        let v: Value = serde_json::from_str(&reply).map_err(|e| denied(format!("bad reply from app to the control hello: {e}")))?;
+        if v.get("ok").and_then(Value::as_bool) == Some(true) {
+            Ok(())
+        } else {
+            let why = v.get("error").and_then(Value::as_str).unwrap_or("refused");
+            Err(denied(format!("the Ember app at {} refused the control token: {why}", self.addr)))
+        }
     }
 
     /// Send one request line and read the reply line. On failure the flag says whether the request
@@ -374,6 +412,58 @@ mod tests {
         std::thread::sleep(Duration::from_millis(200));
         assert_eq!(remote.call("engine.commands", json!({})).unwrap(), json!(7));
         assert_eq!(seen.load(Ordering::SeqCst), 2);
+    }
+
+    /// A server that wants `secret` in the hello line; per connection it answers the hello and, when
+    /// the secret matched, one request. Every line it receives is recorded.
+    fn authenticating_server(secret: String) -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = seen.clone();
+        std::thread::spawn(move || {
+            while let Ok((stream, _)) = listener.accept() {
+                stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                let mut writer = stream.try_clone().unwrap();
+                let mut reader = BufReader::new(stream);
+                let mut hello = String::new();
+                reader.read_line(&mut hello).unwrap();
+                log.lock().unwrap().push(hello.trim().to_string());
+                let v: Value = serde_json::from_str(&hello).unwrap();
+                if v["hello"]["token"] != secret.as_str() {
+                    writeln!(writer, "{}", json!({"ok": false, "error": "bad token"})).unwrap();
+                    continue;
+                }
+                writeln!(writer, "{}", json!({"ok": true, "result": {"hello": "ember-control"}})).unwrap();
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                log.lock().unwrap().push(line.trim().to_string());
+                let request: Value = serde_json::from_str(&line).unwrap();
+                writeln!(writer, "{}", json!({"id": request["id"], "ok": true, "result": 5})).unwrap();
+            }
+        });
+        (addr, seen)
+    }
+
+    #[test]
+    fn the_hello_line_comes_first_and_carries_the_token() {
+        let secret = "s".repeat(40);
+        let (addr, seen) = authenticating_server(secret.clone());
+        let mut remote = Remote::lazy(&addr).with_token(&secret);
+        assert_eq!(remote.call("engine.commands", json!({})).unwrap(), json!(5));
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen[0], crate::control_auth::hello_line(&secret));
+        assert!(seen[1].contains("engine.commands"));
+    }
+
+    #[test]
+    fn a_refused_token_is_reported_without_sending_the_request() {
+        let (addr, seen) = authenticating_server("the-right-secret-the-right-secret-xx".to_string());
+        let mut remote = Remote::lazy(&addr).with_token(&"w".repeat(40));
+        let err = remote.call("engine.execute", json!({"command": "photo.delete"})).unwrap_err();
+        assert!(err.contains("refused the control token") && err.contains("bad token"), "{err}");
+        assert!(!err.contains(&"w".repeat(40)));
+        assert!(seen.lock().unwrap().iter().all(|l| l.contains("hello")), "only hello lines were sent");
     }
 
     #[test]

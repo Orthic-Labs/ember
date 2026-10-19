@@ -1056,12 +1056,12 @@ fn convert_to_dng_is_verified_and_atomic() {
     // a good conversion: a new name (the existing file is not replaced), decodable, relinked
     let r = s.execute("photo.convertToDng", &json!({})).unwrap();
     let out = r["converted"][0]["path"].as_str().unwrap().to_string();
-    assert!(out.ends_with("shot-2.dng"), "{r}");
+    assert!(out.ends_with("shot (1).dng"), "{r}");
     assert_eq!(std::fs::read(&raw).unwrap(), bytes, "the raw is untouched");
     let back = lightcraft_raw::decode(&std::fs::read(&out).unwrap()).unwrap();
     assert_eq!(back.data, lightcraft_raw::decode(&bytes).unwrap().data);
     assert_eq!(s.catalog.photo(id).unwrap().source, lightcraft_catalog::Source::File { path: out });
-    assert_eq!(names(), ["shot-2.dng", "shot.dng"], "no temp file left");
+    assert_eq!(names(), ["shot (1).dng", "shot.dng"], "no temp file left");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1336,7 +1336,7 @@ fn duplicate_never_overwrites_a_file_that_is_there() {
     {
         let victim = dir.join("victim.txt");
         std::fs::write(&victim, b"keep").unwrap();
-        std::os::unix::fs::symlink(&victim, dir.join("pic-copy-2.png")).unwrap();
+        std::os::unix::fs::symlink(&victim, dir.join("pic-copy (1).png")).unwrap();
     }
     let original = std::fs::read(&f).unwrap();
     let mut s = Session::new().with_fs();
@@ -1344,7 +1344,7 @@ fn duplicate_never_overwrites_a_file_that_is_there() {
     let r = s.execute("photo.duplicate", &json!({})).unwrap();
     let dup = lightcraft_catalog::PhotoId(r["ids"][0].as_u64().unwrap());
     let name = s.catalog.photo(dup).unwrap().file_name.clone();
-    let expected = if cfg!(unix) { "pic-copy-3.png" } else { "pic-copy-2.png" };
+    let expected = if cfg!(unix) { "pic-copy (2).png" } else { "pic-copy (1).png" };
     assert_eq!(name, expected);
     assert_eq!(std::fs::read(dir.join("pic-copy.png")).unwrap(), b"someone else's file");
     #[cfg(unix)]

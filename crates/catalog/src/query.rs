@@ -641,7 +641,7 @@ pub(crate) fn key_within(p: &str, r: &str) -> bool {
 /// `hdr`, `panorama` or `hdrPanorama`.
 pub fn merged_kind(file_name: &str) -> Option<&'static str> {
     let stem = file_name.rsplit_once('.').map_or(file_name, |(s, _)| s).to_ascii_lowercase();
-    let stem = stem.trim_end_matches(|c: char| c.is_ascii_digit() || c == '-' || c == ' ');
+    let stem = stem.trim_end_matches(|c: char| c.is_ascii_digit() || matches!(c, '-' | ' ' | '(' | ')'));
     if stem.ends_with("-hdr-pano") {
         Some("hdrPanorama")
     } else if stem.ends_with("-hdr") {

@@ -45,6 +45,10 @@ winit = { version = "0.30", default-features = false, features = ["x11"] }
 rfd = { workspace = true }
 # Atomic writes of ui.json and the start markers (M8, owner `rightkit-fs`)
 rightkit-fs = { version = "=0.4.4", default-features = false, features = ["fs"] }
+# Per-launch random secret of the control channel (OS CSPRNG; already in the tree, pure Rust)
+getrandom = "0.3.4"
+# Control-channel authentication shared with the clients (`lightcraft_mcp::control_auth`)
+lightcraft-mcp = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = { workspace = true }

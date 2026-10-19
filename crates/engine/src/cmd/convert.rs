@@ -10,12 +10,12 @@ use serde_json::{Value, json};
 use super::{CommandSpec, bad, bool_or, cmd, has_active, has_selection};
 use crate::{Result, Session};
 
-/// `<stem>.dng`, then `<stem>-2.dng`, `<stem>-3.dng`… next to `path`.
-fn dng_names(path: &str) -> impl Iterator<Item = std::path::PathBuf> {
+/// `<stem>.dng`, then `<stem> (1).dng`, `<stem> (2).dng`… next to `path` (`rightkit_fs::names::numbered_candidates`).
+fn dng_names(path: &str) -> Vec<std::path::PathBuf> {
     let p = Path::new(path);
     let dir = p.parent().unwrap_or(Path::new("")).to_path_buf();
     let stem = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "photo".into());
-    (1u64..).map(move |n| if n == 1 { dir.join(format!("{stem}.dng")) } else { dir.join(format!("{stem}-{n}.dng")) })
+    lightcraft_catalog::written::numbered(&format!("{stem}.dng"), 10_000).into_iter().map(|n| dir.join(n)).collect()
 }
 
 /// Write the DNG for raw file `path` (develop settings in `packet`) next to it under a free name;
@@ -51,7 +51,7 @@ pub(crate) fn write_dng_with(file_bytes: Option<&crate::merge::ByteReader>, path
         return Err(format!("{path}: the DNG written for it doesn't hold the same raw data; the raw is kept"));
     }
     drop((raw, back));
-    let out = lightcraft_catalog::written::write_new_unique(&mut dng_names(path), &dng)
+    let out = lightcraft_catalog::written::write_new_unique(&dng_names(path), &dng)
         .map_err(|e| format!("{path}: could not write its DNG ({e}); the raw is kept"))?;
     Ok(out.to_string_lossy().to_string())
 }
@@ -460,8 +460,8 @@ fn copy_beside(src: &Path, dir: &Path, stem: &str, ext: &str) -> std::io::Result
     use rightkit_fs::{CloneOptions, FsError};
     let real = if std::fs::symlink_metadata(src).is_ok_and(|m| m.file_type().is_symlink()) { std::fs::canonicalize(src)? } else { src.to_path_buf() };
     let options = CloneOptions::default().without_hard_link();
-    for n in 1..=10_000u32 {
-        let dst = if n == 1 { dir.join(format!("{stem}-copy{ext}")) } else { dir.join(format!("{stem}-copy-{n}{ext}")) };
+    for candidate in rightkit_fs::names::numbered_candidates(&format!("{stem}-copy{ext}"), rightkit_fs::names::MAX_UNIQUE_TRIES) {
+        let dst = dir.join(candidate);
         match rightkit_fs::clone_or_link_or_copy_nofollow_with(&real, &dst, &options) {
             Ok(_) => return Ok(dst),
             // in place and complete; only the folder sync after it failed

@@ -248,14 +248,12 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     let activate = p.get("activate").and_then(Value::as_bool).unwrap_or(true);
     refresh_catalog(s);
     let ins = inspect_file(path, C, None, &catalog_manifests(s))?;
-    install_file(s, C, Path::new(path), ins, acknowledged, activate, false)
+    install_file(s, C, Path::new(path), ins, acknowledged, activate)
 }
 
 /// Install the inspected model file `src`. A recognition model that passes its self-test becomes the one in use and
 /// recognition is switched on (`activate`, the default): installing a model is how someone says they want it.
-/// `verified` is for a download that was already checked against its recorded hash: it is moved into place instead
-/// of being copied and read again.
-fn install_file(s: &mut Session, c: &str, src: &Path, ins: Inspection, acknowledged: bool, activate: bool, verified: bool) -> Result<Value> {
+fn install_file(s: &mut Session, c: &str, src: &Path, ins: Inspection, acknowledged: bool, activate: bool) -> Result<Value> {
     let dir = models_dir(s, c)?;
     let m = match ins.suggestion {
         Suggestion::Known(m) | Suggestion::Draft { manifest: m, .. } => m,
@@ -270,35 +268,39 @@ fn install_file(s: &mut Session, c: &str, src: &Path, ins: Inspection, acknowled
     }
     let home = dir.join(&m.id);
     std::fs::create_dir_all(&home).map_err(|e| fail("could not create the model's folder", e))?;
-    let (part, final_path) = (home.join("model.onnx.part"), home.join("model.onnx"));
-    let moved = verified && std::fs::rename(src, &part).is_ok();
-    let placed = if moved {
-        Ok(())
-    } else {
-        std::fs::copy(src, &part).map_err(|e| fail("could not copy the model (is the disk full?)", e)).and_then(|_| match sha256_file(&part) {
-            Ok(h) if h == ins.sha256 => Ok(()),
-            Ok(_) => Err(EngineError::Other("the copy does not match the original (the file changed while copying?)".into())),
-            Err(e) => Err(fail("could not check the copy", e)),
-        })
-    };
-    if let Err(e) = placed {
-        let _ = std::fs::remove_file(&part);
-        return Err(e);
-    }
-    // Validate the candidate before replacing a working installation.
-    let test = match self_test(&part, &m) {
-        Ok(t) => t,
-        Err(e) => {
-            let _ = std::fs::remove_file(&part);
-            let _ = std::fs::remove_dir(&home);
-            return Err(bad(c, e));
+    let final_path = home.join("model.onnx");
+    // Runs on the staged file before it can appear as model.onnx: the hash the file was inspected under, then the self-test.
+    // Both come before anything replaces a working installation.
+    let verify = |staged: &Path| -> Result<Value> {
+        match sha256_file(staged) {
+            Ok(h) if h == ins.sha256 => {}
+            Ok(_) => return Err(EngineError::Other("the copy does not match the original (the file changed while copying?)".into())),
+            Err(e) => return Err(fail("could not check the copy", e)),
         }
+        self_test(staged, &m).map_err(|e| bad(c, e))
     };
+    let (mut verdict, mut rejected) = (None, None);
     // the validated candidate replaces a working installation atomically
-    if let Err(e) = crate::model_download::publish_staged(&part, &final_path, true) {
-        let _ = std::fs::remove_file(&part);
-        return Err(fail("could not finish the copy", e));
+    let outcome = crate::model_download::install_checked(src, &final_path, true, |staged| match verify(staged) {
+        Ok(v) => {
+            verdict = Some(v);
+            Ok(())
+        }
+        Err(e) => {
+            rejected = Some(e);
+            Err(std::io::Error::other("the staged model was rejected"))
+        }
+    });
+    if let Err(e) = outcome {
+        if let Some(why) = rejected {
+            let _ = std::fs::remove_dir(&home);
+            return Err(why);
+        }
+        return Err(fail("could not install the model (is the disk full?)", e));
     }
+    let Some(test) = verdict else {
+        return Err(EngineError::Other("the model was not checked".into()));
+    };
     write_atomic(&home.join("face-model.json"), &serde_json::to_vec_pretty(&m).map_err(|e| fail("manifest", e))?)?;
     let accepted = json!({"acceptedAt": (s.clock)(), "licence": m.licence.name, "commercial": m.licence.commercial, "fileName": ins.file_name, "selfTest": test});
     write_atomic(&home.join("installed.json"), &serde_json::to_vec_pretty(&accepted).map_err(|e| fail("record", e))?)?;
@@ -333,7 +335,7 @@ pub(super) fn finish_downloads(s: &mut Session) {
     const C: &str = "faces.models.download";
     let extra = catalog_manifests(s);
     for (id, path, sha) in s.face_downloads.finished() {
-        let outcome = inspect_file(&path.to_string_lossy(), C, Some(&sha), &extra).and_then(|ins| install_file(s, C, &path, ins, true, true, true));
+        let outcome = inspect_file(&path.to_string_lossy(), C, Some(&sha), &extra).and_then(|ins| install_file(s, C, &path, ins, true, true));
         match outcome {
             Ok(_) => s.face_downloads.set_outcome(&id, State::Installed),
             Err(e) => {

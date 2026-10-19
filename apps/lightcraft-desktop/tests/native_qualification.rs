@@ -1307,7 +1307,7 @@ fn grid_metrics(control: &rightkit_qa::control::Control) -> Value {
         const visible=cells.filter(e=>{const r=e.getBoundingClientRect();return bounds&&r.bottom>bounds.top&&r.top<bounds.bottom;});
         const ready=visible.filter(e=>[...e.querySelectorAll('img.lc-photo-preview')].some(img=>img.complete&&img.naturalWidth>0&&img.naturalHeight>0));
         const describe=e=>({name:e.querySelector('.lc-photo-name')?.textContent,box:box(e),row:box(e.parentElement),error:e.querySelector('.photo-preview-frame')?.getAttribute('aria-label')});
-        return {visible:visible.length,visibleReady:ready.length,errors:grid?.querySelectorAll('[data-preview-state=error]').length||0,scrollTop:scroll?.scrollTop||0,scrollHeight:scroll?.scrollHeight||0,clientHeight:scroll?.clientHeight||0,top:Number.parseFloat(grid?.style.top||'0')||0,cells:cells.length,images:images.length,loaded:images.filter(img=>img.complete&&img.naturalWidth>0&&img.naturalHeight>0).length,first,busy:grid?.getAttribute('aria-busy')==='true',scrollBox:box(scroll),gridBox:box(grid),firstCells:cells.slice(0,5).map(describe),lastCells:cells.slice(-5).map(describe)};
+        return {visible:visible.length,visibleReady:ready.length,errors:grid?.querySelectorAll('[data-preview-state=error]').length||0,scrollTop:scroll?.scrollTop||0,scrollHeight:scroll?.scrollHeight||0,clientHeight:scroll?.clientHeight||0,top:Number.parseFloat(grid?.style.top||'0')||0,justified:Boolean(grid?.classList.contains('is-justified')),cells:cells.length,images:images.length,loaded:images.filter(img=>img.complete&&img.naturalWidth>0&&img.naturalHeight>0).length,first,busy:grid?.getAttribute('aria-busy')==='true',scrollBox:box(scroll),gridBox:box(grid),firstCells:cells.slice(0,5).map(describe),lastCells:cells.slice(-5).map(describe)};
     })();"#).expect("scalable grid DOM query must execute")
 }
 
@@ -1338,7 +1338,9 @@ fn wait_for_grid(control: &rightkit_qa::control::Control, scrolled: bool, previo
             && value["errors"].as_u64() == Some(0)
             && value["busy"].as_bool() == Some(false)
             && previous_first.is_none_or(|previous| value["first"].as_str() != Some(previous))
-            && (!scrolled || (value["scrollTop"].as_f64().unwrap_or(0.0) > 0.0 && value["top"].as_f64().unwrap_or(0.0) > 0.0));
+            // A square grid moves its window with the scroll; the justified grid positions rows inside a window that stays at
+            // its page top (0 on the first page), so only the scroll offset proves it was scrolled there.
+            && (!scrolled || (value["scrollTop"].as_f64().unwrap_or(0.0) > 0.0 && (value["justified"].as_bool() == Some(true) || value["top"].as_f64().unwrap_or(0.0) > 0.0)));
         if visible {
             return value;
         }
@@ -1646,6 +1648,8 @@ fn run_hdr_merge_from_ui(control: &rightkit_qa::control::Control) -> Value {
 }
 
 fn set_exposure_with_native_pointer(control: &rightkit_qa::control::Control, target: f64) -> f64 {
+    // D switches the view only; the inspector keeps the panel it had (Info on a fresh library), so open Edit first.
+    choose_inspector_panel(control, "edit");
     wait_for_dom(control, "return document.querySelector('input[aria-label=Exposure]') !== null;");
     let before = snapshot(control)["develop"]["light"]["exposure"].as_f64().expect("Exposure baseline must be numeric");
     let slider = control.eval(r#"return (() => { const e=document.querySelector('input[aria-label="Exposure"]'); if(!e)return null; const r=e.getBoundingClientRect(); return {x:r.x,y:r.y+r.height/2,width:r.width,min:Number(e.min),max:Number(e.max),value:Number(e.value)}; })();"#)
@@ -1821,6 +1825,13 @@ fn run_catalog_recovery(
         let before_counts = edited["counts"].clone();
         let expected_exposure = edited["develop"]["light"]["exposure"].as_f64().expect("edited exposure must be numeric");
         let backup = scenario.dir().join("library-backup");
+        // A PNG import queues a host preview build after the import task itself is done, and the app refuses to back up
+        // while any task runs; wait for the queue to drain instead of racing it.
+        wait_for_snapshot(
+            control,
+            |value| value["status"]["jobs"].as_array().is_some_and(Vec::is_empty),
+            "background tasks must finish before the library backup",
+        );
         let backup_result = run(control, "library.backup", json!({"path": backup}));
         assert!(backup_result["path"].as_str().is_some(), "backup must return destination: {backup_result}");
         assert!(backup.is_dir(), "backup directory must exist");

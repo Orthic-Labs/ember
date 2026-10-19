@@ -17,4 +17,4 @@ python3 docs/showcase/run.py docs/showcase/demo.jsonl
 for f in docs/images/*.png; do sips -s format jpeg -s formatOptions 82 "$f" --out "${f%.png}.jpg" && rm "$f"; done
 ```
 
-`run.py` sends each JSON line (`{"method":…,"params":…}` or `{"sleep": seconds}`) to `127.0.0.1:7980`.
+`run.py` sends each JSON line (`{"method":…,"params":…}` or `{"sleep": seconds}`) to `127.0.0.1:7980`. It authenticates first with the app's per-launch secret, read from `$LIGHTCRAFT_CONTROL_TOKEN` or the owner-only token file (`<settings folder>/control/7980.token`); pass another port as the second argument.

@@ -310,13 +310,13 @@ fn apply_auto(s: &mut DevelopSettings, src: &Rgb32f, info: &SourceInfo) {
     s.color.saturation = a.saturation;
 }
 
-/// `dir/<stem>-<suffix>.dng`, then `-2`, `-3`… (the candidates for a merge's output).
+/// `dir/<stem>-<suffix>.dng`, then `<stem>-<suffix> (1).dng`, `(2)`… (the candidates for a merge's output,
+/// `rightkit_fs::names::numbered_candidates`).
 fn output_names(first: &str, suffix: &str) -> impl Iterator<Item = std::path::PathBuf> {
     let p = std::path::Path::new(first);
     let dir = p.parent().map(|d| d.to_path_buf()).unwrap_or_default();
     let stem = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Merge".into());
-    let suffix = suffix.to_string();
-    (1u64..).map(move |k| dir.join(if k == 1 { format!("{stem}-{suffix}.dng") } else { format!("{stem}-{suffix}-{k}.dng") }))
+    lightcraft_catalog::written::numbered(&format!("{stem}-{suffix}.dng"), 10_000).into_iter().map(move |n| dir.join(n))
 }
 
 fn catalog_owns_path(s: &Session, path: &str) -> bool {
@@ -406,9 +406,10 @@ impl Session {
             (id, path, true, local)
         } else {
             // A new file under a free name (never replacing one), complete and synced before it appears.
-            let mut names = output_names(first, job.kind.suffix())
-                .filter(|candidate| !catalogued_paths.contains(&lightcraft_catalog::query::folder_key(&candidate.to_string_lossy())));
-            let path = lightcraft_catalog::written::write_new_unique(&mut names, &out.dng)
+            let names: Vec<std::path::PathBuf> = output_names(first, job.kind.suffix())
+                .filter(|candidate| !catalogued_paths.contains(&lightcraft_catalog::query::folder_key(&candidate.to_string_lossy())))
+                .collect();
+            let path = lightcraft_catalog::written::write_new_unique(&names, &out.dng)
                 .map_err(|e| EngineError::Other(format!("could not write the merged DNG next to {first}: {e}")))?
                 .to_string_lossy()
                 .to_string();

@@ -22,6 +22,11 @@ it open, `--library` on the same folder fails with "This library is already open
 `--demo` starts the headless session with the procedurally generated demo library;
 `--compact` lists only the helper tools (see below). In connect mode the server starts even when
 the app is not running yet and connects on the first call (and reconnects if the app restarts).
+The control channel is authenticated: the client reads the app's per-launch secret from its owner-only token file
+(`<settings folder>/control/<port>.token`) or from `LIGHTCRAFT_CONTROL_TOKEN`, sends it as the first line of every
+connection, and re-reads it on reconnect ([control-protocol.md#authentication](control-protocol.md#authentication)).
+A token file that other users can read is refused. Set `LIGHTCRAFT_CONFIG_DIR` the same way for the app and the
+client when you use an isolated profile.
 A request is sent again only when it never reached the app. If the connection drops after a request
 was sent but before its reply, the tool fails with "the outcome is unknown" and nothing is resent, so a
 command such as undo can't run twice: check the app's state before retrying. Replies must be

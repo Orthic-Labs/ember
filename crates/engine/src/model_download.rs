@@ -23,15 +23,21 @@ use lightcraft_denoise::known::Download;
 /// can never be a model's own folder (ids start with a letter or digit).
 pub const STAGING: &str = ".downloads";
 
-/// Give the staged, checked model file `from` (a finished file beside it) its final name `to`: published by rename with the
-/// folder synced (`rightkit_fs::publish_file_with`). With `replace` false the name is taken exclusively: a model that is
-/// installed, or appears meanwhile, is never replaced (`AlreadyExists`), with no check-then-rename gap. With `replace` true an
-/// installed file is replaced atomically. A failure leaves `from` where it is (the caller's file).
+/// Install the model file `src` as `to` without ever showing a partial or unchecked file there: its bytes are streamed into a
+/// temp file beside `to` (`rightkit_fs::AtomicWriter`), then `check` reads that synced temp file and only when it returns `Ok`
+/// is the temp file published and the folder synced (`commit_checked`), so what `check` validated (hash, self-test) is exactly
+/// what appears at `to`. With `replace` false the name is taken exclusively: a model that is installed, or appears meanwhile,
+/// is never replaced (`AlreadyExists`), with no check-then-rename gap. With `replace` true an installed file is replaced
+/// atomically. A failure of the copy, the check or the publish leaves `to` as it was and no temp file; `src` is never touched.
+/// A check error is only `io::Error::other`: the caller keeps the real reason itself.
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn publish_staged(from: &Path, to: &Path, replace: bool) -> std::io::Result<()> {
+pub(crate) fn install_checked(src: &Path, to: &Path, replace: bool, check: impl FnOnce(&Path) -> std::io::Result<()>) -> std::io::Result<()> {
     let replace = if replace { rightkit_fs::ReplaceMode::Rename } else { rightkit_fs::ReplaceMode::NoReplace };
     let options = rightkit_fs::AtomicWriteOptions { replace, ..rightkit_fs::AtomicWriteOptions::default() };
-    match rightkit_fs::publish_file_with(from, to, options) {
+    let mut input = std::fs::File::open(src)?;
+    let mut writer = rightkit_fs::AtomicWriter::create_with(to, options)?;
+    std::io::copy(&mut input, &mut writer.writer())?;
+    match writer.commit_checked(check) {
         Ok(()) => Ok(()),
         // in place and complete; only a step after the rename (the folder sync) failed
         Err(e) if e.target_replaced() => {
@@ -44,7 +50,7 @@ pub(crate) fn publish_staged(from: &Path, to: &Path, replace: bool) -> std::io::
 
 /// A browser build installs no models.
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn publish_staged(_from: &Path, _to: &Path, _replace: bool) -> std::io::Result<()> {
+pub(crate) fn install_checked(_src: &Path, _to: &Path, _replace: bool, _check: impl FnOnce(&Path) -> std::io::Result<()>) -> std::io::Result<()> {
     Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "this build has no file system"))
 }
 

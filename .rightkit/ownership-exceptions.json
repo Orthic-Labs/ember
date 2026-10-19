@@ -103,6 +103,22 @@
       "reason": "Backup/restore refuses every symlink (security guard); copy_tree has no refuse mode. See section 4 of docs/rightkit-exceptions/M8.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
       "date": "2026-10-19"
+    },
+    {
+      "capability": "app-shell-ui",
+      "package": "@rightkit/react-shell",
+      "path": "apps/lightcraft-desktop/web/src/dialogs/focusReturn.ts",
+      "reason": "Focus return when the opener is gone (palette unmounts, WebKit click does not focus); ModalShell/Popover capture the opener once with no fallback. See section 7 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
+    },
+    {
+      "capability": "app-shell-ui",
+      "package": "@rightkit/react-shell",
+      "path": "apps/lightcraft-desktop/web/src/BackgroundActivity.tsx",
+      "reason": "Focus return when the opener is gone (palette unmounts, WebKit click does not focus); ModalShell/Popover capture the opener once with no fallback. See section 7 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
     }
   ]
 }
