@@ -73,6 +73,8 @@ pub const TABLE: &[(&str, Class)] = &[
     ("desktop", Class::Exempt),
     ("cli", Class::Exempt),
     ("web", Class::Exempt),
+    // the iOS app's Rust boundary (UniFFI static library over desktop-host); the Swift app is its L6 shell
+    ("mobile", Class::Exempt),
     ("xtask", Class::Exempt),
     // training tooling: not product code, nothing depends on it
     ("denoise-train", Class::Exempt),

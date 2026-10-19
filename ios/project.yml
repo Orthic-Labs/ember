@@ -1,10 +1,11 @@
 # Ember native iOS/iPad app shell (library + non-destructive photo editing).
-# Generated project is XcodeGen output (gitignored):
+# Generated project is XcodeGen output (gitignored). On a Mac:
+#   scripts/ios/build-xcframework.sh   # Rust engine -> ios/Frameworks/EmberCore.xcframework + Swift bindings
 #   cd ios && xcodegen generate
-# Build and test run in public CI only (local build is blocked for public repos).
-# RightKitSwift is the published git-URL pin; never a path dep.
-# RightKitDB (read-only library index) ships after tag 0.7.0; it is not in the
-# pin yet. Add the product to the Ember target when the pin moves to a tag that has it.
+# Windows has no local build; iOS builds run on the Mac (dev profile) or in CI.
+# RightKitSwift is the published git-URL pin; never a path dep. Adopt only products that cover
+# what Ember does; 0.9.0 (held) brings requireDeviceID options and the licence ContinuityBridge.
+# The library index is Ember's Rust catalog, not RightKitDB.
 name: Ember
 options:
   bundleIdPrefix: com.orthiclabs
@@ -22,7 +23,7 @@ settings:
 packages:
   RightKitSwift:
     url: https://github.com/Orthic-Labs/rightkit
-    exactVersion: 0.7.0
+    exactVersion: 0.8.1
 targets:
   Ember:
     type: application
@@ -34,8 +35,17 @@ targets:
         # Empty until the licence endpoint is ratified; Settings shows "not configured".
         EMBER_LICENSE_BASE_URL: ""
     sources:
+      # Includes Ember/Generated/ (UniFFI Swift bindings from scripts/ios/build-xcframework.sh).
       - path: Ember
     dependencies:
+      # Rust engine: crates/mobile built by scripts/ios/build-xcframework.sh (run before xcodegen).
+      - framework: Frameworks/EmberCore.xcframework
+        embed: false
+      - sdk: Metal.framework
+      - sdk: QuartzCore.framework
+      - sdk: CoreGraphics.framework
+      - sdk: Security.framework
+      - sdk: SystemConfiguration.framework
       - package: RightKitSwift
         product: RightKitLicense
       - package: RightKitSwift
@@ -78,6 +88,18 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.orthiclabs.ember.tests
+  EmberUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: EmberUITests
+    dependencies:
+      - target: Ember
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.orthiclabs.ember.uitests
+        TEST_TARGET_NAME: Ember
 schemes:
   Ember:
     build:
@@ -86,3 +108,4 @@ schemes:
     test:
       targets:
         - EmberTests
+        - EmberUITests

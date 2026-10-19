@@ -1,0 +1,42 @@
+[package]
+name = "lightcraft-mobile"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Ember mobile host bridge (L5): the UniFFI surface the iOS app calls. A thin, versioned wrapper over lightcraft-desktop-host's session owner: JSON command dispatch, snapshots, generation-aware view slices and encoded preview bytes. No hand-written unsafe; the only unsafe is UniFFI's generated scaffolding."
+
+[lib]
+# `lib` for the Rust tests; `staticlib` is what the XCFramework packages for iOS.
+crate-type = ["lib", "staticlib"]
+
+[features]
+# Builds the `uniffi-bindgen` binary that scripts/ios/build-xcframework.sh uses to generate the
+# Swift bindings. Never enabled in the shipped library.
+bindgen = ["uniffi/cli"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["bindgen"]
+
+# Opts out of the workspace lints only because UniFFI's generated scaffolding emits
+# `#[unsafe(no_mangle)] extern "C"` entry points; this crate itself writes no unsafe (see CLAUDE.md).
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+
+[dependencies]
+# Path, not `workspace = true`: the workspace entry keeps default features (SAM masking), which the
+# mobile V1 scope leaves out (docs/ios-architecture.md: only qualified mobile mask tools).
+lightcraft-desktop-host = { path = "../desktop-host", default-features = false }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+uniffi = "0.32"
+
+[dev-dependencies]
+png = { workspace = true }

@@ -1,3 +1,6 @@
 Ember.xcodeproj/
 DerivedData/
 .build/
+# Build products of scripts/ios/build-xcframework.sh
+Frameworks/
+Ember/Generated/

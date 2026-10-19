@@ -1,6 +1,21 @@
 # Ember iOS & iPadOS architecture
 
-**Status:** design proposal · 2026-10-13. No iOS implementation or scaffolding starts until Mac RightKit mandatory requirements settle. Rust remains authoritative; SwiftUI supplies native mobile presentation. Android is outside scope.
+**Status:** design proposal · 2026-10-13; local-first V1 slice built 2026-10-19 (below). Sync, StoreKit, sharing and the remaining RightKit owner adoption still follow the sequence in this document. Rust remains authoritative; SwiftUI supplies native mobile presentation. Android is outside scope.
+
+## Built so far (2026-10-19)
+
+| Piece | Where | State |
+|---|---|---|
+| Rust bridge | `crates/mobile` (`lightcraft-mobile`, UniFFI 0.32, same as `rightkit-android`) | `EmberSession` wraps `DesktopHandle`: `open`, `run(id, paramsJson)`, `snapshot`, `viewSlice`, `preview`/`previewQuick` → descriptor, `previewBytes(handle)`, `releasePreview`, `preferences`, `persist`, `close`; contract version `bridgeVersion() == 1`. JSON shapes are desktop-host's. Pixels travel as encoded bytes, never JSON. Malformed input returns `EmberError`; tests cover it. |
+| XCFramework | `scripts/ios/build-xcframework.sh` (macOS) | Builds `aarch64-apple-ios` + `aarch64-apple-ios-sim` static libraries (dev profile by default) into `ios/Frameworks/EmberCore.xcframework` and generates the Swift bindings into `ios/Ember/Generated/` (both gitignored). Without SAM (`default-features = false`). |
+| App | `ios/Ember` (XcodeGen `ios/project.yml`) | Library chooser (user-chosen folder per D6, remembered by security-scoped bookmark, or the procedural sample library) → adaptive grid with rating/flag/edited badges → viewer with stars, pick/reject, touch-and-hold before/after → Edit panel (bottom on iPhone, side inspector on iPad) whose Light / Color / Effects / Vignette sliders come from the Rust control specs; a slider gesture is one undo step (`develop.beginInteraction`/`endInteraction`), undo/redo, double-tap resets → Share exports a JPEG through `app.export`. Imports from Photos or Files copy into `<library>/Originals/` and import by path. Catalog persists when the app backgrounds. |
+| Tests | `crates/mobile` unit tests; `ios/EmberUITests` | Bridge: malformed requests, demo session slice/rate/edit/render. UI test: chooser → sample library → rate → pick → edit exposure → undo, with screenshots in the result bundle. |
+
+**Shared components (Rk3 Win rulings, `ios-349/RULINGS.md`, relayed 2026-10-19).** There is no mandatory iOS owner list; RightKit's mandatory set is desktop-only and the Apple profile is an unratified draft. Ember pins RightKitSwift **0.8.1** and adopts only products covering what it does (licence, Apple credentials, diagnostics, store). The licence device id is RightKit's Keychain `requireDeviceID` (fails closed); 0.9.0 (held) adds its seed/accessibility/corruption options, the licence ContinuityBridge, `SyncedCredentialPolicy`, RightKitAccount, RightKitHTTP + NetPolicy, RightKitOAuth and RightKitHelperProtocol: move to them when tagged. Never built inside Ember: licence/Pro bridge, device-id store, account sign-in, HTTP client or URL policy, synced-credential policy, OAuth/PKCE, CoreML model root (HeardRight's SharedModelRoot), LAN send (Pulse's SendKit), signing/archive/TestFlight scripts.
+
+**TestFlight route (not run yet).** App Store Connect record exists: "Ember by Orthic Labs", app id 6824279883, bundle `com.orthiclabs.ember`, SKU `ember-ios`, internal TestFlight group. Releases go through right-release #349 (rightkit `docs/IOS-PACKAGE-RECIPE.md`, `targets.ios.iosPackage`; recipe fixes on rightkit main 44125396), run in the Mac desktop (Aqua) session, dry run first and reviewed by Rk3 Win before `--apply`. Still needed: an original 1024 px opaque AppIcon asset catalog (with its `assets/ATTRIBUTION.md` entry), `targets.ios.cargoManifest`/`ownershipScope` for the linked Rust library, a one-off RustRight `ios-static` exception for the release library, and a version bump before every sealed rebuild. Known gap: rightkit#780 (iOS build path assumes a Tauri layout).
+
+Not yet: personal sync, StoreKit, sharing, keywords/albums UI, crop/rotation UI, presets, named versions, masks, RAW-format reporting, background-task progress UI beyond the busy overlay, device/oldest-hardware performance measurements. The existing RightKit owners (licence, credentials, diagnostics, store) stay wired as before.
 
 ## What users can do
 
