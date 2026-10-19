@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { Button, IconButton, ModalShell } from '@rightkit/react-shell/react';
 import { LegalDocumentBody } from '@rightkit/legal-ui';
 import '@rightkit/legal-ui/legal-ui.css';
 import { legalDocument, type LegalDocumentId } from './documents';
@@ -32,19 +33,10 @@ export function LegalDocumentViewerHost() {
   if (!id) return null;
   const document = legalDocument(id);
   return (
-    <div className="lc-dialog-backdrop" style={{ zIndex: 3000 }} onClick={closeLegalDocument}>
-      <div className="lc-dialog lc-dialog-wide" role="dialog" aria-modal="true" aria-label={document.title} onClick={(event) => event.stopPropagation()}>
-        <div className="lc-dialog-header">
-          <h2>{document.title}</h2>
-          <button type="button" className="lc-icon-button" aria-label="Close" onClick={closeLegalDocument}>×</button>
-        </div>
-        <div className="lc-dialog-body"><LegalDocumentBody content={document.body} format={document.format} markdown="extended" /></div>
-        <div className="lc-dialog-actions">
-          <div className="lc-dialog-action-group">
-            <button type="button" className="lc-button lc-button-primary" autoFocus onClick={closeLegalDocument}>Done</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <ModalShell label={document.title} onClose={closeLegalDocument} width={860} autoFocus={false} overlayStyle={{ zIndex: 3000 }} overlayClassName="lc-dialog-backdrop" className="lc-dialog">
+      <div className="lc-dialog-header"><h2 className="rk-modal__title">{document.title}</h2><IconButton label="Close" onClick={closeLegalDocument}>×</IconButton></div>
+      <div className="lc-dialog-body"><LegalDocumentBody content={document.body} format={document.format} markdown="extended" /></div>
+      <div className="rk-modal__actions lc-dialog-actions"><Button variant="primary" className="lc-button lc-button-primary" autoFocus onClick={closeLegalDocument}>Done</Button></div>
+    </ModalShell>
   );
 }

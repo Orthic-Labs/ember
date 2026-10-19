@@ -1,3 +1,4 @@
+import { applyThemeAttribute, prefersDark } from '@rightkit/theme';
 import { getPreferences } from './api';
 
 export type ThemeChoice = 'light' | 'dark' | 'system';
@@ -25,6 +26,6 @@ export async function applyBootTheme(): Promise<void> {
   } catch {
     // Preferences unavailable: keep the system theme.
   }
-  const dark = choice === 'dark' || (choice === 'system' && window.matchMedia?.('(prefers-color-scheme: dark)').matches === true);
-  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  // @rightkit/theme owns the first-paint data-theme contract shared with the shell's provider.
+  applyThemeAttribute(choice === 'system' ? (prefersDark() ? 'dark' : 'light') : choice);
 }

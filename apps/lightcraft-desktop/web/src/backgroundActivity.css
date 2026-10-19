@@ -1,8 +1,8 @@
-.lc-background-activity{position:relative;flex-shrink:0;-webkit-app-region:no-drag}
+.lc-background-activity{flex-shrink:0;-webkit-app-region:no-drag}
 .lc-background-activity>button{display:flex;align-items:center;gap:7px}
 .lc-job-indicator{width:6px;height:6px;border-radius:50%;background:var(--accent,#2166d1)}
 .lc-job-count{font-variant-numeric:tabular-nums}
-.lc-background-jobs{position:absolute;z-index:90;right:0;top:calc(100% + 10px);width:min(360px,calc(100vw - 32px));max-height:min(560px,calc(100vh - 90px));overflow:auto;padding:16px;background:var(--elevated,#fff);color:var(--ink,#1f252f);border:1px solid var(--line,#d8dde5);border-radius:10px;box-shadow:0 12px 40px #0003;text-align:left;white-space:normal}
+.lc-background-jobs{max-height:min(560px,calc(100vh - 90px));overflow:auto;text-align:left;white-space:normal}
 .lc-background-jobs h2{margin:0 0 12px;font-size:14px;font-weight:600}
 .lc-background-jobs h3{margin:16px 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2,#697383)}
 .lc-background-jobs p{margin:8px 0;font-size:12px}
@@ -10,5 +10,5 @@
 .lc-job-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .lc-job-heading strong{font-size:12px;font-weight:500;overflow-wrap:anywhere}
 .lc-job-heading span{flex-shrink:0;font-size:11px;font-variant-numeric:tabular-nums;color:var(--ink-2,#697383)}
-.lc-job progress{display:block;width:100%;height:5px;margin:10px 0;accent-color:var(--accent,#2166d1)}
+.lc-job .rk-progress{margin:10px 0}
 .lc-job-error{color:var(--bad,#bf2735);overflow-wrap:anywhere}

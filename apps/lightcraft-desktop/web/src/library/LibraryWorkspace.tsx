@@ -1,12 +1,11 @@
 import { APP_NAME } from '../branding';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type KeyboardEvent, type UIEvent } from 'react';
-import { navNeighborIndex } from '@rightkit/react-shell';
-import { AppearanceMenu, NavList, PaletteTrigger, useShell, type NavGroup } from '@rightkit/react-shell/react';
+import { AppearanceMenu, Checkbox, ContextMenu, NavList, Popover, PaletteTrigger, Select, Slider, useContextMenu, useShell, type MenuItem, type NavGroup } from '@rightkit/react-shell/react';
 import type { DesktopSnapshot, PhotoSummary } from '../types';
 import { useDesktop } from '../desktop';
 import { RetainedLayout } from '../layout/RetainedLayout';
 import { PhotoPreview } from '../preview/PhotoPreview';
-import { libraryGroups, usePhotoSlice, type LibraryNavItem } from './libraryData';
+import { usePhotoSlice } from './libraryData';
 import './library.css';
 
 // One bounded page spans a normal viewport, so a justified window stays contiguous at page edges.
@@ -15,8 +14,6 @@ const MAX_PAGE_GEOMETRY = 64;
 const MIN_THUMB = 96;
 const MAX_THUMB = 480;
 const SCROLL_SYNC_FALLBACK_MS = 64;
-
-type MenuState = { x: number; y: number; photo: PhotoSummary } | null;
 
 function sourceKey(source: unknown): string {
   if (typeof source === 'string') return source;
@@ -87,107 +84,24 @@ function stars(rating: number): string {
   return rating > 0 ? `${'★'.repeat(Math.min(5, rating))}${'☆'.repeat(Math.max(0, 5 - rating))}` : '☆☆☆☆☆';
 }
 
-function navIsActive(snapshot: DesktopSnapshot | null, item: LibraryNavItem): boolean {
-  if (!snapshot) return false;
-  const source = sourceKey(snapshot.source);
-  if (item.id === 'all') return source === 'all';
-  if (item.id === 'recently-added') return source === 'recentlyAdded';
-  if (item.id === 'picks') return source === 'picks';
-  if (item.id === 'recently-deleted') return source === 'recentlyDeleted';
-  if (item.id === 'local') return source === 'folder';
-  if (item.params?.kind === 'album') {
-    return source === 'album' && String((snapshot.source as { id?: unknown } | null)?.id ?? '') === String(item.params.id);
-  }
-  return false;
-}
-
-function NavIcon({ icon }: { icon: string }) {
-  const glyph: Record<string, string> = { photos: '▦', clock: '◷', 'flag-pick': '⚑', trash: '⌫', album: '▱', folder: '□', sparkles: '✦', calendar: '▣', warning: '!' };
-  return <span className={`lc-nav-icon lc-nav-icon-${icon}`} aria-hidden="true">{glyph[icon] ?? '·'}</span>;
-}
-
-type SidebarCollapseState = Record<string, boolean>;
-
 export function LibraryShellSidebar({ groups, sectionIds, activeId, onNavigate }: { groups: readonly NavGroup[]; sectionIds: readonly string[]; activeId: string; onNavigate: (id: string) => void }) {
   const { ui, setUi, t } = useDesktop();
   const shell = useShell();
-  const groupsRef = useRef<HTMLDivElement>(null);
-  const collapsedSections = useMemo(() => Object.fromEntries(Object.entries(ui.sections).filter(([key, value]) => key.startsWith('sidebar:') && value === true).map(([key]) => [key.slice(8), true])), [ui.sections]);
-  const toggleSection = (id: string) => {
-    const key = `sidebar:${id}`;
-    setUi({ sections: { ...ui.sections, [key]: !collapsedSections[id] } });
-  };
-  useEffect(() => {
-    const buttons = Array.from(groupsRef.current?.querySelectorAll<HTMLButtonElement>('button[data-nav-id]') ?? []);
-    if (!buttons.length) return;
-    const selected = buttons.find((button) => button.dataset.navId === activeId) ?? buttons[0];
-    buttons.forEach((button) => { button.tabIndex = button === selected ? 0 : -1; });
-  }, [activeId, collapsedSections, groups, ui.sidebarCollapsed]);
-  const onKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
-    const buttons = Array.from(groupsRef.current?.querySelectorAll<HTMLButtonElement>('button[data-nav-id]') ?? []);
-    const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('button[data-nav-id]') : null;
-    if (!target) return;
-    const current = buttons.indexOf(target);
-    const next = navNeighborIndex('vertical', event.key, current < 0 ? 0 : current, buttons.length);
-    if (next === null || !buttons[next]) return;
-    event.preventDefault();
-    event.stopPropagation();
-    buttons[next].focus();
+  const sectionKey = (index: number) => `sidebar:${sectionIds[index] ?? `group-${index}`}`;
+  const collapsedTitles = groups.flatMap((group, index) => (ui.sections[sectionKey(index)] === true && group.title ? [group.title] : []));
+  const onToggleGroup = (title: string) => {
+    const index = groups.findIndex((group) => group.title === title);
+    if (index < 0) return;
+    const key = sectionKey(index);
+    setUi({ sections: { ...ui.sections, [key]: ui.sections[key] !== true } });
   };
   return <aside className="rk-side lc-shell-library-sidebar" aria-label={t('Sections')} hidden={ui.sidebarCollapsed}>
     <PaletteTrigger onOpen={shell.palette.show} label={t('Jump to')} />
-    <div className="lc-shell-sidebar-groups" ref={groupsRef} onKeyDownCapture={onKeyDownCapture}>
-      {groups.map((group, index) => {
-        const id = sectionIds[index] ?? `group-${index}`;
-        const sectionCollapsed = !ui.sidebarCollapsed && collapsedSections[id] === true;
-        const visibleGroup = sectionCollapsed ? { ...group, items: [] } : group;
-        return <section className={`lc-shell-sidebar-group${sectionCollapsed ? ' is-collapsed' : ''}`} key={id}>
-          <button className="lc-shell-sidebar-group-header" type="button" aria-expanded={!sectionCollapsed} onClick={() => toggleSection(id)}>
-            <span>{group.title}</span><span aria-hidden="true">{sectionCollapsed ? '›' : '⌄'}</span>
-          </button>
-          <NavList groups={[visibleGroup]} activeId={activeId} onNavigate={onNavigate} label={group.title} />
-        </section>;
-      })}
+    <div className="lc-shell-sidebar-groups">
+      <NavList groups={groups} activeId={activeId} onNavigate={onNavigate} label={t('Sections')} collapsedGroups={ui.sidebarCollapsed ? [] : collapsedTitles} onToggleGroup={onToggleGroup} renderTwisty={(open) => <span aria-hidden="true">{open ? '⌄' : '›'}</span>} />
     </div>
     <div className="rk-side__foot"><footer className="rk-brand-foot"><span className="rk-wordmark">{APP_NAME}</span><AppearanceMenu value={ui.theme} onChange={(theme) => setUi({ theme })} labels={{ appearance: t('Appearance'), theme: { system: t('System'), light: t('Light'), dark: t('Dark') } }} /></footer></div>
   </aside>;
-}
-
-function SourceSidebar({ snapshot, collapsed, collapsedSections, onToggleSection, onNavigate }: { snapshot: DesktopSnapshot | null; collapsed: boolean; collapsedSections: SidebarCollapseState; onToggleSection: (id: string) => void; onNavigate: (item: LibraryNavItem) => void }) {
-  const groups = useMemo(() => libraryGroups(snapshot), [snapshot]);
-  return (
-    <aside className={`lc-library-sidebar${collapsed ? ' is-collapsed' : ''}`} aria-label="Library sources">
-      {groups.map((group) => {
-        const sectionCollapsed = collapsedSections[group.id] === true;
-        return <section className={`lc-source-group${sectionCollapsed ? ' is-collapsed' : ''}`} key={group.id}>
-          {!collapsed && <button className="lc-source-group-header" type="button" aria-expanded={!sectionCollapsed} onClick={() => onToggleSection(group.id)}>
-            <h2>{group.title}</h2><span className="lc-source-group-chevron" aria-hidden="true">{sectionCollapsed ? '›' : '⌄'}</span>
-          </button>}
-          {(!sectionCollapsed || collapsed) && group.items.map((item) => (
-            <button
-              className={`lc-source-item${navIsActive(snapshot, item) ? ' is-active' : ''}`}
-              type="button"
-              key={item.id}
-              onClick={() => onNavigate(item)}
-              title={collapsed ? item.label : undefined}
-              aria-label={item.label}
-              aria-current={navIsActive(snapshot, item) ? 'page' : undefined}
-            >
-              <NavIcon icon={item.icon} />
-              {!collapsed && <span className="lc-source-label">{item.label}</span>}
-              {!collapsed && item.count !== undefined && <span className="lc-source-count">{item.count}</span>}
-            </button>
-          ))}
-        </section>
-      })}
-      {!collapsed && <div className="lc-sidebar-status" aria-live="polite">
-        {snapshot?.status.unsaved && <span>Unsaved changes</span>}
-        {snapshot?.status.importing && <span>Importing…</span>}
-        {snapshot?.status.exporting && <span>Exporting…</span>}
-        {!snapshot?.status.unsaved && !snapshot?.status.importing && !snapshot?.status.exporting && <span>Library ready</span>}
-      </div>}
-    </aside>
-  );
 }
 
 function FilterBar({ snapshot, filterText, setFilterText }: { snapshot: DesktopSnapshot | null; filterText: string; setFilterText: (value: string) => void }) {
@@ -224,40 +138,37 @@ function FilterBar({ snapshot, filterText, setFilterText }: { snapshot: DesktopS
       <button className="lc-filter-more" type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>Filters <span aria-hidden="true">⌄</span></button>
       {(filter && Object.keys(filter).some((key) => filter[key] !== null && filter[key] !== undefined && filter[key] !== '' && filter[key] !== false && filter[key] !== 0)) && <button className="lc-filter-clear" type="button" onClick={clear}>Clear all</button>}
       {expanded && <div className="lc-filter-panel" role="region" aria-label="Full filters">
-        <label>Rating <select value={String(filter?.rating ?? 0)} onChange={(event) => setFilter({ rating: Number(event.target.value) || 0 })}><option value="0">Any</option>{[1, 2, 3, 4, 5].map((rating) => <option key={rating} value={rating}>{rating}+ stars</option>)}</select></label>
-        <label>Flag <select value={String(filter?.flag ?? '')} onChange={(event) => setFilter({ flag: event.target.value || null })}><option value="">Any</option><option value="pick">Picked</option><option value="reject">Rejected</option><option value="none">Unflagged</option></select></label>
-        <label>Label <select value={String(filter?.label ?? '')} onChange={(event) => setFilter({ label: event.target.value || null })}><option value="">Any</option>{['red', 'yellow', 'green', 'blue', 'purple'].map((label) => <option key={label} value={label}>{label}</option>)}</select></label>
-        <label>Kind <select value={String(filter?.kind ?? '')} onChange={(event) => setFilter({ kind: event.target.value || null })}><option value="">Any</option><option value="image">Image</option><option value="raw">Raw</option><option value="video">Video</option></select></label>
+        <label>Rating <Select value={String(filter?.rating ?? 0)} options={[{ value: '0', label: 'Any' }, ...[1, 2, 3, 4, 5].map((rating) => ({ value: String(rating), label: `${rating}+ stars` }))]} onChange={(value) => setFilter({ rating: Number(value) || 0 })} label="Rating" /></label>
+        <label>Flag <Select value={String(filter?.flag ?? '')} options={[{ value: '', label: 'Any' }, { value: 'pick', label: 'Picked' }, { value: 'reject', label: 'Rejected' }, { value: 'none', label: 'Unflagged' }]} onChange={(value) => setFilter({ flag: value || null })} label="Flag" /></label>
+        <label>Label <Select value={String(filter?.label ?? '')} options={[{ value: '', label: 'Any' }, ...['red', 'yellow', 'green', 'blue', 'purple'].map((label) => ({ value: label, label }))]} onChange={(value) => setFilter({ label: value || null })} label="Label" /></label>
+        <label>Kind <Select value={String(filter?.kind ?? '')} options={[{ value: '', label: 'Any' }, { value: 'image', label: 'Image' }, { value: 'raw', label: 'Raw' }, { value: 'video', label: 'Video' }]} onChange={(value) => setFilter({ kind: value || null })} label="Kind" /></label>
         <label>Date <input value={String(filter?.date ?? '')} onChange={(event) => setFilter({ date: event.target.value || null })} placeholder="YYYY-MM-DD" /></label>
         <label>Keyword <input value={String(filter?.keyword ?? '')} onChange={(event) => setFilter({ keyword: event.target.value || null })} /></label>
         <label>Camera <input value={String(filter?.camera ?? '')} onChange={(event) => setFilter({ camera: event.target.value || null })} /></label>
-        <label className="lc-filter-check"><input type="checkbox" checked={filter?.edited === true} onChange={(event) => setFilter({ edited: event.target.checked ? true : null })} /> Edited only</label>
-        {presets.length > 0 && <label>Saved <select defaultValue="" onChange={(event) => { if (event.target.value) void run('filter.applyPreset', { name: event.target.value }); }}><option value="">Choose…</option>{presets.map((preset) => <option key={preset.name} value={preset.name}>{preset.name}</option>)}</select></label>}
+        <Checkbox className="lc-filter-check" checked={filter?.edited === true} onChange={(checked) => setFilter({ edited: checked ? true : null })} label="Edited only" />
+        {presets.length > 0 && <label>Saved <Select value="" options={[{ value: '', label: 'Choose…' }, ...presets.map((preset) => ({ value: preset.name, label: preset.name }))]} onChange={(value) => { if (value) void run('filter.applyPreset', { name: value }); }} label="Saved filters" /></label>}
         <div className="lc-filter-save"><input value={savedName} onChange={(event) => setSavedName(event.target.value)} placeholder="Saved filter name" aria-label="Saved filter name" /><button type="button" onClick={save}>Save filter</button><button type="button" onClick={() => setDialog({ kind: 'smartAlbum', params: { fromFilter: true } })}>Smart album…</button></div>
       </div>}
     </div>
   );
 }
 
-function GridMenu({ menu, close, albums }: { menu: MenuState; close: () => void; albums: DesktopSnapshot['albums'] }) {
-  const { run } = useDesktop();
-  if (!menu) return null;
-  const target = { ids: [menu.photo.id] };
-  const execute = (id: string, params: Record<string, unknown> = {}) => { close(); void run(id, { ...params, ...target }); };
-  return <div className="lc-grid-menu" role="menu" style={{ left: menu.x, top: menu.y }} onMouseLeave={close}>
-    <button type="button" role="menuitem" onClick={() => execute('photo.pick')}>Pick <kbd>P</kbd></button>
-    <button type="button" role="menuitem" onClick={() => execute('photo.reject')}>Reject <kbd>X</kbd></button>
-    <button type="button" role="menuitem" onClick={() => execute('photo.unflag')}>Unflag <kbd>U</kbd></button>
-    <div className="lc-menu-label">Rating</div>
-    <div className="lc-menu-rating">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} type="button" role="menuitem" aria-label={`${rating} stars`} onClick={() => execute('photo.rate', { rating })}>{rating <= menu.photo.rating ? '★' : '☆'}</button>)}</div>
-    <div className="lc-menu-label">Label</div>
-    <div className="lc-menu-labels">{['red', 'yellow', 'green', 'blue', 'purple', 'none'].map((label) => <button type="button" role="menuitem" className={`lc-label-dot ${label}`} key={label} aria-label={`${label} label`} onClick={() => execute('photo.label', { label })} />)}</div>
-    <div className="lc-menu-label">Add to album</div>
-    {albums.filter((album) => !album.folder && !album.smart).map((album) => <button type="button" role="menuitem" key={album.id} onClick={() => execute('album.addPhotos', { id: album.id })}>{album.name}</button>)}
-    {albums.every((album) => album.folder || album.smart) && <span className="lc-menu-empty">No writable albums</span>}
-    <button type="button" role="menuitem" onClick={() => execute('app.showInFinder')}>Reveal original</button>
-    <button type="button" role="menuitem" onClick={() => execute(menu.photo.deleted ? 'photo.restore' : 'photo.delete')}>{menu.photo.deleted ? 'Restore' : 'Move to Recently Deleted'}</button>
-  </div>;
+function photoMenuItems(photo: PhotoSummary, albums: DesktopSnapshot['albums'], run: ReturnType<typeof useDesktop>['run']): MenuItem[] {
+  const ids = [photo.id];
+  const writable = albums.filter((album) => !album.folder && !album.smart);
+  return [
+    { id: 'pick', label: 'Pick', shortcut: 'P', run: () => void run('photo.pick', { ids }) },
+    { id: 'reject', label: 'Reject', shortcut: 'X', run: () => void run('photo.reject', { ids }) },
+    { id: 'unflag', label: 'Unflag', shortcut: 'U', run: () => void run('photo.unflag', { ids }) },
+    // Inline multi-button rows: one menu row holds five rating buttons (exception B6; MenuItem is one action per row).
+    { id: 'rating', label: <span className="lc-menu-group"><span className="lc-menu-label">Rating</span><span className="lc-menu-rating">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} type="button" aria-label={`${rating} stars`} onClick={() => void run('photo.rate', { ids, rating })}>{rating <= photo.rating ? '★' : '☆'}</button>)}</span></span>, separatorBefore: true },
+    { id: 'label', label: <span className="lc-menu-group"><span className="lc-menu-label">Label</span><span className="lc-menu-labels">{['red', 'yellow', 'green', 'blue', 'purple', 'none'].map((label) => <button key={label} type="button" className={`lc-label-dot ${label}`} aria-label={`${label} label`} onClick={() => void run('photo.label', { ids, label })} />)}</span></span> },
+    { id: 'album-heading', label: 'Add to album', separatorBefore: true, disabled: true },
+    ...writable.map((album): MenuItem => ({ id: `album-${album.id}`, label: album.name, run: () => void run('album.addPhotos', { ids, id: album.id }) })),
+    ...(writable.length ? [] : [{ id: 'album-none', label: 'No writable albums', disabled: true }]),
+    { id: 'reveal', label: 'Reveal original', separatorBefore: true, run: () => void run('app.showInFinder', { ids }) },
+    { id: 'delete', label: photo.deleted ? 'Restore' : 'Move to Recently Deleted', run: () => void run(photo.deleted ? 'photo.restore' : 'photo.delete', { ids }) },
+  ];
 }
 
 function VirtualPhotoGrid({ snapshot, mode, thumbSize }: { snapshot: DesktopSnapshot; mode: 'photoGrid' | 'squareGrid'; thumbSize: number }) {
@@ -265,7 +176,7 @@ function VirtualPhotoGrid({ snapshot, mode, thumbSize }: { snapshot: DesktopSnap
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
   const [viewportWidth, setViewportWidth] = useState(900);
-  const [menu, setMenu] = useState<MenuState>(null);
+  const photoMenu = useContextMenu<PhotoSummary>((photo) => photoMenuItems(photo, snapshot.albums, run), 'Photo actions');
   const pageHeights = useRef(new Map<number, number>());
   const retainedSlices = useRef(new Map<string, PhotoSummary[]>());
   const [geometryRevision, setGeometryRevision] = useState(0);
@@ -442,7 +353,7 @@ function VirtualPhotoGrid({ snapshot, mode, thumbSize }: { snapshot: DesktopSnap
       {row.photos.map((photo) => {
         const isSelected = selected.has(photo.id);
         const width = `${Math.max(0, ((gridWidth - gap * (row.photos.length - 1)) * photoAspect(photo)) / Math.max(row.aspectSum, 0.5))}px`;
-        return <button className={`lc-photo-cell${isSelected ? ' is-selected' : ''}${active === photo.id ? ' is-active' : ''}${ui.gridInfo ? ' is-grid-info' : ''}`} style={{ width, height: row.height }} type="button" role="gridcell" aria-selected={isSelected} key={photo.id} onClick={(event) => { event.stopPropagation(); select(photo, event); }} onDoubleClick={(event) => { event.stopPropagation(); select(photo, event); setUi({ view: 'detail', panel: 'info', filmstrip: true }); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setMenu({ x: event.clientX, y: event.clientY, photo }); }}>
+        return <button className={`lc-photo-cell${isSelected ? ' is-selected' : ''}${active === photo.id ? ' is-active' : ''}${ui.gridInfo ? ' is-grid-info' : ''}`} style={{ width, height: row.height }} type="button" role="gridcell" aria-selected={isSelected} key={photo.id} onClick={(event) => { event.stopPropagation(); select(photo, event); }} onDoubleClick={(event) => { event.stopPropagation(); select(photo, event); setUi({ view: 'detail', panel: 'info', filmstrip: true }); }} onContextMenu={(event) => photoMenu.open(event, photo)}>
           <span className="lc-photo-frame"><PhotoPreview photoId={photo.id} slot={`grid-${photo.id}`} viewGeneration={snapshot.viewGeneration} width={Math.max(96, Math.round(thumbSize * photoAspect(photo)))} height={Math.max(96, Math.round(thumbSize))} quality="draft" className="lc-photo-preview" /><PhotoBadges photo={photo} /><span className="lc-photo-caption"><span className="lc-photo-name">{photo.fileName}</span><span className="lc-photo-stars">{stars(photo.rating)}</span></span></span>
         </button>;
       })}
@@ -537,7 +448,7 @@ function VirtualPhotoGrid({ snapshot, mode, thumbSize }: { snapshot: DesktopSnap
   const windowTemplate = `repeat(${columns}, minmax(0, 1fr))`;
   const windowGeometryKey = `${windowTop}:${windowTemplate}:${geometrySignature}:${gap}`;
   return (
-    <div className={`lc-grid-scroll ${mode === 'squareGrid' ? 'is-square' : 'is-aspect'}`} ref={scrollRef} onScroll={onScroll} onClick={() => setMenu(null)}>
+    <div className={`lc-grid-scroll ${mode === 'squareGrid' ? 'is-square' : 'is-aspect'}`} ref={scrollRef} onScroll={onScroll}>
       <div className="lc-grid-spacer" key={spacerGeometryKey} style={{ height: totalHeight }} aria-hidden="true" />
       <RetainedLayout geometryKey={windowGeometryKey} className={`lc-grid-window${mode === 'photoGrid' ? ' is-justified' : ''}`} style={{ top: windowTop, gridTemplateColumns: windowTemplate, gap }} onKeyDown={(event) => {
           if (event.key === 'ArrowRight') { event.preventDefault(); moveSelection(1, event); }
@@ -550,14 +461,14 @@ function VirtualPhotoGrid({ snapshot, mode, thumbSize }: { snapshot: DesktopSnap
           {mode === 'photoGrid' ? <>{renderJustifiedRows(currentVisibleRows.rows, `row-${chunkOffset}`, currentVisibleRows.tops)}{showNextPage && renderJustifiedRows(nextVisibleRows.rows, `row-${nextChunkOffset}`, nextVisibleRows.tops.map((top) => nextPageTop - currentPageTop + top))}</> : <>{Array.from({ length: squareLeadingCells }, (_, index) => <span className="lc-square-spacer" aria-hidden="true" key={`square-spacer-${index}`} />)}{squarePhotos.map((photo) => {
             const isSelected = selected.has(photo.id);
             const style = { '--lc-aspect': '1' } as CSSProperties;
-            return <button className={`lc-photo-cell${isSelected ? ' is-selected' : ''}${active === photo.id ? ' is-active' : ''}${ui.gridInfo ? ' is-grid-info' : ''}`} style={style} type="button" role="gridcell" aria-selected={isSelected} key={photo.id} onClick={(event) => { event.stopPropagation(); select(photo, event); }} onDoubleClick={(event) => { event.stopPropagation(); select(photo, event); setUi({ view: 'detail', panel: 'info', filmstrip: true }); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setMenu({ x: event.clientX, y: event.clientY, photo }); }}>
+            return <button className={`lc-photo-cell${isSelected ? ' is-selected' : ''}${active === photo.id ? ' is-active' : ''}${ui.gridInfo ? ' is-grid-info' : ''}`} style={style} type="button" role="gridcell" aria-selected={isSelected} key={photo.id} onClick={(event) => { event.stopPropagation(); select(photo, event); }} onDoubleClick={(event) => { event.stopPropagation(); select(photo, event); setUi({ view: 'detail', panel: 'info', filmstrip: true }); }} onContextMenu={(event) => photoMenu.open(event, photo)}>
               <span className="lc-photo-frame"><PhotoPreview photoId={photo.id} slot={`grid-${photo.id}`} viewGeneration={snapshot.viewGeneration} width={Math.max(96, thumbSize)} height={Math.max(96, thumbSize)} quality="draft" className="lc-photo-preview" /><PhotoBadges photo={photo} /><span className="lc-photo-caption"><span className="lc-photo-name">{photo.fileName}</span><span className="lc-photo-stars">{stars(photo.rating)}</span></span></span>
             </button>;
           })}</>}
           {slice.loading && photos.length === 0 && <div className="lc-grid-loading" role="status">Loading photos…</div>}
           {slice.error && <div className="lc-grid-error" role="alert">Unable to load photos: {slice.error}</div>}
       </RetainedLayout>
-      <GridMenu menu={menu} albums={snapshot.albums} close={() => setMenu(null)} />
+      {photoMenu.element}
     </div>
   );
 }
@@ -571,60 +482,43 @@ function Header({ snapshot, mode, setMode, thumbSize }: { snapshot: DesktopSnaps
   const sourceLabel = typeof snapshot.source === 'object' && snapshot.source && 'label' in snapshot.source ? String((snapshot.source as { label?: unknown }).label) : sourceKey(snapshot.source) === 'all' ? 'All Photos' : sourceKey(snapshot.source);
   const [sortOpen, setSortOpen] = useState(false);
   const [displayOpen, setDisplayOpen] = useState(false);
+  const sortButtonRef = useRef<HTMLButtonElement>(null);
+  const displayButtonRef = useRef<HTMLButtonElement>(null);
   const randomSort = sortIsRandom(snapshot.sort);
-  const sort = (key: string) => { setSortOpen(false); void run('library.sort', { key }); };
-  useEffect(() => {
-    if (!displayOpen) return;
-    const dismissDisplay = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setDisplayOpen(false);
-    };
-    document.addEventListener('keydown', dismissDisplay);
-    return () => document.removeEventListener('keydown', dismissDisplay);
-  }, [displayOpen]);
+  const sortItems: MenuItem[] = [
+    ...[['captureDate', 'Capture date'], ['importDate', 'Import date'], ['editDate', 'Modified'], ['fileName', 'Filename'], ['rating', 'Rating'], ['fileSize', 'File size'], ['random', 'Random']].map(([key, label]): MenuItem => ({ id: key, label, run: () => void run('library.sort', { key }) })),
+    ...(randomSort ? [{ id: 'reshuffle', label: 'Reshuffle', separatorBefore: true, run: () => void run('library.shuffle', {}) }] : []),
+    { id: 'ascending', label: 'Ascending', separatorBefore: !randomSort, disabled: randomSort, run: () => void run('library.sort', { ascending: true }) },
+    { id: 'descending', label: 'Descending', disabled: randomSort, run: () => void run('library.sort', { ascending: false }) },
+  ];
   return <header className="lc-library-header">
     <div className="lc-library-title"><h1>{sourceLabel}</h1><span>{snapshot.selection.length > 1 ? `${snapshot.selection.length} selected · ` : ''}{snapshot.total} photos</span></div>
     <div className="lc-library-actions">
       <button type="button" className="lc-header-action" onClick={() => void run('file.addPhotos', {})}>Import</button>
       <button type="button" className="lc-header-action" onClick={() => setDialog({ kind: 'export' })}>Export</button>
-      <div className="lc-display-wrap"><button type="button" className="lc-header-action" aria-expanded={displayOpen} onClick={() => setDisplayOpen((value) => !value)}>Display <span aria-hidden="true">⌄</span></button>{displayOpen && <div className="lc-display-menu" role="menu">
-        <div className="lc-display-views" role="group" aria-label="Grid style"><button type="button" className={mode === 'photoGrid' ? 'is-active' : ''} aria-pressed={mode === 'photoGrid'} onClick={() => { setMode('photoGrid'); setUi({ view: 'photoGrid' }); }}>▦ Photo grid</button><button type="button" className={mode === 'squareGrid' ? 'is-active' : ''} aria-pressed={mode === 'squareGrid'} onClick={() => { setMode('squareGrid'); setUi({ view: 'squareGrid' }); }}>□ Square grid</button></div>
-        <label className="lc-display-size">Thumbnail size <input type="range" min={MIN_THUMB} max={MAX_THUMB} step={4} value={thumbSize} onChange={(event) => setUi({ thumbSize: Number(event.target.value) })} /></label>
-        <button type="button" role="menuitem" onClick={() => setUi({ gridInfo: !ui.gridInfo })}>Grid info: {ui.gridInfo ? 'On' : 'Off'}</button><button type="button" role="menuitem" onClick={() => { setDisplayOpen(false); setDialog({ kind: 'copySettings' }); }}>Copy settings</button><button type="button" role="menuitem" onClick={() => { setDisplayOpen(false); setDialog({ kind: 'pasteSettings' }); }}>Paste settings</button>
-      </div>}</div>
-      <div className="lc-sort-wrap"><button type="button" className="lc-header-action" aria-expanded={sortOpen} onClick={() => setSortOpen((value) => !value)}>Sort ▾</button>{sortOpen && <div className="lc-sort-menu" role="menu">{[['captureDate', 'Capture date'], ['importDate', 'Import date'], ['editDate', 'Modified'], ['fileName', 'Filename'], ['rating', 'Rating'], ['fileSize', 'File size']].map(([key, label]) => <button type="button" role="menuitem" key={key} onClick={() => sort(key)}>{label}</button>)}<button type="button" role="menuitem" className="lc-sort-random" onClick={() => sort('random')}>Random</button><hr />{randomSort && <button type="button" role="menuitem" onClick={() => { setSortOpen(false); void run('library.shuffle', {}); }}>Reshuffle</button>}<button type="button" role="menuitem" disabled={randomSort} aria-disabled={randomSort} onClick={() => { if (!randomSort) { setSortOpen(false); void run('library.sort', { ascending: true }); } }}>Ascending</button><button type="button" role="menuitem" disabled={randomSort} aria-disabled={randomSort} onClick={() => { if (!randomSort) { setSortOpen(false); void run('library.sort', { ascending: false }); } }}>Descending</button></div>}</div>
+      <div className="lc-display-wrap"><button ref={displayButtonRef} type="button" className="lc-header-action" aria-expanded={displayOpen} onClick={() => setDisplayOpen((value) => !value)}>Display <span aria-hidden="true">⌄</span></button></div>
+      {displayOpen && displayButtonRef.current && <Popover anchor={displayButtonRef.current} label="Display" placement="bottom-end" width={200} className="lc-display-menu" onClose={() => setDisplayOpen(false)}>
+        <div className="lc-display-views" role="group" aria-label="Grid style"><button type="button" className={mode === 'photoGrid' ? 'rk-menu__item is-active' : 'rk-menu__item'} aria-pressed={mode === 'photoGrid'} onClick={() => { setMode('photoGrid'); setUi({ view: 'photoGrid' }); }}>▦ Photo grid</button><button type="button" className={mode === 'squareGrid' ? 'rk-menu__item is-active' : 'rk-menu__item'} aria-pressed={mode === 'squareGrid'} onClick={() => { setMode('squareGrid'); setUi({ view: 'squareGrid' }); }}>□ Square grid</button></div>
+        <div className="lc-display-size"><span>Thumbnail size</span><Slider value={thumbSize} min={MIN_THUMB} max={MAX_THUMB} step={4} label="Thumbnail size" onChange={(value) => setUi({ thumbSize: value })} /></div>
+        <button type="button" role="menuitem" className="rk-menu__item" onClick={() => setUi({ gridInfo: !ui.gridInfo })}>Grid info: {ui.gridInfo ? 'On' : 'Off'}</button>
+        <button type="button" role="menuitem" className="rk-menu__item" onClick={() => { setDisplayOpen(false); setDialog({ kind: 'copySettings' }); }}>Copy settings</button>
+        <button type="button" role="menuitem" className="rk-menu__item" onClick={() => { setDisplayOpen(false); setDialog({ kind: 'pasteSettings' }); }}>Paste settings</button>
+      </Popover>}
+      <button ref={sortButtonRef} type="button" className="lc-header-action" aria-haspopup="menu" aria-expanded={sortOpen} onClick={() => setSortOpen((value) => !value)}>Sort ▾</button>
+      {sortOpen && sortButtonRef.current && <ContextMenu anchor={sortButtonRef.current} placement="bottom-end" items={sortItems} label="Sort" width={176} onClose={() => setSortOpen(false)} />}
     </div>
   </header>;
 }
 
-export default function LibraryWorkspace({ showSidebar = true }: { showSidebar?: boolean } = {}) {
-  const { snapshot, ui, setUi, run, native } = useDesktop();
+export default function LibraryWorkspace() {
+  const { snapshot, ui, setUi, run } = useDesktop();
   const [filterText, setFilterText] = useState(ui.filterText ?? '');
   const mode: 'photoGrid' | 'squareGrid' = ui.view === 'squareGrid' ? 'squareGrid' : 'photoGrid';
   const thumbSize = Math.max(MIN_THUMB, Math.min(MAX_THUMB, ui.thumbSize || 180));
-  const sidebarCollapsed = ui.sidebarCollapsed;
-  // Namespaced UI keys retain section state independently from shell sidebarCollapsed.
-  const collapsedSections = useMemo<SidebarCollapseState>(() => Object.fromEntries(Object.entries(ui.sections).filter(([key, value]) => key.startsWith('sidebar:') && value === true).map(([key]) => [key.slice(8), true])), [ui.sections]);
-  const toggleSection = useCallback((id: string) => {
-    const key = `sidebar:${id}`;
-    setUi({ sections: { ...ui.sections, [key]: !collapsedSections[id] } });
-  }, [collapsedSections, setUi, ui.sections]);
   useEffect(() => { const handle = window.setTimeout(() => { setUi({ filterText }); void run('library.filter', { text: filterText }); }, 220); return () => window.clearTimeout(handle); }, [filterText, run, setUi]);
-  const navigate = useCallback(async (item: LibraryNavItem) => {
-    if (item.id === 'local') {
-      const result = await native('pickFolder', {});
-      if (result && typeof result === 'object' && 'path' in result && typeof (result as { path?: unknown }).path === 'string') {
-        const path = (result as { path: string }).path;
-        await run('library.browse', { path, subfolders: true });
-      }
-      return;
-    }
-    await run(item.command, item.params ?? {});
-  }, [native, run]);
   if (!snapshot) return <main className="lc-library-empty" role="status">Reconnect to load library.</main>;
-  return <div className={`lc-library-workspace${showSidebar ? '' : ' lc-library-workspace-shell-nav'}`} style={{ '--lc-sidebar-width': showSidebar ? (sidebarCollapsed ? '48px' : `${ui.sidebarWidth || 268}px`) : '0px' } as CSSProperties}>
-    {showSidebar && <SourceSidebar snapshot={snapshot} collapsed={sidebarCollapsed} collapsedSections={collapsedSections} onToggleSection={toggleSection} onNavigate={navigate} />}
+  return <div className="lc-library-workspace lc-library-workspace-shell-nav" style={{ '--lc-sidebar-width': '0px' } as CSSProperties}>
     <section className="lc-library-main" aria-label="Library">
-      {showSidebar && <div className="lc-library-sidebar-toggle"><button type="button" aria-label={sidebarCollapsed ? 'Expand library sidebar' : 'Collapse library sidebar'} aria-pressed={sidebarCollapsed} onClick={() => setUi({ sidebarCollapsed: !sidebarCollapsed })}>☰</button></div>}
       <Header snapshot={snapshot} mode={mode} setMode={(next) => setUi({ view: next })} thumbSize={thumbSize} />
       <FilterBar snapshot={snapshot} filterText={filterText} setFilterText={setFilterText} />
       <VirtualPhotoGrid snapshot={snapshot} mode={mode} thumbSize={thumbSize} />

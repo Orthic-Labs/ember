@@ -1,9 +1,9 @@
 import { canonicalSection, sectionIsOpen, toggledSection } from '../controlSections';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { ControlSpec, DesktopSnapshot, JsonObject, Panel, UiState } from '../types';
 import { useDesktop } from '../desktop';
 import { Icon, type IconName } from '../icons';
-import { FuseCurves } from '@rightkit/react-shell/react';
+import { Checkbox, ContextMenu, FuseCurves, Select, Slider, type MenuItem } from '@rightkit/react-shell/react';
 import { SliderCommandQueue } from './sliderCommandQueue';
 import { fromRange, rangeProps } from './trackScale';
 import './Inspector.css';
@@ -77,30 +77,10 @@ export default function Inspector({ className = '' }: { className?: string }) {
   const panel = ui.panel ?? (ui.view === 'detail' ? 'edit' : 'info');
   const [moreOpen, setMoreOpen] = useState(false);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
   const choose = (next: Exclude<Panel, null>) => {
     desktop.setUi({ inspectorCollapsed: false, panel: next, ...(next === 'edit' || next === 'crop' || next === 'remove' || next === 'masking' || next === 'redeye' || next === 'profiles' || next === 'presets' ? { view: 'detail' } : {}) });
   };
   const hiddenPanelActive = MORE_PANEL_ITEMS.some(item => item.id === panel);
-  const closeMore = (restoreFocus = true) => {
-    setMoreOpen(false);
-    if (restoreFocus) requestAnimationFrame(() => moreButtonRef.current?.focus());
-  };
-  useEffect(() => {
-    if (!moreOpen) return undefined;
-    requestAnimationFrame(() => moreMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus());
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); closeMore(); }
-      else if (event.key === 'Tab') closeMore(false);
-    };
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (!moreButtonRef.current?.contains(target) && !moreMenuRef.current?.contains(target)) closeMore(false);
-    };
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => { document.removeEventListener('keydown', onKeyDown); document.removeEventListener('pointerdown', onPointerDown); };
-  }, [moreOpen]);
   return <aside className={`lc-inspector ${ui.inspectorCollapsed ? 'is-collapsed' : ''} ${className}`} data-theme={theme} aria-label="Inspector">
     <div className="lc-inspector__content">
       <div className="lc-inspector__scroll">
@@ -118,26 +98,19 @@ export default function Inspector({ className = '' }: { className?: string }) {
       {!snapshot && <div className="lc-inspector__empty">Waiting for desktop session…</div>}
       </div>
     </div>
-    <ToolRail active={panel} choose={choose} chooseFromMore={(next) => { choose(next); closeMore(); }} open={moreOpen} setOpen={setMoreOpen} hiddenActive={hiddenPanelActive} buttonRef={moreButtonRef} menuRef={moreMenuRef} collapsed={ui.inspectorCollapsed} toggleCollapsed={() => desktop.setUi({ inspectorCollapsed: !ui.inspectorCollapsed })} />
+    <ToolRail active={panel} choose={choose} open={moreOpen} setOpen={setMoreOpen} hiddenActive={hiddenPanelActive} buttonRef={moreButtonRef} collapsed={ui.inspectorCollapsed} toggleCollapsed={() => desktop.setUi({ inspectorCollapsed: !ui.inspectorCollapsed })} />
   </aside>;
 }
 
-function ToolRail({ active, choose, chooseFromMore, open, setOpen, hiddenActive, buttonRef, menuRef, collapsed, toggleCollapsed }: { active: Panel; choose: (panel: Exclude<Panel, null>) => void; chooseFromMore: (panel: Exclude<Panel, null>) => void; open: boolean; setOpen: (open: boolean) => void; hiddenActive: boolean; buttonRef: React.RefObject<HTMLButtonElement | null>; menuRef: React.RefObject<HTMLDivElement | null>; collapsed: boolean; toggleCollapsed: () => void }) {
+function ToolRail({ active, choose, open, setOpen, hiddenActive, buttonRef, collapsed, toggleCollapsed }: { active: Panel; choose: (panel: Exclude<Panel, null>) => void; open: boolean; setOpen: (open: boolean) => void; hiddenActive: boolean; buttonRef: RefObject<HTMLButtonElement | null>; collapsed: boolean; toggleCollapsed: () => void }) {
+  const moreItems: MenuItem[] = MORE_PANEL_ITEMS.map(item => ({ id: item.id, label: item.label, icon: <Icon name={item.icon} size={16} />, checked: active === item.id, run: () => choose(item.id) }));
   return <nav className="lc-inspector__rail" aria-label="Inspector tools">
     <div className="lc-inspector__rail-tools">
       {PANEL_ITEMS.map(item => <button key={item.id} type="button" className="lc-inspector__tool" data-panel={item.id} aria-label={item.label} aria-pressed={active === item.id} title={item.label} onClick={() => choose(item.id)}><span className="lc-inspector__tool-icon" aria-hidden="true"><Icon name={item.icon} size={17} /></span>{active === item.id && <FuseCurves fill="var(--rk-plane)" />}</button>)}
     </div>
     <div className="lc-inspector__rail-more">
       <button ref={buttonRef} type="button" className="lc-inspector__tool" data-more-tools="true" aria-label="More tools" aria-haspopup="menu" aria-expanded={open} aria-pressed={hiddenActive} title="More tools" onClick={() => setOpen(!open)}><span className="lc-inspector__tool-icon" aria-hidden="true"><span className="lc-inspector__more-glyph">•••</span></span>{hiddenActive && <FuseCurves fill="var(--rk-plane)" />}</button>
-      {open && <div ref={menuRef} className="lc-inspector__more-menu" role="menu" aria-label="More tools" onKeyDown={event => {
-        const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
-        const current = items.indexOf(document.activeElement as HTMLButtonElement);
-        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); items[(current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus(); }
-        else if (event.key === 'Home' || event.key === 'End') { event.preventDefault(); items[event.key === 'Home' ? 0 : items.length - 1]?.focus(); }
-      }}>
-        <div className="lc-inspector__more-title">More tools</div>
-        {MORE_PANEL_ITEMS.map(item => <button key={item.id} type="button" role="menuitem" className="lc-inspector__more-item" data-panel={item.id} aria-current={active === item.id ? 'true' : undefined} onClick={() => chooseFromMore(item.id)}><Icon name={item.icon} size={16} /><span>{item.label}</span></button>)}
-      </div>}
+      {open && buttonRef.current && <ContextMenu anchor={buttonRef.current} placement="top-end" items={moreItems} label="More tools" width={176} onClose={() => setOpen(false)} />}
     </div>
     <button type="button" className="lc-inspector__collapse" data-inspector-collapse="true" aria-label={collapsed ? 'Expand inspector' : 'Collapse inspector'} aria-expanded={!collapsed} title={collapsed ? 'Expand inspector' : 'Collapse inspector'} onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); toggleCollapsed(); }}><Icon name="chevron" size={17} /></button>
   </nav>;
@@ -163,7 +136,7 @@ function Histogram({ histogram, clipping, setClipping }: { histogram: unknown; c
   const sampleCount = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, num(data.total, fallbackTotal)));
   return <div className="lc-histogram" aria-label="Histogram">
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="RGB and luminance histogram"><title>RGB and luminance histogram</title><path d="M0 100H100" stroke="currentColor" opacity=".18" fill="none" aria-hidden="true" /><path d={area} fill="#7d899d" opacity=".28" aria-hidden="true" /><path d={path(red)} stroke="#df6464" strokeWidth="1.1" vectorEffect="non-scaling-stroke" fill="none" aria-hidden="true" /><path d={path(green)} stroke="#58be86" strokeWidth="1.1" vectorEffect="non-scaling-stroke" fill="none" aria-hidden="true" /><path d={path(blue)} stroke="#6496e9" strokeWidth="1.1" vectorEffect="non-scaling-stroke" fill="none" aria-hidden="true" /><path d={path(luma)} stroke="#e0e4eb" strokeWidth="1.4" vectorEffect="non-scaling-stroke" fill="none" aria-hidden="true" /></svg>
-    <div className="lc-histogram__footer"><span>{sampleCount ? `${sampleCount} samples` : 'Histogram'}</span><label className="lc-histogram__toggle"><span><input type="checkbox" checked={clipping} onChange={e => setClipping(e.target.checked)} /> Clipping</span></label></div>
+    <div className="lc-histogram__footer"><span>{sampleCount ? `${sampleCount} samples` : 'Histogram'}</span><Checkbox className="lc-histogram__toggle" checked={clipping} onChange={setClipping} label="Clipping" /></div>
   </div>;
 }
 
@@ -186,7 +159,7 @@ function EditPanel({ desktop }: { desktop: InspectorDesktop }) {
     <Header title="Edit" detail={snapshot?.active == null ? 'No photo' : `Photo ${snapshot.active}`} />
     <Histogram histogram={histogram} clipping={clipping} setClipping={v => { setClipping(v); setUi({ clipping: v }); }} />
     <div className="lc-inspector__actions"><button className="lc-inspector__button primary" type="button" onClick={() => void run('develop.auto', {})}>Auto</button><button className="lc-inspector__button" type="button" onClick={() => void run('develop.treatment', {})}>B&amp;W</button><button className="lc-inspector__button" type="button" onClick={() => void run('develop.reset', {})}>Reset all</button></div>
-    <div className="lc-profile"><span>Profile</span><select value={profileId} onChange={e => void run('develop.profile', { id: e.target.value, amount: num(profile.amount, 100) })} aria-label="Profile"><option value={profileId}>{profileId}</option></select><button type="button" className="lc-inspector__button" onClick={() => setUi({ panel: 'profiles', view: 'detail' })}>Browse</button></div>
+    <div className="lc-profile"><span>Profile</span><Select value={profileId} options={[{ value: profileId, label: profileId }]} onChange={id => void run('develop.profile', { id, amount: num(profile.amount, 100) })} label="Profile" /><button type="button" className="lc-inspector__button" onClick={() => setUi({ panel: 'profiles', view: 'detail' })}>Browse</button></div>
     <WhiteBalanceMode run={run} settings={settings} />
     {grouped.size === 0 && <div className="lc-inspector__empty">Controls are unavailable until active photo loads.</div>}
     {[...grouped.entries()].sort(([a], [b]) => { const ai = SECTION_ORDER.indexOf(a); const bi = SECTION_ORDER.indexOf(b); return (ai < 0 ? SECTION_ORDER.length : ai) - (bi < 0 ? SECTION_ORDER.length : bi); }).map(([key, list]) => <ControlSection key={key} name={key} controls={list} values={values} open={sectionOpen(key)} toggle={() => toggleSection(key)} run={run} settings={settings} />)}
@@ -199,7 +172,7 @@ function WhiteBalanceMode({ run, settings }: { run: Run; settings: Json }) {
   const wb = object(settings.wb);
   const mode = text(wb.mode, 'custom');
   const options = ['asShot', 'auto', 'daylight', 'cloudy', 'shade', 'tungsten', 'fluorescent', 'flash', 'custom'];
-  return <div className="lc-profile"><span>White balance</span><select value={options.includes(mode) ? mode : 'custom'} onChange={e => void run('develop.wb', { mode: e.target.value })} aria-label="White balance mode">{options.map(option => <option key={option} value={option}>{option === 'asShot' ? 'As shot' : option[0].toUpperCase() + option.slice(1)}</option>)}</select></div>;
+  return <div className="lc-profile"><span>White balance</span><Select value={options.includes(mode) ? mode : 'custom'} options={options.map(option => ({ value: option, label: option === 'asShot' ? 'As shot' : option[0].toUpperCase() + option.slice(1) }))} onChange={value => void run('develop.wb', { mode: value })} label="White balance mode" /></div>;
 }
 
 function ControlSection({ name, controls, values, open, toggle, run, settings }: { name: string; controls: ControlSpec[]; values: Record<string, number>; open: boolean; toggle: () => void; run: Run; settings: Json }) {
@@ -214,34 +187,23 @@ function CurvePresetPicker({ run }: { run: Run }) {
   const [presets, setPresets] = useState<Json[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const pickerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuId = 'curve-preset-menu';
-
-  const close = () => {
-    setOpen(false);
-    buttonRef.current?.focus();
-  };
   const load = async () => {
+    setOpen(true);
     setLoading(true);
     setError('');
     try {
       const result = curvePresetResult(await run('curve.presets', {}));
       setPresets(result.presets);
       setCurrent(result.current);
-      setOpen(true);
     } catch (reason: unknown) {
       setError(String(reason));
-      setOpen(true);
     } finally {
       setLoading(false);
     }
   };
-  const apply = async (preset: Json) => {
-    const name = text(preset.name).trim();
-    if (!name) return;
+  const apply = async (name: string) => {
     setCurrent(name);
-    close();
     try {
       await run('curve.applyPreset', { name });
     } catch (reason: unknown) {
@@ -249,17 +211,17 @@ function CurvePresetPicker({ run }: { run: Run }) {
       setOpen(true);
     }
   };
-  useEffect(() => {
-    if (!open) return undefined;
-    const first = pickerRef.current?.querySelector<HTMLButtonElement>('[role="menuitemradio"]');
-    first?.focus();
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
-    const onPointerDown = (event: PointerEvent) => { if (!pickerRef.current?.contains(event.target as Node)) setOpen(false); };
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => { document.removeEventListener('keydown', onKeyDown); document.removeEventListener('pointerdown', onPointerDown); };
-  }, [open]);
-  return <div className="lc-curve-picker" ref={pickerRef}><button ref={buttonRef} type="button" className="lc-inspector__button" aria-haspopup="menu" aria-expanded={open} aria-controls={menuId} aria-busy={loading} onClick={() => { if (open) close(); else void load(); }}>Curve presets <span aria-hidden="true">⌄</span></button>{open && <div id={menuId} className="lc-curve-picker__menu" role="menu" aria-label="Tone curve presets">{loading ? <div className="lc-curve-picker__message" role="menuitem" aria-disabled="true" aria-live="polite">Loading presets…</div> : error ? <><div className="lc-curve-picker__message" role="menuitem" aria-disabled="true">{error}</div><button type="button" role="menuitem" onClick={() => void load()}>Retry</button></> : presets.length ? presets.map(preset => { const name = text(preset.name).trim(); const selected = current === name; return <button type="button" role="menuitemradio" aria-checked={selected} aria-current={selected ? 'true' : undefined} key={name} onClick={() => void apply(preset)}><span>{name}</span>{selected && <span aria-hidden="true">✓</span>}</button>; }) : <div className="lc-curve-picker__message" role="menuitem" aria-disabled="true">No curve presets available.</div>}</div>}</div>;
+  const items: MenuItem[] = loading
+    ? [{ id: 'loading', label: 'Loading presets…', disabled: true }]
+    : error
+      ? [{ id: 'error', label: error, disabled: true }, { id: 'retry', label: 'Retry', run: () => void load() }]
+      : presets.length
+        ? presets.flatMap((preset): MenuItem[] => {
+          const name = text(preset.name).trim();
+          return name ? [{ id: name, label: name, checked: current === name, run: () => void apply(name) }] : [];
+        })
+        : [{ id: 'empty', label: 'No curve presets available.', disabled: true }];
+  return <div className="lc-curve-picker"><button ref={buttonRef} type="button" className="lc-inspector__button" aria-haspopup="menu" aria-expanded={open} aria-busy={loading} onClick={() => void load()}>Curve presets <span aria-hidden="true">⌄</span></button>{open && buttonRef.current && <ContextMenu anchor={buttonRef.current} items={items} label="Tone curve presets" className="lc-curve-picker__menu" width={220} onClose={() => setOpen(false)} />}</div>;
 }
 
 function ControlRow({ spec, value, run }: { spec: ControlSpec; value: number; run: Run }) {
@@ -357,11 +319,11 @@ function ControlRow({ spec, value, run }: { spec: ControlSpec; value: number; ru
 function MixerLegend({ settings }: { settings: Json }) { const mixer = object(settings.mixer); return <div className="lc-inspector__empty">{Object.keys(mixer).length ? 'Adjust hue, saturation & luminance for each colour.' : 'Select photo to adjust its colours.'}</div>; }
 
 function CurveEditor({ run, settings }: { run: Run; settings: Json }) {
-  const curve = object(settings.curve); const [channel, setChannel] = useState('master'); const [presets, setPresets] = useState<Json[]>([]); const points = array(curve[channel]).map(point => { const value = object(point); if (Array.isArray(point)) return [num(point[0]), num(point[1])] as [number, number]; return [num(value.x), num(value.y)] as [number, number]; }).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+  const curve = object(settings.curve); const [channel, setChannel] = useState('master'); const [presets, setPresets] = useState<Json[]>([]); const [chosenPreset, setChosenPreset] = useState(''); const points = array(curve[channel]).map(point => { const value = object(point); if (Array.isArray(point)) return [num(point[0]), num(point[1])] as [number, number]; return [num(value.x), num(value.y)] as [number, number]; }).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
   useEffect(() => { let live = true; void run('curve.presets', {}).then((value: unknown) => { if (live) setPresets(array(object(value).presets).map(object)); }); return () => { live = false; }; }, [run]);
   const effective = points.length > 1 ? points : [[0, 0], [1, 1]] as [number, number][];
   const update = (event: React.PointerEvent<SVGSVGElement>) => { const rect = event.currentTarget.getBoundingClientRect(); const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)); const y = Math.max(0, Math.min(1, 1 - (event.clientY - rect.top) / rect.height)); const next = [...effective, [x, y] as [number, number]].sort((a, b) => a[0] - b[0]); void run('develop.curve', { channel, points: next }); };
-  return <div className="lc-curve"><div className="lc-tabs">{['master', 'red', 'green', 'blue'].map(c => <button key={c} type="button" aria-selected={channel === c} onClick={() => setChannel(c)}>{c}</button>)}</div><svg viewBox="0 0 100 100" role="img" aria-label={`${channel} tone curve`} onPointerDown={update}><path d="M0 100L100 0" stroke="#535963" fill="none" strokeDasharray="2 2" /><polyline points={effective.map(([x, y]) => `${x * 100},${100 - y * 100}`).join(' ')} fill="none" stroke="var(--i-accent)" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />{effective.map(([x, y], i) => <circle key={`${x}-${y}-${i}`} cx={x * 100} cy={100 - y * 100} r="2.2" fill="var(--i-accent)" />)}</svg>{presets.length > 0 && <div className="lc-inspector__row"><label htmlFor="curve-preset">Preset</label><select id="curve-preset" defaultValue="" onChange={e => { if (e.target.value) void run('curve.applyPreset', { name: e.target.value }); }}><option value="">Choose…</option>{presets.map(p => <option key={text(p.name)} value={text(p.name)}>{text(p.name)}</option>)}</select></div>}<div className="lc-inspector__actions"><button type="button" className="lc-inspector__button" onClick={() => void run('file.importCurvePresets', {}).then(() => run('curve.presets', {}).then(value => setPresets(array(object(value).presets).map(object))))}>Import…</button><button type="button" className="lc-inspector__button" onClick={() => void run('file.exportCurvePresets', {})}>Export…</button></div></div>;
+  return <div className="lc-curve"><div className="lc-tabs">{['master', 'red', 'green', 'blue'].map(c => <button key={c} type="button" aria-selected={channel === c} onClick={() => setChannel(c)}>{c}</button>)}</div><svg viewBox="0 0 100 100" role="img" aria-label={`${channel} tone curve`} onPointerDown={update}><path d="M0 100L100 0" stroke="#535963" fill="none" strokeDasharray="2 2" /><polyline points={effective.map(([x, y]) => `${x * 100},${100 - y * 100}`).join(' ')} fill="none" stroke="var(--i-accent)" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />{effective.map(([x, y], i) => <circle key={`${x}-${y}-${i}`} cx={x * 100} cy={100 - y * 100} r="2.2" fill="var(--i-accent)" />)}</svg>{presets.length > 0 && <div className="lc-inspector__row"><label>Preset</label><Select value={chosenPreset} options={[{ value: '', label: 'Choose…' }, ...presets.map(p => ({ value: text(p.name), label: text(p.name) }))]} onChange={name => { setChosenPreset(name); if (name) void run('curve.applyPreset', { name }); }} label="Preset" /></div>}<div className="lc-inspector__actions"><button type="button" className="lc-inspector__button" onClick={() => void run('file.importCurvePresets', {}).then(() => run('curve.presets', {}).then(value => setPresets(array(object(value).presets).map(object))))}>Import…</button><button type="button" className="lc-inspector__button" onClick={() => void run('file.exportCurvePresets', {})}>Export…</button></div></div>;
 }
 
 function PointColorPanel({ run, settings }: { run: Run; settings: Json }) {
@@ -374,7 +336,7 @@ function PresetsPanel({ desktop }: { desktop: InspectorDesktop }) { const { run 
 
 function CropPanel({ desktop }: { desktop: InspectorDesktop }) { const { run, snapshot, ui, setUi } = desktop; const controls = snapshot?.controls.filter(c => c.id === 'crop.angle' || c.section === 'Geometry') ?? []; const values = snapshot?.controlValues ?? {}; return <><Header title="Crop & Geometry" /><div className="lc-inspector__actions"><button className="lc-inspector__button" type="button" onClick={() => void run('crop.aspect', { aspect: 'free' })}>Free</button>{['1x1', '4x5', '2x3', '16x9'].map(a => <button key={a} className="lc-inspector__button" type="button" onClick={() => void run('crop.aspect', { aspect: a })}>{a}</button>)}</div><div className="lc-inspector__actions"><button className="lc-inspector__button" type="button" onClick={() => void run('crop.rotateAspect', {})}>Rotate</button><button className="lc-inspector__button" type="button" onClick={() => void run('crop.autoStraighten', {})}>Auto</button><button className="lc-inspector__button" type="button" onClick={() => void run('crop.reset', {})}>Reset</button></div>{controls.map(c => <ControlRow key={c.id} spec={c} value={num(values[c.id], c.default)} run={run} />)}<div className="lc-inspector__section"><button className="lc-inspector__section-head" type="button" data-open={true}><span /><span>Overlay</span></button><div className="lc-mask-modes">{['grid', 'thirds', 'diagonal', 'golden'].map(kind => <button type="button" key={kind} aria-pressed={ui.cropOverlay === kind} onClick={() => setUi({ cropOverlay: kind })}>{kind}</button>)}</div></div></>; }
 
-function RemovePanel({ desktop }: { desktop: InspectorDesktop }) { const { run, snapshot, setUi } = desktop; const settings = object(snapshot?.develop); const spots = array(settings.spots); const [mode, setMode] = useState('remove'); const [size, setSize] = useState(0.04); return <><Header title="Remove" detail={`${spots.length} corrections`} /><div className="lc-inspector__actions"><button className="lc-inspector__button primary" type="button" onClick={() => void run('spot.findDust', { sensitivity: 50, add: true })}>Find Dust</button><button className="lc-inspector__button" type="button" onClick={() => void run('spot.delete', {})}>Delete Selected</button></div><div className="lc-tabs">{['remove', 'heal', 'clone'].map(m => <button key={m} type="button" aria-selected={mode === m} onClick={() => { setMode(m); setUi({ tool: m }); }}>{m}</button>)}</div><div className="lc-inspector__row"><label htmlFor="spot-size">Size</label><input id="spot-size" type="range" min=".001" max=".25" step=".001" value={size} onChange={e => setSize(Number(e.target.value))} /><input type="number" min=".001" max=".25" step=".001" value={size} onChange={e => setSize(Number(e.target.value))} /></div><div className="lc-inspector__empty">Choose Remove, Heal, or Clone, then drag over the photo to place a correction.</div>{spots.map((spot, i) => <div className="lc-list__item" key={i}><strong>Spot {i + 1}</strong><small>{text(object(spot).mode, 'remove')}</small><button type="button" className="lc-inspector__button" onClick={() => void run('spot.select', { index: i })}>Select</button></div>)}</>; }
+function RemovePanel({ desktop }: { desktop: InspectorDesktop }) { const { run, snapshot, setUi } = desktop; const settings = object(snapshot?.develop); const spots = array(settings.spots); const [mode, setMode] = useState('remove'); const [size, setSize] = useState(0.04); return <><Header title="Remove" detail={`${spots.length} corrections`} /><div className="lc-inspector__actions"><button className="lc-inspector__button primary" type="button" onClick={() => void run('spot.findDust', { sensitivity: 50, add: true })}>Find Dust</button><button className="lc-inspector__button" type="button" onClick={() => void run('spot.delete', {})}>Delete Selected</button></div><div className="lc-tabs">{['remove', 'heal', 'clone'].map(m => <button key={m} type="button" aria-selected={mode === m} onClick={() => { setMode(m); setUi({ tool: m }); }}>{m}</button>)}</div><div className="lc-inspector__row"><label>Size</label><Slider value={size} min={0.001} max={0.25} step={0.001} label="Size" onChange={setSize} /><input type="number" min=".001" max=".25" step=".001" value={size} onChange={e => setSize(Number(e.target.value))} /></div><div className="lc-inspector__empty">Choose Remove, Heal, or Clone, then drag over the photo to place a correction.</div>{spots.map((spot, i) => <div className="lc-list__item" key={i}><strong>Spot {i + 1}</strong><small>{text(object(spot).mode, 'remove')}</small><button type="button" className="lc-inspector__button" onClick={() => void run('spot.select', { index: i })}>Select</button></div>)}</>; }
 
 function MaskingPanel({ desktop }: { desktop: InspectorDesktop }) {
   const { run, snapshot, ui, setUi } = desktop;
@@ -399,8 +361,8 @@ function MaskingPanel({ desktop }: { desktop: InspectorDesktop }) {
     ].map(([kind, label]) => <button type="button" key={kind} aria-pressed={ui.tool === kind} onClick={() => addMask(kind)}>{label}</button>)}</div>
     <div className="lc-inspector__actions"><button className="lc-inspector__button" type="button" onClick={() => setUi({ maskOverlay: !ui.maskOverlay })}>{ui.maskOverlay ? 'Hide overlay' : 'Show overlay'}</button><button className="lc-inspector__button" type="button" onClick={() => void run('mask.deleteAll', {})}>Delete all</button></div>
     <div className="lc-inspector__actions" aria-label="Mask component mode"><button className="lc-inspector__button" type="button" onClick={() => addComponent('add')}>Add component</button><button className="lc-inspector__button" type="button" onClick={() => addComponent('subtract')}>Subtract</button><button className="lc-inspector__button" type="button" onClick={() => addComponent('intersect')}>Intersect</button></div>
-    <div className="lc-inspector__row"><label htmlFor="mask-size">Brush size</label><input id="mask-size" type="range" min="1" max="500" step="1" value={ui.brushSize} onChange={e => setUi({ brushSize: Number(e.target.value) })} /><input type="number" min="1" max="500" value={ui.brushSize} onChange={e => setUi({ brushSize: Number(e.target.value) })} /></div>
-    <div className="lc-inspector__row"><label htmlFor="mask-feather">Feather</label><input id="mask-feather" type="range" min="0" max="100" step="1" value={ui.brushFeather} onChange={e => setUi({ brushFeather: Number(e.target.value) })} /><input type="number" min="0" max="100" value={ui.brushFeather} onChange={e => setUi({ brushFeather: Number(e.target.value) })} /></div>
+    <div className="lc-inspector__row"><label>Brush size</label><Slider value={ui.brushSize} min={1} max={500} step={1} label="Brush size" onChange={brushSize => setUi({ brushSize })} /><input type="number" min="1" max="500" value={ui.brushSize} onChange={e => setUi({ brushSize: Number(e.target.value) })} /></div>
+    <div className="lc-inspector__row"><label>Feather</label><Slider value={ui.brushFeather} min={0} max={100} step={1} label="Feather" onChange={brushFeather => setUi({ brushFeather })} /><input type="number" min="0" max="100" value={ui.brushFeather} onChange={e => setUi({ brushFeather: Number(e.target.value) })} /></div>
     <div className="lc-list">{masks.map((m, i) => { const mask = object(m); const id = num(mask.id, i + 1); const visible = mask.visible !== false; return <div className="lc-list__item" key={id} aria-current={active === id}><button type="button" onClick={() => { setActive(id); void run('mask.select', { id }); }}><strong>{text(mask.name, `Mask ${id}`)}</strong><small>{array(mask.components).length} component{array(mask.components).length === 1 ? '' : 's'}</small></button><button type="button" aria-label={`${visible ? 'Hide' : 'Show'} mask ${id}`} onClick={() => void run('mask.visible', { id, visible: !visible })}>{visible ? '●' : '○'}</button><button type="button" className="lc-inspector__button" onClick={() => void run('mask.invert', { id })}>Invert</button></div>; })}</div>
     {masks.length === 0 && <div className="lc-inspector__empty">Choose a mask type, then drag on photo to adjust its area.</div>}
     {ui.tool === 'colorRange' && <div className="lc-inspector__empty">Click photo to sample colour. Hold Shift to add up to five samples.</div>}

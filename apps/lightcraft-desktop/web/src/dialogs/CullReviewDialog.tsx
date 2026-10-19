@@ -2,6 +2,8 @@ import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CompletedJobState, DesktopContextValue, JsonObject, JobStatus } from "../types";
 import PhotoPreview from "../preview/PhotoPreview";
+import { Button, Checkbox, IconButton, ModalShell } from "@rightkit/react-shell/react";
+import { useInertSiblings } from "./inertSiblings";
 import "./cullReview.css";
 
 type CullReviewDesktop = Pick<DesktopContextValue, "run" | "refresh" | "snapshot">;
@@ -174,8 +176,6 @@ export function CullReviewDialog({ desktop, photoIds, photos, onClose }: CullRev
   const snapshotRef = useRef(desktop.snapshot);
   const terminalRef = useRef<CompletedJobState | null>(null);
   const pollingRef = useRef(false);
-  const modalRef = useRef<HTMLElement | null>(null);
-  const closeRef = useRef<() => void>(() => undefined);
   const applyingRef = useRef(false);
   const autoStartedRef = useRef(false);
   const taskIdRef = useRef<string | null>(null);
@@ -231,32 +231,9 @@ export function CullReviewDialog({ desktop, photoIds, photos, onClose }: CullRev
     if (taskId && !terminalRef.current) void cancelTask();
     onClose();
   }, [cancelTask, onClose, taskId]);
-  closeRef.current = close;
 
-  useEffect(() => {
-    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const portal = modalRef.current?.parentElement;
-    const siblings = Array.from(document.body.children).filter((node) => node !== portal);
-    const previous = siblings.map((node) => ({ node, inert: (node as HTMLElement).inert, hidden: node.getAttribute("aria-hidden") }));
-    siblings.forEach((node) => { (node as HTMLElement).inert = true; node.setAttribute("aria-hidden", "true"); });
-    const focusables = () => Array.from(modalRef.current?.querySelectorAll<HTMLElement>("button,a[href],input,select,textarea,[tabindex]:not([tabindex='-1'])") ?? []).filter((element) => !element.matches(":disabled"));
-    focusables()[0]?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !applyingRef.current) { event.preventDefault(); closeRef.current(); return; }
-      if (event.key !== "Tab") return;
-      const fields = focusables();
-      if (!fields.length) return;
-      const first = fields[0]; const last = fields[fields.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      previous.forEach(({ node, inert, hidden }) => { (node as HTMLElement).inert = inert; if (hidden === null) node.removeAttribute("aria-hidden"); else node.setAttribute("aria-hidden", hidden); });
-      if (active?.isConnected && !active.closest("[aria-hidden='true']")) active.focus();
-    };
-  }, []);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useInertSiblings(bodyRef);
 
   useEffect(() => {
     if (!taskId) return;
@@ -507,30 +484,29 @@ export function CullReviewDialog({ desktop, photoIds, photos, onClose }: CullRev
   const pageEnd = Math.min(rows.length, pageStart + pageRows.length);
 
   const body = (
-    <div className="lc-cull-review-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !applying) close(); }}>
-      <section ref={modalRef} className="lc-cull-review-dialog" role="dialog" aria-modal="true" aria-labelledby="lc-cull-review-title">
+    <ModalShell label="Review focus suggestions" labelledBy="lc-cull-review-title" width={980} onClose={close} dismissible={!applying} overlayClassName="lc-cull-review-backdrop" className="lc-cull-review-dialog">
         <header className="lc-cull-review-header">
           <div>
             <p className="lc-cull-review-eyebrow">Cull review</p>
             <h2 id="lc-cull-review-title">Review focus suggestions</h2>
             <p className="lc-cull-review-subtitle">Suggestions are read-only until you explicitly select photos to apply.</p>
           </div>
-          <button className="lc-cull-review-close" type="button" aria-label="Close" onClick={close} disabled={applying}>×</button>
+          <IconButton className="lc-cull-review-close" label="Close" onClick={close} disabled={applying}>×</IconButton>
         </header>
 
-        <div className="lc-cull-review-body">
+        <div ref={bodyRef} className="lc-cull-review-body">
           <div className="lc-cull-review-settings" aria-label="Analysis settings">
-            <label className="lc-cull-review-check"><input type="checkbox" checked={rejectEnabled} onChange={(event) => setRejectEnabled(event.target.checked)} disabled={busy || applying} /><span>Suggest rejects below focus threshold</span></label>
+            <Checkbox className="lc-cull-review-check" checked={rejectEnabled} onChange={setRejectEnabled} disabled={busy || applying} label="Suggest rejects below focus threshold" />
             <label className="lc-cull-review-threshold">Threshold
               <input type="number" min={0} max={100} step={1} value={rejectBelowText} onChange={(event) => setRejectBelowText(event.target.value)} disabled={!rejectEnabled || busy || applying} />
               <span>/ 100</span>
             </label>
-            <button className="lc-cull-review-button lc-cull-review-button-secondary" type="button" onClick={() => void generate()} disabled={busy || applying || stableIds.length === 0}>Generate suggestions</button>
+            <Button className="lc-cull-review-button-secondary" onClick={() => void generate()} disabled={busy || applying || stableIds.length === 0}>Generate suggestions</Button>
           </div>
 
           <p className="lc-cull-review-note">Focus score is a qualitative review signal from current classical analysis; it is not an accuracy or confidence claim.</p>
-          {(busy || applying) && <div className="lc-cull-review-progress" aria-live="polite"><span>{job?.label ?? (applying ? "Applying cull proposal…" : `Analysing ${stableIds.length} photo${stableIds.length === 1 ? "" : "s"}…`)}</span><progress max={progressTotal} value={job && job.total > 0 ? progressCompleted : undefined} /><button className="lc-cull-review-button lc-cull-review-button-secondary" type="button" onClick={cancel} disabled={cancelling}>{cancelling ? "Cancelling…" : applying ? "Cancel apply" : "Cancel"}</button></div>}
-          {error && <div className={`lc-cull-review-message ${stale ? "is-warning" : "is-error"}`} role="alert">{error}{stale && <button className="lc-cull-review-button lc-cull-review-button-secondary" type="button" onClick={() => void generate()} disabled={busy || applying}>Retry</button>}</div>}
+          {(busy || applying) && <div className="lc-cull-review-progress" aria-live="polite"><span>{job?.label ?? (applying ? "Applying cull proposal…" : `Analysing ${stableIds.length} photo${stableIds.length === 1 ? "" : "s"}…`)}</span><progress max={progressTotal} value={job && job.total > 0 ? progressCompleted : undefined} /><Button className="lc-cull-review-button-secondary" onClick={cancel} disabled={cancelling}>{cancelling ? "Cancelling…" : applying ? "Cancel apply" : "Cancel"}</Button></div>}
+          {error && <div className={`lc-cull-review-message ${stale ? "is-warning" : "is-error"}`} role="alert">{error}{stale && <Button className="lc-cull-review-button-secondary" onClick={() => void generate()} disabled={busy || applying}>Retry</Button>}</div>}
 
           {rows.length > 0 && <div className="lc-cull-review-list" aria-label="Cull suggestions">
             {pageRows.map((row) => {
@@ -540,16 +516,15 @@ export function CullReviewDialog({ desktop, photoIds, photos, onClose }: CullRev
                 <div className="lc-cull-review-thumb"><PhotoPreview photoId={row.id} slot={`cull-review-${row.id}`} viewGeneration={desktop.snapshot?.viewGeneration ?? 0} width={88} height={66} quality="draft" alt={row.fileName} /></div>
                 <div className="lc-cull-review-info"><strong>{metadata?.fileName ?? row.fileName}</strong><span>Photo ID {row.id}</span><span>{row.reason} · {row.uncertainty}</span>{row.failure && <span className="lc-cull-review-failure">{row.failure}</span>}</div>
                 <div className="lc-cull-review-score"><span>Focus score</span><strong>{row.sharpness === null ? "—" : row.sharpness.toFixed(1)}</strong>{row.group && <small>Burst {row.group}{row.best ? " · best" : ""}</small>}</div>
-                <div className="lc-cull-review-action">{row.existingFlag !== "none" ? <span className="lc-cull-review-existing">Existing {row.existingFlag}; unchanged</span> : <label className="lc-cull-review-check"><input type="checkbox" checked={selected.has(row.id)} onChange={() => toggle(row.id)} disabled={!canAccept || busy || applying || stale} /><span>{row.proposedFlag ? `Accept ${row.proposedFlag}` : "No action"}</span></label>}</div>
+                <div className="lc-cull-review-action">{row.existingFlag !== "none" ? <span className="lc-cull-review-existing">Existing {row.existingFlag}; unchanged</span> : <Checkbox className="lc-cull-review-check" checked={selected.has(row.id)} onChange={() => toggle(row.id)} disabled={!canAccept || busy || applying || stale} label={row.proposedFlag ? `Accept ${row.proposedFlag}` : "No action"} />}</div>
               </article>;
             })}
           </div>}
-          {rows.length > 0 && <nav className="lc-cull-review-pagination" aria-label="Cull review pages"><span>Showing {pageStart + 1}–{pageEnd} of {rows.length} photos</span><div><button className="lc-cull-review-button lc-cull-review-button-secondary" type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={currentPage === 0 || busy || applying}>Previous</button><button className="lc-cull-review-button lc-cull-review-button-secondary" type="button" onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} disabled={currentPage >= pageCount - 1 || busy || applying}>Next</button></div></nav>}
+          {rows.length > 0 && <nav className="lc-cull-review-pagination" aria-label="Cull review pages"><span>Showing {pageStart + 1}–{pageEnd} of {rows.length} photos</span><div><Button className="lc-cull-review-button-secondary" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={currentPage === 0 || busy || applying}>Previous</Button><Button className="lc-cull-review-button-secondary" onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} disabled={currentPage >= pageCount - 1 || busy || applying}>Next</Button></div></nav>}
           {!busy && rows.length === 0 && stableIds.length === 0 && <p className="lc-cull-review-empty">No photos selected.</p>}
         </div>
-        <footer className="lc-cull-review-footer"><span>{selected.size} selected · Apply creates one undo step</span><div><button className="lc-cull-review-button lc-cull-review-button-secondary" type="button" onClick={close} disabled={applying}>Cancel</button><button className="lc-cull-review-button lc-cull-review-button-primary" type="button" onClick={() => void apply()} disabled={applying || busy || stale || selected.size === 0}>{applying ? "Applying…" : "Apply selected"}</button></div></footer>
-      </section>
-    </div>
+        <footer className="lc-cull-review-footer"><span>{selected.size} selected · Apply creates one undo step</span><div><Button className="lc-cull-review-button-secondary" onClick={close} disabled={applying}>Cancel</Button><Button variant="primary" className="lc-cull-review-button-primary" onClick={() => void apply()} disabled={applying || busy || stale || selected.size === 0}>{applying ? "Applying…" : "Apply selected"}</Button></div></footer>
+    </ModalShell>
   );
   return typeof document === "undefined" ? null : createPortal(body, document.body);
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import { AppShell, SegmentedControl, ShellProvider, createThemeStore, useCommands, useShortcuts, type Command, type NavGroup } from '@rightkit/react-shell/react';
+import { AppShell, SegmentedControl, ShellProvider, createThemeStore, useCommands, useShortcuts, useToast, type Command, type NavGroup } from '@rightkit/react-shell/react';
 import { getPlatform } from '@rightkit/platform-ui';
 import { createShell } from '@rightkit/tauri-shell';
 import { DesktopProvider, useDesktop } from './desktop';
@@ -115,6 +115,8 @@ function Workspace() {
   const { snapshot, ui, locale, t, setUi, run, native, error, notice } = desktop;
   // Rust preferences own persisted choice; RightKit applies matching CSS tokens.
   useEffect(() => { themeStore().save(ui.theme); }, [ui.theme]);
+  const toast = useToast();
+  useEffect(() => { if (notice) toast(notice); }, [notice, toast]);
   const groups = useMemo(() => libraryGroups(snapshot), [snapshot]);
   const navGroups = useMemo(() => sourceNav(groups, t), [groups, t]);
   const navItems = useMemo(() => groups.flatMap((group) => group.items), [groups]);
@@ -163,7 +165,7 @@ function Workspace() {
         theme: { system: t('System'), light: t('Light'), dark: t('Dark') },
       }}
       commands={commands}
-      titlebarEnd={<div className="lc-title-status">{snapshot?.status.unsaved && <span className="lc-status-dot" title={t('Unsaved changes')} />} <span aria-live="polite">{error && <span className="lc-title-error">{error}</span>}{notice && !error && <span>{notice}</span>}</span><BackgroundActivity /></div>}
+      titlebarEnd={<div className="lc-title-status">{snapshot?.status.unsaved && <span className="lc-status-dot" title={t('Unsaved changes')} />} <span aria-live="polite">{error && <span className="lc-title-error">{error}</span>}</span><BackgroundActivity /></div>}
     >
       <div className={`lc-content ${ui.sidebarCollapsed ? 'is-shell-collapsed' : ''}`}>
         <WorkspaceLayout />
@@ -202,7 +204,7 @@ function WorkspaceLayout() {
   }, [dragging, setUi]);
   const layoutClass = `${isLibrary ? 'lc-library-layout' : 'lc-stage-layout'}${ui.inspectorCollapsed ? ' is-inspector-collapsed' : ''}`;
   return <RetainedLayout geometryKey={committedGeometryKey} className={layoutClass} style={{ '--lc-inspector': `${ui.inspectorWidth}px` } as CSSProperties}>
-    {isLibrary ? <div className="lc-library-center"><LibraryWorkspace showSidebar={false} />{ui.filmstrip && <Filmstrip />}</div> : <StageWorkspace />}
+    {isLibrary ? <div className="lc-library-center"><LibraryWorkspace />{ui.filmstrip && <Filmstrip />}</div> : <StageWorkspace />}
     {!ui.inspectorCollapsed && <button className="lc-inspector-resizer" type="button" role="slider" tabIndex={0} aria-orientation="vertical" aria-valuemin={260} aria-valuemax={520} aria-valuenow={ui.inspectorWidth} aria-label={t('Resize inspector')} onKeyDown={(event) => resizeInspectorByKey(event, ui.inspectorWidth, setUi)} onPointerDown={(event) => { drag.current = { x: event.clientX, width: ui.inspectorWidth }; setDragging(true); event.currentTarget.setPointerCapture(event.pointerId); }} />}
     <Inspector key="workspace-inspector" className={ui.inspectorCollapsed ? 'is-collapsed' : ''} />
   </RetainedLayout>;

@@ -373,11 +373,29 @@ fn click_dom(control: &rightkit_qa::control::Control, selector: &str, message: &
 fn choose_inspector_panel(control: &rightkit_qa::control::Control, panel: &str) {
     let selector = format!(".lc-inspector button[data-panel='{panel}']");
     let visible = control.eval(&format!("return document.querySelector({selector:?}) !== null;")).expect("tool visibility must be queryable");
-    if visible.as_bool() != Some(true) {
-        click_dom(control, ".lc-inspector button[data-more-tools]", "More tools menu must open");
-        wait_for_dom(control, &format!("return document.querySelector({selector:?}) !== null;"));
+    if visible.as_bool() == Some(true) {
+        click_dom(control, &selector, "inspector tool must select its actual panel");
+        return;
     }
-    click_dom(control, &selector, "inspector tool must select its actual panel");
+    // Panels past the rail live in RightKit's More tools ContextMenu, portaled to the body; pick the row by label.
+    let label = match panel {
+        "profiles" => "Profiles",
+        "redeye" => "Red eye",
+        "versions" => "Versions",
+        "activity" => "History",
+        "keywords" => "Keywords",
+        other => panic!("inspector panel {other} is neither on the rail nor in More tools"),
+    };
+    click_dom(control, ".lc-inspector button[data-more-tools]", "More tools menu must open");
+    let menu = r#"[role=menu][aria-label="More tools"]"#;
+    wait_for_dom(control, &format!("return document.querySelector({menu:?}) !== null;"));
+    let row = control
+        .eval(&format!(
+            "return Array.from(document.querySelectorAll({menu:?} + ' > div')).findIndex((row) => row.textContent.trim() === {label:?}) + 1;"
+        ))
+        .expect("More tools rows must be queryable");
+    let row = row.as_u64().filter(|index| *index > 0).expect("More tools must list the panel");
+    click_dom(control, &format!("{menu} > div:nth-child({row}) > [role^=menuitem]"), "More tools row must select its actual panel");
 }
 
 fn assert_inspector_panels_fit(control: &rightkit_qa::control::Control) {
@@ -664,7 +682,7 @@ fn diagnose_native_viewport_bounce(control: &rightkit_qa::control::Control, scen
             };
             return {
                 viewport: { width: innerWidth, height: innerHeight },
-                layout: ['.lc-library-layout', '.lc-library-workspace', '.lc-grid-scroll', '.lc-grid-spacer', '.lc-grid-window', '.lc-stage-layout', '.stage-workspace', '.lc-inspector', '.lc-inspector__rail', '.lc-inspector__more-menu'].map(describe),
+                layout: ['.lc-library-layout', '.lc-library-workspace', '.lc-grid-scroll', '.lc-grid-spacer', '.lc-grid-window', '.lc-stage-layout', '.stage-workspace', '.lc-inspector', '.lc-inspector__rail', '[role=menu][aria-label="More tools"]'].map(describe),
             };
         })();"#) {
             Ok(value) => value,
@@ -3237,7 +3255,7 @@ fn native_hidden_control_journeys() {
                         wait_for_dom(control, "return (() => { const button = document.querySelector('.lc-curve-picker > button'); if (!button) return false; const rect = button.getBoundingClientRect(); return rect.top >= 0 && rect.bottom <= innerHeight && rect.left >= 0 && rect.right <= innerWidth; })();");
                         click_dom(control, ".lc-curve-picker > button", "curve preset picker must open");
                         wait_for_dom(control, "return document.querySelector('[aria-label=\"Tone curve presets\"]') !== null;");
-                        click_dom(control, ".lc-curve-picker__menu [role=menuitemradio]:nth-child(3)", "Strong Contrast preset must apply");
+                        click_dom(control, ".lc-curve-picker__menu > div:nth-child(3) > [role=menuitemcheckbox]", "Strong Contrast preset must apply");
                         let curve_changed = wait_for_snapshot(control, |state| state["develop"]["curve"] != curve_before, "curve preset must change Rust develop settings");
                         assert_ne!(curve_changed["develop"]["curve"], curve_before);
                         run(control, "edit.undo", json!({}));
@@ -3307,7 +3325,7 @@ fn native_hidden_control_journeys() {
                         set_dialog_field(control, "Sharpen", "screen");
                         wait_for_dom(control, "return [...document.querySelectorAll('.lc-dialog .lc-field span')].some((node) => node.textContent === 'Sharpen amount');");
                         set_dialog_field(control, "Sharpen amount", "high");
-                        assert_eq!(control.eval("return (() => { const node = [...document.querySelectorAll('.lc-dialog .lc-check')].find((item) => item.querySelector('span')?.textContent === 'Watermark')?.querySelector('input'); if (!node) return false; node.click(); return node.checked; })();").expect("watermark checkbox must execute").as_bool(), Some(true));
+                        assert_eq!(control.eval("return (() => { const node = [...document.querySelectorAll('.lc-dialog .lc-check')].find((item) => item.querySelector('.rk-check__label')?.textContent === 'Watermark')?.querySelector('input'); if (!node) return false; node.click(); return node.checked; })();").expect("watermark checkbox must execute").as_bool(), Some(true));
                         wait_for_dom(control, "return document.querySelector('.lc-dialog textarea') !== null;");
                         set_dialog_field(control, "Watermark text", "MMMM\nMMMM");
                         set_dialog_field(control, "Size (%)", "15");

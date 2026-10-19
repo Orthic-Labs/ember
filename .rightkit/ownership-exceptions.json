@@ -15,6 +15,62 @@
       "reason": "QA-only window set_size and outer_position (qa-native feature); the shell has readback only. See section 2 of docs/rightkit-exceptions/M1.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
       "date": "2026-10-19"
+    },
+    {
+      "capability": "app-shell-ui",
+      "package": "@rightkit/react-shell",
+      "path": "apps/lightcraft-desktop/web/src/App.tsx",
+      "reason": "Right-hand inspector resizer; sidebarResizable covers the left sidebar only. See section 1 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
+    },
+    {
+      "capability": "app-shell-ui",
+      "package": "@rightkit/react-shell",
+      "path": "apps/lightcraft-desktop/web/src/app.css",
+      "reason": "Collapsed sidebar kept as a 48px icon rail; sidebarCollapsed hides the sidebar. See section 2 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
+    },
+    {
+      "capability": "app-shell-ui",
+      "package": "@rightkit/react-shell",
+      "path": "apps/lightcraft-desktop/web/src/layout/RetainedLayout.tsx",
+      "reason": "Retained portal host keeping grid and inspector state across layout changes; no equivalent. See section 3 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
+    },
+    {
+      "capability": "app-shell-ui",
+      "package": "@rightkit/react-shell",
+      "path": "apps/lightcraft-desktop/web/src/dialogs/inertSiblings.ts",
+      "reason": "Inert background while a dialog is open; ModalShell sets no inert or aria-hidden. See section 4 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
+    },
+    {
+      "capability": "app-shell-ui",
+      "package": "@rightkit/react-shell",
+      "path": "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
+      "reason": "Multi-line TextArea; ui.d.ts has Input only. See section 5 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
+    },
+    {
+      "capability": "app-shell-ui",
+      "package": "@rightkit/react-shell",
+      "path": "apps/lightcraft-desktop/web/src/library/LibraryWorkspace.tsx",
+      "reason": "Grid context-menu rating and label rows; MenuItem is one action per row. See section 6 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
+    },
+    {
+      "capability": "app-shell-ui",
+      "package": "@rightkit/react-shell",
+      "path": "apps/lightcraft-desktop/web/src/inspector/Inspector.tsx",
+      "reason": "ControlRow slider gestures (one undo step, Escape cancel, stable id); Slider has only onChange. See section 6 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
     }
   ]
 }

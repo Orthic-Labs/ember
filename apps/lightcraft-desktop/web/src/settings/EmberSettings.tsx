@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Button, Input, Toggle } from '@rightkit/react-shell/react';
+import { Button, Input, Select, Toggle } from '@rightkit/react-shell/react';
 import {
   SettingRow,
   SettingsGroup,
@@ -32,14 +32,6 @@ async function chooseFolder(native: Desktop['native']): Promise<string> {
   if (typeof result === 'string') return result;
   if (Array.isArray(result)) return str(result.find((path) => typeof path === 'string'));
   return '';
-}
-
-function SelectControl({ label, value, options, onChange }: { label: string; value: string; options: ReadonlyArray<readonly [string, string]>; onChange: (value: string) => void }) {
-  return (
-    <select className="rk-input" aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
-      {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
-    </select>
-  );
 }
 
 /** Text input that saves when it loses focus or Enter is pressed, not on every key. */
@@ -82,7 +74,7 @@ function GeneralBody({ ctx, desktop }: { ctx: SettingsContext; desktop: Desktop 
       </SettingsGroup>
       <SettingsGroup title="Startup">
         <SettingRow id="general.startupView" label="Open in" keywords={['start', 'launch', 'view']}>
-          <SelectControl label="Open in" value={str(v['general.startupView'], 'last')} options={[['last', 'Last view'], ['photoGrid', 'Photo Grid'], ['detail', 'Detail']]} onChange={(value) => void ctx.set('general.startupView', value)} />
+          <Select label="Open in" value={str(v['general.startupView'], 'last')} options={([['last', 'Last view'], ['photoGrid', 'Photo Grid'], ['detail', 'Detail']]).map(([value, label]) => ({ value, label }))} onChange={(value) => void ctx.set('general.startupView', value)} />
         </SettingRow>
       </SettingsGroup>
       <SettingsGroup title="Culling">
@@ -121,7 +113,7 @@ function InterfaceBody({ ctx }: { ctx: SettingsContext }) {
       <SettingsGroup title="Detail">
         {toggle('interface.navigator', 'Show Navigator while zoomed in')}
         <SettingRow id="interface.infoOverlay" label="Info overlay">
-          <SelectControl label="Info overlay" value={String(num(v['interface.infoOverlay']))} options={[['0', 'Off'], ['1', 'File & date'], ['2', 'Exposure']]} onChange={(value) => void ctx.set('interface.infoOverlay', Number(value))} />
+          <Select label="Info overlay" value={String(num(v['interface.infoOverlay']))} options={([['0', 'Off'], ['1', 'File & date'], ['2', 'Exposure']]).map(([value, label]) => ({ value, label }))} onChange={(value) => void ctx.set('interface.infoOverlay', Number(value))} />
         </SettingRow>
       </SettingsGroup>
     </>
@@ -162,10 +154,10 @@ function ImportBody({ ctx, desktop }: { ctx: SettingsContext; desktop: Desktop }
     <>
       <SettingsGroup title="Develop defaults">
         <SettingRow id="import.rawPreset" label="Raw photos" keywords={['preset', 'develop', 'default']}>
-          <SelectControl label="Raw photos" value={rawPreset} options={presetChoices('Ember Default', rawPreset)} onChange={(value) => void ctx.set('import.rawPreset', value)} />
+          <Select label="Raw photos" value={rawPreset} options={(presetChoices('Ember Default', rawPreset)).map(([value, label]) => ({ value, label }))} onChange={(value) => void ctx.set('import.rawPreset', value)} />
         </SettingRow>
         <SettingRow id="import.otherPreset" label="Non-raw photos" keywords={['preset', 'jpeg']}>
-          <SelectControl label="Non-raw photos" value={otherPreset} options={presetChoices('None', otherPreset)} onChange={(value) => void ctx.set('import.otherPreset', value)} />
+          <Select label="Non-raw photos" value={otherPreset} options={(presetChoices('None', otherPreset)).map(([value, label]) => ({ value, label }))} onChange={(value) => void ctx.set('import.otherPreset', value)} />
         </SettingRow>
         <SettingRow id="import.perCamera" label="Use camera-specific defaults" keywords={['camera', 'model']}>
           <Toggle label="Use camera-specific defaults" checked={v['import.perCamera'] === true} onChange={(value) => void ctx.set('import.perCamera', value)} />
@@ -176,7 +168,7 @@ function ImportBody({ ctx, desktop }: { ctx: SettingsContext; desktop: Desktop }
               {cameras.map((camera, index) => (
                 <div className="lc-settings-camera" key={index}>
                   <CommitText label={`Camera ${index + 1}`} value={str(camera.camera)} placeholder="Camera model" onCommit={(value) => setCameras(cameras.map((item, i) => (i === index ? { ...item, camera: value } : item)))} />
-                  <SelectControl label={`Preset for camera ${index + 1}`} value={str(camera.preset) || 'default'} options={presetChoices('Ember Default', str(camera.preset))} onChange={(value) => setCameras(cameras.map((item, i) => (i === index ? { ...item, preset: value === 'default' ? '' : value } : item)))} />
+                  <Select label={`Preset for camera ${index + 1}`} value={str(camera.preset) || 'default'} options={(presetChoices('Ember Default', str(camera.preset))).map(([value, label]) => ({ value, label }))} onChange={(value) => setCameras(cameras.map((item, i) => (i === index ? { ...item, preset: value === 'default' ? '' : value } : item)))} />
                   <Button size="sm" onClick={() => setCameras(cameras.filter((_, i) => i !== index))}>Remove</Button>
                 </div>
               ))}
@@ -193,7 +185,7 @@ function ImportBody({ ctx, desktop }: { ctx: SettingsContext; desktop: Desktop }
           <CommitText label="Default creator" value={str(v['import.creator'])} onCommit={(value) => void ctx.set('import.creator', value)} />
         </SettingRow>
         <SettingRow id="import.metadataPreset" label="Metadata preset">
-          <SelectControl label="Metadata preset" value={metadataValue} options={metadataChoices} onChange={(value) => void ctx.set('import.metadataPreset', value)} />
+          <Select label="Metadata preset" value={metadataValue} options={(metadataChoices).map(([value, label]) => ({ value, label }))} onChange={(value) => void ctx.set('import.metadataPreset', value)} />
         </SettingRow>
       </SettingsGroup>
       <SettingsGroup title="XMP sidecars">
@@ -201,7 +193,7 @@ function ImportBody({ ctx, desktop }: { ctx: SettingsContext; desktop: Desktop }
           <Toggle label="Automatically write changes into XMP sidecars" checked={v['xmp.autoWrite'] === true} onChange={(value) => void ctx.set('xmp.autoWrite', value)} />
         </SettingRow>
         <SettingRow id="xmp.naming" label="Sidecar names">
-          <SelectControl label="Sidecar names" value={str(v['xmp.naming'], 'stem')} options={[['stem', 'photo.xmp'], ['full', 'photo.ext.xmp']]} onChange={(value) => void ctx.set('xmp.naming', value)} />
+          <Select label="Sidecar names" value={str(v['xmp.naming'], 'stem')} options={([['stem', 'photo.xmp'], ['full', 'photo.ext.xmp']]).map(([value, label]) => ({ value, label }))} onChange={(value) => void ctx.set('xmp.naming', value)} />
         </SettingRow>
       </SettingsGroup>
       <SettingsGroup title="Auto Import" description="The watched folder is scanned every few seconds while Ember is open.">
@@ -274,7 +266,7 @@ function PerformanceBody({ ctx, desktop, backend }: { ctx: SettingsContext; desk
               </div>
             </SettingRow>
             <SettingRow id="performance.smartExisting" label="Existing previews">
-              <SelectControl label="Existing previews" value={existing} options={[['move', 'Move them'], ['leave', 'Leave them'], ['discard', 'Delete them']]} onChange={setExisting} />
+              <Select label="Existing previews" value={existing} options={([['move', 'Move them'], ['leave', 'Leave them'], ['discard', 'Delete them']]).map(([value, label]) => ({ value, label }))} onChange={setExisting} />
             </SettingRow>
           </>
         ) : (
@@ -290,7 +282,7 @@ function LanguageBody({ ctx }: { ctx: SettingsContext }) {
   return (
     <SettingsGroup title="Language" description="The language is saved and applied to the shell and command labels.">
       <SettingRow id="language.locale" label="Language" keywords={['locale', 'translation']}>
-        <SelectControl label="Language" value={str(ctx.values['language.locale'], 'en')} options={[['en', 'English'], ['zh-hans', '简体中文'], ['zh-hant', '繁體中文'], ['ja', '日本語'], ['pt-br', 'Português (Brasil)']]} onChange={(value) => void ctx.set('language.locale', value)} />
+        <Select label="Language" value={str(ctx.values['language.locale'], 'en')} options={([['en', 'English'], ['zh-hans', '简体中文'], ['zh-hant', '繁體中文'], ['ja', '日本語'], ['pt-br', 'Português (Brasil)']]).map(([value, label]) => ({ value, label }))} onChange={(value) => void ctx.set('language.locale', value)} />
       </SettingRow>
     </SettingsGroup>
   );
