@@ -1,3 +1,27 @@
+# pnpm refuses a package whose provenance trust level dropped; RightKit's own npm releases
+# have no provenance, so each exact version Ember uses is excluded (rightkit#791, option A).
+# Update this list with every @rightkit/* bump: exact versions only, no ranges or wildcards.
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  - '@rightkit/app-update@0.4.0'
+  - '@rightkit/ci@0.2.45'
+  - '@rightkit/i18n@0.1.0'
+  - '@rightkit/legal-ui@0.4.0'
+  - '@rightkit/legal@0.6.1'
+  - '@rightkit/license@0.2.1'
+  - '@rightkit/logs@0.1.4'
+  - '@rightkit/logs@0.1.5'
+  - '@rightkit/onboarding@0.6.1'
+  - '@rightkit/platform-ui@0.4.0'
+  - '@rightkit/qa-chrome@0.1.8'
+  - '@rightkit/qa@0.5.1'
+  - '@rightkit/react-shell@0.7.1'
+  - '@rightkit/release@0.4.0'
+  - '@rightkit/settings-ui@0.6.1'
+  - '@rightkit/tauri-shell@0.1.1'
+  - '@rightkit/tauri@0.2.3'
+  - '@rightkit/theme@0.3.1'
+
 minimumReleaseAgeExclude:
   - '@rightkit/ci@0.2.43'
   - '@rightkit/tauri-shell@0.1.1'

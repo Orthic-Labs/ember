@@ -23,7 +23,7 @@ use tauri::WebviewWindow;
 use tauri::http::{Request, Response};
 #[cfg(feature = "qa-native")]
 use tauri::plugin::TauriPlugin;
-use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder, Wry};
+use tauri::{AppHandle, Manager, State, Wry};
 
 use self::preferences::Preferences;
 
@@ -451,19 +451,29 @@ fn native_window_action(app: &AppHandle<Wry>, action: &str, params: &Value, call
                     route.push_str("&active=");
                     route.push_str(&active.to_string());
                 }
-                WebviewWindowBuilder::new(app, "second-main", WebviewUrl::App(route.into()))
-                    .title("Ember")
-                    .inner_size(1200.0, 800.0)
-                    .min_inner_size(800.0, 560.0)
-                    .build()
-                    .map_err(|error| format!("opening second window: {error}"))?;
+                // RightKit Shell owns window creation (M1); the route carries the view state.
+                let spec = rightkit_tauri_shell::windows::WindowSpec {
+                    label: "second-main".into(),
+                    title: Some("Ember".into()),
+                    path: Some(route),
+                    width: Some(1200.0),
+                    height: Some(800.0),
+                    min_width: Some(800.0),
+                    min_height: Some(560.0),
+                    ..Default::default()
+                };
+                rightkit_tauri_shell::windows::open(app, &spec).map_err(|error| format!("opening second window: {error}"))?;
             }
             Ok(json!({"label": "second-main"}))
         }
         "toggleFullscreen" => {
-            let fullscreen = params.get("enabled").and_then(Value::as_bool).unwrap_or(!window.is_fullscreen().map_err(|error| error.to_string())?);
-            window.set_fullscreen(fullscreen).map_err(|error| error.to_string())?;
-            Ok(json!({"fullscreen": fullscreen}))
+            match params.get("enabled").and_then(Value::as_bool) {
+                // An explicit state (Full Screen Preview, the stage button) has no shell equivalent:
+                // the shell's "fullscreen" only toggles (.rightkit/ownership-exceptions.json, M1).
+                Some(enabled) => window.set_fullscreen(enabled).map_err(|error| error.to_string())?,
+                None => rightkit_tauri_shell::commands::rk_shell_window("fullscreen".into(), window.clone())?,
+            }
+            Ok(json!({"fullscreen": window.is_fullscreen().map_err(|error| error.to_string())?}))
         }
         "confirmClose" | "closeWindow" => {
             let force = params.get("force").and_then(Value::as_bool).unwrap_or(false);
@@ -472,6 +482,12 @@ fn native_window_action(app: &AppHandle<Wry>, action: &str, params: &Value, call
                 && let Some(state) = app.try_state::<AppState>()
             {
                 state.closing.store(true, Ordering::SeqCst);
+            }
+            if !force {
+                // An ordinary close goes through RightKit Shell; CloseRequested still applies Ember's guard.
+                rightkit_tauri_shell::commands::rk_shell_window("close".into(), window.clone())
+                    .map_err(|error| format!("closing window: {error}"))?;
+                return Ok(Value::Null);
             }
             if let Err(error) = window.close() {
                 if force
