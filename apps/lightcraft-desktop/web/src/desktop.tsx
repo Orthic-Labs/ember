@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { getSnapshot, nativeAction, openSecondWindow, runCommand, savePreferences } from './api';
 import { allUiMetadata, applyUiCommand, UI_COMMAND_IDS } from './commands';
 import { normalizeLocale, translate } from './i18n';
@@ -659,9 +661,7 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let live = true;
     let unlisten: Array<() => void> = [];
-    const expectedLabel = isSecondary ? 'second-main' : 'main';
-    const focusChanged = (focused: boolean, label?: unknown) => {
-      if (typeof label === 'string' && label !== expectedLabel) return;
+    const focusChanged = (focused: boolean) => {
       if (!focused) {
         nativeFocused.current = false;
         return;
@@ -675,9 +675,10 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
     window.addEventListener('blur', onBlur);
     window.addEventListener('focus', onFocus);
     void Promise.all([
-      listen<JsonObject>('lc://native-drop', (event) => {
-        if (!live) return;
-        const paths = pathsFrom(event.payload);
+      // Tauri's own per-webview drop and focus events carry the dropped paths and this window's focus.
+      getCurrentWebview().onDragDropEvent((event) => {
+        if (!live || event.payload.type !== 'drop') return;
+        const paths = event.payload.paths.filter((path) => path.length > 0);
         if (!paths.length) return;
         void nativeAction('dropImport', { paths }).then((validated) => {
           const accepted = pathsFrom(validated);
@@ -691,9 +692,8 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
         liveNotice.current = message;
         setNotice(message);
       }),
-      listen<JsonObject>('lc://window-focus', (event) => {
-        if (!live) return;
-        focusChanged(event.payload?.focused === true, event.payload?.label);
+      getCurrentWindow().onFocusChanged((event) => {
+        if (live) focusChanged(event.payload === true);
       }),
       listen<JsonObject>('lc://close-requested', (event) => {
         if (!live) return;

@@ -467,11 +467,11 @@ fn native_window_action(app: &AppHandle<Wry>, action: &str, params: &Value, call
             Ok(json!({"label": "second-main"}))
         }
         "toggleFullscreen" => {
-            match params.get("enabled").and_then(Value::as_bool) {
-                // An explicit state (Full Screen Preview, the stage button) has no shell equivalent:
-                // the shell's "fullscreen" only toggles (.rightkit/ownership-exceptions.json, M1).
-                Some(enabled) => window.set_fullscreen(enabled).map_err(|error| error.to_string())?,
-                None => rightkit_tauri_shell::commands::rk_shell_window("fullscreen".into(), window.clone())?,
+            // RightKit Shell's "fullscreen" toggles; an explicit state (Full Screen Preview, the stage
+            // button) toggles only when the window is not already in it.
+            let current = window.is_fullscreen().map_err(|error| error.to_string())?;
+            if params.get("enabled").and_then(Value::as_bool) != Some(current) {
+                rightkit_tauri_shell::commands::rk_shell_window("fullscreen".into(), window.clone())?;
             }
             Ok(json!({"fullscreen": window.is_fullscreen().map_err(|error| error.to_string())?}))
         }
@@ -1180,9 +1180,6 @@ pub fn run() {
         .on_window_event(|window, event| {
             use tauri::Emitter;
             match event {
-                tauri::WindowEvent::Focused(focused) => {
-                    let _ = window.emit("lc://window-focus", json!({"label": window.label(), "owner": window.label() == "main", "focused": focused}));
-                }
                 tauri::WindowEvent::CloseRequested { .. } if window.label() != "main" => {}
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     let Some(state) = window.app_handle().try_state::<AppState>() else { return };
@@ -1210,9 +1207,6 @@ pub fn run() {
                     } else {
                         state.shutdown_complete.store(true, Ordering::Release);
                     }
-                }
-                tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => {
-                    let _ = window.emit("lc://native-drop", json!({"paths": paths}));
                 }
                 tauri::WindowEvent::Destroyed => {
                     if window.label() == "main"

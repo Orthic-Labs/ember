@@ -4,7 +4,7 @@
       "capability": "desktop-shell",
       "package": "rightkit-tauri-shell",
       "path": "apps/lightcraft-desktop/src/native.rs",
-      "reason": "Fullscreen to an explicit state (toggleFullscreen with enabled); the shell action only toggles. See section 1 of docs/rightkit-exceptions/M1.md (need, published-API gap with file:line, other apps, proof).",
+      "reason": "Main-window CloseRequested guard (active work, unsaved catalog, ordered shutdown); the shell has no close veto hook. See section 1 of docs/rightkit-exceptions/M1.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
       "date": "2026-10-19"
     },
@@ -12,23 +12,7 @@
       "capability": "desktop-shell",
       "package": "rightkit-tauri-shell",
       "path": "apps/lightcraft-desktop/src/native.rs",
-      "reason": "Main-window CloseRequested guard (active work, unsaved catalog, ordered shutdown); the shell has no close veto hook. See section 2 of docs/rightkit-exceptions/M1.md (need, published-API gap with file:line, other apps, proof).",
-      "owner": "ember",
-      "date": "2026-10-19"
-    },
-    {
-      "capability": "desktop-shell",
-      "package": "rightkit-tauri-shell",
-      "path": "apps/lightcraft-desktop/src/native.rs",
-      "reason": "Focused and DragDrop forwarded to the renderer as lc://window-focus and lc://native-drop; the shell does not emit them. See section 3 of docs/rightkit-exceptions/M1.md (need, published-API gap with file:line, other apps, proof).",
-      "owner": "ember",
-      "date": "2026-10-19"
-    },
-    {
-      "capability": "desktop-shell",
-      "package": "rightkit-tauri-shell",
-      "path": "apps/lightcraft-desktop/src/native.rs",
-      "reason": "QA-only window set_size and outer_position (qa-native feature); the shell has readback only. See section 4 of docs/rightkit-exceptions/M1.md (need, published-API gap with file:line, other apps, proof).",
+      "reason": "QA-only window set_size and outer_position (qa-native feature); the shell has readback only. See section 2 of docs/rightkit-exceptions/M1.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
       "date": "2026-10-19"
     }
