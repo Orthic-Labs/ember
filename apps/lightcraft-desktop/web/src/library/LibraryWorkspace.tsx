@@ -1,6 +1,6 @@
 import { APP_NAME } from '../branding';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type KeyboardEvent, type UIEvent } from 'react';
-import { AppearanceMenu, Button, Checkbox, ContextMenu, IconButton, NavList, Popover, PaletteTrigger, Select, Slider, useContextMenu, useShell, type MenuItem, type NavGroup } from '@rightkit/react-shell/react';
+import { AppearanceMenu, Button, Checkbox, ContextMenu, IconButton, Input, NavList, Popover, PaletteTrigger, Select, Slider, useContextMenu, useShell, type MenuItem, type NavGroup } from '@rightkit/react-shell/react';
 import type { DesktopSnapshot, PhotoSummary } from '../types';
 import { useDesktop } from '../desktop';
 import { RetainedLayout } from '../layout/RetainedLayout';
@@ -129,7 +129,7 @@ function FilterBar({ snapshot, filterText, setFilterText }: { snapshot: DesktopS
     <div className={`lc-filter-bar${expanded ? ' is-expanded' : ''}`}>
       <label className="lc-filter-search">
         <span aria-hidden="true">⌕</span>
-        <input value={filterText} onChange={(event) => setFilterText(event.target.value)} placeholder="Search photos" aria-label="Search photos" />
+        <Input value={filterText} onChange={(event) => setFilterText(event.target.value)} placeholder="Search photos" aria-label="Search photos" />
         {filterText && <IconButton label="Clear search" onClick={() => setFilterText('')}>×</IconButton>}
       </label>
       <Button variant="ghost" className="lc-filter-pill" type="button" aria-pressed={Boolean(filter?.rating)} onClick={() => setFilter({ rating: filter?.rating ? 0 : 3, ratingOp: 'atLeast' })}>★ 3+</Button>
@@ -142,12 +142,12 @@ function FilterBar({ snapshot, filterText, setFilterText }: { snapshot: DesktopS
         <label>Flag <Select value={String(filter?.flag ?? '')} options={[{ value: '', label: 'Any' }, { value: 'pick', label: 'Picked' }, { value: 'reject', label: 'Rejected' }, { value: 'none', label: 'Unflagged' }]} onChange={(value) => setFilter({ flag: value || null })} label="Flag" /></label>
         <label>Label <Select value={String(filter?.label ?? '')} options={[{ value: '', label: 'Any' }, ...['red', 'yellow', 'green', 'blue', 'purple'].map((label) => ({ value: label, label }))]} onChange={(value) => setFilter({ label: value || null })} label="Label" /></label>
         <label>Kind <Select value={String(filter?.kind ?? '')} options={[{ value: '', label: 'Any' }, { value: 'image', label: 'Image' }, { value: 'raw', label: 'Raw' }, { value: 'video', label: 'Video' }]} onChange={(value) => setFilter({ kind: value || null })} label="Kind" /></label>
-        <label>Date <input value={String(filter?.date ?? '')} onChange={(event) => setFilter({ date: event.target.value || null })} placeholder="YYYY-MM-DD" /></label>
-        <label>Keyword <input value={String(filter?.keyword ?? '')} onChange={(event) => setFilter({ keyword: event.target.value || null })} /></label>
-        <label>Camera <input value={String(filter?.camera ?? '')} onChange={(event) => setFilter({ camera: event.target.value || null })} /></label>
+        <label>Date <Input value={String(filter?.date ?? '')} onChange={(event) => setFilter({ date: event.target.value || null })} placeholder="YYYY-MM-DD" /></label>
+        <label>Keyword <Input value={String(filter?.keyword ?? '')} onChange={(event) => setFilter({ keyword: event.target.value || null })} /></label>
+        <label>Camera <Input value={String(filter?.camera ?? '')} onChange={(event) => setFilter({ camera: event.target.value || null })} /></label>
         <Checkbox className="lc-filter-check" checked={filter?.edited === true} onChange={(checked) => setFilter({ edited: checked ? true : null })} label="Edited only" />
         {presets.length > 0 && <label>Saved <Select value="" options={[{ value: '', label: 'Choose…' }, ...presets.map((preset) => ({ value: preset.name, label: preset.name }))]} onChange={(value) => { if (value) void run('filter.applyPreset', { name: value }); }} label="Saved filters" /></label>}
-        <div className="lc-filter-save"><input value={savedName} onChange={(event) => setSavedName(event.target.value)} placeholder="Saved filter name" aria-label="Saved filter name" /><Button type="button" onClick={save}>Save filter</Button><Button type="button" onClick={() => setDialog({ kind: 'smartAlbum', params: { fromFilter: true } })}>Smart album…</Button></div>
+        <div className="lc-filter-save"><Input value={savedName} onChange={(event) => setSavedName(event.target.value)} placeholder="Saved filter name" aria-label="Saved filter name" /><Button type="button" onClick={save}>Save filter</Button><Button type="button" onClick={() => setDialog({ kind: 'smartAlbum', params: { fromFilter: true } })}>Smart album…</Button></div>
       </div>}
     </div>
   );

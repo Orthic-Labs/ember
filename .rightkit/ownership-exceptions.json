@@ -63,6 +63,14 @@
       "reason": "ControlRow slider gestures (one undo step, Escape cancel, stable id); Slider has only onChange. See section 6 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
       "date": "2026-10-19"
+    },
+    {
+      "capability": "app-shell-ui",
+      "package": "@rightkit/react-shell",
+      "path": "apps/lightcraft-desktop/web/src/inspector/Inspector.tsx",
+      "reason": "Multi-line textarea in the inspector; ui.d.ts has Input only. See section 5 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
     }
   ]
 }

@@ -30,7 +30,7 @@
 .lc-view-toggle.is-active { border-color: var(--lc-accent, #0165dd); background: color-mix(in srgb, var(--lc-accent, #0165dd) 14%, transparent); color: var(--lc-accent, #0165dd); }
 .lc-filter-bar { display: flex; align-items: center; gap: 7px; min-height: 48px; padding: 7px 14px; border-bottom: 1px solid var(--lc-border); background: var(--lc-chrome, #fff); position: relative; flex-wrap: wrap; }
 .lc-filter-search { display: flex; align-items: center; gap: 6px; flex: 1 1 190px; max-width: 360px; min-height: 30px; padding: 0 8px; border: 1px solid var(--lc-border); border-radius: 6px; color: var(--lc-muted); }
-.lc-filter-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; font-size: 12px; }
+.lc-filter-search input { min-width: 0; flex: 1; height: auto; padding: 0; border: 0; border-radius: 0; outline: 0; background: transparent; color: inherit; font: inherit; font-size: 12px; }
 .lc-filter-search button { border: 0; background: transparent; color: var(--lc-muted); cursor: pointer; }
 .lc-filter-pill, .lc-filter-more, .lc-filter-clear { min-height: 28px; padding: 4px 9px; border: 1px solid var(--lc-border); border-radius: 14px; background: transparent; color: inherit; cursor: pointer; font: inherit; font-size: 11px; }
 .lc-filter-pill[aria-pressed="true"] { border-color: var(--lc-accent, #0165dd); background: color-mix(in srgb, var(--lc-accent, #0165dd) 14%, transparent); color: var(--lc-accent, #0165dd); }

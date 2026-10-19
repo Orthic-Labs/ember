@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CompletedJobState, DesktopContextValue, JsonObject, JobStatus } from "../types";
 import PhotoPreview from "../preview/PhotoPreview";
-import { Button, Checkbox, IconButton, ModalShell, ProgressBar } from "@rightkit/react-shell/react";
+import { Button, Checkbox, IconButton, Input, ModalShell, ProgressBar } from "@rightkit/react-shell/react";
 import { useInertSiblings } from "./inertSiblings";
 import "./cullReview.css";
 
@@ -498,7 +498,7 @@ export function CullReviewDialog({ desktop, photoIds, photos, onClose }: CullRev
           <div className="lc-cull-review-settings" aria-label="Analysis settings">
             <Checkbox className="lc-cull-review-check" checked={rejectEnabled} onChange={setRejectEnabled} disabled={busy || applying} label="Suggest rejects below focus threshold" />
             <label className="lc-cull-review-threshold">Threshold
-              <input type="number" min={0} max={100} step={1} value={rejectBelowText} onChange={(event) => setRejectBelowText(event.target.value)} disabled={!rejectEnabled || busy || applying} />
+              <Input type="number" min={0} max={100} step={1} value={rejectBelowText} onChange={(event) => setRejectBelowText(event.target.value)} disabled={!rejectEnabled || busy || applying} />
               <span>/ 100</span>
             </label>
             <Button className="lc-cull-review-button-secondary" onClick={() => void generate()} disabled={busy || applying || stableIds.length === 0}>Generate suggestions</Button>
