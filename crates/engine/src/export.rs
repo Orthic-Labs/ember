@@ -3786,7 +3786,7 @@ mod tests {
         let (files, written, seen) = lanes_batch(&mut s, &ids, &o, 1, true, usize::MAX);
         let files = files.unwrap();
         let paths: Vec<_> = written.iter().map(|(p, _)| p.clone()).collect();
-        assert_eq!(paths, ["out/same.png", "out/same-2.png", "out/same-3.png", "out/same-4.png", "out/same-5.png"]);
+        assert_eq!(paths, ["out/same.png", "out/same (1).png", "out/same (2).png", "out/same (3).png", "out/same (4).png"]);
         let heights: std::collections::HashSet<_> = files.iter().map(|f| f["height"].as_u64()).collect();
         assert!(heights.len() > 1, "photos of different shapes show the order: {files:?}");
         for lanes in [2, 3, 8] {

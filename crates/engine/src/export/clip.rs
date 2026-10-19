@@ -334,7 +334,7 @@ mod tests {
 
         assert_eq!(wrote.get(), 0, "a clip is moved on disk, never pushed through the byte writer");
         assert_eq!(std::fs::read(out.join("beach.mov")).unwrap(), b"clip bytes");
-        assert_eq!(std::fs::read(out.join("beach-2.mov")).unwrap(), b"more bytes", "a taken name gets the next free one");
+        assert_eq!(std::fs::read(out.join("beach (1).mov")).unwrap(), b"more bytes", "a taken name gets the next free one");
         assert_eq!(results.len(), 2, "{results:?}");
         assert_eq!(results[0]["bytes"], 10);
         assert_eq!(results[0]["video"]["mode"], "copy");
