@@ -41,6 +41,8 @@ const env = {
   RIGHTKIT_QA_CATALOG: path.resolve(repoRoot, "fixtures/desktop/catalog.json"),
   RIGHTKIT_QA_BASELINE: path.resolve(repoRoot, "fixtures/desktop/installed-baseline.json"),
   RIGHTKIT_QA_INSTALLED_ARTIFACT_SHA256: executable.sha256,
+  // rightkit-qa 0.7 refuses an app in an installed-apps location unless this stage is named.
+  RIGHT_RELEASE_QA_STAGE: "installed",
 };
 const args = ["test", "--locked", "-p", "lightcraft-desktop", "--test", "native_qualification", "--features", "qa-native", "--", "--ignored", "--nocapture"];
 console.log(`desktop installed qualification: rightkit Cargo ${args.join(" ")}`);

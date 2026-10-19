@@ -67,7 +67,7 @@ export async function qualify(record, root) {
   const installedHash = createHash('sha256').update(readFileSync(installed)).digest('hex');
   if (installation.sha256 !== installedHash) fail('installed candidate changed after Right Release installation');
   if (record.platform === 'macos') collectMacForegroundBaseline(root, record);
-  const env = { ...process.env, CRAFT_FONTS_DIR: path.join(process.env.RUNNER_TEMP, 'lightcraft-build-fonts'), CRAFT_FONTS_REQUIRED: '1', RIGHTKIT_QA_HIDDEN: '1', RIGHTKIT_QA_UI_BINARY: installed, RIGHTKIT_QA_EVIDENCE: path.join(root, 'qa-evidence'), RIGHTKIT_QA_SOURCE_REVISION: record.sourceRevision, RIGHTKIT_QA_ARCHITECTURE: record.architecture, RIGHTKIT_QA_INSTALLED_ARTIFACT_SHA256: installedHash };
+  const env = { ...process.env, CRAFT_FONTS_DIR: path.join(process.env.RUNNER_TEMP, 'lightcraft-build-fonts'), CRAFT_FONTS_REQUIRED: '1', RIGHTKIT_QA_HIDDEN: '1', RIGHTKIT_QA_UI_BINARY: installed, RIGHTKIT_QA_EVIDENCE: path.join(root, 'qa-evidence'), RIGHTKIT_QA_SOURCE_REVISION: record.sourceRevision, RIGHTKIT_QA_ARCHITECTURE: record.architecture, RIGHTKIT_QA_INSTALLED_ARTIFACT_SHA256: installedHash, RIGHT_RELEASE_QA_STAGE: 'installed' };
   // Match candidate target/features (both on Cargo's dev profile) so qualification reuses
   // the native engine compilation.
   const result = runCargoSync(['test', '--locked', '-p', 'lightcraft-desktop', '--test', 'native_qualification', '--target', target.install.targetTriple, '--features', 'qa-native,custom-protocol', '--', '--ignored', '--nocapture'], { cwd: repoRoot, env, stdio: 'inherit', windowsHide: true });

@@ -49,7 +49,12 @@ impl EmberError {
 
 impl From<String> for EmberError {
     fn from(message: String) -> Self {
-        if message.contains("session owner is closed") { Self::Closed } else { Self::Session { message } }
+        // A call racing shutdown either finds the channel closed or the owner gone before it replies.
+        if message.contains("session owner is closed") || message.contains("session owner stopped") {
+            Self::Closed
+        } else {
+            Self::Session { message }
+        }
     }
 }
 
