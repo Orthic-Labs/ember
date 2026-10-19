@@ -272,7 +272,7 @@ fn read_json(path: &Path, kind: &str) -> Result<Value, String> {
 fn emit_report(report: &Value, out: Option<&Path>) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(report).map_err(|_| "could not encode cull evaluation report")?;
     if let Some(path) = out {
-        std::fs::write(path, &bytes).map_err(|_| "could not write cull evaluation report")?;
+        crate::output_file::replace(path, &bytes).map_err(|_| "could not write cull evaluation report")?;
         println!("{}", json!({"report": path.to_string_lossy(), "version": REPORT_VERSION, "schema": REPORT_SCHEMA}));
     } else {
         println!("{}", String::from_utf8_lossy(&bytes));

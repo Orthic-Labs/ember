@@ -153,8 +153,10 @@ pub fn check_writable(dir: &Path) -> Result<(), String> {
         }
         std::fs::create_dir(dir).map_err(|e| format!("can't create {}: {e}", dir.display()))?;
     }
+    // A marker written the way proxies are (temp file, rename) and removed again: proof that a new file can appear in `dir`.
     let probe = dir.join(format!(".lightcraft-write-test-{}", std::process::id()));
-    std::fs::write(&probe, b"x").map_err(|e| format!("{} is not writable (is the drive full or read-only?): {e}", dir.display()))?;
+    lightcraft_catalog::written::replace(&probe, b"x", false)
+        .map_err(|e| format!("{} is not writable (is the drive full or read-only?): {e}", dir.display()))?;
     let _ = std::fs::remove_file(&probe);
     Ok(())
 }
@@ -222,6 +224,37 @@ impl Existing {
     }
 }
 
+/// Move the proxy `src` to `dst` (a free name, or a damaged file of the same name): published by rename where both are on one
+/// drive (`rightkit_fs::publish_file_with`), else (across drives) a copy that is read back and compared by SHA-256 before it has its
+/// name (`rightkit_fs::copy_verified_with_digest`), never a partial proxy at the new place; the source is removed only once the
+/// copy is in place.
+#[cfg(not(target_arch = "wasm32"))]
+fn move_proxy(src: &Path, dst: &Path) -> std::io::Result<()> {
+    let options = rightkit_fs::AtomicWriteOptions::default();
+    let published = rightkit_fs::publish_file_with(src, dst, options);
+    match published {
+        Ok(()) => return Ok(()),
+        // renamed; only a step after it failed: the proxy is at its new place
+        Err(e) if e.target_replaced() => {
+            log::warn!("{}: moved, but a step after the move failed: {e}", dst.display());
+            return Ok(());
+        }
+        Err(_) => {}
+    }
+    match rightkit_fs::copy_verified_with_digest(src, dst, options, rightkit_fs::verified::DigestAlgorithm::Sha256, None, |_, _| {}) {
+        Ok(_) => {}
+        Err(e) if e.target_replaced() => log::warn!("{}: copied, but a step after the copy failed: {e}", dst.display()),
+        Err(e) => return Err(e.into()),
+    }
+    std::fs::remove_file(src)
+}
+
+/// A browser build has no file system to move a file in.
+#[cfg(target_arch = "wasm32")]
+fn move_proxy(_src: &Path, _dst: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "this build has no file system"))
+}
+
 /// Apply `what` to the smart previews in `from` for the new folder `to` → (moved or removed, failed).
 pub fn migrate(from: &Path, to: &Path, what: Existing) -> (usize, Vec<String>) {
     let (mut done, mut failed) = (0, Vec::new());
@@ -246,12 +279,7 @@ pub fn migrate(from: &Path, to: &Path, what: Existing) -> (usize, Vec<String>) {
                         // named by content: the complete copy already there is the same preview
                         std::fs::remove_file(&src)
                     } else {
-                        // across drives: copied atomically (never a partial proxy at the new place)
-                        std::fs::rename(&src, &dst).or_else(|_| {
-                            std::fs::read(&src)
-                                .and_then(|b| lightcraft_catalog::safe_file::write_atomic(&dst, &b))
-                                .and_then(|()| std::fs::remove_file(&src))
-                        })
+                        move_proxy(&src, &dst)
                     }
                 })
             }
@@ -350,7 +378,7 @@ pub fn look_checked(dir: &Path) -> bool {
 pub fn mark_look_checked(dir: &Path) -> Result<(), String> {
     let path = dir.join(LOOK_MARKER);
     let text = format!("{} {}\n", crate::camera_preview::LOOK_VERSION, ENCODE_VERSION);
-    lightcraft_catalog::safe_file::write_atomic(&path, text.as_bytes()).map_err(|e| format!("{}: {e}", path.display()))
+    lightcraft_catalog::written::replace(&path, text.as_bytes(), true).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 /// Load the proxy at `path`.

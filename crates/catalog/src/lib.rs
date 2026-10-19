@@ -23,10 +23,10 @@ pub mod lock;
 pub mod model;
 pub mod query;
 pub mod rules;
-pub mod safe_file;
 pub mod search;
 pub mod stacks;
 pub mod store;
+pub mod written;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

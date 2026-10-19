@@ -29,14 +29,15 @@ fn second_opener_is_refused_until_the_first_lets_go() {
     let dir = temp_dir("twice");
     let first = LibraryLock::acquire(&dir, "Ember").unwrap();
     assert!(first.held());
-    let owner: LockOwner = serde_json::from_slice(&std::fs::read(dir.join(OWNER)).unwrap()).unwrap();
-    assert_eq!((owner.pid, owner.program.as_str()), (std::process::id(), "Ember"));
+    let owner = rightkit_fs::probe_owner(&dir.join(LOCK)).expect("the owner note is written");
+    assert_eq!(owner.pid, std::process::id());
+    assert!(owner.label.starts_with("Ember "), "{owner:?}");
 
     let e = LibraryLock::acquire(&dir, "lightcraft-cli").unwrap_err();
     let LockError::InUse(Some(who)) = &e else { panic!("{e:?}") };
     assert_eq!(who.pid, std::process::id());
     let msg = e.to_string();
-    assert!(msg.contains("already open in Ember") && msg.contains(&format!("process {}", std::process::id())), "{msg}");
+    assert!(msg.contains("already open in Ember ") && msg.contains(&format!("process {}", std::process::id())), "{msg}");
 
     drop(first);
     assert!(!dir.join(OWNER).exists(), "the owner note goes with the lock");
@@ -56,7 +57,7 @@ fn leftover_lock_files_are_not_a_lock() {
     std::fs::write(dir.join(OWNER), br#"{"pid":999999,"host":"elsewhere","program":"Ember","version":"0.2.0","since":1}"#).unwrap();
     let l = LibraryLock::acquire(&dir, "Ember").unwrap();
     assert!(l.held());
-    let owner: LockOwner = serde_json::from_slice(&std::fs::read(dir.join(OWNER)).unwrap()).unwrap();
+    let owner = rightkit_fs::probe_owner(&dir.join(LOCK)).unwrap();
     assert_eq!(owner.pid, std::process::id(), "the note now names this process");
     drop(l);
     let _ = std::fs::remove_dir_all(&dir);
@@ -106,24 +107,6 @@ fn lock_holder_child() {
     std::thread::sleep(std::time::Duration::from_secs(120));
 }
 
-/// Issue #680: a process spawned by any thread holds a copy of every descriptor until it execs
-/// (close-on-exec only closes them then), and `flock` lasts while any copy of the descriptor is
-/// open. Dropping the `LibraryLock` must still free the library, so it releases explicitly rather
-/// than relying on its handle closing. A `try_clone` of the descriptor stands in for the child's
-/// copy: it refers to the same open file description, which is exactly what the child gets.
-#[cfg(unix)]
-#[test]
-fn the_library_is_free_once_dropped_even_if_a_child_holds_a_copy() {
-    let dir = temp_dir("copy");
-    let first = LibraryLock::acquire(&dir, "LightCraft").unwrap();
-    let copy = first.descriptor_copy().unwrap();
-    drop(first);
-    let again = LibraryLock::acquire(&dir, "lightcraft-cli").expect("the library is free once its LibraryLock is dropped");
-    assert!(again.held());
-    drop((again, copy));
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
 /// Issue #680, as it happens in practice: one thread spawns cheap children while another acquires,
 /// drops and re-acquires the lock on its own directory. Every acquire must succeed (before the fix
 /// a few per cent were refused with `InUse(None)`). Bounded: about two seconds of cycles, pass or fail.
@@ -169,4 +152,37 @@ fn dropping_the_lock_frees_the_library_while_another_thread_spawns_processes() {
         refused.len(),
         &refused[..refused.len().min(3)]
     );
+}
+
+/// An old Ember's note (another shape, no computer name) can't be read by the published probe: the second opener is still
+/// refused, and the message says "another Ember program".
+#[test]
+fn an_owner_note_in_an_older_shape_degrades_to_a_generic_message() {
+    let _serial = serial();
+    let dir = temp_dir("old-note");
+    let first = LibraryLock::acquire(&dir, "Ember").unwrap();
+    std::fs::write(dir.join(OWNER), br#"{"pid":4242,"host":"studio","program":"Ember","version":"0.2.0","since":1}"#).unwrap();
+    let e = LibraryLock::acquire(&dir, "lightcraft-cli").unwrap_err();
+    assert!(matches!(e, LockError::InUse(None)), "{e:?}");
+    assert!(e.to_string().contains("another Ember program"), "{e}");
+    drop(first);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The lock does not depend on the owner note: when the note can't be written (a folder sits at its name) the library is
+/// still locked, and a second opener is refused.
+#[test]
+fn the_library_stays_locked_when_the_owner_note_cannot_be_written() {
+    let _serial = serial();
+    let dir = temp_dir("no-note");
+    std::fs::create_dir_all(dir.join(OWNER).join("keep")).unwrap();
+    let first = LibraryLock::acquire(&dir, "Ember").unwrap();
+    assert!(first.held(), "locked without a note");
+    let e = LibraryLock::acquire(&dir, "lightcraft-cli").unwrap_err();
+    assert!(matches!(e, LockError::InUse(_)), "{e:?}");
+    drop(first);
+    let again = LibraryLock::acquire(&dir, "lightcraft-cli").unwrap();
+    assert!(again.held());
+    drop(again);
+    let _ = std::fs::remove_dir_all(&dir);
 }

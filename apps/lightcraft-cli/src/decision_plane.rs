@@ -1,7 +1,7 @@
 //! Offline plane extraction: no library import, development, provider calls or source writes.
 
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 
 use lightcraft_photo_ai::digest;
@@ -39,15 +39,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if digest(&source) != expected {
         return Err("plane source SHA256 mismatch".into());
     }
-    // Existing output (including a link to input) fails before decoding. A failed new output
-    // stays incomplete; only successful stdout receipts qualify its bytes for corpus use.
-    let mut target = OpenOptions::new().write(true).create_new(true).open(&output).map_err(|e| format!("new plane output: {e}"))?;
+    // Existing output (including a link to input) fails before decoding; the publish at the end
+    // still refuses to replace one that appears meanwhile. A failed run leaves no output file.
+    if crate::output_file::name_taken(Path::new(&output)) {
+        return Err("new plane output: the output already exists".into());
+    }
     let pool = rayon::ThreadPoolBuilder::new().num_threads(1).build().map_err(|e| format!("plane worker: {e}"))?;
     let plane = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| pool.install(|| gray_tiff(&source))))
         .map_err(|_| "plane decoder panicked")?
         .map_err(|e| e.to_string())?;
     let pgm = pgm(&plane)?;
-    target.write_all(&pgm).and_then(|()| target.sync_all()).map_err(|e| format!("plane output write: {e}"))?;
+    crate::output_file::publish_new(Path::new(&output), &pgm).map_err(|e| format!("plane output write: {e}"))?;
     println!(
         "{}",
         json!({

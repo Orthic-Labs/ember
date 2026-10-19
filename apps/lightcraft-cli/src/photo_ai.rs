@@ -289,7 +289,7 @@ fn metrics(image: &Rgba8) -> Value {
     json!({"displayHighlightClipFraction": high, "displayBlackClipFraction": low, "meaning": "proxy observations; intentional clipping is not an automatic failure"})
 }
 fn write(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    std::fs::write(path, bytes).map_err(|e| format!("could not write experiment output: {e}"))
+    crate::output_file::replace(path, bytes).map_err(|e| format!("could not write experiment output: {e}"))
 }
 fn write_image(path: &Path, image: &Rgba8) -> Result<(), String> {
     write(path, &encode_png(&EncodeImage::rgba8(image), &EncodeMeta::default()).map_err(|e| e.to_string())?)

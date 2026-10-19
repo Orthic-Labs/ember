@@ -4,9 +4,11 @@
 //! lose data comes last:
 //!
 //! 1. [`place`] puts the photo (and its XMP sidecars) at the destination **without touching the
-//!    source**: a hard link when source and destination share a volume (instant, no extra space,
-//!    never overwrites), else a copy that is written to a new file (never overwriting), synced to
-//!    disk and compared byte for byte with the original. A name that is taken gets -1, -2…
+//!    source**: a clone or a hard link when source and destination share a volume (instant, no
+//!    extra space, never overwrites; `rightkit-fs` `clone_or_link_or_copy_nofollow_with`), else a
+//!    copy that is written to a temp file, synced to disk, compared byte for byte with the
+//!    original and only then published under its name (never overwriting, never half written at
+//!    the final name). A name that is taken gets -1, -2…
 //!    Anything that fails is undone ([`rollback`]): the partial destination is removed and the
 //!    source stays as it was.
 //! 2. Only after the catalog records pointing at the destinations were committed and saved
@@ -20,8 +22,8 @@
 //! (Not `std::fs::rename`: it would remove the source before the catalog knows the new place,
 //! and on Unix it silently replaces an existing destination.)
 
-use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Write};
+use std::fs::{self, File};
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 /// A photo put in place by [`place`]; its source is untouched.
@@ -56,8 +58,6 @@ pub(crate) enum Fault {
     Corrupt,
     /// Removing the source fails (as on a read-only card).
     FailRemove,
-    /// Syncing the destination's folder to disk fails.
-    FailDirSync,
     /// Each copy takes a little longer and notes the thread it ran on ([`copy_threads`]), to see
     /// an import's copies run side by side.
     Slow,
@@ -101,14 +101,21 @@ fn injected(f: Fault) -> bool {
     }
 }
 
-/// Is `path` inside `dir` (as written, or once symlinks and `..` are resolved)?
+/// Is `path` inside `dir` (as written, or once symlinks and `..` are resolved: `rightkit_fs::is_within`, which resolves the
+/// existing part of both and compares whole components)? A relative pair is judged as written (and as made absolute), which
+/// `is_within` alone, wanting absolute paths, would call "not inside".
 pub(crate) fn inside(path: &Path, dir: &Path) -> bool {
     if path.starts_with(dir) {
         return true;
     }
-    match (fs::canonicalize(path), fs::canonicalize(dir)) {
-        (Ok(p), Ok(d)) => p.starts_with(d),
-        _ => false,
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let absolute = |p: &Path| std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf());
+        rightkit_fs::is_within(&absolute(dir), &absolute(path))
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        false
     }
 }
 
@@ -146,7 +153,7 @@ pub(crate) fn sidecars_of(src: &Path) -> Vec<(PathBuf, bool)> {
 /// Put `src` into `dir` as `name` (-1, -2… when taken) with its sidecars, leaving the source
 /// untouched. On failure nothing is left at the destination.
 pub(crate) fn place(src: &Path, dir: &Path, name: &str) -> Result<Placed, String> {
-    create_dir_durable(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    make_dir(dir, true).map_err(|e| format!("{}: {e}", dir.display()))?;
     let (stem, ext) = match name.rsplit_once('.') {
         Some((s, e)) if !s.is_empty() => (s.to_string(), format!(".{e}")),
         _ => (name.to_string(), String::new()),
@@ -200,7 +207,7 @@ pub(crate) fn place(src: &Path, dir: &Path, name: &str) -> Result<Placed, String
 /// (whose recorded metadata and hash would be stale). Without one the copy is compared byte for
 /// byte with the source.
 pub(crate) fn copy_new(src: &Path, dir: &Path, name: &str, expect: Option<lightcraft_preview::Hash128>) -> Result<PathBuf, String> {
-    fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    make_dir(dir, false).map_err(|e| format!("{}: {e}", dir.display()))?;
     let (stem, ext) = match name.rsplit_once('.') {
         Some((s, e)) if !s.is_empty() => (s.to_string(), format!(".{e}")),
         _ => (name.to_string(), String::new()),
@@ -242,7 +249,7 @@ pub(crate) fn finish(p: &Placed) -> Result<Vec<(String, String)>, String> {
     // the copy's contents are on disk (synced when written); its name in the folder must be too before the original
     // goes, or a crash in between could keep the deletion and lose the new name (issue #1501)
     if let Some(dir) = p.dst.parent() {
-        sync_dir(dir).map_err(|e| format!("could not make the copy's folder durable ({e}): the original is kept"))?;
+        sync_folder(dir).map_err(|e| format!("could not make the copy's folder durable ({e}): the original is kept"))?;
     }
     fs::remove_file(&p.src).map_err(|e| format!("could not remove the original ({e}): it stays where it was"))?;
     let mut kept = Vec::new();
@@ -275,105 +282,139 @@ pub(crate) fn sibling_photo(sidecar: &Path) -> Option<String> {
     })
 }
 
-/// Flush folder `dir`'s entries (the names in it) to disk. A file's own sync doesn't cover the folder entry that names
-/// it. Windows can't open a folder for this; NTFS journals those entries itself, so there it does nothing.
-pub(crate) fn sync_dir(dir: &Path) -> io::Result<()> {
-    if injected(Fault::FailDirSync) {
-        return Err(io::Error::other("folder sync failed (injected)"));
+/// Create `dir` and its missing parents; `durable` also makes every folder this call creates durable (its entry in its parent
+/// is synced, `rightkit_fs::atomic::create_dir_all_durable`).
+fn make_dir(dir: &Path, durable: bool) -> io::Result<()> {
+    #[cfg(not(target_arch = "wasm32"))]
+    if durable {
+        return Ok(rightkit_fs::atomic::create_dir_all_durable(dir, false)?);
     }
-    #[cfg(unix)]
+    let _ = durable;
+    fs::create_dir_all(dir)
+}
+
+/// Flush folder `dir`'s entries (the names in it) to disk: a file's own sync doesn't cover the folder entry that names it.
+/// Windows has no folder flush (NTFS journals those entries itself), so there it does nothing.
+fn sync_folder(dir: &Path) -> io::Result<()> {
+    #[cfg(not(target_arch = "wasm32"))]
     {
-        File::open(dir)?.sync_all()
+        rightkit_fs::atomic::try_sync_dir(dir)
     }
-    #[cfg(not(unix))]
+    #[cfg(target_arch = "wasm32")]
     {
         let _ = dir;
         Ok(())
     }
 }
 
-/// [`fs::create_dir_all`], with every folder it creates made durable: each new folder's entry is in its parent, so
-/// the parent is synced too.
-fn create_dir_durable(dir: &Path) -> io::Result<()> {
-    let mut missing: Vec<&Path> = Vec::new();
-    let mut at = Some(dir);
-    while let Some(d) = at.filter(|d| !d.as_os_str().is_empty() && !d.exists()) {
-        missing.push(d);
-        at = d.parent();
-    }
-    fs::create_dir_all(dir)?;
-    for d in &missing {
-        if let Some(parent) = d.parent().filter(|p| !p.as_os_str().is_empty()) {
-            sync_dir(parent)?;
-        }
-    }
-    Ok(())
-}
-
-/// `dst` = `src` without touching `src`: a hard link, else a verified copy. Never overwrites
-/// (`AlreadyExists` when `dst` is taken).
+/// `dst` = `src` without touching `src`: a clone or a hard link where the volume has one, else a verified copy. Never
+/// overwrites (`AlreadyExists` when `dst` is taken).
 fn link_or_copy(src: &Path, dst: &Path) -> io::Result<()> {
     let force_copy = injected(Fault::NoLink) || injected(Fault::FailWrite) || injected(Fault::Corrupt);
+    #[cfg(not(target_arch = "wasm32"))]
     if !force_copy && !is_symlink(src) {
-        match fs::hard_link(src, dst) {
-            Ok(()) => {
-                let (a, b) = (fs::metadata(src)?, fs::metadata(dst)?);
-                if a.len() == b.len() {
-                    return Ok(());
-                }
+        use rightkit_fs::{CloneOptions, CloneOutcome};
+        // `Cloned` / `HardLinked`: the destination is the source's own bytes, and `finish` compares them again before the source
+        // goes. `Copied` (another volume, or no links there: FAT/exFAT cards, some shares) is the library's own copy: it keeps
+        // the Move rule of a byte-for-byte comparison, and the source's modified time like `copy_verified` does.
+        let compare_and_stamp = |dst: &Path| -> io::Result<()> {
+            if !same_bytes(src, dst)? {
                 let _ = fs::remove_file(dst);
-                return Err(io::Error::other("the link doesn't match the original"));
+                return Err(io::Error::other("the copy differs from the original"));
             }
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => return Err(e),
-            // another volume, or no hard links there (FAT/exFAT cards, some shares): copy
-            Err(_) => {}
-        }
+            copy_modified(src, dst);
+            Ok(())
+        };
+        return match rightkit_fs::clone_or_link_or_copy_nofollow_with(src, dst, &CloneOptions::default()) {
+            Ok(CloneOutcome::Cloned | CloneOutcome::HardLinked) => Ok(()),
+            Ok(CloneOutcome::Copied) => compare_and_stamp(dst),
+            Err(e) if e.target_replaced() || matches!(e, rightkit_fs::FsError::DirSyncFailed { .. }) => {
+                // published (a clone or a link is a new entry; `DirSyncFailed` is its folder sync failing); only a step after it
+                // failed, which `finish` checks again before the source goes
+                log::warn!("{}: placed, but a step after it failed: {e}", dst.display());
+                compare_and_stamp(dst)
+            }
+            Err(e) => Err(io_error(e)),
+        };
     }
+    let _ = force_copy;
     // Move keeps the byte-for-byte comparison: the source is deleted on the strength of it
     copy_verified(src, dst, None)
 }
 
-/// Copy into a new file, sync it to disk and verify it: against `expect` (the probe's hash of the
-/// source) when given, else byte for byte against the source. On any failure the partial copy is
-/// removed.
+/// `rightkit_fs::FsError` as the `io::Error` of its cause (its message names the temp file; the cause is what matters here).
+#[cfg(not(target_arch = "wasm32"))]
+fn io_error(e: rightkit_fs::FsError) -> io::Error {
+    match e {
+        rightkit_fs::FsError::Io { source, .. } => source,
+        other => other.into(),
+    }
+}
+
+/// Give `dst` the modified time of `src` (best effort: only the copy's own timestamp).
+#[cfg(not(target_arch = "wasm32"))]
+fn copy_modified(src: &Path, dst: &Path) {
+    if let Ok(m) = fs::metadata(src).and_then(|m| m.modified())
+        && let Ok(f) = fs::OpenOptions::new().write(true).open(dst)
+    {
+        let _ = f.set_modified(m);
+    }
+}
+
+/// Copy into a new file and verify it before it has its name: the content goes to a temp file beside `dst` (`rightkit-fs`
+/// `AtomicWriter`), is synced, and is checked against `expect` (the probe's hash of the source) when given, else byte for
+/// byte against the source; only a good copy is published, exclusively (`AlreadyExists` when `dst` is taken, even by a file that
+/// appears meanwhile). On any failure the temp file is removed: nothing is ever at `dst` but a complete, verified copy.
 pub(crate) fn copy_verified(src: &Path, dst: &Path, expect: Option<lightcraft_preview::Hash128>) -> io::Result<()> {
-    let mut out = OpenOptions::new().write(true).create_new(true).open(dst)?;
-    let r = (|| {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
         let mut inp = File::open(src)?;
+        let options = rightkit_fs::AtomicWriteOptions { replace: rightkit_fs::ReplaceMode::NoReplace, ..rightkit_fs::AtomicWriteOptions::default() };
+        let mut out = rightkit_fs::AtomicWriter::create_with(dst, options).map_err(io_error)?;
         if injected(Fault::FailWrite) {
-            out.write_all(b"partial")?;
+            out.write_all(b"partial").map_err(io_error)?;
             return Err(io::Error::other("write failed (injected)"));
         }
-        io::copy(&mut inp, &mut out)?;
+        io::copy(&mut inp, out.file_mut())?;
         #[cfg(test)]
         if injected(Fault::Slow) {
             COPY_THREADS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(std::thread::current().id());
             std::thread::sleep(std::time::Duration::from_millis(30));
         }
         if injected(Fault::Corrupt) {
-            out.write_all(b"!")?;
+            out.write_all(b"!").map_err(io_error)?;
         }
-        out.sync_all()?;
+        // the source's modified time goes on the copy before it is published
         if let Ok(m) = fs::metadata(src).and_then(|m| m.modified()) {
-            let _ = out.set_modified(m);
+            let _ = out.file_mut().set_modified(m);
         }
-        match expect {
-            Some(h) if hash_file(dst)? != h => {
+        let checked = out.commit_checked(|temp| match expect {
+            Some(h) if hash_file(temp)? != h => {
                 Err(io::Error::other("the copy differs from the original as it was read for the import (a bad copy, or the file changed meanwhile)"))
             }
             Some(_) => Ok(()),
-            None if !same_bytes(src, dst)? => Err(io::Error::other("the copy differs from the original")),
+            None if !same_bytes(src, temp)? => Err(io::Error::other("the copy differs from the original")),
             None => Ok(()),
+        });
+        match checked {
+            Ok(()) => Ok(()),
+            // published and complete; only the folder sync after it failed: `finish` syncs the folder again before the source goes
+            Err(e) if e.target_replaced() => {
+                log::warn!("{}: copied, but a step after the copy failed: {e}", dst.display());
+                Ok(())
+            }
+            Err(e) => Err(io_error(e)),
         }
-    })();
-    drop(out);
-    if r.is_err() {
-        let _ = fs::remove_file(dst);
     }
-    r
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = (src, dst, expect);
+        Err(io::Error::new(io::ErrorKind::Unsupported, "this build has no file system"))
+    }
 }
 
 /// [`lightcraft_preview::hash_bytes`] of a file's content, read in chunks.
+#[cfg(not(target_arch = "wasm32"))]
 fn hash_file(path: &Path) -> io::Result<lightcraft_preview::Hash128> {
     let mut f = File::open(path)?;
     let mut h = lightcraft_preview::Hasher128::new();

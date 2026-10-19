@@ -120,13 +120,13 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
         let file = match &dir {
             Some(d) => {
                 let f = d.join(format!("{}.cube", id.trim_start_matches("lut:")));
-                std::fs::write(&f, &text).map_err(|e| bad(C, format!("{}: {e}", f.display())))?;
+                lightcraft_catalog::written::replace(&f, text.as_bytes(), true).map_err(|e| bad(C, format!("{}: {e}", f.display())))?;
                 f.to_string_lossy().to_string()
             }
             None => {
                 // no library on disk: remember the original (the in-memory session ends with the app)
                 let f = std::env::temp_dir().join(format!("lightcraft-{}.cube", id.trim_start_matches("lut:")));
-                std::fs::write(&f, &text).map_err(|e| bad(C, e.to_string()))?;
+                lightcraft_catalog::written::replace(&f, text.as_bytes(), true).map_err(|e| bad(C, e.to_string()))?;
                 f.to_string_lossy().to_string()
             }
         };

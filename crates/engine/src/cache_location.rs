@@ -4,7 +4,6 @@
 //! (a drive that is not connected) the library's own folder is used, so the choice comes back with
 //! the drive.
 
-use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 
 /// The folder the cache uses now: `chosen` when it exists and lies outside `originals`, else
@@ -28,37 +27,34 @@ pub fn at_open(default: &Path, chosen: Option<&Path>, originals: &Path) -> PathB
 }
 
 /// Refuse a cache folder that is, lies inside, or holds the library's originals: the cache never
-/// shares a folder with the user's photos.
+/// shares a folder with the user's photos. The comparison is `rightkit_fs::is_within` both ways: the existing part of each
+/// path is resolved (symlinks, Windows short names and verbatim prefixes) and the part that does not exist yet is kept, whole
+/// components are compared, and the case rules are the volume's.
 pub fn check_outside_originals(dir: &Path, originals: &Path) -> Result<(), String> {
-    let (d, o) = (comparable(dir), comparable(originals));
-    if d.starts_with(&o) || o.starts_with(&d) {
+    if related(dir, originals) {
         return Err(format!("{} is inside the library's originals ({}): choose another folder", dir.display(), originals.display()));
     }
     Ok(())
 }
 
+/// `a` is, lies inside or holds `b`.
+fn related(a: &Path, b: &Path) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // `is_within` wants absolute paths; a relative one is made absolute first rather than called "not inside"
+        let absolute = |p: &Path| std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf());
+        let (a, b) = (absolute(a), absolute(b));
+        rightkit_fs::is_within(&b, &a) || rightkit_fs::is_within(&a, &b)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        a.starts_with(b) || b.starts_with(a)
+    }
+}
+
 /// Whether `p` is absolute and has no `..` part (what a chosen folder must be).
 pub fn plain_absolute(p: &Path) -> bool {
     p.is_absolute() && !p.components().any(|c| matches!(c, Component::ParentDir))
-}
-
-/// `p` with its existing part resolved (symlinks, Windows short names and verbatim prefixes), so
-/// both sides of a comparison are spelled the same way; the part that does not exist yet is kept.
-fn comparable(p: &Path) -> PathBuf {
-    let mut tail: Vec<OsString> = Vec::new();
-    let mut cur = p;
-    loop {
-        if let Ok(resolved) = std::fs::canonicalize(cur) {
-            return tail.iter().rev().fold(resolved, |acc, part| acc.join(part));
-        }
-        match (cur.parent(), cur.file_name()) {
-            (Some(parent), Some(name)) => {
-                tail.push(name.to_os_string());
-                cur = parent;
-            }
-            _ => return p.to_path_buf(),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -108,6 +104,23 @@ mod tests {
         let originals = lib.join("Originals");
         assert!(check_outside_originals(&originals.join("a").join("b"), &originals).is_err());
         assert!(check_outside_originals(&lib.join("cache"), &originals).is_ok());
+        let _ = std::fs::remove_dir_all(&lib);
+    }
+
+    /// A link to the originals (or to a folder inside them) is the originals: refused, whatever its own spelling.
+    #[cfg(unix)]
+    #[test]
+    fn a_link_to_the_originals_is_refused() {
+        let lib = scratch("link");
+        let originals = lib.join("Originals");
+        std::fs::create_dir_all(originals.join("2026")).unwrap();
+        let (to_originals, to_inner) = (lib.join("alias"), lib.join("alias-inner"));
+        std::os::unix::fs::symlink(&originals, &to_originals).unwrap();
+        std::os::unix::fs::symlink(originals.join("2026"), &to_inner).unwrap();
+        assert!(check_outside_originals(&to_originals, &originals).is_err());
+        assert!(check_outside_originals(&to_inner, &originals).is_err());
+        assert!(check_outside_originals(&to_originals.join("new"), &originals).is_err(), "a missing folder below the link");
+        assert!(check_outside_originals(&originals, &to_originals).is_err(), "and from the other side");
         let _ = std::fs::remove_dir_all(&lib);
     }
 

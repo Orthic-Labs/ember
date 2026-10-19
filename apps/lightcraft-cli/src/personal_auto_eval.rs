@@ -4,8 +4,8 @@
 //! catalog, decodes a photo, renders an image, calls a provider, or applies a setting.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 
 use lightcraft_develop::{DevelopSettings, SCHEMA_VERSION, controls};
@@ -219,8 +219,10 @@ fn write_new_json(path: &Path, value: &Value, kind: &str) -> Result<(), String> 
     if bytes.len() as u64 > MAX_BYTES {
         return Err(format!("{kind} output exceeds {MAX_BYTES} byte cap"));
     }
-    let mut file = OpenOptions::new().write(true).create_new(true).open(path).map_err(|_| format!("could not create new {kind} output"))?;
-    file.write_all(&bytes).map_err(|_| format!("could not write {kind} output"))?;
+    crate::output_file::publish_new(path, &bytes).map_err(|e| match e {
+        rightkit_fs::FsError::AlreadyExists(_) => format!("could not create new {kind} output"),
+        _ => format!("could not write {kind} output"),
+    })?;
     Ok(())
 }
 

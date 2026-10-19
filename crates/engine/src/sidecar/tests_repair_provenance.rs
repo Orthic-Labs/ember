@@ -272,7 +272,7 @@ fn own_atomic_shared_packet_writes_advance_retained_versions_and_failures_do_not
     std::fs::rename(&f.source, &held).unwrap();
     let before = queued(&f.s);
     {
-        let _fault = lightcraft_catalog::safe_file::fail_writes_after(0);
+        let _fault = rightkit_fs::atomic::seams::fail_write_after(0, std::io::ErrorKind::Other);
         assert!(f.s.save_sidecar(PhotoId(2)).is_err());
     }
     assert_eq!(queued(&f.s), before, "failed atomic writes must not advance provenance");

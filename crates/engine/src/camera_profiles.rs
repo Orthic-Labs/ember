@@ -110,7 +110,7 @@ pub fn save(profile: &CameraProfile, dir: &Path) -> Result<PathBuf, String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let path = dir.join(file_name(&profile.model));
     let json = serde_json::to_vec_pretty(profile).map_err(|e| e.to_string())?;
-    lightcraft_catalog::safe_file::write_atomic(&path, &json).map_err(|e| format!("{}: {e}", path.display()))?;
+    lightcraft_catalog::written::replace(&path, &json, true).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(path)
 }
 

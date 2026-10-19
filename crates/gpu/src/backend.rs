@@ -272,7 +272,7 @@ fn arm(marker: &std::path::Path, active: &Mutex<u32>, what: &str) {
             let _ = std::fs::create_dir_all(d);
         }
         let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-        let _ = std::fs::write(marker, marker_text(what, secs));
+        let _ = rightkit_fs::atomic_write(marker, marker_text(what, secs).as_bytes());
     }
     *n = n.saturating_add(1);
 }

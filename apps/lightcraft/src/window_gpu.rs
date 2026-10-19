@@ -54,7 +54,7 @@ impl Files {
         if let Some(d) = p.parent() {
             let _ = std::fs::create_dir_all(d);
         }
-        if let Err(e) = std::fs::write(&p, format!("{}\n", r.name())) {
+        if let Err(e) = rightkit_fs::atomic_write(&p, format!("{}\n", r.name()).as_bytes()) {
             log::warn!("window: could not write {}: {e}", p.display());
         }
     }

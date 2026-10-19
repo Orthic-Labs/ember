@@ -27,3 +27,7 @@ rightkit-fs = { version = "=0.4.4", default-features = false, features = ["fs", 
 [dev-dependencies]
 lightcraft-geom = { workspace = true }
 proptest = { workspace = true }
+
+# fault injection (a write that fails part-way) and sync counts for the write-policy tests; never in a release dependency
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+rightkit-fs = { version = "=0.4.4", default-features = false, features = ["fs", "json", "test-seams"] }

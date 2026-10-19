@@ -203,10 +203,8 @@ mod native {
                     if dst.exists() {
                         // the same key is there already (same content): the old copy is redundant
                         fs::remove_file(&p)
-                    } else if fs::rename(&p, &dst).is_ok() {
-                        Ok(())
                     } else {
-                        fs::copy(&p, &dst).and_then(|_| fs::remove_file(&p))
+                        move_file(&p, &dst)
                     }
                 });
                 match done {
@@ -297,6 +295,31 @@ mod native {
             }
         }
         log::info!("preview cache: {} brought into the new layout ({moved} thumbnails kept, {dropped} dropped)", dir.display());
+    }
+
+    /// Move the cache file `p` to the free name `dst`: published by rename where both are on one drive, else (another drive) a copy
+    /// that is read back and compared by SHA-256 before it has its name, then the source removed (`rightkit-fs`). Neither ever
+    /// replaces a file at `dst`: a name that appears meanwhile holds the same content (the name is the content key), so the
+    /// source is then simply redundant. A cache file can always be made again, so nothing is synced.
+    fn move_file(p: &Path, dst: &Path) -> io::Result<()> {
+        let options = rightkit_fs::AtomicWriteOptions {
+            durable: false,
+            replace: rightkit_fs::ReplaceMode::NoReplace,
+            ..rightkit_fs::AtomicWriteOptions::default()
+        };
+        match rightkit_fs::publish_file_with(p, dst, options) {
+            Ok(()) => return Ok(()),
+            Err(rightkit_fs::FsError::AlreadyExists(_)) => return fs::remove_file(p),
+            Err(e) if e.target_replaced() => return Ok(()),
+            Err(_) => {}
+        }
+        match rightkit_fs::copy_verified_with_digest(p, dst, options, rightkit_fs::verified::DigestAlgorithm::Sha256, None, |_, _| {}) {
+            Ok(_) => {}
+            Err(rightkit_fs::FsError::AlreadyExists(_)) => {}
+            Err(e) if e.target_replaced() => {}
+            Err(e) => return Err(e.into()),
+        }
+        fs::remove_file(p)
     }
 
     fn migrate_one(store: &rightkit_cache::DiskCache, f: &Legacy) -> io::Result<()> {

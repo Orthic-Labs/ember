@@ -9,7 +9,7 @@
 //! compressed length and CRC-32, then the strips' bytes. `key` says what the product was made from (the photo's
 //! content, the model, this code's version, the settings it depends on); a file with another key is stale.
 
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::Path;
 
 use lightcraft_raster::Rgb32f;
@@ -155,12 +155,10 @@ pub fn write(path: &Path, img: &Rgb32f, key: &str) -> Result<(), ProductError> {
     let packed: Vec<Vec<u8>> = strips.par_iter().map(|&(a, b)| encode_strip(img, a, b)).collect::<Result<_, _>>()?;
     let header = serde_json::to_vec(&Header { width: img.width, height: img.height, strip: STRIP_ROWS, key: key.to_string() })
         .map_err(|e| ProductError::Format(e.to_string()))?;
-    let tmp = path.with_extension("tmp");
-    let result = (|| -> Result<(), ProductError> {
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
-        let mut f = std::io::BufWriter::new(std::fs::File::create(&tmp)?);
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    crate::publish::replace_with(path, |f| {
         f.write_all(MAGIC)?;
         f.write_all(&[VERSION, 0, 0, 0])?;
         f.write_all(&(header.len() as u32).to_le_bytes())?;
@@ -172,15 +170,9 @@ pub fn write(path: &Path, img: &Rgb32f, key: &str) -> Result<(), ProductError> {
         for p in &packed {
             f.write_all(p)?;
         }
-        f.flush()?;
-        drop(f);
-        std::fs::rename(&tmp, path)?;
         Ok(())
-    })();
-    if result.is_err() {
-        let _ = std::fs::remove_file(&tmp);
-    }
-    result
+    })?;
+    Ok(())
 }
 
 /// The parsed start of a product file: header, each strip's (compressed length, CRC-32), and the file length the

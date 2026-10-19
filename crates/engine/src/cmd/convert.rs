@@ -2,7 +2,7 @@
 //! embedded as XMP) next to it, and the photo is relinked to the DNG. The original stays on
 //! disk; undo relinks the photo to it.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use lightcraft_catalog::{MediaKind, Op, Source};
 use serde_json::{Value, json};
@@ -51,7 +51,7 @@ pub(crate) fn write_dng_with(file_bytes: Option<&crate::merge::ByteReader>, path
         return Err(format!("{path}: the DNG written for it doesn't hold the same raw data; the raw is kept"));
     }
     drop((raw, back));
-    let out = lightcraft_catalog::safe_file::write_new_unique(&mut dng_names(path), &dng)
+    let out = lightcraft_catalog::written::write_new_unique(&mut dng_names(path), &dng)
         .map_err(|e| format!("{path}: could not write its DNG ({e}); the raw is kept"))?;
     Ok(out.to_string_lossy().to_string())
 }
@@ -451,6 +451,38 @@ fn reload(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"reloaded": reloaded.iter().map(|i| i.0).collect::<Vec<_>>()}))
 }
 
+/// An independent copy of `src` in `dir` under the first free name `<stem>-copy<ext>`, `<stem>-copy-2<ext>`, …: a clone where the volume has
+/// copy-on-write, else a copy (never a hard link, which would be the same file), published without ever replacing a file
+/// that is there or appears meanwhile, and never a partial file at the new name (`rightkit-fs`
+/// `clone_or_link_or_copy_nofollow_with`). A symlinked photo is copied from the file it points to.
+#[cfg(not(target_arch = "wasm32"))]
+fn copy_beside(src: &Path, dir: &Path, stem: &str, ext: &str) -> std::io::Result<PathBuf> {
+    use rightkit_fs::{CloneOptions, FsError};
+    let real = if std::fs::symlink_metadata(src).is_ok_and(|m| m.file_type().is_symlink()) { std::fs::canonicalize(src)? } else { src.to_path_buf() };
+    let options = CloneOptions::default().without_hard_link();
+    for n in 1..=10_000u32 {
+        let dst = if n == 1 { dir.join(format!("{stem}-copy{ext}")) } else { dir.join(format!("{stem}-copy-{n}{ext}")) };
+        match rightkit_fs::clone_or_link_or_copy_nofollow_with(&real, &dst, &options) {
+            Ok(_) => return Ok(dst),
+            // in place and complete; only the folder sync after it failed
+            Err(e) if e.target_replaced() || matches!(e, FsError::DirSyncFailed { .. }) => {
+                log::warn!("{}: copied, but a step after the copy failed: {e}", dst.display());
+                return Ok(dst);
+            }
+            // taken (a file, a folder, or a link at that name): the next name
+            Err(FsError::AlreadyExists(_) | FsError::Symlink(_)) => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, format!("no free copy name next to {}", src.display())))
+}
+
+/// A browser build has no file system to copy a file in.
+#[cfg(target_arch = "wasm32")]
+fn copy_beside(_src: &Path, _dir: &Path, _stem: &str, _ext: &str) -> std::io::Result<PathBuf> {
+    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "this build has no file system"))
+}
+
 /// Duplicate: copy the file next to itself (`<name>-copy`, never overwriting) and add it with the
 /// same settings, metadata, rating, flag, label and albums. → {ids}
 fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
@@ -463,13 +495,7 @@ fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
         let stem = src.file_stem().map(|x| x.to_string_lossy().to_string()).unwrap_or_else(|| "photo".into());
         let ext = src.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
         let dir = src.parent().unwrap_or(Path::new(""));
-        let mut dst = dir.join(format!("{stem}-copy{ext}"));
-        let mut n = 2;
-        while dst.exists() {
-            dst = dir.join(format!("{stem}-copy-{n}{ext}"));
-            n += 1;
-        }
-        std::fs::copy(src, &dst).map_err(|e| bad(C, format!("{path}: {e}")))?;
+        let dst = copy_beside(src, dir, &stem, &ext).map_err(|e| bad(C, format!("{path}: {e}")))?;
         let new = s.catalog.alloc_photo_id();
         let mut q = ph.clone();
         q.id = new;

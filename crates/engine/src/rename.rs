@@ -369,47 +369,65 @@ impl MoveFs for RealFs {
         if a == b {
             return true;
         }
-        #[cfg(unix)]
+        // The file system's own identity (device + inode, volume + file index), through any spelling; when either file has none
+        // available the answer is "different" (the trait's "when in doubt: false").
+        #[cfg(not(target_arch = "wasm32"))]
         {
-            use std::os::unix::fs::MetadataExt;
-            let (Ok(ma), Ok(mb)) = (std::fs::metadata(a), std::fs::metadata(b)) else { return false };
-            ma.dev() == mb.dev() && ma.ino() == mb.ino()
+            matches!((rightkit_fs::FileKey::of_path(a), rightkit_fs::FileKey::of_path(b)), (Ok(x), Ok(y)) if x == y)
         }
-        #[cfg(not(unix))]
+        #[cfg(target_arch = "wasm32")]
         {
-            // Resolve both spellings through the filesystem. A directory-entry heuristic was
-            // asymmetric and rejected an existing uppercase packet through its lowercase alias.
-            // Exact resolved paths also keep distinct files on case-sensitive volumes separate.
-            let (Ok(a), Ok(b)) = (std::fs::canonicalize(a), std::fs::canonicalize(b)) else { return false };
-            a == b
+            false
         }
     }
 
     fn rename_no_replace(&self, a: &Path, b: &Path) -> std::io::Result<()> {
-        if self.exists(b) {
-            return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, format!("{} already exists", b.display())));
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            match rightkit_fs::rename_exclusive(a, b) {
+                Ok(()) => Ok(()),
+                // The name `b` is published. Where the kernel has no exclusive rename the move was link then unlink: when the
+                // unlink failed `a` is still a second name of the file, so finish the move by removing it, and when that fails too
+                // drop the new name (both are the same file: nothing is lost) and report that `a` stays.
+                Err(e) if e.target_replaced() => {
+                    if !self.exists(a) {
+                        log::warn!("{}: renamed, but a step after the rename failed: {e}", b.display());
+                        return Ok(());
+                    }
+                    std::fs::remove_file(a).inspect_err(|_| {
+                        let _ = std::fs::remove_file(b);
+                    })
+                }
+                Err(e) => {
+                    let e = std::io::Error::from(e);
+                    if e.kind() == std::io::ErrorKind::CrossesDevices { move_across_volumes(self, a, b) } else { Err(e) }
+                }
+            }
         }
-        // A hard link fails when `b` exists — even if it appeared since the check above — so
-        // nothing is ever replaced. Volumes without hard links (FAT, some network shares) fall back
-        // to a plain rename after the check.
-        match std::fs::hard_link(a, b) {
-            Ok(()) => std::fs::remove_file(a).inspect_err(|_| {
-                // both names are the same file: dropping the new one loses nothing
-                let _ = std::fs::remove_file(b);
-            }),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(e),
-            Err(_) => std::fs::rename(a, b)
-                .or_else(|e| if e.kind() == std::io::ErrorKind::CrossesDevices { move_across_volumes(self, a, b) } else { Err(e) }),
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (a, b);
+            Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "this build has no file system"))
         }
     }
 
     fn copy_no_replace(&self, a: &Path, b: &Path) -> std::io::Result<()> {
-        use std::io::Write;
-        let bytes = std::fs::read(a)?;
-        let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(b)?;
-        f.write_all(&bytes).and_then(|_| f.sync_all()).inspect_err(|_| {
-            let _ = std::fs::remove_file(b);
-        })
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            match copy_new_verified(a, b) {
+                Ok(()) => Ok(()),
+                Err(e) if e.target_replaced() => {
+                    log::warn!("{}: copied, but a step after the copy failed: {e}", b.display());
+                    Ok(())
+                }
+                Err(e) => Err(e.into()),
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (a, b);
+            Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "this build has no file system"))
+        }
     }
 
     fn remove_file(&self, p: &Path) -> std::io::Result<()> {
@@ -421,20 +439,31 @@ impl MoveFs for RealFs {
     }
 }
 
-/// Move `a` to `b` on another volume: copy (never replacing), compare the copy with the original
-/// byte for byte, and only then remove the original. A copy that doesn't match is removed.
-fn move_across_volumes(fs: &RealFs, a: &Path, b: &Path) -> std::io::Result<()> {
-    fs.copy_no_replace(a, b)?;
+/// A verified copy of `a` at the new name `b` (never replacing, never a link): written to a temp file beside `b`, read back and
+/// compared by SHA-256 with what was read from `a`, flushed, then published exclusively with its folder synced.
+#[cfg(not(target_arch = "wasm32"))]
+fn copy_new_verified(a: &Path, b: &Path) -> rightkit_fs::Result<()> {
+    let options = rightkit_fs::AtomicWriteOptions { replace: rightkit_fs::ReplaceMode::NoReplace, ..rightkit_fs::AtomicWriteOptions::default() };
+    rightkit_fs::copy_verified_with_digest(a, b, options, rightkit_fs::verified::DigestAlgorithm::Sha256, None, |_, _| {}).map(|_| ())
+}
+
+/// Move `a` to `b` on another volume: copy (never replacing; verified and its folder made durable by the copy), compare the copy
+/// with the original byte for byte once more (the original may have changed since it was read), and only then remove the
+/// original. A copy that doesn't match, or whose name couldn't be made durable, is removed and the original kept.
+#[cfg(not(target_arch = "wasm32"))]
+fn move_across_volumes(_fs: &RealFs, a: &Path, b: &Path) -> std::io::Result<()> {
+    match copy_new_verified(a, b) {
+        Ok(()) => {}
+        Err(e) if e.target_replaced() => {
+            // the copy is in place but its name in the folder may not survive a power cut (issue #1501): the original stays
+            let _ = std::fs::remove_file(b);
+            return Err(std::io::Error::other(format!("could not make {} durable ({e}); the original was kept", b.display())));
+        }
+        Err(e) => return Err(e.into()),
+    }
     if !same_contents(a, b).unwrap_or(false) {
         let _ = std::fs::remove_file(b);
         return Err(std::io::Error::other(format!("the copy at {} did not match the original; the original was kept", b.display())));
-    }
-    // the copy's name in its folder must be on disk before the original goes (issue #1501)
-    if let Some(dir) = b.parent()
-        && let Err(e) = crate::import_move::sync_dir(dir)
-    {
-        let _ = std::fs::remove_file(b);
-        return Err(std::io::Error::other(format!("could not make {} durable ({e}); the original was kept", b.display())));
     }
     std::fs::remove_file(a).inspect_err(|_| {
         // the original stays: drop the copy so the file isn't in two places
@@ -444,6 +473,7 @@ fn move_across_volumes(fs: &RealFs, a: &Path, b: &Path) -> std::io::Result<()> {
 
 /// Whether files `a` and `b` hold the same bytes: lengths first, then 1 MiB chunks at a time, so
 /// a large raw or video is never read into memory whole.
+#[cfg(not(target_arch = "wasm32"))]
 fn same_contents(a: &Path, b: &Path) -> std::io::Result<bool> {
     const CHUNK: usize = 1 << 20;
     let (mut fa, mut fb) = (std::fs::File::open(a)?, std::fs::File::open(b)?);
@@ -465,6 +495,7 @@ fn same_contents(a: &Path, b: &Path) -> std::io::Result<bool> {
 
 /// Fill `buf` from `r` as far as the file goes; the number of bytes read (less than the buffer
 /// only at the end of the file).
+#[cfg(not(target_arch = "wasm32"))]
 fn read_full(r: &mut impl std::io::Read, buf: &mut [u8]) -> std::io::Result<usize> {
     let mut filled = 0;
     while let Some(rest) = buf.get_mut(filled..).filter(|r| !r.is_empty()) {

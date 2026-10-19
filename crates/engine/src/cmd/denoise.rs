@@ -183,12 +183,16 @@ fn install_file(
             return Err(bad(c, e));
         }
     };
-    // An installed id is immutable: installing again must never destroy a usable model.
-    if final_path.exists() {
+    // An installed id is immutable: installing again must never destroy a usable model. The name is taken exclusively, so a model
+    // installed meanwhile is refused here too (no check-then-rename gap).
+    if let Err(e) = crate::model_download::publish_staged(&part, &final_path, false) {
         let _ = std::fs::remove_file(&part);
-        return Err(bad(c, "that model is already installed; remove it before installing a replacement"));
+        return Err(if e.kind() == std::io::ErrorKind::AlreadyExists {
+            bad(c, "that model is already installed; remove it before installing a replacement")
+        } else {
+            fail("could not finish the copy", e)
+        });
     }
-    std::fs::rename(&part, &final_path).map_err(|e| fail("could not finish the copy", e))?;
     write_atomic(&home.join("denoise-model.json"), &serde_json::to_vec_pretty(&m).map_err(|e| fail("manifest", e))?).map_err(EngineError::Other)?;
     let accepted = json!({
         "acceptedAt": accepted_at,

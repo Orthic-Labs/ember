@@ -352,6 +352,7 @@ fn export_presets(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).map_err(|e| crate::EngineError::Other(format!("{}: {e}", dir.display())))?;
     }
-    std::fs::write(&path, to_file(&chosen)).map_err(|e| crate::EngineError::Other(format!("{}: {e}", path.display())))?;
+    lightcraft_catalog::written::replace(&path, to_file(&chosen).as_bytes(), true)
+        .map_err(|e| crate::EngineError::Other(format!("{}: {e}", path.display())))?;
     Ok(json!({"path": path.display().to_string(), "count": chosen.len()}))
 }

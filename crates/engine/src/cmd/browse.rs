@@ -238,17 +238,16 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// Rename `from` to `to` on disk (a folder; everything in it goes along). Never overwrites:
-/// refused when `to` exists (a case-only rename on a case-insensitive file system goes through
-/// a temporary name). Missing parents of `to` are created.
+/// refused when `to` exists, decided by the exclusive rename itself (`rightkit_fs::rename_exclusive`), so a folder that appears
+/// meanwhile is refused too. A case-only rename on a case-insensitive file system is the one thing the published rename cannot
+/// do (an exclusive rename sees the destination as existing: it is the same folder), so it goes through a temporary name here.
+/// Missing parents of `to` are created.
 pub(crate) fn rename_folder_on_disk(from: &str, to: &str) -> std::result::Result<(), String> {
     let (src, dst) = (Path::new(from), Path::new(to));
     if !src.is_dir() {
         return Err(format!("{from} is not a folder (moved or deleted?)"));
     }
     let case_only = from != to && from.to_lowercase() == to.to_lowercase();
-    if dst.exists() && !case_only {
-        return Err(format!("{to} already exists"));
-    }
     if dst.starts_with(src) {
         return Err("a folder can't move into itself".into());
     }
@@ -266,7 +265,28 @@ pub(crate) fn rename_folder_on_disk(from: &str, to: &str) -> std::result::Result
             format!("{from} → {to}: {e}")
         });
     }
-    std::fs::rename(src, dst).map_err(|e| format!("{from} → {to}: {e}"))
+    rename_exclusive(src, dst)
+        .map_err(|e| if e.kind() == std::io::ErrorKind::AlreadyExists { format!("{to} already exists") } else { format!("{from} → {to}: {e}") })
+}
+
+/// `src` → `dst`, only when nothing is at `dst`, decided by the file system in the same step (no check, then rename).
+#[cfg(not(target_arch = "wasm32"))]
+fn rename_exclusive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    match rightkit_fs::rename_exclusive(src, dst) {
+        Ok(()) => Ok(()),
+        // moved; only a step after the move failed (the folder sync)
+        Err(e) if e.target_replaced() => {
+            log::warn!("{}: renamed, but a step after the rename failed: {e}", dst.display());
+            Ok(())
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// A browser build has no file system to rename in.
+#[cfg(target_arch = "wasm32")]
+fn rename_exclusive(_src: &Path, _dst: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "this build has no file system"))
 }
 
 /// Do an undo step's folder change on disk: rename `from` → `to`; with `to` empty, remove the
@@ -466,4 +486,73 @@ pub(crate) fn move_folder(s: &mut Session, from: &str, to: &str) -> std::result:
     }
     follow_folder(s, from, to);
     Ok(n)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("lc-browse-rename-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn names(dir: &Path) -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+        v.sort();
+        v
+    }
+
+    /// The exception for the case-only rename (B3): `Trips` becomes `trips`, with its contents, through a temporary name that is
+    /// gone again, on a case-insensitive volume (macOS and Windows defaults) and on a case-sensitive one alike.
+    #[test]
+    fn a_case_only_folder_rename_keeps_the_contents_and_leaves_no_temporary_name() {
+        let d = scratch("case");
+        std::fs::create_dir_all(d.join("Trips")).unwrap();
+        std::fs::write(d.join("Trips/a.jpg"), b"photo").unwrap();
+        rename_folder_on_disk(&d.join("Trips").to_string_lossy(), &d.join("trips").to_string_lossy()).unwrap();
+        assert_eq!(names(&d), ["trips"], "the folder is spelled as asked, and no `.lc-rename-*` is left");
+        assert_eq!(std::fs::read(d.join("trips/a.jpg")).unwrap(), b"photo");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// A rename onto a name that is taken is refused and nothing moves (the check and the rename are one exclusive step).
+    #[test]
+    fn a_folder_rename_never_replaces_a_folder_that_is_there() {
+        let d = scratch("taken");
+        std::fs::create_dir_all(d.join("a")).unwrap();
+        std::fs::create_dir_all(d.join("b")).unwrap();
+        std::fs::write(d.join("a/one.jpg"), b"1").unwrap();
+        std::fs::write(d.join("b/two.jpg"), b"2").unwrap();
+        let e = rename_folder_on_disk(&d.join("a").to_string_lossy(), &d.join("b").to_string_lossy()).unwrap_err();
+        assert!(e.contains("already exists"), "{e}");
+        assert_eq!(std::fs::read(d.join("a/one.jpg")).unwrap(), b"1");
+        assert_eq!(std::fs::read(d.join("b/two.jpg")).unwrap(), b"2");
+        // an empty folder at the name is not replaced either (a plain Unix rename would)
+        std::fs::create_dir_all(d.join("empty")).unwrap();
+        assert!(rename_folder_on_disk(&d.join("a").to_string_lossy(), &d.join("empty").to_string_lossy()).is_err());
+        assert_eq!(names(&d), ["a", "b", "empty"]);
+        // a free name works
+        rename_folder_on_disk(&d.join("a").to_string_lossy(), &d.join("c").to_string_lossy()).unwrap();
+        assert_eq!(std::fs::read(d.join("c/one.jpg")).unwrap(), b"1");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// On a volume with neither an exclusive rename nor hard links (FAT, exFAT, some shares) the published exclusive rename cannot
+    /// move a folder: the rename is refused and the folder stays where it was, never half done.
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_rename_on_a_volume_without_exclusive_rename_changes_nothing() {
+        let d = scratch("nolinks");
+        std::fs::create_dir_all(d.join("a")).unwrap();
+        std::fs::write(d.join("a/one.jpg"), b"1").unwrap();
+        let _volume = rightkit_fs::atomic::testing::force_no_hard_links();
+        assert!(rename_folder_on_disk(&d.join("a").to_string_lossy(), &d.join("b").to_string_lossy()).is_err());
+        drop(_volume);
+        assert_eq!(names(&d), ["a"], "no folder, placeholder or temporary name appeared");
+        assert_eq!(std::fs::read(d.join("a/one.jpg")).unwrap(), b"1");
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }

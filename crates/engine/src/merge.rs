@@ -408,7 +408,7 @@ impl Session {
             // A new file under a free name (never replacing one), complete and synced before it appears.
             let mut names = output_names(first, job.kind.suffix())
                 .filter(|candidate| !catalogued_paths.contains(&lightcraft_catalog::query::folder_key(&candidate.to_string_lossy())));
-            let path = lightcraft_catalog::safe_file::write_new_unique(&mut names, &out.dng)
+            let path = lightcraft_catalog::written::write_new_unique(&mut names, &out.dng)
                 .map_err(|e| EngineError::Other(format!("could not write the merged DNG next to {first}: {e}")))?
                 .to_string_lossy()
                 .to_string();

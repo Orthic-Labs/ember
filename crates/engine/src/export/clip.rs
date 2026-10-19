@@ -33,13 +33,13 @@ pub struct StagedFile {
 
 impl StagedFile {
     /// Replace (or create) `dest` with this file: its folder is made if needed, the content is written to a temp file next to `dest`
-    /// and renamed into place ([`lightcraft_catalog::safe_file::write_atomic_with`]).
+    /// and renamed into place ([`lightcraft_catalog::written::replace_with`]).
     pub(super) fn place(&self, dest: &Path) -> Result<(), String> {
         if let Some(dir) = dest.parent().filter(|d| !d.as_os_str().is_empty()) {
             std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         }
         let mut src = std::fs::File::open(&self.path).map_err(|e| format!("{}: {e}", self.path.display()))?;
-        lightcraft_catalog::safe_file::write_atomic_with(dest, &mut |w| std::io::copy(&mut src, w).map(|_| ()))
+        lightcraft_catalog::written::replace_with(dest, true, &mut |w| std::io::copy(&mut src, w).map(|_| ()))
             .map_err(|e| format!("{}: {e}", dest.display()))?;
         Ok(())
     }

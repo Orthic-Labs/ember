@@ -1,10 +1,8 @@
 //! Private, content-addressed intermediates & derived diagnostics for reusable corpus work.
 //! These measurements are not semantic ground truth or recovered editor settings.
 
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use lightcraft_color::{REC2020, Xy, luminance_2020};
 use lightcraft_develop::DevelopSettings;
@@ -12,8 +10,6 @@ use lightcraft_photo_ai::digest;
 use lightcraft_pipeline::{SourceInfo, auto};
 use lightcraft_raster::{Plane, Rgb32f};
 use serde_json::{Value, json};
-
-static SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 pub(super) fn pixel_bytes(image: &Rgb32f) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(image.data.len().saturating_mul(12).saturating_add(16));
@@ -34,22 +30,12 @@ fn store(root: Option<&Path>, bytes: &[u8], width: usize, height: usize, channel
     let name = format!("{hash}.{channels}xf32le");
     let destination = root.join(&name);
     if !destination.exists() {
-        let sequence = SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let temporary = root.join(format!(".{}-{sequence}.partial", std::process::id()));
-        let mut file = OpenOptions::new().write(true).create_new(true).open(&temporary).map_err(|_| "proxy_cache_create_failed")?;
-        let written = file.write_all(bytes).and_then(|()| file.sync_all());
-        drop(file);
-        if written.is_err() {
-            let _ = fs::remove_file(&temporary);
-            return Err("proxy_cache_write_failed".into());
+        // Publish complete bytes atomically without replacing another writer's existing object:
+        // an object that appeared meanwhile holds the same content-addressed bytes, so it is a success.
+        match crate::output_file::publish_new(&destination, bytes) {
+            Ok(()) | Err(rightkit_fs::FsError::AlreadyExists(_)) => {}
+            Err(_) => return Err("proxy_cache_publish_failed".into()),
         }
-        // Publish complete bytes atomically without replacing another writer's existing object.
-        let linked = fs::hard_link(&temporary, &destination);
-        let removed = fs::remove_file(&temporary);
-        if linked.is_err() && !destination.exists() {
-            return Err("proxy_cache_publish_failed".into());
-        }
-        removed.map_err(|_| "proxy_cache_temporary_cleanup_failed")?;
     }
     let retained = super::read_bounded(&destination, 48_000_016).map_err(|_| "proxy_cache_unreadable")?;
     if retained.len() != bytes.len() || digest(&retained) != hash {
@@ -175,7 +161,11 @@ pub(super) fn regions(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
     use super::*;
+
+    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn alpha_cache_bounds_smoothing_roundoff_but_rejects_invalid_values() {

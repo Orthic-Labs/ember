@@ -119,7 +119,7 @@ fn run(tokens: &[String]) -> Result<()> {
             }
             let json = serde_json::to_vec_pretty(&m)?;
             match out {
-                Some(p) => std::fs::write(p, json)?,
+                Some(p) => rightkit_fs::atomic_write(&p, &json)?,
                 None => println!("{}", String::from_utf8_lossy(&json)),
             }
             Ok(())
@@ -201,7 +201,7 @@ fn run(tokens: &[String]) -> Result<()> {
             if let Some(parent) = out.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::write(&out, serde_json::to_vec_pretty(&report)?)?;
+            rightkit_fs::atomic_write(&out, &serde_json::to_vec_pretty(&report)?)?;
             println!("status: {} (see `checks` in {})", report.status, out.display());
             for c in &report.checks {
                 println!("  [{}] {}: {:.5} (threshold {})", if c.pass { "pass" } else { "FAIL" }, c.name, c.value, c.threshold);

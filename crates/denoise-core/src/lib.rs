@@ -9,6 +9,7 @@ pub mod known;
 pub mod licence;
 pub mod manifest;
 pub mod product;
+mod publish;
 pub mod run;
 pub mod tiles;
 

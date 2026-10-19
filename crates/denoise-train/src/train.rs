@@ -212,8 +212,8 @@ fn write_contract(cfg: &TrainConfig, manifest: &SplitManifest) -> Result<()> {
             "heldout_files": manifest.heldout.len(),
         }),
     };
-    std::fs::write(cfg.out_dir.join("contract.json"), serde_json::to_vec_pretty(&contract)?)?;
-    std::fs::write(cfg.out_dir.join("splits.json"), serde_json::to_vec_pretty(manifest)?)?;
+    rightkit_fs::atomic_write(&cfg.out_dir.join("contract.json"), &serde_json::to_vec_pretty(&contract)?)?;
+    rightkit_fs::atomic_write(&cfg.out_dir.join("splits.json"), &serde_json::to_vec_pretty(manifest)?)?;
     Ok(())
 }
 
@@ -288,7 +288,7 @@ fn read_state(dir: &Path) -> Option<State> {
 fn save_atomic(varmap: &VarMap, path: &Path) -> Result<()> {
     let tmp = path.with_extension("safetensors.tmp");
     varmap.save(&tmp)?;
-    std::fs::rename(&tmp, path)?;
+    rightkit_fs::publish_file(&tmp, path)?;
     Ok(())
 }
 
@@ -406,7 +406,7 @@ pub fn train(manifest: &SplitManifest, cfg: &TrainConfig) -> Result<TrainSummary
             let ck = cfg.out_dir.join(format!("ckpt-{done:08}.safetensors"));
             save_atomic(&varmap, &ck)?;
             save_atomic(&varmap, &cfg.out_dir.join("latest.safetensors"))?;
-            std::fs::write(cfg.out_dir.join("state.json"), serde_json::to_vec(&State { step: done, best_val_loss: best })?)?;
+            rightkit_fs::atomic_write(&cfg.out_dir.join("state.json"), &serde_json::to_vec(&State { step: done, best_val_loss: best })?)?;
             prune_checkpoints(&cfg.out_dir, cfg.keep_ckpts)?;
         }
     }

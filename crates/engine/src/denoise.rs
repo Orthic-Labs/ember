@@ -349,7 +349,11 @@ fn set_up_card<T: Send + 'static, R>(
         }
         let secs = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_secs());
         // a marker that cannot be written only loses the crash guard
-        let _ = std::fs::write(marker, format!("setting up the graphics card for AI Denoise (unix time {secs})\n"));
+        let _ = lightcraft_catalog::written::replace(
+            marker,
+            format!("setting up the graphics card for AI Denoise (unix time {secs})\n").as_bytes(),
+            false,
+        );
         running.push(marker.to_path_buf());
         SetUpEnded(marker.to_path_buf())
     };
@@ -874,7 +878,7 @@ pub(crate) fn read_settings(dir: &Path) -> Settings {
 
 /// Replace a file atomically (a temp file next to it, synced, renamed into place).
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    lightcraft_catalog::safe_file::write_atomic(path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
+    lightcraft_catalog::written::replace(path, bytes, true).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
 pub(crate) fn write_settings(dir: &Path, st: &Settings) -> Result<(), String> {

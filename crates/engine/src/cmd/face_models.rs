@@ -61,7 +61,7 @@ pub(super) fn read_settings(dir: &Path) -> FaceSettings {
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
-    lightcraft_catalog::safe_file::write_atomic(path, bytes).map_err(|e| fail(&format!("could not write {}", path.display()), e))
+    lightcraft_catalog::written::replace(path, bytes, true).map_err(|e| fail(&format!("could not write {}", path.display()), e))
 }
 
 pub(super) fn write_settings(dir: &Path, st: &FaceSettings) -> Result<()> {
@@ -294,7 +294,8 @@ fn install_file(s: &mut Session, c: &str, src: &Path, ins: Inspection, acknowled
             return Err(bad(c, e));
         }
     };
-    if let Err(e) = std::fs::rename(&part, &final_path) {
+    // the validated candidate replaces a working installation atomically
+    if let Err(e) = crate::model_download::publish_staged(&part, &final_path, true) {
         let _ = std::fs::remove_file(&part);
         return Err(fail("could not finish the copy", e));
     }

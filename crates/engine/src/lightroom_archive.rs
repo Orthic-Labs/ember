@@ -49,22 +49,25 @@ pub fn store(directory: &Path, data: &CatalogImport) -> Result<PathBuf, String> 
     let mut managed = managed_files(directory)?;
     managed.sort_by_key(|entry| entry.index);
 
-    let temporary = temporary_path(directory)?;
-    write_archive(&temporary, data).inspect_err(|_| {
-        let _ = remove_managed_file(&temporary);
-    })?;
+    if managed.last().is_some_and(|entry| entry.index == u64::MAX) {
+        return Err("managed LRCAT archive index is exhausted".into());
+    }
+    let index = managed.last().map_or(0, |entry| entry.index.saturating_add(1));
+    let destination = next_destination(directory, index)?;
+    // Written once, straight to its name: the archive appears complete or not at all, and never over a file that is there
+    // (`rightkit-fs` exclusive publish). It is a new file of ours until the retention below has run, so whatever fails from
+    // here on removes it again and leaves the directory as it was.
+    write_archive(&destination, data)?;
+    let discard_new = |error: String| {
+        let _ = remove_managed_file(&destination);
+        error
+    };
 
     let recent = managed.iter().rev().take(MAX_MANAGED_ARCHIVES);
     for entry in recent {
-        let same = match same_bounded(&temporary, &entry.path) {
-            Ok(same) => same,
-            Err(error) => {
-                let _ = remove_managed_file(&temporary);
-                return Err(error.to_string());
-            }
-        };
+        let same = same_bounded(&destination, &entry.path).map_err(|error| discard_new(error.to_string()))?;
         if same {
-            remove_managed_file(&temporary).map_err(|e| e.to_string())?;
+            remove_managed_file(&destination).map_err(|e| e.to_string())?;
             let matched = entry.path.clone();
             let mut all = managed.clone();
             prune_existing(directory, &mut all, Some(&matched))?;
@@ -72,52 +75,13 @@ pub fn store(directory: &Path, data: &CatalogImport) -> Result<PathBuf, String> 
         }
     }
 
-    let index = managed.last().map_or(0, |entry| entry.index.saturating_add(1));
-    if managed.last().is_some_and(|entry| entry.index == u64::MAX) {
-        let _ = remove_managed_file(&temporary);
-        return Err("managed LRCAT archive index is exhausted".into());
-    }
-    let destination = match next_destination(directory, index) {
-        Ok(path) => path,
-        Err(error) => {
-            let _ = remove_managed_file(&temporary);
-            return Err(error);
-        }
-    };
-    let size = match fs::metadata(&temporary) {
-        Ok(meta) => meta.len(),
-        Err(error) => {
-            let _ = remove_managed_file(&temporary);
-            return Err(error.to_string());
-        }
-    };
+    let size = fs::metadata(&destination).map_err(|error| discard_new(error.to_string()))?.len();
     let new_entry = Managed { index, path: destination.clone(), size };
     let mut after = managed;
     after.push(new_entry);
     after.sort_by_key(|entry| entry.index);
-    let retirees = match retirement_set(&after) {
-        Ok(retirees) => retirees,
-        Err(error) => {
-            let _ = remove_managed_file(&temporary);
-            return Err(error);
-        }
-    };
-    let quarantined = match quarantine(&retirees) {
-        Ok(quarantined) => quarantined,
-        Err(error) => {
-            let _ = remove_managed_file(&temporary);
-            return Err(error);
-        }
-    };
-
-    if let Err(error) = publish_new(&temporary, &destination) {
-        rollback_quarantine(&quarantined);
-        let _ = remove_managed_file(&temporary);
-        return Err(error.to_string());
-    }
-    if let Err(error) = remove_managed_file(&temporary) {
-        return Err(format!("archive published but temporary cleanup failed: {error}"));
-    }
+    let retirees = retirement_set(&after).map_err(&discard_new)?;
+    let quarantined = quarantine(&retirees).map_err(&discard_new)?;
     for (old, held) in quarantined {
         if let Err(error) = remove_managed_file(&held) {
             return Err(format!("archive published but could not retire {}: {error}", old.display()));
@@ -188,19 +152,6 @@ fn parse_managed_name(name: &std::ffi::OsStr) -> Option<u64> {
     digits.parse().ok()
 }
 
-fn temporary_path(directory: &Path) -> Result<PathBuf, String> {
-    let pid = std::process::id();
-    for slot in 0..MAX_SCAN {
-        let path = directory.join(format!(".lightroom-import-{pid}-{slot}.tmp"));
-        match fs::symlink_metadata(&path) {
-            Ok(_) => continue,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(path),
-            Err(error) => return Err(error.to_string()),
-        }
-    }
-    Err("no safe temporary archive name available".into())
-}
-
 fn next_destination(directory: &Path, mut index: u64) -> Result<PathBuf, String> {
     for _ in 0..MAX_SCAN {
         let path = directory.join(format!("{NAME_PREFIX}{index}{NAME_SUFFIX}"));
@@ -213,8 +164,9 @@ fn next_destination(directory: &Path, mut index: u64) -> Result<PathBuf, String>
     Err("no safe managed archive name available".into())
 }
 
+/// Write the archive as the new file `path`: never over an existing file, complete or absent.
 fn write_archive(path: &Path, data: &CatalogImport) -> Result<(), String> {
-    lightcraft_catalog::safe_file::write_atomic_with(path, &mut |raw| {
+    lightcraft_catalog::written::write_exclusive_with(path, true, &mut |raw| {
         let mut bounded = BoundedWriter { inner: raw, total: 0 };
         bounded.write_all(HEADER)?;
         let mut compressor = ZlibWriter::new(&mut bounded);
@@ -417,13 +369,6 @@ fn quarantine(entries: &[Managed]) -> Result<Vec<(PathBuf, PathBuf)>, String> {
 fn rollback_quarantine(moved: &[(PathBuf, PathBuf)]) {
     for (original, held) in moved.iter().rev() {
         let _ = fs::rename(held, original);
-    }
-}
-
-fn publish_new(temporary: &Path, destination: &Path) -> io::Result<()> {
-    match fs::hard_link(temporary, destination) {
-        Ok(()) => Ok(()),
-        Err(error) => Err(io::Error::new(error.kind(), format!("cannot atomically publish archive: {error}"))),
     }
 }
 
@@ -668,6 +613,45 @@ mod tests {
         let retirees = retirement_set(&entries).unwrap();
         assert_eq!(retirees.len(), 3);
         assert_eq!(retirees.iter().map(|entry| entry.index).collect::<Vec<_>>(), vec![0, 1, 2]);
+    }
+
+    /// An archive is written straight to its name, complete or absent, and never over a file that is there.
+    #[test]
+    fn an_archive_is_never_written_over_a_file_that_is_there() {
+        let path = tempdir();
+        let target = path.join("lightroom-import-0.lca");
+        fs::write(&target, b"other").unwrap();
+        assert!(write_archive(&target, &data("x.lrcat".into())).is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"other");
+        let names: Vec<_> = fs::read_dir(&path).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+        assert_eq!(names, vec!["lightroom-import-0.lca"], "no temporary file is left");
+        // a failed write (the size limit) leaves nothing at the name either
+        let missing = path.join("lightroom-import-1.lca");
+        assert!(write_archive(&missing, &data("x".repeat((MAX_ARCHIVE_BYTES as usize) + 1))).is_err());
+        assert!(!missing.exists());
+        assert_eq!(fs::read_dir(&path).unwrap().count(), 1);
+        fs::remove_dir_all(path).unwrap();
+    }
+
+    /// When retention can't retire an old archive the new one is withdrawn too: the directory is as it was and the error says why.
+    #[test]
+    fn a_failed_retention_withdraws_the_new_archive_and_keeps_the_old_ones() {
+        let path = tempdir();
+        for index in 0..MAX_MANAGED_ARCHIVES {
+            fs::write(path.join(format!("lightroom-import-{index}.lca")), format!("old {index}")).unwrap();
+        }
+        // the name the oldest archive would be set aside under is occupied
+        let held = path.join(format!(".lightroom-retire-{}-0.tmp", std::process::id()));
+        fs::write(&held, b"occupied").unwrap();
+        let error = store(&path, &data("new.lrcat".into())).unwrap_err();
+        assert!(error.contains("retention temporary path already exists"), "{error}");
+        assert_eq!(managed_count(&path), MAX_MANAGED_ARCHIVES);
+        assert!(!path.join(format!("lightroom-import-{MAX_MANAGED_ARCHIVES}.lca")).exists(), "the new archive was withdrawn");
+        for index in 0..MAX_MANAGED_ARCHIVES {
+            assert_eq!(fs::read(path.join(format!("lightroom-import-{index}.lca"))).unwrap(), format!("old {index}").into_bytes());
+        }
+        assert_eq!(fs::read(&held).unwrap(), b"occupied");
+        fs::remove_dir_all(path).unwrap();
     }
 
     #[test]

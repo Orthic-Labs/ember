@@ -293,6 +293,7 @@ fn a_source_that_cannot_be_removed_is_kept_and_reported() {
 
 /// The copy's folder is synced to disk before the original is removed; when that sync fails the original stays
 /// and is reported, and the photo is imported from its copy (issue #1501).
+#[cfg(unix)]
 #[test]
 fn the_original_stays_when_the_copys_folder_cannot_be_synced() {
     let base = temp_dir("dirsync");
@@ -300,9 +301,10 @@ fn the_original_stays_when_the_copys_folder_cannot_be_synced() {
     write_png(&card.join("a.png"), 1);
     std::fs::create_dir_all(&dest).unwrap();
     let mut s = session();
-    inject(Fault::FailDirSync);
+    // every folder sync this thread makes fails (rightkit-fs test hook; Unix is where folders are synced)
+    let sync_fails = rightkit_fs::atomic::testing::fail_dir_sync(std::io::ErrorKind::Other);
     let r = import_move(&mut s, &[&card], &dest, json!({"organize": "flat"}));
-    inject(Fault::None);
+    drop(sync_fails);
     assert_eq!(len(&r, "imported"), 1, "{r}");
     assert_eq!(len(&r, "moved"), 0, "{r}");
     assert!(r["kept"][0]["reason"].as_str().unwrap().contains("durable"), "{r}");
@@ -419,7 +421,7 @@ fn move_into_the_library_is_saved_before_sources_go() {
 #[ignore]
 fn write_policy_timing() {
     use crate::import_move::copy_verified;
-    use lightcraft_catalog::safe_file::{write_atomic, write_atomic_nosync};
+    use lightcraft_catalog::written::replace;
     use std::time::{Duration, Instant};
     let root = std::env::var_os("LIGHTCRAFT_BENCH_DIR").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
     let base = root.join(format!("lc-write-policy-{}", std::process::id()));
@@ -431,13 +433,13 @@ fn write_policy_timing() {
     for i in 0..n {
         let b = data(size, i as u32);
         let t = Instant::now();
-        write_atomic(&base.join(format!("sync-{i}.jpg")), &b).unwrap();
+        replace(&base.join(format!("sync-{i}.jpg")), &b, true).unwrap();
         synced += t.elapsed();
         let t = Instant::now();
-        write_atomic_nosync(&base.join(format!("nosync-{i}.jpg")), &b).unwrap();
+        replace(&base.join(format!("nosync-{i}.jpg")), &b, false).unwrap();
         unsynced += t.elapsed();
     }
-    println!("export {n} × {} KB: write_atomic (synced) {synced:?}, write_atomic_nosync {unsynced:?}", size >> 10);
+    println!("export {n} × {} KB: replace durable {synced:?}, replace not durable {unsynced:?}", size >> 10);
     let (n, size) = (40usize, 8 << 20);
     let card = base.join("card");
     std::fs::create_dir_all(&card).unwrap();
@@ -553,5 +555,61 @@ fn finish_keeps_the_original_when_the_copy_changed_to_the_same_length() {
     assert!(finish(&placed).is_err());
     assert_eq!(std::fs::read(&src).unwrap(), b"edited  bytes!");
     inject(Fault::None);
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+/// Data safety of the copy behind Move and Copy: the destination name only ever holds a complete, verified copy; a name that is
+/// taken (before, or appearing while the copy runs) is never replaced; the source is never touched; the copy carries the
+/// source's modified time.
+#[test]
+fn a_copy_never_replaces_a_taken_name_and_keeps_the_source_untouched() {
+    use crate::import_move::copy_verified;
+    let base = temp_dir("copy-taken");
+    let (src, dst) = (base.join("card/IMG_1.jpg"), base.join("dest/IMG_1.jpg"));
+    std::fs::create_dir_all(src.parent().unwrap()).unwrap();
+    std::fs::create_dir_all(dst.parent().unwrap()).unwrap();
+    std::fs::write(&src, b"original bytes").unwrap();
+    let stamp = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+    std::fs::File::options().write(true).open(&src).unwrap().set_modified(stamp).unwrap();
+    // a file already at the name stays as it is
+    std::fs::write(&dst, b"someone else's file").unwrap();
+    let e = copy_verified(&src, &dst, None).unwrap_err();
+    assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists, "{e}");
+    assert_eq!(std::fs::read(&dst).unwrap(), b"someone else's file");
+    assert_eq!(std::fs::read(&src).unwrap(), b"original bytes");
+    assert_eq!(files_under(dst.parent().unwrap()), ["IMG_1.jpg"], "a refused copy leaves no temp file");
+    // a free name gets the verified copy with the source's modified time, the source untouched
+    std::fs::remove_file(&dst).unwrap();
+    copy_verified(&src, &dst, None).unwrap();
+    assert_eq!(std::fs::read(&dst).unwrap(), b"original bytes");
+    assert_eq!(std::fs::metadata(&dst).unwrap().modified().unwrap(), stamp);
+    assert_eq!(std::fs::read(&src).unwrap(), b"original bytes");
+    assert_eq!(files_under(dst.parent().unwrap()), ["IMG_1.jpg"]);
+    // a wrong expected hash (the source changed since the probe): nothing is published, the source stays
+    let other = base.join("dest/IMG_2.jpg");
+    let wrong = lightcraft_preview::hash_bytes(b"not the file");
+    assert!(copy_verified(&src, &other, Some(wrong)).is_err());
+    assert!(!other.exists());
+    assert_eq!(files_under(dst.parent().unwrap()), ["IMG_1.jpg"], "no partial copy or temp file");
+    assert_eq!(std::fs::read(&src).unwrap(), b"original bytes");
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+/// Place (the first phase of Move) without any injected fault: the destination holds the source's bytes, the source is still
+/// there, and a name that is taken is numbered, never replaced.
+#[test]
+fn place_keeps_the_source_and_never_replaces_a_destination() {
+    use crate::import_move::place;
+    let base = temp_dir("place-keep");
+    let (src, dest) = (base.join("card/IMG_1.jpg"), base.join("dest"));
+    std::fs::create_dir_all(src.parent().unwrap()).unwrap();
+    std::fs::create_dir_all(&dest).unwrap();
+    std::fs::write(&src, b"original bytes").unwrap();
+    std::fs::write(dest.join("IMG_1.jpg"), b"already here").unwrap();
+    let placed = place(&src, &dest, "IMG_1.jpg").unwrap();
+    assert_eq!(placed.dst, dest.join("IMG_1-1.jpg"));
+    assert_eq!(std::fs::read(&placed.dst).unwrap(), b"original bytes");
+    assert_eq!(std::fs::read(dest.join("IMG_1.jpg")).unwrap(), b"already here");
+    assert_eq!(std::fs::read(&src).unwrap(), b"original bytes", "place never touches the source");
     let _ = std::fs::remove_dir_all(&base);
 }

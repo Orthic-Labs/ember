@@ -3,7 +3,7 @@
 //! going and moved into place. It is a stranger's file, so every length and offset in it is checked, a name is only
 //! ever compared (never used as a path), and zip64, encrypted and multi-disk archives are refused.
 
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
 /// How far from the end the end-of-central-directory record can start (a 22-byte record and a 64 KiB comment).
@@ -147,18 +147,7 @@ pub fn extract(archive: &Path, name: &str, dest: &Path, max_bytes: u64) -> Resul
     if data.len() as u64 != e.size || crc32(&data) != e.crc {
         return format("the file in the archive is damaged");
     }
-    let tmp = dest.with_extension("part");
-    let written = (|| -> std::io::Result<()> {
-        let mut out = std::fs::File::create(&tmp)?;
-        out.write_all(&data)?;
-        out.flush()?;
-        drop(out);
-        std::fs::rename(&tmp, dest)
-    })();
-    if let Err(err) = written {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(err.into());
-    }
+    crate::publish::replace_with(dest, |out| out.write_all(&data))?;
     Ok(data.len() as u64)
 }
 

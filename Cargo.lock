@@ -4638,6 +4638,7 @@ dependencies = [
  "pollster 1.0.1",
  "rfd",
  "rightkit-child-process 0.5.2",
+ "rightkit-fs",
  "rightkit-logs",
  "serde_json",
  "winit",
@@ -4694,6 +4695,7 @@ dependencies = [
  "lightcraft-tiff",
  "lightcraft-ui-egui",
  "rayon",
+ "rightkit-fs",
  "serde_json",
 ]
 
@@ -4762,6 +4764,7 @@ dependencies = [
  "miniz_oxide 0.9.1",
  "proptest",
  "rayon",
+ "rightkit-fs",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -4786,6 +4789,7 @@ dependencies = [
  "lightcraft-nafnet",
  "lightcraft-raw",
  "rayon",
+ "rightkit-fs",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -4808,6 +4812,7 @@ dependencies = [
  "rightkit-child-process 0.5.2",
  "rightkit-credentials",
  "rightkit-device",
+ "rightkit-fs",
  "rightkit-logs",
  "rightkit-qa",
  "rightkit-tauri-shell",
@@ -4835,6 +4840,7 @@ dependencies = [
  "png 0.18.1",
  "rayon",
  "rightkit-file-watch",
+ "rightkit-fs",
  "serde",
  "serde_json",
 ]
@@ -4891,6 +4897,7 @@ dependencies = [
  "rayon",
  "rightkit-child-process 0.5.2",
  "rightkit-crash",
+ "rightkit-fs",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -4953,6 +4960,7 @@ dependencies = [
  "lightcraft-scenes",
  "log",
  "pollster 1.0.1",
+ "rightkit-fs",
  "wgpu",
 ]
 
@@ -5083,6 +5091,7 @@ dependencies = [
  "lightcraft-raster",
  "log",
  "rightkit-cache",
+ "rightkit-fs",
  "siphasher",
  "zune-core",
  "zune-jpeg",

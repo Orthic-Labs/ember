@@ -6,8 +6,8 @@
 //! scans a directory or writes a catalog, original, or sidecar.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use lightcraft_develop::{DevelopSettings, controls};
@@ -131,8 +131,10 @@ fn write_new_json(path: &Path, value: &Value) -> Result<(), String> {
     if bytes.len() as u64 > MAX_BYTES {
         return Err(format!("extracted manifest exceeds {MAX_BYTES} byte cap"));
     }
-    let mut file = OpenOptions::new().write(true).create_new(true).open(path).map_err(|_| "could not create new extracted manifest")?;
-    file.write_all(&bytes).map_err(|_| "could not write extracted manifest".into())
+    crate::output_file::publish_new(path, &bytes).map_err(|e| match e {
+        rightkit_fs::FsError::AlreadyExists(_) => "could not create new extracted manifest".to_string(),
+        _ => "could not write extracted manifest".to_string(),
+    })
 }
 
 #[derive(Debug)]

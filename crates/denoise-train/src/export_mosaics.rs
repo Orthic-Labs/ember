@@ -162,13 +162,6 @@ pub fn parse_npy_u16(bytes: &[u8]) -> Result<(Vec<u16>, usize, usize)> {
     Ok((samples, height, width))
 }
 
-fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, bytes)?;
-    std::fs::rename(&tmp, path)?;
-    Ok(())
-}
-
 /// Decode one raw and write its mosaic and sidecar into `out`. Returns the sidecar.
 pub fn export_one(path: &Path, out: &Path) -> Result<Sidecar> {
     let path_s = path.display().to_string();
@@ -185,7 +178,7 @@ pub fn export_one(path: &Path, out: &Path) -> Result<Sidecar> {
     let normalized = raw.normalized().map_err(|e| bad(e.to_string()))?;
     let mosaic = rggb_u16(&normalized).map_err(|e| bad(e.to_string()))?;
     let npy_name = format!("{sha}.npy");
-    write_atomic(&out.join(&npy_name), &npy_u16_bytes(&mosaic.samples, mosaic.height, mosaic.width)?)?;
+    rightkit_fs::atomic_write(&out.join(&npy_name), &npy_u16_bytes(&mosaic.samples, mosaic.height, mosaic.width)?)?;
     let sidecar = Sidecar {
         format_version: SIDECAR_VERSION,
         sha256: sha.clone(),
@@ -207,7 +200,7 @@ pub fn export_one(path: &Path, out: &Path) -> Result<Sidecar> {
         model: raw.metadata.model.clone(),
         decoder: format!("lightcraft-denoise-train {}", env!("CARGO_PKG_VERSION")),
     };
-    write_atomic(&out.join(format!("{sha}.json")), &serde_json::to_vec_pretty(&sidecar)?)?;
+    rightkit_fs::atomic_write(&out.join(format!("{sha}.json")), &serde_json::to_vec_pretty(&sidecar)?)?;
     Ok(sidecar)
 }
 
@@ -245,7 +238,7 @@ pub fn export_dir(input: &Path, out: &Path) -> Result<ExportSummary> {
             Err(e) => summary.skipped.push((p.display().to_string(), e.to_string())),
         }
     }
-    std::fs::write(out.join("skipped.json"), serde_json::to_vec_pretty(&summary)?)?;
+    rightkit_fs::atomic_write(&out.join("skipped.json"), &serde_json::to_vec_pretty(&summary)?)?;
     Ok(summary)
 }
 

@@ -866,7 +866,7 @@ fn apply(s: &mut crate::Session, data: CatalogImport, update_existing: bool) -> 
     if let Some(path) = index_path {
         s.persist()?;
         let bytes = serde_json::to_vec(&applied.index).map_err(|e| error(e.to_string()))?;
-        lightcraft_catalog::safe_file::write_atomic(&path, &bytes).map_err(|e| error(e.to_string()))?;
+        lightcraft_catalog::written::replace(&path, &bytes, true).map_err(|e| error(e.to_string()))?;
     }
     Ok(applied.report)
 }

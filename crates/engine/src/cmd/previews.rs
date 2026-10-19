@@ -275,7 +275,7 @@ fn smart_run(
                         if !parent.is_dir() {
                             std::fs::create_dir(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
                         }
-                        lightcraft_catalog::safe_file::write_atomic(&path, &b).map_err(|e| format!("{}: {e}", path.display()))
+                        lightcraft_catalog::written::replace(&path, &b, true).map_err(|e| format!("{}: {e}", path.display()))
                     });
                 match r {
                     Ok(()) => {

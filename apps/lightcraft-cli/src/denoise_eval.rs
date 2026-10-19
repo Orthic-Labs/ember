@@ -3,8 +3,6 @@
 //! This harness is deliberately a post-demosaic RGB experiment. It does not read photos,
 //! catalogs, models or provider assets, and its receipt never claims qualification.
 
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
 
@@ -96,8 +94,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if bytes.len() > REPORT_CAP {
         return Err(format!("report exceeds {REPORT_CAP} byte cap"));
     }
-    let mut file = OpenOptions::new().write(true).create_new(true).open(out_path).map_err(|e| format!("could not create new report '{out}': {e}"))?;
-    file.write_all(&bytes).map_err(|e| format!("could not write report '{out}': {e}"))?;
+    crate::output_file::publish_new(out_path, &bytes).map_err(|e| format!("could not create new report '{out}': {e}"))?;
     Ok(())
 }
 

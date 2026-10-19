@@ -2316,7 +2316,7 @@ pub fn export_batch(
 }
 
 /// Write an exported or rendered file on disk: its folder is created if needed, and the file is
-/// replaced atomically ([`lightcraft_catalog::safe_file::write_atomic_nosync`]: a temp file
+/// replaced atomically ([`lightcraft_catalog::written::replace`] without a sync: a temp file
 /// renamed into place), so a failure part-way leaves any previous file intact and no truncated
 /// one. Not synced to disk (issue #134): an export can always be made again from the original.
 /// The native writer behind exports, renders and screenshots (app, CLI, MCP).
@@ -2331,12 +2331,11 @@ pub fn write_file_durable(path: &str, bytes: &[u8]) -> Result<(), String> {
 }
 
 fn write_with(path: &str, bytes: &[u8], durable: bool) -> Result<(), String> {
-    use lightcraft_catalog::safe_file::{write_atomic, write_atomic_nosync};
     let p = std::path::Path::new(path);
     if let Some(dir) = p.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
-    if durable { write_atomic(p, bytes) } else { write_atomic_nosync(p, bytes) }.map_err(|e| format!("{path}: {e}"))
+    lightcraft_catalog::written::replace(p, bytes, durable).map_err(|e| format!("{path}: {e}"))
 }
 
 /// The path of the sidecar with extension `ext` of the exported file `main`.

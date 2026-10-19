@@ -2,11 +2,11 @@
 
 #![forbid(unsafe_code)]
 
-use std::fs::{self, File, OpenOptions};
+use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use serde_json::{Value, json};
 use tauri::{WebviewWindow, Wry};
@@ -64,32 +64,17 @@ pub fn migrate_preferences(source: &Path, destination: &Path) -> Result<bool, St
     }
     let parent = destination.parent().ok_or_else(|| "preferences destination has no parent".to_string())?;
     fs::create_dir_all(parent).map_err(|error| format!("creating preferences directory: {error}"))?;
-    let name = destination.file_name().and_then(|name| name.to_str()).unwrap_or("ui.json");
-    let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_nanos()).unwrap_or(0);
-    let temporary = parent.join(format!(".{name}.migrate-{}-{stamp}", std::process::id()));
-    let result: std::io::Result<bool> = (|| {
-        let mut file = OpenOptions::new().create_new(true).write(true).open(&temporary)?;
-        file.write_all(&bytes)?;
-        file.sync_all()?;
-        if destination.exists() {
-            return Ok(false);
+    let options = rightkit_fs::AtomicWriteOptions { replace: rightkit_fs::ReplaceMode::NoReplace, ..rightkit_fs::AtomicWriteOptions::default() };
+    match rightkit_fs::atomic_write_with_options(destination, options, |file| file.write_all(&bytes)) {
+        Ok(()) => Ok(true),
+        // Another writer published the destination first: nothing was needed, nothing was overwritten.
+        Err(rightkit_fs::FsError::AlreadyExists(_)) => Ok(false),
+        // The copy is in place; only a step after the publish failed.
+        Err(error) if error.target_replaced() => {
+            log::warn!("{}: migrated, but a step after the publish failed: {error}", destination.display());
+            Ok(true)
         }
-        fs::rename(&temporary, destination)?;
-        if let Ok(directory) = File::open(parent) {
-            let _ = directory.sync_all();
-        }
-        Ok(true)
-    })();
-    match result {
-        Ok(true) => Ok(true),
-        Ok(false) => {
-            let _ = fs::remove_file(&temporary);
-            Ok(false)
-        }
-        Err(error) => {
-            let _ = fs::remove_file(&temporary);
-            Err(format!("migrating legacy preferences: {error}"))
-        }
+        Err(error) => Err(format!("migrating legacy preferences: {error}")),
     }
 }
 

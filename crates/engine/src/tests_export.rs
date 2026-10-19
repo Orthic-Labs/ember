@@ -359,7 +359,7 @@ fn a_failed_export_write_keeps_the_previous_file() {
     let to = Destination { dir: out.to_string_lossy().to_string(), exact: None };
     let o = ExportOptions { conflict: Conflict::Overwrite, ..Default::default() };
     {
-        let _fault = lightcraft_catalog::safe_file::fail_writes_after(100);
+        let _fault = rightkit_fs::atomic::seams::fail_write_after(100, std::io::ErrorKind::Other);
         let err = disk_batch(&mut s, id, &o, &to).unwrap_err();
         assert!(err.contains("injected"), "{err}");
     }
@@ -401,19 +401,19 @@ fn export_protects_the_target_of_an_imported_symlink() {
 #[test]
 fn exports_are_atomic_without_a_sync() {
     use crate::export::{Conflict, Destination};
-    use lightcraft_catalog::safe_file::syncs_on_this_thread;
+    use rightkit_fs::atomic::seams::take_sync_counts;
     let (mut s, id, dir, _src, _) = library_with_jpeg("export-nosync");
     let out = dir.join("out");
     let to = Destination { dir: out.to_string_lossy().to_string(), exact: None };
     let o = ExportOptions { conflict: Conflict::Unique, ..Default::default() };
-    let before = syncs_on_this_thread();
+    take_sync_counts();
     for _ in 0..3 {
         disk_batch(&mut s, id, &o, &to).unwrap();
     }
-    assert_eq!(syncs_on_this_thread(), before, "no per-file sync for exports");
+    assert_eq!(take_sync_counts(), Default::default(), "no per-file or folder sync for exports");
     assert_eq!(std::fs::read_dir(&out).unwrap().count(), 3, "three exports, no temp files");
     crate::export::write_file_durable(&out.join("edit.tif").to_string_lossy(), b"tiff").unwrap();
-    assert!(syncs_on_this_thread() > before, "the durable writer syncs");
+    assert!(take_sync_counts().file_syncs > 0, "the durable writer syncs");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

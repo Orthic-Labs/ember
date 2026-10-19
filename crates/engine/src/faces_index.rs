@@ -16,7 +16,6 @@
 //! `dim` `f32`.
 
 use std::collections::HashMap;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -186,18 +185,18 @@ impl Index {
             return Ok(());
         }
         if self.file_matches {
-            let mut f = std::fs::OpenOptions::new().append(true).open(&path)?;
             let mut buf = Vec::new();
             for (k, e) in &self.unsaved {
                 buf.extend(self.record(k, e));
             }
-            f.write_all(&buf)?;
+            // a rebuildable cache: appended without a sync; a torn tail is dropped by the reader
+            rightkit_fs::append_record(&path, &buf, rightkit_fs::AppendOptions::default().durable(false))?;
         } else {
             let mut buf = self.header();
             for (k, e) in &self.entries {
                 buf.extend(self.record(k, e));
             }
-            lightcraft_catalog::safe_file::write_atomic(&path, &buf)?;
+            lightcraft_catalog::written::replace(&path, &buf, true)?;
             self.file_matches = true;
         }
         self.unsaved.clear();
@@ -296,13 +295,12 @@ impl Scanned {
             return Ok(());
         }
         if self.file_matches {
-            let mut f = std::fs::OpenOptions::new().append(true).open(&path)?;
             let buf: Vec<u8> = self.unsaved.iter().flat_map(|id| id.to_le_bytes()).collect();
-            f.write_all(&buf)?;
+            rightkit_fs::append_record(&path, &buf, rightkit_fs::AppendOptions::default().durable(false))?;
         } else {
             let mut buf = Self::header();
             buf.extend(self.set.iter().flat_map(|id| id.to_le_bytes()));
-            lightcraft_catalog::safe_file::write_atomic(&path, &buf)?;
+            lightcraft_catalog::written::replace(&path, &buf, true)?;
             self.file_matches = true;
         }
         self.unsaved.clear();

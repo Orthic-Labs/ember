@@ -5,8 +5,8 @@
 //! splits. Explicit pair evidence is required before a row can proceed to a later alignment gate.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 use lightcraft_engine::lightroom_catalog::{self, CatalogPhoto};
@@ -168,10 +168,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         return Err(format!("discovery output exceeds {MAX_OUTPUT_BYTES} byte cap"));
     }
     let output = resolve_new_output(&options.output, &[&catalog_path, pair_path.as_deref().unwrap_or(Path::new(""))])?;
-    let mut file =
-        OpenOptions::new().write(true).create_new(true).open(&output).map_err(|e| format!("cannot create new output {}: {e}", output.display()))?;
-    file.write_all(&bytes).map_err(|e| format!("cannot write output: {e}"))?;
-    file.flush().map_err(|e| format!("cannot flush output: {e}"))?;
+    crate::output_file::publish_new(&output, &bytes).map_err(|e| format!("cannot create new output {}: {e}", output.display()))?;
     println!(
         "{}: {} catalog photos; {} paired candidates pending alignment; {} dropped; {} orphan pair entries; output {}",
         SCHEMA,

@@ -3,7 +3,7 @@
 //! record ids and content digests only; manifest paths never leave the manifest.
 
 use std::collections::HashSet;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
@@ -96,10 +96,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     reader.seek(SeekFrom::Start(0)).map_err(|e| format!("manifest rewind: {e}"))?;
 
-    // Existing output (including a link to the manifest) fails before any image is read. A failed
-    // new output stays incomplete; only the stdout summary qualifies its bytes.
-    let target = OpenOptions::new().write(true).create_new(true).open(&output).map_err(|e| format!("new measure output: {e}"))?;
-    let mut out = BufWriter::new(target);
+    // Existing output (including a link to the manifest) fails before any image is read; the
+    // publish at the end still refuses to replace one that appears meanwhile. Rows go to a temp
+    // file that is published whole, so a failed run leaves no output file.
+    if crate::output_file::name_taken(Path::new(&output)) {
+        return Err("new measure output: the output already exists".into());
+    }
+    let mut target = rightkit_fs::AtomicWriter::create_with(Path::new(&output), crate::output_file::new_file_options())
+        .map_err(|e| format!("new measure output: {e}"))?;
+    let mut out = BufWriter::new(target.writer());
     write_line(&mut out, &header)?;
 
     let mut buffer = Vec::new();
@@ -127,7 +132,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
         }
         write_line(&mut out, &row)?;
     }
-    out.flush().and_then(|()| out.get_ref().sync_all()).map_err(|e| format!("measure output write: {e}"))?;
+    out.flush().map_err(|e| format!("measure output write: {e}"))?;
+    drop(out);
+    match target.commit() {
+        Ok(()) => {}
+        Err(e) if e.target_replaced() => {}
+        Err(e) => return Err(format!("measure output write: {e}")),
+    }
     println!("{{\"measured\":{measured},\"failed\":{failed}}}");
     Ok(())
 }

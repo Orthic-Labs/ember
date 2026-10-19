@@ -71,6 +71,38 @@
       "reason": "Multi-line textarea in the inspector; ui.d.ts has Input only. See section 5 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
       "date": "2026-10-19"
+    },
+    {
+      "capability": "safe-filesystem",
+      "package": "rightkit-fs",
+      "path": "crates/catalog/src/store.rs",
+      "reason": "Journal torn-tail truncate before the next append; append.rs leaves torn-tail repair to the app. See section 1 of docs/rightkit-exceptions/M8.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
+    },
+    {
+      "capability": "safe-filesystem",
+      "package": "rightkit-fs",
+      "path": "crates/engine/src/lightroom_archive.rs",
+      "reason": "Lightroom archive retention (8 archives / 128 MiB) and quarantine; no retention API, trash is macOS-only. See section 2 of docs/rightkit-exceptions/M8.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
+    },
+    {
+      "capability": "safe-filesystem",
+      "package": "rightkit-fs",
+      "path": "crates/engine/src/cmd/browse.rs",
+      "reason": "Case-only folder rename through a temporary name; rename_exclusive sees the destination as existing. See section 3 of docs/rightkit-exceptions/M8.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
+    },
+    {
+      "capability": "safe-filesystem",
+      "package": "rightkit-fs",
+      "path": "crates/desktop-host/src/controller.rs",
+      "reason": "Backup/restore refuses every symlink (security guard); copy_tree has no refuse mode. See section 4 of docs/rightkit-exceptions/M8.md (need, published-API gap with file:line, other apps, proof).",
+      "owner": "ember",
+      "date": "2026-10-19"
     }
   ]
 }

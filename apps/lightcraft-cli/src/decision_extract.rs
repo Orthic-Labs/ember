@@ -5,8 +5,8 @@ mod geometry;
 mod reusable;
 
 use std::collections::BTreeSet;
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 
 use lightcraft_codecs::DecodeOptions;
@@ -60,8 +60,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     } else {
         validate_manifest(&manifest)?;
     }
-    // Reserve create-new output before decoding; an existing output is never overwritten.
-    let mut file = OpenOptions::new().write(true).create_new(true).open(&output).map_err(|_| "cannot create new numeric output")?;
+    // An existing output (a dangling link included) fails before decoding; the final publish refuses
+    // to replace one that appears meanwhile, so an existing output is never overwritten.
+    if crate::output_file::name_taken(Path::new(&output)) {
+        return Err("cannot create new numeric output".into());
+    }
     let records = manifest.get("records").and_then(Value::as_array).ok_or("records missing")?;
     let mut results = Vec::with_capacity(records.len());
     for row in records {
@@ -103,7 +106,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if bytes.len() > 16 * 1024 * 1024 {
         return Err("numeric output exceeds cap".into());
     }
-    file.write_all(&bytes).and_then(|()| file.sync_all()).map_err(|_| "numeric output write failed")?;
+    crate::output_file::publish_new(Path::new(&output), &bytes).map_err(|e| match e {
+        rightkit_fs::FsError::AlreadyExists(_) => "cannot create new numeric output",
+        _ => "numeric output write failed",
+    })?;
     println!("{}", json!({"schema": SCHEMA, "records": records.len()}));
     Ok(())
 }

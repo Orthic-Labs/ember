@@ -34,6 +34,7 @@ mod decision_manifest;
 mod decision_plane;
 mod denoise_eval;
 mod measure_batch;
+mod output_file;
 mod personal_auto_eval;
 mod personal_auto_extract;
 mod photo_ai;
@@ -536,7 +537,7 @@ fn synth_merge(args: &[String]) -> Result<(), String> {
         "hdr" => {
             for (k, b) in lightcraft_merge::synth::bracket_dngs(1800, 1200, &[-2.0, 0.0, 2.0]).map_err(|e| e.to_string())?.into_iter().enumerate() {
                 let p = Path::new(&dir).join(format!("bracket-{k}.dng"));
-                std::fs::write(&p, b).map_err(|e| e.to_string())?;
+                output_file::replace(&p, &b).map_err(|e| e.to_string())?;
                 written.push(p);
             }
         }
@@ -550,7 +551,7 @@ fn synth_merge(args: &[String]) -> Result<(), String> {
                 let img = v.to_srgb8();
                 let png = lightcraft_codecs::encode_png(&lightcraft_codecs::EncodeImage::rgba8(&img), &lightcraft_codecs::EncodeMeta::default())
                     .map_err(|e| e.to_string())?;
-                std::fs::write(&p, png).map_err(|e| e.to_string())?;
+                output_file::replace(&p, &png).map_err(|e| e.to_string())?;
                 written.push(p);
             }
         }
@@ -640,7 +641,7 @@ fn look(args: &[String]) -> Result<(), String> {
     }
     let look = lightcraft_pipeline::look::extract_linear(&decoded).ok_or("look extract: no usable sample (empty images?)")?;
     let text = serde_json::to_string_pretty(&look).map_err(|e| e.to_string())?;
-    std::fs::write(&out, text).map_err(|e| format!("{out}: {e}"))?;
+    output_file::replace(Path::new(&out), text.as_bytes()).map_err(|e| format!("{out}: {e}"))?;
     println!("{}", serde_json::json!({"out": out, "samples": look.samples, "luminance": look.luminance, "clip": look.clip, "chroma": look.chroma}));
     Ok(())
 }

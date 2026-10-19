@@ -48,30 +48,32 @@ pub trait Store: Send {
 /// Files in a directory.
 pub struct FsStore {
     dir: PathBuf,
-    /// Open append handle (kept between appends; dropped on rewrite/truncate).
-    appender: Option<(String, std::fs::File)>,
 }
 
 impl FsStore {
     /// Use `dir` (created if missing).
     pub fn open(dir: impl AsRef<Path>) -> io::Result<FsStore> {
-        std::fs::create_dir_all(dir.as_ref())?;
-        // temp files of a save a crash cut short (only those of writers confirmed dead)
         #[cfg(not(target_arch = "wasm32"))]
-        let _ = rightkit_fs::sweep_stale_temps(dir.as_ref(), std::time::Duration::ZERO);
-        Ok(FsStore { dir: dir.as_ref().to_path_buf(), appender: None })
+        {
+            // each folder this creates is made durable; when only that sync fails the library folder is there and usable
+            if let Err(e) = rightkit_fs::atomic::create_dir_all_durable(dir.as_ref(), false) {
+                if !dir.as_ref().is_dir() {
+                    return Err(e.into());
+                }
+                log::warn!("library folder {}: created, but making it durable failed: {e}", dir.as_ref().display());
+            }
+            // temp files of a save a crash cut short (only those of writers confirmed dead)
+            let _ = rightkit_fs::sweep_stale_temps(dir.as_ref(), std::time::Duration::ZERO);
+        }
+        #[cfg(target_arch = "wasm32")]
+        std::fs::create_dir_all(dir.as_ref())?;
+        Ok(FsStore { dir: dir.as_ref().to_path_buf() })
     }
     pub fn dir(&self) -> &Path {
         &self.dir
     }
     fn path(&self, name: &str) -> PathBuf {
         self.dir.join(name)
-    }
-    fn sync_dir(&self) {
-        // Makes the new name durable on POSIX (a no-op on Windows, where NTFS journals it); the
-        // folder sync is `rightkit-fs`'s and errors are ignored.
-        #[cfg(not(target_arch = "wasm32"))]
-        rightkit_fs::atomic::sync_dir(&self.dir);
     }
 }
 
@@ -89,37 +91,27 @@ impl Store for FsStore {
     }
 
     fn write_atomic_with(&mut self, name: &str, fill: &mut dyn FnMut(&mut dyn io::Write) -> io::Result<()>) -> io::Result<u64> {
-        if self.appender.as_ref().is_some_and(|(n, _)| n == name) {
-            self.appender = None;
-        }
-        crate::safe_file::atomic_replace(&self.path(name), true, fill)
+        crate::written::replace_with(&self.path(name), true, fill)
     }
 
     fn append(&mut self, name: &str, data: &[u8]) -> io::Result<()> {
-        use std::io::Write;
-        if self.appender.as_ref().is_none_or(|(n, _)| n != name) {
-            let existed = self.path(name).exists();
-            let f = std::fs::OpenOptions::new().create(true).append(true).open(self.path(name))?;
-            if !existed {
-                self.sync_dir();
-            }
-            self.appender = Some((name.to_string(), f));
+        // One durable append (written, flushed, and the folder flushed when the file is created). An error may leave part of
+        // `data` in the file; the caller cuts it back ([`Store::truncate`]) before appending again.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            rightkit_fs::append_record(&self.path(name), data, rightkit_fs::AppendOptions::default())?;
+            Ok(())
         }
-        let Some((_, f)) = self.appender.as_mut() else { return Err(io::Error::other("appender not open")) };
-        let written = f.write_all(data).and_then(|()| f.sync_data());
-        if written.is_err() {
-            // The handle may be dead (a network share that reconnected, a removed volume): the next
-            // attempt reopens the file. Part of `data` may be in the file; the caller cuts it back
-            // ([`Store::truncate`]) before appending again.
-            self.appender = None;
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (name, data);
+            Err(io::Error::new(io::ErrorKind::Unsupported, "this build has no file system"))
         }
-        written
     }
 
+    // Kept as app code (rightkit-fs leaves torn-tail repair to the app: fs/append.rs): the journal cuts a failed append's partial
+    // record before the next append. Proof: tests_torn_append.rs.
     fn truncate(&mut self, name: &str, len: u64) -> io::Result<()> {
-        if self.appender.as_ref().is_some_and(|(n, _)| n == name) {
-            self.appender = None;
-        }
         let f = match std::fs::OpenOptions::new().write(true).open(self.path(name)) {
             Ok(f) => f,
             // nothing to cut (an append that failed before creating the file)
@@ -136,7 +128,7 @@ impl Store for FsStore {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn background_writer(&self) -> Option<Box<dyn Store>> {
-        Some(Box::new(FsStore { dir: self.dir.clone(), appender: None }))
+        Some(Box::new(FsStore { dir: self.dir.clone() }))
     }
 }
 
@@ -232,6 +224,51 @@ mod tests_replace {
         assert_eq!(store.read("catalog.snap").unwrap().as_deref(), Some(&b"two two"[..]), "the old file survives a failed save");
         let names: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
         assert_eq!(names, vec!["catalog.snap"], "no temp file left");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests_append {
+    use super::*;
+
+    /// The journal's append on a real folder: each append is flushed (the file, and the folder when the file is created), records
+    /// follow each other, and a torn tail is cut back to the previous length before the next append (the app's torn-tail rule,
+    /// kept beside `rightkit_fs::append_record`, which leaves it to the app).
+    #[test]
+    fn appends_are_flushed_and_a_torn_tail_is_cut_back_before_the_next_append() {
+        use rightkit_fs::atomic::seams;
+        let dir = std::env::temp_dir().join(format!("lc-store-append-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut store = FsStore::open(&dir).unwrap();
+        seams::reset_sync_counts();
+        store.append("catalog.log", b"one\n").unwrap();
+        let first = seams::take_sync_counts();
+        assert!(first.file_syncs >= 1, "the appended bytes are flushed: {first:?}");
+        assert!(first.dir_syncs >= 1, "the folder entry of a new file is flushed: {first:?}");
+        store.append("catalog.log", b"two\n").unwrap();
+        assert!(seams::take_sync_counts().file_syncs >= 1);
+        // a torn record (a full disk cut it short): the journal cuts the file back to the length it had, then appends again
+        let good = std::fs::metadata(dir.join("catalog.log")).unwrap().len();
+        store.append("catalog.log", b"thr").unwrap();
+        store.truncate("catalog.log", good).unwrap();
+        store.append("catalog.log", b"three\n").unwrap();
+        assert_eq!(store.read("catalog.log").unwrap().as_deref(), Some(&b"one\ntwo\nthree\n"[..]));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A link planted at the log's name is never written through.
+    #[cfg(unix)]
+    #[test]
+    fn an_append_never_follows_a_link_at_the_log_name() {
+        let dir = std::env::temp_dir().join(format!("lc-store-append-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut store = FsStore::open(&dir).unwrap();
+        let victim = dir.join("victim.txt");
+        std::fs::write(&victim, b"keep").unwrap();
+        std::os::unix::fs::symlink(&victim, dir.join("catalog.log")).unwrap();
+        assert!(store.append("catalog.log", b"x\n").is_err());
+        assert_eq!(std::fs::read(&victim).unwrap(), b"keep");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

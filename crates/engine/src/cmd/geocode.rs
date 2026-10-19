@@ -192,7 +192,9 @@ mod download {
             return Err("the downloaded place list is empty".into());
         }
         let _ = std::fs::remove_file(staging.join(GEONAMES_ZIP));
-        let write = |name: &str, data: &[u8]| std::fs::write(dir.join(name), data).map_err(|e| format!("could not save {name}: {e}"));
+        let write = |name: &str, data: &[u8]| {
+            lightcraft_catalog::written::replace(&dir.join(name), data, true).map_err(|e| format!("could not save {name}: {e}"))
+        };
         for name in &GEONAMES_FILES[1..] {
             // optional: without them states stay blank and countries are ISO codes
             match get(name, base, &staging, cancel, task).and_then(|()| std::fs::read(staging.join(name)).map_err(|e| e.to_string())) {

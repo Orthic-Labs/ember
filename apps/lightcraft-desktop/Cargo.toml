@@ -38,6 +38,8 @@ rightkit-credentials = "=0.3.0"
 rightkit-app-settings = "=0.2.4"
 rightkit-child-process = { version = "=0.5.2" }
 rightkit-logs = { version = "=0.3.3", default-features = false }
+# Exclusive preference migration (M8, owner `rightkit-fs`)
+rightkit-fs = { version = "=0.4.4", default-features = false, features = ["fs"] }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.build-dependencies]
 tauri-build = "=2.7.3"

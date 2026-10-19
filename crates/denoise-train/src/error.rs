@@ -4,6 +4,8 @@
 pub enum Error {
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
+    #[error("io: {0}")]
+    Fs(#[from] rightkit_fs::FsError),
     #[error("candle: {0}")]
     Candle(#[from] candle_core::Error),
     #[error("json: {0}")]

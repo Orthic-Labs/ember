@@ -1046,7 +1046,7 @@ fn convert_to_dng_is_verified_and_atomic() {
     };
     {
         // the drive fills up part-way
-        let _fault = lightcraft_catalog::safe_file::fail_writes_after(200);
+        let _fault = rightkit_fs::atomic::seams::fail_write_after(200, std::io::ErrorKind::Other);
         let r = s.execute("photo.convertToDng", &json!({})).unwrap();
         assert_eq!(r["converted"].as_array().unwrap().len(), 0, "{r}");
         assert!(r["skipped"][0][1].as_str().unwrap().contains("the raw is kept"), "{r}");
@@ -1321,6 +1321,41 @@ fn duplicate_copies_the_file_and_the_edits() {
     assert_ne!(dup, orig);
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(s.catalog.photo(dup).is_none(), "one undo step");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Duplicating never overwrites: names that are taken (a file, a link to a file elsewhere) are skipped, the copy is a file of its
+/// own (never a hard link), and the original stays as it was.
+#[test]
+fn duplicate_never_overwrites_a_file_that_is_there() {
+    let dir = temp_dir("dup-taken");
+    let f = dir.join("pic.png");
+    write_png(&f, 5);
+    std::fs::write(dir.join("pic-copy.png"), b"someone else's file").unwrap();
+    #[cfg(unix)]
+    {
+        let victim = dir.join("victim.txt");
+        std::fs::write(&victim, b"keep").unwrap();
+        std::os::unix::fs::symlink(&victim, dir.join("pic-copy-2.png")).unwrap();
+    }
+    let original = std::fs::read(&f).unwrap();
+    let mut s = Session::new().with_fs();
+    s.execute("library.import", &json!({"paths": [f.to_string_lossy()]})).unwrap();
+    let r = s.execute("photo.duplicate", &json!({})).unwrap();
+    let dup = lightcraft_catalog::PhotoId(r["ids"][0].as_u64().unwrap());
+    let name = s.catalog.photo(dup).unwrap().file_name.clone();
+    let expected = if cfg!(unix) { "pic-copy-3.png" } else { "pic-copy-2.png" };
+    assert_eq!(name, expected);
+    assert_eq!(std::fs::read(dir.join("pic-copy.png")).unwrap(), b"someone else's file");
+    #[cfg(unix)]
+    assert_eq!(std::fs::read(dir.join("victim.txt")).unwrap(), b"keep", "a link at a name is never written through");
+    assert_eq!(std::fs::read(dir.join(&name)).unwrap(), original, "the copy has the original's bytes");
+    assert_eq!(std::fs::read(&f).unwrap(), original, "the original is untouched");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        assert_eq!(std::fs::metadata(dir.join(&name)).unwrap().nlink(), 1, "an independent file, not a hard link");
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 

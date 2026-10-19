@@ -445,7 +445,8 @@ pub fn specs() -> Vec<CommandSpec> {
                 let mut r = json!({"keywords": file.written.len(), "captureOneRefuses": refuses, "unwritable": file.unwritable});
                 match str_param(p, "path").map(str::trim).filter(|x| !x.is_empty()) {
                     Some(path) => {
-                        std::fs::write(path, &file.text).map_err(|e| crate::EngineError::Other(format!("{path}: {e}")))?;
+                        lightcraft_catalog::written::replace(std::path::Path::new(path), file.text.as_bytes(), true)
+                            .map_err(|e| crate::EngineError::Other(format!("{path}: {e}")))?;
                         r["path"] = json!(path);
                     }
                     None => r["text"] = json!(file.text),

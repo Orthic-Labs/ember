@@ -7,8 +7,26 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use lightcraft_catalog::safe_file::same_file;
 use lightcraft_catalog::{Catalog, Source};
+
+/// Do `a` and `b` name the same existing file (through links, `..`, case-insensitive names)? The identity is `rightkit-fs`'s
+/// (`FileKey`: device + inode on Unix, volume + file index on Windows). When either file's identity is not available the resolved
+/// paths decide, so an unavailable identity never reads as "different": this answers "is this target an original?" before
+/// anything is written over it.
+fn same_file(a: &Path, b: &Path) -> bool {
+    let (Ok(ma), Ok(mb)) = (std::fs::metadata(a), std::fs::metadata(b)) else { return false };
+    #[cfg(not(target_arch = "wasm32"))]
+    if let (Ok(x), Ok(y)) = (rightkit_fs::FileKey::of_path(a), rightkit_fs::FileKey::of_path(b)) {
+        return x == y;
+    }
+    if ma.len() != mb.len() {
+        return false;
+    }
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(x), Ok(y)) => x == y || x.to_string_lossy().to_lowercase() == y.to_string_lossy().to_lowercase(),
+        _ => false,
+    }
+}
 
 /// The library's originals and their sidecars, looked up by file name.
 #[derive(Debug, Default)]
@@ -99,6 +117,23 @@ impl crate::Session {
 mod tests {
     use super::*;
     use lightcraft_catalog::{Op, Photo, PhotoId};
+
+    #[test]
+    fn same_file_sees_hard_links_and_other_spellings_and_not_copies() {
+        let d = std::env::temp_dir().join(format!("lc-same-file-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("sub")).unwrap();
+        let p = d.join("x.jpg");
+        std::fs::write(&p, b"x").unwrap();
+        std::fs::copy(&p, d.join("copy.jpg")).unwrap();
+        assert!(!same_file(&p, &d.join("copy.jpg")), "a copy is another file");
+        assert!(same_file(&p, &d.join("sub/../x.jpg")));
+        assert!(!same_file(&p, &d.join("missing.jpg")));
+        if std::fs::hard_link(&p, d.join("link.jpg")).is_ok() {
+            assert!(same_file(&p, &d.join("link.jpg")));
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
 
     #[test]
     fn originals_and_their_sidecars_are_protected_by_identity() {

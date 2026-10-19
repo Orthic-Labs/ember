@@ -117,7 +117,7 @@ impl LightroomArchiveFinalization {
         if bytes.len() > MAX_INDEX_BYTES {
             return Err(error("LRCAT import index exceeds 16 MiB"));
         }
-        lightcraft_catalog::safe_file::write_atomic(&path, &bytes).map_err(|e| error(e.to_string()))
+        lightcraft_catalog::written::replace(&path, &bytes, true).map_err(|e| error(e.to_string()))
     }
 
     pub fn path(&self) -> Option<&Path> {

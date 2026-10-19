@@ -447,25 +447,16 @@ pub const OWNED_IF_STATED: &[&str] = &["exif:DateTimeOriginal", "photoshop:DateC
 const OWNED_IF_STATED_OR_NEW_REGIONS: &[&str] =
     &["exif:DateTimeOriginal", "photoshop:DateCreated", "exif:GPSLatitude", "exif:GPSLongitude", "mwg-rs:Regions"];
 
-/// Write `data` to `path` atomically: a temp file next to it, synced, then renamed over it.
-fn write_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
-    lightcraft_catalog::safe_file::write_atomic(path, data)
-}
-
 /// Copy `path` to a new `<name>.bak-<stamp>` (`-1`, `-2`… if taken; never overwriting).
 fn backup(path: &Path, stamp: &str) -> std::io::Result<PathBuf> {
-    use std::io::Write;
     let bytes = std::fs::read(path)?;
     let stamp: String = stamp.chars().filter(char::is_ascii_alphanumeric).collect();
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     for k in 0..1000 {
         let b = path.with_file_name(if k == 0 { format!("{name}.bak-{stamp}") } else { format!("{name}.bak-{stamp}-{k}") });
-        match std::fs::OpenOptions::new().write(true).create_new(true).open(&b) {
-            Ok(mut f) => {
-                f.write_all(&bytes)?;
-                f.sync_all()?;
-                return Ok(b);
-            }
+        // published exclusively, so an existing backup (or one that appears meanwhile) is never overwritten
+        match lightcraft_catalog::written::write_exclusive(&b, &bytes, true) {
+            Ok(()) => return Ok(b),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(e) => return Err(e),
         }
@@ -763,7 +754,7 @@ impl Session {
             .flatten();
         let (fresh, regions) = sidecar_save_packet(p, &self.catalog);
         let (data, merged, backup) = sidecar_contents(&path, seed.as_deref(), fresh, regions.as_ref(), &(self.clock)()).map_err(err)?;
-        write_atomic(&path, data.as_bytes()).map_err(err)?;
+        lightcraft_catalog::written::replace(&path, data.as_bytes(), true).map_err(err)?;
         self.note_sidecar_write(&path, data.as_bytes());
         Ok(SidecarSaved { path, merged, backup })
     }

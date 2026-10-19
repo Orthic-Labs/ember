@@ -600,7 +600,11 @@ impl Controller {
         if destination.exists() {
             return Err("backup destination already exists; refusing to overwrite it".into());
         }
-        if let Err(error) = copy_tree(&source, &destination, 0) {
+        // Claim the destination first; only a folder this call made is removed on failure.
+        if let Err(error) = std::fs::create_dir(&destination) {
+            return Err(format!("backup create {}: {error}", destination.display()));
+        }
+        if let Err(error) = copy_library(&source, &destination) {
             let _ = std::fs::remove_dir_all(&destination);
             return Err(error);
         }
@@ -631,7 +635,7 @@ impl Controller {
         if let Err(error) = std::fs::create_dir(&destination) {
             return Err(format!("could not claim restore destination {}: {error}", destination.display()));
         }
-        if let Err(error) = copy_tree_entries(&backup, &destination, 0) {
+        if let Err(error) = copy_library(&backup, &destination) {
             let _ = std::fs::remove_dir_all(&destination);
             return Err(format!("could not stage restored library: {error}"));
         }
@@ -669,28 +673,44 @@ fn persisted_segmenter_dir(value: &Value) -> Option<PathBuf> {
     Some(PathBuf::from(path))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn same_library_path(left: &Path, right: &Path) -> bool {
-    match (std::fs::canonicalize(left), std::fs::canonicalize(right)) {
+    match (rightkit_fs::canonicalize_plain(left), rightkit_fs::canonicalize_plain(right)) {
         (Ok(left), Ok(right)) => left == right,
         _ => left == right,
     }
 }
 
+/// A browser build has no folders to compare.
+#[cfg(target_arch = "wasm32")]
+fn same_library_path(left: &Path, right: &Path) -> bool {
+    left == right
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn backup_destination(path: &Path, source: &Path) -> Result<PathBuf, String> {
     let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
-    let parent = std::fs::canonicalize(parent).map_err(|error| format!("backup destination parent: {error}"))?;
+    let parent = rightkit_fs::canonicalize_plain(parent).map_err(|error| format!("backup destination parent: {error}"))?;
     let name = path.file_name().ok_or_else(|| "backup path has no file name".to_string())?;
     let destination = parent.join(name);
-    let source = std::fs::canonicalize(source).map_err(|error| format!("library path: {error}"))?;
-    if destination == source || destination.starts_with(&source) || source.starts_with(&destination) {
+    let source = rightkit_fs::canonicalize_plain(source).map_err(|error| format!("library path: {error}"))?;
+    // `is_within` is true for the same folder too: the destination may be neither inside the open
+    // library nor contain it.
+    if rightkit_fs::is_within(&source, &destination) || rightkit_fs::is_within(&destination, &source) {
         return Err("backup destination must be outside open library".into());
     }
     Ok(destination)
 }
 
+/// A browser build has no folders to back up to.
+#[cfg(target_arch = "wasm32")]
+fn backup_destination(_path: &Path, _source: &Path) -> Result<PathBuf, String> {
+    Err("this build has no file system".into())
+}
+
 fn restore_destination(backup: &Path) -> Result<PathBuf, String> {
     let parent = backup.parent().ok_or_else(|| "backup path has no parent".to_string())?;
-    let parent = std::fs::canonicalize(parent).map_err(|error| format!("restore destination parent: {error}"))?;
+    let parent = restore_parent(parent)?;
     let name = backup.file_name().ok_or_else(|| "backup path has no file name".to_string())?.to_string_lossy();
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_nanos()).unwrap_or_default();
     let pid = std::process::id();
@@ -726,34 +746,78 @@ fn cancel_preview_build(session: &Session, timeout: Duration) -> Result<(), Stri
     }
 }
 
-fn copy_tree(source: &Path, destination: &Path, depth: usize) -> Result<(), String> {
-    if depth > 64 {
+#[cfg(not(target_arch = "wasm32"))]
+fn restore_parent(parent: &Path) -> Result<PathBuf, String> {
+    rightkit_fs::canonicalize_plain(parent).map_err(|error| format!("restore destination parent: {error}"))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn restore_parent(_parent: &Path) -> Result<PathBuf, String> {
+    Err("this build has no file system".into())
+}
+
+/// Library lock files are never part of a backup or a restore.
+#[cfg(not(target_arch = "wasm32"))]
+fn is_lock_file(name: &std::ffi::OsStr) -> bool {
+    matches!(name.to_str(), Some("catalog.lock" | "catalog.lock.owner"))
+}
+
+/// Deepest folder nesting a backup or restore will read.
+#[cfg(not(target_arch = "wasm32"))]
+const MAX_COPY_DEPTH: usize = 64;
+
+/// Security rule (kept beside `rightkit_fs::copy_tree`, which can only keep a link or copy what it
+/// points to): a backup or restore refuses every symlink, so a link planted in the library can never
+/// pull in the bytes of a file outside it. A read-only walk that fails on the first link, before
+/// anything is copied. The top-level lock files are skipped here exactly as the copy skips them.
+#[cfg(not(target_arch = "wasm32"))]
+fn refuse_symlinks(path: &Path, depth: usize) -> Result<(), String> {
+    if depth > MAX_COPY_DEPTH {
         return Err("library backup directory nesting is too deep".into());
     }
-    let metadata = std::fs::symlink_metadata(source).map_err(|error| format!("backup read {}: {error}", source.display()))?;
+    let metadata = std::fs::symlink_metadata(path).map_err(|error| format!("backup read {}: {error}", path.display()))?;
     if metadata.file_type().is_symlink() {
-        return Err(format!("library backup refuses symlink {}", source.display()));
+        return Err(format!("library backup refuses symlink {}", path.display()));
     }
     if metadata.is_dir() {
-        std::fs::create_dir(destination).map_err(|error| format!("backup create {}: {error}", destination.display()))?;
-        copy_tree_entries(source, destination, depth)?;
+        for entry in std::fs::read_dir(path).map_err(|error| format!("backup list {}: {error}", path.display()))? {
+            let entry = entry.map_err(|error| format!("backup entry {}: {error}", path.display()))?;
+            if depth == 0 && is_lock_file(&entry.file_name()) {
+                continue;
+            }
+            refuse_symlinks(&entry.path(), depth.saturating_add(1))?;
+        }
         Ok(())
     } else if metadata.is_file() {
-        std::fs::copy(source, destination).map(|_| ()).map_err(|error| format!("backup copy {}: {error}", source.display()))
+        Ok(())
     } else {
-        Err(format!("unsupported library entry {}", source.display()))
+        Err(format!("unsupported library entry {}", path.display()))
     }
 }
 
-fn copy_tree_entries(source: &Path, destination: &Path, depth: usize) -> Result<(), String> {
+/// Copy the contents of the library folder `source` into the existing, empty folder `destination`:
+/// every symlink refused first (`refuse_symlinks`), then each top-level entry except the two lock
+/// files through `rightkit_fs::copy_tree`, which never overwrites. A link that appears after the
+/// check is kept as a link (`keep_symlinks`), never followed, so no outside bytes are read either way.
+#[cfg(not(target_arch = "wasm32"))]
+fn copy_library(source: &Path, destination: &Path) -> Result<(), String> {
+    refuse_symlinks(source, 0)?;
+    let options = rightkit_fs::CopyOptions::new(true, true);
     for entry in std::fs::read_dir(source).map_err(|error| format!("backup list {}: {error}", source.display()))? {
         let entry = entry.map_err(|error| format!("backup entry {}: {error}", source.display()))?;
-        if depth == 0 && matches!(entry.file_name().to_str(), Some("catalog.lock" | "catalog.lock.owner")) {
+        if is_lock_file(&entry.file_name()) {
             continue;
         }
-        copy_tree(&entry.path(), &destination.join(entry.file_name()), depth.saturating_add(1))?;
+        rightkit_fs::copy_tree(&entry.path(), &destination.join(entry.file_name()), options)
+            .map_err(|error| format!("backup copy {}: {error}", entry.path().display()))?;
     }
     Ok(())
+}
+
+/// A browser build has no folders to copy.
+#[cfg(target_arch = "wasm32")]
+fn copy_library(_source: &Path, _destination: &Path) -> Result<(), String> {
+    Err("this build has no file system".into())
 }
 
 #[cfg(test)]
@@ -1149,5 +1213,126 @@ mod tests {
         let _ = fs::remove_dir_all(old);
         let _ = fs::remove_dir_all(next);
         let _ = fs::remove_dir_all(selected_dir);
+    }
+
+    fn write_file(path: &Path, bytes: &[u8]) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(path, bytes).unwrap();
+    }
+
+    fn list_files(root: &Path) -> Vec<String> {
+        fn walk(dir: &Path, root: &Path, out: &mut Vec<String>) {
+            for entry in fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    walk(&path, root, out);
+                } else {
+                    out.push(path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"));
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(root, root, &mut out);
+        out.sort();
+        out
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn library_copy_takes_every_file_except_the_top_level_lock_files() {
+        let base = temp_library("copy-set");
+        let (source, destination) = (base.join("library"), base.join("backup"));
+        write_file(&source.join("catalog.db"), b"db");
+        write_file(&source.join("catalog.lock"), b"lock");
+        write_file(&source.join("catalog.lock.owner"), b"owner");
+        write_file(&source.join("previews/a/b/p.bin"), b"preview");
+        write_file(&source.join("previews/catalog.lock"), b"nested lock names are data");
+        fs::create_dir_all(source.join("empty-folder")).unwrap();
+        fs::create_dir_all(&destination).unwrap();
+
+        copy_library(&source, &destination).unwrap();
+
+        assert_eq!(list_files(&destination), ["catalog.db", "previews/a/b/p.bin", "previews/catalog.lock"]);
+        assert!(destination.join("empty-folder").is_dir());
+        assert_eq!(fs::read(destination.join("previews/a/b/p.bin")).unwrap(), b"preview");
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn library_copy_never_overwrites_what_the_destination_already_holds() {
+        let base = temp_library("copy-keep");
+        let (source, destination) = (base.join("library"), base.join("backup"));
+        write_file(&source.join("catalog.db"), b"new");
+        write_file(&destination.join("catalog.db"), b"keep");
+
+        assert!(copy_library(&source, &destination).is_err());
+        assert_eq!(fs::read(destination.join("catalog.db")).unwrap(), b"keep");
+        let _ = fs::remove_dir_all(base);
+    }
+
+    /// Security rule B4: a link planted inside the library is refused before anything is copied, so a
+    /// backup or restore never carries the bytes of a file outside the library.
+    #[cfg(unix)]
+    #[test]
+    fn library_copy_refuses_a_planted_symlink_before_copying_anything() {
+        let base = temp_library("copy-symlink");
+        let outside = base.join("outside");
+        write_file(&outside.join("secret.txt"), b"secret");
+        for (label, link_at) in [("top", "stolen.txt"), ("nested", "previews/deep/stolen.txt")] {
+            let (source, destination) = (base.join(format!("library-{label}")), base.join(format!("backup-{label}")));
+            write_file(&source.join("catalog.db"), b"db");
+            write_file(&source.join("previews/deep/p.bin"), b"preview");
+            std::os::unix::fs::symlink(outside.join("secret.txt"), source.join(link_at)).unwrap();
+            fs::create_dir_all(&destination).unwrap();
+
+            let error = copy_library(&source, &destination).unwrap_err();
+            assert!(error.contains("refuses symlink"), "{label}: {error}");
+            assert!(list_files(&destination).is_empty(), "{label}: nothing is copied once a link is found");
+        }
+        // A link to a folder is refused the same way.
+        let (source, destination) = (base.join("library-dir"), base.join("backup-dir"));
+        write_file(&source.join("catalog.db"), b"db");
+        std::os::unix::fs::symlink(&outside, source.join("outside-folder")).unwrap();
+        fs::create_dir_all(&destination).unwrap();
+        assert!(copy_library(&source, &destination).unwrap_err().contains("refuses symlink"));
+        assert!(list_files(&destination).is_empty());
+        let _ = fs::remove_dir_all(base);
+    }
+
+    /// A link that appears after the check is kept as a link (never followed): no outside bytes.
+    #[cfg(unix)]
+    #[test]
+    fn library_copy_does_not_follow_a_link_that_appears_after_the_check() {
+        let base = temp_library("copy-race");
+        let outside = base.join("outside.txt");
+        write_file(&outside, b"secret");
+        let (source, destination) = (base.join("library"), base.join("backup"));
+        write_file(&source.join("catalog.db"), b"db");
+        fs::create_dir_all(&destination).unwrap();
+        // The copy step alone (the check has already passed in the race this models).
+        let link = source.join("late-link");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        let options = rightkit_fs::CopyOptions::new(true, true);
+        rightkit_fs::copy_tree(&link, &destination.join("late-link"), options).unwrap();
+        assert!(fs::symlink_metadata(destination.join("late-link")).unwrap().file_type().is_symlink());
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn backup_destination_must_be_outside_the_open_library() {
+        let base = temp_library("backup-where");
+        let library = base.join("library");
+        fs::create_dir_all(library.join("inner")).unwrap();
+        assert!(backup_destination(&library, &library).is_err(), "the library itself");
+        assert!(backup_destination(&library.join("inner").join("b"), &library).is_err(), "inside the library");
+        assert!(backup_destination(&base, &library).is_err(), "a folder that contains the library");
+        let outside = backup_destination(&base.join("backup"), &library).unwrap();
+        assert!(outside.ends_with("backup"));
+        assert!(same_library_path(&library, &library.join("inner").join("..")));
+        let _ = fs::remove_dir_all(base);
     }
 }

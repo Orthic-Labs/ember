@@ -23,7 +23,6 @@ trustPolicyExclude:
   - '@rightkit/theme@0.3.1'
 
 minimumReleaseAgeExclude:
-  - '@rightkit/ci@0.2.43'
   - '@rightkit/tauri-shell@0.1.1'
   # RightKit mandatory-set versions published 2026-10-19 (bogusyogi/rightkit #790).
   - '@rightkit/app-update@0.4.0'

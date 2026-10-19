@@ -516,7 +516,7 @@ fn damaged_smart_previews_are_rebuilt_and_failed_writes_leave_none() {
     let dir = s.media.smart_dir.clone().unwrap();
     let file = crate::smart::sharded_file_path(&dir, s.catalog.photo(id).unwrap());
     {
-        let _fault = lightcraft_catalog::safe_file::fail_writes_after(64);
+        let _fault = rightkit_fs::atomic::seams::fail_write_after(64, std::io::ErrorKind::Other);
         let r = s.execute("library.smartPreviews", &json!({})).unwrap();
         assert_eq!((r["built"].as_u64(), r["failed"].as_array().map(Vec::len)), (Some(0), Some(1)), "{r}");
     }

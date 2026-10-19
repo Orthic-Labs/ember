@@ -296,29 +296,6 @@ fn load_prefs_at(path: &std::path::Path, set_aside_damaged: bool) -> (Option<UiS
     }
 }
 
-/// Write `bytes` to `path` atomically: a temp file, fsynced, renamed over it (a crash or a full
-/// disk leaves the old file or the new one, never a truncated one).
-fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
-    use std::io::Write;
-    let tmp = path.with_extension("json.tmp");
-    let written = (|| {
-        let mut f = std::fs::File::create(&tmp)?;
-        f.write_all(bytes)?;
-        f.sync_all()
-    })();
-    if let Err(e) = written {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(e);
-    }
-    std::fs::rename(&tmp, path)?;
-    if let Some(dir) = path.parent()
-        && let Ok(d) = std::fs::File::open(dir)
-    {
-        let _ = d.sync_all();
-    }
-    Ok(())
-}
-
 /// Saves `ui.json` (app settings, incl. the library to open at launch): as soon as the library
 /// changes, every few seconds when anything else changed, and at exit.
 ///
@@ -371,7 +348,15 @@ impl PrefsWriter {
         }
         path.parent()
             .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|()| write_atomic(&path, &bytes))
+            .and_then(|()| match rightkit_fs::atomic_write(&path, &bytes) {
+                Ok(()) => Ok(()),
+                // The new file is in place; only a step after the replace (the folder sync) failed.
+                Err(e) if e.target_replaced() => {
+                    log::warn!("{}: replaced, but a step after the replace failed: {e}", path.display());
+                    Ok(())
+                }
+                Err(e) => Err(e.into()),
+            })
             .map_err(|e| format!("saving the app settings failed: {e}"))?;
         self.written = bytes;
         self.library = ui.settings.library_path.clone();
@@ -1259,15 +1244,15 @@ mod tests {
         let d = dir("atomic");
         let path = d.join("ui.json");
         std::fs::write(&path, b"old").unwrap();
-        write_atomic(&path, b"{\"new\": true}").unwrap();
+        rightkit_fs::atomic_write(&path, b"{\"new\": true}").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"{\"new\": true}");
         assert!(!d.join("ui.json.tmp").exists());
         // a failed write leaves the old file
         let missing = d.join("gone").join("ui.json");
-        assert!(write_atomic(&missing, b"x").is_err());
+        assert!(rightkit_fs::atomic_write(&missing, b"x").is_err());
         assert_eq!(std::fs::read(&path).unwrap(), b"{\"new\": true}");
         let ui = UiState::default();
-        write_atomic(&path, &serde_json::to_vec_pretty(&ui).unwrap()).unwrap();
+        rightkit_fs::atomic_write(&path, &serde_json::to_vec_pretty(&ui).unwrap()).unwrap();
         let (loaded, warning, _) = load_prefs_at(&path, true);
         assert!(loaded.is_some() && warning.is_none());
         let _ = std::fs::remove_dir_all(&d);
