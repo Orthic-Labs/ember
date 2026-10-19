@@ -1,5 +1,5 @@
 import { APP_NAME } from '../branding';
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type KeyboardEvent, type UIEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type KeyboardEvent, type ReactNode, type UIEvent } from 'react';
 import { AppearanceMenu, Checkbox, ContextMenu, NavList, Popover, PaletteTrigger, Select, Slider, useContextMenu, useShell, type MenuItem, type NavGroup } from '@rightkit/react-shell/react';
 import type { DesktopSnapshot, PhotoSummary } from '../types';
 import { useDesktop } from '../desktop';
@@ -153,16 +153,56 @@ function FilterBar({ snapshot, filterText, setFilterText }: { snapshot: DesktopS
   );
 }
 
+/** The option a choice row will apply; the row's click (mouse or Enter) applies it. */
+type MenuPick<T> = { value: T };
+
+/**
+ * A menu row holding several choices (exception B6: MenuItem is one action per row). The row is a
+ * normal ContextMenu item, so arrows reach it and Enter applies it; while it is highlighted, Left and
+ * Right move between its choices. A pointer click picks a choice and the row applies it.
+ */
+function MenuChoiceRow<T>({ title, className, options, pick }: { title: string; className: string; options: ReadonlyArray<{ value: T; label: string; content: ReactNode; buttonClass?: string }>; pick: MenuPick<T> }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [index, setIndex] = useState(() => Math.max(0, options.findIndex((option) => option.value === pick.value)));
+  const indexRef = useRef(index);
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      if (!ref.current?.closest('.rk-menu__item')?.classList.contains('is-active')) return;
+      event.preventDefault();
+      const choices = optionsRef.current;
+      const next = Math.min(choices.length - 1, Math.max(0, indexRef.current + (event.key === 'ArrowRight' ? 1 : -1)));
+      const choice = choices[next];
+      if (!choice) return;
+      indexRef.current = next;
+      pick.value = choice.value;
+      setIndex(next);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pick]);
+  const current = options[index];
+  return <span ref={ref} className="lc-menu-group">
+    <span className="lc-menu-label">{title}</span>
+    <span className="lc-visually-hidden">{current ? `: ${current.label}. Left and Right choose, Enter applies.` : ''}</span>
+    <span className={className}>{options.map((option, i) => <button key={option.label} type="button" tabIndex={-1} className={`${option.buttonClass ?? ''}${i === index ? ' is-picked' : ''}`} aria-label={option.label} aria-pressed={i === index} onClick={() => { indexRef.current = i; pick.value = option.value; }}>{option.content}</button>)}</span>
+  </span>;
+}
+
 function photoMenuItems(photo: PhotoSummary, albums: DesktopSnapshot['albums'], run: ReturnType<typeof useDesktop>['run']): MenuItem[] {
   const ids = [photo.id];
   const writable = albums.filter((album) => !album.folder && !album.smart);
+  const rating: MenuPick<number> = { value: photo.rating > 0 ? photo.rating : 5 };
+  const label: MenuPick<string> = { value: photo.label ?? 'none' };
   return [
     { id: 'pick', label: 'Pick', shortcut: 'P', run: () => void run('photo.pick', { ids }) },
     { id: 'reject', label: 'Reject', shortcut: 'X', run: () => void run('photo.reject', { ids }) },
     { id: 'unflag', label: 'Unflag', shortcut: 'U', run: () => void run('photo.unflag', { ids }) },
-    // Inline multi-button rows: one menu row holds five rating buttons (exception B6; MenuItem is one action per row).
-    { id: 'rating', label: <span className="lc-menu-group"><span className="lc-menu-label">Rating</span><span className="lc-menu-rating">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} type="button" aria-label={`${rating} stars`} onClick={() => void run('photo.rate', { ids, rating })}>{rating <= photo.rating ? '★' : '☆'}</button>)}</span></span>, separatorBefore: true },
-    { id: 'label', label: <span className="lc-menu-group"><span className="lc-menu-label">Label</span><span className="lc-menu-labels">{['red', 'yellow', 'green', 'blue', 'purple', 'none'].map((label) => <button key={label} type="button" className={`lc-label-dot ${label}`} aria-label={`${label} label`} onClick={() => void run('photo.label', { ids, label })} />)}</span></span> },
+    // Multi-choice rows stay app-owned (exception B6); MenuChoiceRow keeps every choice on the keyboard.
+    { id: 'rating', label: <MenuChoiceRow title="Rating" className="lc-menu-rating" pick={rating} options={[1, 2, 3, 4, 5].map((value) => ({ value, label: `${value} stars`, content: value <= photo.rating ? '★' : '☆' }))} />, separatorBefore: true, run: () => void run('photo.rate', { ids, rating: rating.value }) },
+    { id: 'label', label: <MenuChoiceRow title="Label" className="lc-menu-labels" pick={label} options={['red', 'yellow', 'green', 'blue', 'purple', 'none'].map((value) => ({ value, label: `${value} label`, content: null, buttonClass: `lc-label-dot ${value}` }))} />, run: () => void run('photo.label', { ids, label: label.value }) },
     { id: 'album-heading', label: 'Add to album', separatorBefore: true, disabled: true },
     ...writable.map((album): MenuItem => ({ id: `album-${album.id}`, label: album.name, run: () => void run('album.addPhotos', { ids, id: album.id }) })),
     ...(writable.length ? [] : [{ id: 'album-none', label: 'No writable albums', disabled: true }]),

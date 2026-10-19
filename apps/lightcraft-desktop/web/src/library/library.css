@@ -127,3 +127,7 @@
 .lc-filmstrip-image { height: 100%; }
 .lc-filmstrip-meta { position: absolute; right: 0; bottom: 0; left: 0; box-sizing: border-box; min-height: 25px; padding: 11px 6px 4px; background: linear-gradient(180deg, transparent, #000b); color: #fff; font-size: 10px; text-shadow: 0 1px 2px #000; }
 .lc-filmstrip-meta span:first-child { color: #fff; }
+
+/* Grid-menu choice rows (MenuChoiceRow): the picked choice is what Enter applies. */
+.lc-menu-rating button.is-picked, .lc-menu-labels button.is-picked { outline: 2px solid var(--rk-ink); outline-offset: 1px; border-radius: 4px; }
+.lc-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
