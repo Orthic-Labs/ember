@@ -56,7 +56,6 @@
 .lc-photo-caption span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.lc-photo-caption span:last-child { color: #ffcf57; letter-spacing: -1px; white-space: nowrap; }
 .lc-grid-loading, .lc-grid-error { grid-column: 1 / -1; padding: 28px; color: #ccd1da; text-align: center; }
 .lc-grid-error { color: #ff9d9d; }
-.lc-menu-group { display: block; }.lc-menu-rating button { border: 0; background: transparent; cursor: pointer; padding: 2px 3px; }.lc-menu-label { margin: 5px 8px 2px; color: #a9b1be; font-size: 10px; text-transform: uppercase; }.lc-menu-rating, .lc-menu-labels { display: flex; gap: 2px; padding: 0 4px 4px; }.lc-menu-rating button { justify-content: center; color: #ffd05b; font-size: 16px; }.lc-menu-labels button { width: 18px; height: 18px; padding: 0; border: 1px solid #fff5; border-radius: 50%; }.lc-label-dot.red { background: #ef5d5d; }.lc-label-dot.yellow { background: #e9c65e; }.lc-label-dot.green { background: #65ca70; }.lc-label-dot.blue { background: #60a9f5; }.lc-label-dot.purple { background: #a677e8; }.lc-label-dot.none { background: transparent; }
 .lc-library-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 7px 12px; border-top: 1px solid var(--lc-border); background: var(--lc-chrome, #fff); flex-wrap: wrap; }
 .lc-footer-views, .lc-footer-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }.lc-footer-views button, .lc-footer-actions button { min-height: 28px; padding: 4px 8px; border: 1px solid var(--lc-border); border-radius: 5px; background: transparent; color: inherit; cursor: pointer; font: inherit; font-size: 11px; }.lc-footer-views button.is-active { border-color: var(--lc-accent, #0165dd); color: var(--lc-accent, #0165dd); }.lc-footer-actions label { display: flex; align-items: center; gap: 7px; color: var(--lc-muted); font-size: 11px; }.lc-footer-actions input[type='range'] { width: 110px; accent-color: var(--lc-accent, #0165dd); }
 .lc-library-error { position: absolute; right: 14px; bottom: 62px; z-index: 10; padding: 8px 10px; border: 1px solid #e47171; border-radius: 6px; background: #481f26; color: #ffd9d9; font-size: 12px; }
@@ -127,7 +126,5 @@
 .lc-filmstrip-image { height: 100%; }
 .lc-filmstrip-meta { position: absolute; right: 0; bottom: 0; left: 0; box-sizing: border-box; min-height: 25px; padding: 11px 6px 4px; background: linear-gradient(180deg, transparent, #000b); color: #fff; font-size: 10px; text-shadow: 0 1px 2px #000; }
 .lc-filmstrip-meta span:first-child { color: #fff; }
-
-/* Grid-menu choice rows (MenuChoiceRow): the picked choice is what Enter applies. */
-.lc-menu-rating button.is-picked, .lc-menu-labels button.is-picked { outline: 2px solid var(--rk-ink); outline-offset: 1px; border-radius: 4px; }
-.lc-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.lc-display-views button[aria-pressed="true"] { background: color-mix(in srgb, currentColor 14%, transparent); }
+.lc-display-action { justify-content: flex-start; width: 100%; }

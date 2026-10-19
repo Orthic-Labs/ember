@@ -49,3 +49,6 @@ kbd{padding:2px 6px;border:1px solid #c8d0da;border-radius:4px;background:#f2f5f
 .lc-release-notes{white-space:pre-wrap;line-height:1.55}
 .lc-dialog input[type=number]{font-variant-numeric:tabular-nums}
 @media(max-width:700px){.lc-import-layout,.lc-export-columns,.lc-merge-layout{grid-template-columns:1fr}.lc-summary-grid{grid-template-columns:repeat(2,1fr)}}
+/* Import candidate rows are published Checkbox labels: the row keeps its grid, the box sits in column 1. */
+.rk-check.lc-candidate{display:grid}
+.lc-candidate .rk-check__label{display:contents}

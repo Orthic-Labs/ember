@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "../api";
 import type { PreviewQuality } from "../desktop/types";
 import { usePreview } from "./usePreview";
+import { Button } from "@rightkit/react-shell/react";
 
 export interface PhotoPreviewProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "width" | "height" | "onError"> {
   photoId: number;
@@ -87,8 +88,8 @@ export function PhotoPreview({ photoId, slot, width, height, viewGeneration = 0,
     <div className="photo-preview-frame" style={wrapperStyle} role={error && image ? "group" : !image ? (error ? "img" : "status") : undefined} aria-label={error ? `${alt || "Photo"}: ${preview.state.error}` : !image ? "Loading preview" : undefined}>
       {images}
       {!image && <span data-preview-state={error ? "error" : "loading"}>{error ? "Preview unavailable" : "Loading preview…"}</span>}
-      {error && image && <div role="alert" style={{ position: "absolute", zIndex: 3, inset: "auto 8px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "6px 8px", background: "rgba(0, 0, 0, 0.72)", color: "white" }}><span data-preview-state="error">{preview.state.error}</span><button type="button" onClick={preview.retry}>Retry</button></div>}
-      {error && !image && <button type="button" onClick={preview.retry}>Retry</button>}
+      {error && image && <div role="alert" style={{ position: "absolute", zIndex: 3, inset: "auto 8px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "6px 8px", background: "rgba(0, 0, 0, 0.72)", color: "white" }}><span data-preview-state="error">{preview.state.error}</span><Button size="sm" onClick={preview.retry}>Retry</Button></div>}
+      {error && !image && <Button size="sm" onClick={preview.retry}>Retry</Button>}
     </div>
   );
 }

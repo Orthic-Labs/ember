@@ -1373,10 +1373,10 @@ fn assert_thumbnail_page_boundaries(control: &rightkit_qa::control::Control) {
 
 fn enable_grid_info(control: &rightkit_qa::control::Control) {
     click_dom(control, ".lc-display-wrap > button", "Display menu must open");
-    let label = control.eval("return [...document.querySelectorAll('.lc-display-menu [role=menuitem]')].find(node => node.textContent?.startsWith('Grid info:'))?.textContent || ''; ").expect("Grid info state must be queryable");
+    let label = control.eval("return [...document.querySelectorAll('.lc-display-menu button.lc-display-gridinfo')].find(node => node.textContent?.startsWith('Grid info:'))?.textContent || ''; ").expect("Grid info state must be queryable");
     assert!(label.as_str().is_some_and(|text| text.starts_with("Grid info:")), "Grid info control must exist inside Display menu: {label}");
     if label.as_str().is_some_and(|text| text.ends_with("Off")) {
-        click_dom(control, ".lc-display-menu > button[role=menuitem]", "Grid info must enable via Display menu");
+        click_dom(control, ".lc-display-menu > button.lc-display-gridinfo", "Grid info must enable via Display menu");
     }
     click_dom(control, ".lc-display-wrap > button", "Display menu must close");
     wait_for_dom(control, "return Boolean(document.querySelector('.lc-grid-window .lc-photo-caption span:first-child')?.textContent?.trim());");
@@ -2455,8 +2455,15 @@ fn native_hidden_control_journeys() {
                         .expect("active photo native context menu coordinates must be readable");
                     control.click(cell["x"].as_f64().expect("photo x required"), cell["y"].as_f64().expect("photo y required"), "right", 1)
                         .expect("native right click must open photo context menu");
-                    click_dom(control, ".lc-menu-rating button[aria-label='5 stars']", "native pointer must choose five stars");
-                    wait_for_dom(control, "return document.querySelector('.lc-photo-cell.is-active .lc-photo-stars')?.textContent === '★★★★★' && document.querySelector('.lc-menu-rating') === null;");
+                    // RightKit ContextMenu rows: each rating is a checkable row; pick "5 stars" by its text.
+                    let photo_menu = r#"[role=menu][aria-label="Photo actions"]"#;
+                    wait_for_dom(control, &format!("return document.querySelector({photo_menu:?}) !== null;"));
+                    let five = control
+                        .eval(&format!("return Array.from(document.querySelectorAll({photo_menu:?} + ' > div')).findIndex((row) => row.textContent.trim().endsWith('5 stars')) + 1;"))
+                        .expect("photo menu rows must be queryable");
+                    let five = five.as_u64().filter(|index| *index > 0).expect("photo menu must offer 5 stars");
+                    click_dom(control, &format!("{photo_menu} > div:nth-child({five}) > [role=menuitemcheckbox]"), "native pointer must choose five stars");
+                    wait_for_dom(control, &format!("return document.querySelector('.lc-photo-cell.is-active .lc-photo-stars')?.textContent === '★★★★★' && document.querySelector({photo_menu:?}) === null;"));
                     control.key("X").expect("supported reject shortcut must execute");
                     let rated = run(control, "photo.inspect", json!({"id": photo_id}));
                     assert_eq!(rated["rating"], 5);
@@ -2542,7 +2549,7 @@ fn native_hidden_control_journeys() {
                             click_dom(control, ".lc-inspector button[data-inspector-collapse]", "manual inspector collapse must execute");
                             wait_for_retained_layout_collapse(control, &identity_key, &identity_owner);
                             click_dom(control, ".lc-inspector button[data-more-tools]", "collapsed More tools must open");
-                            let collapsed_menu = control.eval("return (() => { const e = document.querySelector('.lc-inspector__more-menu'); if (!e) return null; const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); const inspector = document.querySelector('.lc-inspector'); const layout = inspector?.closest('.lc-stage-layout,.lc-library-layout'); return { width: inspector?.getBoundingClientRect().width, layout: layout?.className, columns: layout ? getComputedStyle(layout).gridTemplateColumns : null, inside: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, reachable: e.contains(hit) }; })();").expect("collapsed More geometry must be queryable");
+                            let collapsed_menu = control.eval("return (() => { const e = document.querySelector('[role=menu][aria-label=\"More tools\"]'); if (!e) return null; const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); const inspector = document.querySelector('.lc-inspector'); const layout = inspector?.closest('.lc-stage-layout,.lc-library-layout'); return { width: inspector?.getBoundingClientRect().width, layout: layout?.className, columns: layout ? getComputedStyle(layout).gridTemplateColumns : null, inside: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, reachable: e.contains(hit) }; })();").expect("collapsed More geometry must be queryable");
                             assert!(collapsed_menu["width"].as_f64().is_some_and(|value| (value - 44.0).abs() < 2.0), "collapsed inspector must retain44px rail: {collapsed_menu}");
                             assert_eq!(collapsed_menu["inside"].as_bool(), Some(true), "collapsed menu must remain inside viewport: {collapsed_menu}");
                             assert_eq!(collapsed_menu["reachable"].as_bool(), Some(true), "collapsed More menu must be visible & reachable: {collapsed_menu}");

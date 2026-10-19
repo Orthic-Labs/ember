@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CompletedJobState, DesktopContextValue, JsonObject, JobStatus } from "../types";
 import PhotoPreview from "../preview/PhotoPreview";
-import { Button, Checkbox, IconButton, ModalShell } from "@rightkit/react-shell/react";
+import { Button, Checkbox, IconButton, ModalShell, ProgressBar } from "@rightkit/react-shell/react";
 import { useInertSiblings } from "./inertSiblings";
 import "./cullReview.css";
 
@@ -505,7 +505,7 @@ export function CullReviewDialog({ desktop, photoIds, photos, onClose }: CullRev
           </div>
 
           <p className="lc-cull-review-note">Focus score is a qualitative review signal from current classical analysis; it is not an accuracy or confidence claim.</p>
-          {(busy || applying) && <div className="lc-cull-review-progress" aria-live="polite"><span>{job?.label ?? (applying ? "Applying cull proposal…" : `Analysing ${stableIds.length} photo${stableIds.length === 1 ? "" : "s"}…`)}</span><progress max={progressTotal} value={job && job.total > 0 ? progressCompleted : undefined} /><Button className="lc-cull-review-button-secondary" onClick={cancel} disabled={cancelling}>{cancelling ? "Cancelling…" : applying ? "Cancel apply" : "Cancel"}</Button></div>}
+          {(busy || applying) && <div className="lc-cull-review-progress" aria-live="polite"><span>{job?.label ?? (applying ? "Applying cull proposal…" : `Analysing ${stableIds.length} photo${stableIds.length === 1 ? "" : "s"}…`)}</span><ProgressBar className={job && job.total > 0 ? undefined : "is-indeterminate"} value={job && job.total > 0 ? progressCompleted : 0} max={job && job.total > 0 ? progressTotal : 1} label={applying ? "Applying cull proposal" : "Analysing photos"} /><Button className="lc-cull-review-button-secondary" onClick={cancel} disabled={cancelling}>{cancelling ? "Cancelling…" : applying ? "Cancel apply" : "Cancel"}</Button></div>}
           {error && <div className={`lc-cull-review-message ${stale ? "is-warning" : "is-error"}`} role="alert">{error}{stale && <Button className="lc-cull-review-button-secondary" onClick={() => void generate()} disabled={busy || applying}>Retry</Button>}</div>}
 
           {rows.length > 0 && <div className="lc-cull-review-list" aria-label="Cull suggestions">

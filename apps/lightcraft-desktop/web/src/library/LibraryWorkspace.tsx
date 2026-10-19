@@ -1,6 +1,6 @@
 import { APP_NAME } from '../branding';
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type KeyboardEvent, type ReactNode, type UIEvent } from 'react';
-import { AppearanceMenu, Checkbox, ContextMenu, NavList, Popover, PaletteTrigger, Select, Slider, useContextMenu, useShell, type MenuItem, type NavGroup } from '@rightkit/react-shell/react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type KeyboardEvent, type UIEvent } from 'react';
+import { AppearanceMenu, Button, Checkbox, ContextMenu, IconButton, NavList, Popover, PaletteTrigger, Select, Slider, useContextMenu, useShell, type MenuItem, type NavGroup } from '@rightkit/react-shell/react';
 import type { DesktopSnapshot, PhotoSummary } from '../types';
 import { useDesktop } from '../desktop';
 import { RetainedLayout } from '../layout/RetainedLayout';
@@ -130,13 +130,13 @@ function FilterBar({ snapshot, filterText, setFilterText }: { snapshot: DesktopS
       <label className="lc-filter-search">
         <span aria-hidden="true">⌕</span>
         <input value={filterText} onChange={(event) => setFilterText(event.target.value)} placeholder="Search photos" aria-label="Search photos" />
-        {filterText && <button type="button" aria-label="Clear search" onClick={() => setFilterText('')}>×</button>}
+        {filterText && <IconButton label="Clear search" onClick={() => setFilterText('')}>×</IconButton>}
       </label>
-      <button className="lc-filter-pill" type="button" aria-pressed={Boolean(filter?.rating)} onClick={() => setFilter({ rating: filter?.rating ? 0 : 3, ratingOp: 'atLeast' })}>★ 3+</button>
-      <button className="lc-filter-pill" type="button" aria-pressed={filter?.flag === 'pick'} onClick={() => setFilter({ flag: filter?.flag === 'pick' ? null : 'pick' })}>⚑ Picks</button>
-      <button className="lc-filter-pill" type="button" aria-pressed={filter?.edited === true} onClick={() => setFilter({ edited: filter?.edited === true ? null : true })}>✎ Edited</button>
-      <button className="lc-filter-more" type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>Filters <span aria-hidden="true">⌄</span></button>
-      {(filter && Object.keys(filter).some((key) => filter[key] !== null && filter[key] !== undefined && filter[key] !== '' && filter[key] !== false && filter[key] !== 0)) && <button className="lc-filter-clear" type="button" onClick={clear}>Clear all</button>}
+      <Button variant="ghost" className="lc-filter-pill" type="button" aria-pressed={Boolean(filter?.rating)} onClick={() => setFilter({ rating: filter?.rating ? 0 : 3, ratingOp: 'atLeast' })}>★ 3+</Button>
+      <Button variant="ghost" className="lc-filter-pill" type="button" aria-pressed={filter?.flag === 'pick'} onClick={() => setFilter({ flag: filter?.flag === 'pick' ? null : 'pick' })}>⚑ Picks</Button>
+      <Button variant="ghost" className="lc-filter-pill" type="button" aria-pressed={filter?.edited === true} onClick={() => setFilter({ edited: filter?.edited === true ? null : true })}>✎ Edited</Button>
+      <Button variant="ghost" className="lc-filter-more" type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>Filters <span aria-hidden="true">⌄</span></Button>
+      {(filter && Object.keys(filter).some((key) => filter[key] !== null && filter[key] !== undefined && filter[key] !== '' && filter[key] !== false && filter[key] !== 0)) && <Button variant="ghost" className="lc-filter-clear" type="button" onClick={clear}>Clear all</Button>}
       {expanded && <div className="lc-filter-panel" role="region" aria-label="Full filters">
         <label>Rating <Select value={String(filter?.rating ?? 0)} options={[{ value: '0', label: 'Any' }, ...[1, 2, 3, 4, 5].map((rating) => ({ value: String(rating), label: `${rating}+ stars` }))]} onChange={(value) => setFilter({ rating: Number(value) || 0 })} label="Rating" /></label>
         <label>Flag <Select value={String(filter?.flag ?? '')} options={[{ value: '', label: 'Any' }, { value: 'pick', label: 'Picked' }, { value: 'reject', label: 'Rejected' }, { value: 'none', label: 'Unflagged' }]} onChange={(value) => setFilter({ flag: value || null })} label="Flag" /></label>
@@ -147,62 +147,29 @@ function FilterBar({ snapshot, filterText, setFilterText }: { snapshot: DesktopS
         <label>Camera <input value={String(filter?.camera ?? '')} onChange={(event) => setFilter({ camera: event.target.value || null })} /></label>
         <Checkbox className="lc-filter-check" checked={filter?.edited === true} onChange={(checked) => setFilter({ edited: checked ? true : null })} label="Edited only" />
         {presets.length > 0 && <label>Saved <Select value="" options={[{ value: '', label: 'Choose…' }, ...presets.map((preset) => ({ value: preset.name, label: preset.name }))]} onChange={(value) => { if (value) void run('filter.applyPreset', { name: value }); }} label="Saved filters" /></label>}
-        <div className="lc-filter-save"><input value={savedName} onChange={(event) => setSavedName(event.target.value)} placeholder="Saved filter name" aria-label="Saved filter name" /><button type="button" onClick={save}>Save filter</button><button type="button" onClick={() => setDialog({ kind: 'smartAlbum', params: { fromFilter: true } })}>Smart album…</button></div>
+        <div className="lc-filter-save"><input value={savedName} onChange={(event) => setSavedName(event.target.value)} placeholder="Saved filter name" aria-label="Saved filter name" /><Button type="button" onClick={save}>Save filter</Button><Button type="button" onClick={() => setDialog({ kind: 'smartAlbum', params: { fromFilter: true } })}>Smart album…</Button></div>
       </div>}
     </div>
   );
 }
 
-/** The option a choice row will apply; the row's click (mouse or Enter) applies it. */
-type MenuPick<T> = { value: T };
-
-/**
- * A menu row holding several choices (exception B6: MenuItem is one action per row). The row is a
- * normal ContextMenu item, so arrows reach it and Enter applies it; while it is highlighted, Left and
- * Right move between its choices. A pointer click picks a choice and the row applies it.
- */
-function MenuChoiceRow<T>({ title, className, options, pick }: { title: string; className: string; options: ReadonlyArray<{ value: T; label: string; content: ReactNode; buttonClass?: string }>; pick: MenuPick<T> }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const [index, setIndex] = useState(() => Math.max(0, options.findIndex((option) => option.value === pick.value)));
-  const indexRef = useRef(index);
-  const optionsRef = useRef(options);
-  optionsRef.current = options;
-  useEffect(() => {
-    const onKey = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-      if (!ref.current?.closest('.rk-menu__item')?.classList.contains('is-active')) return;
-      event.preventDefault();
-      const choices = optionsRef.current;
-      const next = Math.min(choices.length - 1, Math.max(0, indexRef.current + (event.key === 'ArrowRight' ? 1 : -1)));
-      const choice = choices[next];
-      if (!choice) return;
-      indexRef.current = next;
-      pick.value = choice.value;
-      setIndex(next);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [pick]);
-  const current = options[index];
-  return <span ref={ref} className="lc-menu-group">
-    <span className="lc-menu-label">{title}</span>
-    <span className="lc-visually-hidden">{current ? `: ${current.label}. Left and Right choose, Enter applies.` : ''}</span>
-    <span className={className}>{options.map((option, i) => <button key={option.label} type="button" tabIndex={-1} className={`${option.buttonClass ?? ''}${i === index ? ' is-picked' : ''}`} aria-label={option.label} aria-pressed={i === index} onClick={() => { indexRef.current = i; pick.value = option.value; }}>{option.content}</button>)}</span>
-  </span>;
-}
-
 function photoMenuItems(photo: PhotoSummary, albums: DesktopSnapshot['albums'], run: ReturnType<typeof useDesktop>['run']): MenuItem[] {
   const ids = [photo.id];
   const writable = albums.filter((album) => !album.folder && !album.smart);
-  const rating: MenuPick<number> = { value: photo.rating > 0 ? photo.rating : 5 };
-  const label: MenuPick<string> = { value: photo.label ?? 'none' };
   return [
     { id: 'pick', label: 'Pick', shortcut: 'P', run: () => void run('photo.pick', { ids }) },
     { id: 'reject', label: 'Reject', shortcut: 'X', run: () => void run('photo.reject', { ids }) },
     { id: 'unflag', label: 'Unflag', shortcut: 'U', run: () => void run('photo.unflag', { ids }) },
-    // Multi-choice rows stay app-owned (exception B6); MenuChoiceRow keeps every choice on the keyboard.
-    { id: 'rating', label: <MenuChoiceRow title="Rating" className="lc-menu-rating" pick={rating} options={[1, 2, 3, 4, 5].map((value) => ({ value, label: `${value} stars`, content: value <= photo.rating ? '★' : '☆' }))} />, separatorBefore: true, run: () => void run('photo.rate', { ids, rating: rating.value }) },
-    { id: 'label', label: <MenuChoiceRow title="Label" className="lc-menu-labels" pick={label} options={['red', 'yellow', 'green', 'blue', 'purple', 'none'].map((value) => ({ value, label: `${value} label`, content: null, buttonClass: `lc-label-dot ${value}` }))} />, run: () => void run('photo.label', { ids, label: label.value }) },
+    // Rating and label are checkable rows under disabled group headings; every choice is a plain menu row, so arrows and Enter reach it.
+    { id: 'rating-heading', label: 'Rating', separatorBefore: true, disabled: true },
+    ...[1, 2, 3, 4, 5].map((value): MenuItem => ({ id: `rate-${value}`, label: `${value} star${value === 1 ? '' : 's'}`, checked: photo.rating === value, run: () => void run('photo.rate', { ids, rating: value }) })),
+    { id: 'label-heading', label: 'Label', separatorBefore: true, disabled: true },
+    { id: 'label-red', label: 'Red', checked: (photo.label ?? 'none') === 'red', run: () => void run('photo.label', { ids, label: 'red' }) },
+    { id: 'label-yellow', label: 'Yellow', checked: (photo.label ?? 'none') === 'yellow', run: () => void run('photo.label', { ids, label: 'yellow' }) },
+    { id: 'label-green', label: 'Green', checked: (photo.label ?? 'none') === 'green', run: () => void run('photo.label', { ids, label: 'green' }) },
+    { id: 'label-blue', label: 'Blue', checked: (photo.label ?? 'none') === 'blue', run: () => void run('photo.label', { ids, label: 'blue' }) },
+    { id: 'label-purple', label: 'Purple', checked: (photo.label ?? 'none') === 'purple', run: () => void run('photo.label', { ids, label: 'purple' }) },
+    { id: 'label-none', label: 'No label', checked: (photo.label ?? 'none') === 'none', run: () => void run('photo.label', { ids, label: 'none' }) },
     { id: 'album-heading', label: 'Add to album', separatorBefore: true, disabled: true },
     ...writable.map((album): MenuItem => ({ id: `album-${album.id}`, label: album.name, run: () => void run('album.addPhotos', { ids, id: album.id }) })),
     ...(writable.length ? [] : [{ id: 'album-none', label: 'No writable albums', disabled: true }]),
@@ -534,17 +501,17 @@ function Header({ snapshot, mode, setMode, thumbSize }: { snapshot: DesktopSnaps
   return <header className="lc-library-header">
     <div className="lc-library-title"><h1>{sourceLabel}</h1><span>{snapshot.selection.length > 1 ? `${snapshot.selection.length} selected · ` : ''}{snapshot.total} photos</span></div>
     <div className="lc-library-actions">
-      <button type="button" className="lc-header-action" onClick={() => void run('file.addPhotos', {})}>Import</button>
-      <button type="button" className="lc-header-action" onClick={() => setDialog({ kind: 'export' })}>Export</button>
-      <div className="lc-display-wrap"><button ref={displayButtonRef} type="button" className="lc-header-action" aria-expanded={displayOpen} onClick={() => setDisplayOpen((value) => !value)}>Display <span aria-hidden="true">⌄</span></button></div>
+      <Button variant="ghost" type="button" className="lc-header-action" onClick={() => void run('file.addPhotos', {})}>Import</Button>
+      <Button variant="ghost" type="button" className="lc-header-action" onClick={() => setDialog({ kind: 'export' })}>Export</Button>
+      <div className="lc-display-wrap"><Button ref={displayButtonRef} variant="ghost" type="button" className="lc-header-action" aria-expanded={displayOpen} onClick={() => setDisplayOpen((value) => !value)}>Display <span aria-hidden="true">⌄</span></Button></div>
       {displayOpen && displayButtonRef.current && <Popover anchor={displayButtonRef.current} label="Display" placement="bottom-end" width={200} className="lc-display-menu" onClose={() => setDisplayOpen(false)}>
-        <div className="lc-display-views" role="group" aria-label="Grid style"><button type="button" className={mode === 'photoGrid' ? 'rk-menu__item is-active' : 'rk-menu__item'} aria-pressed={mode === 'photoGrid'} onClick={() => { setMode('photoGrid'); setUi({ view: 'photoGrid' }); }}>▦ Photo grid</button><button type="button" className={mode === 'squareGrid' ? 'rk-menu__item is-active' : 'rk-menu__item'} aria-pressed={mode === 'squareGrid'} onClick={() => { setMode('squareGrid'); setUi({ view: 'squareGrid' }); }}>□ Square grid</button></div>
+        <div className="lc-display-views" role="group" aria-label="Grid style"><Button variant="ghost" type="button" className={mode === 'photoGrid' ? 'is-active' : undefined} aria-pressed={mode === 'photoGrid'} onClick={() => { setMode('photoGrid'); setUi({ view: 'photoGrid' }); }}>▦ Photo grid</Button><Button variant="ghost" type="button" className={mode === 'squareGrid' ? 'is-active' : undefined} aria-pressed={mode === 'squareGrid'} onClick={() => { setMode('squareGrid'); setUi({ view: 'squareGrid' }); }}>□ Square grid</Button></div>
         <div className="lc-display-size"><span>Thumbnail size</span><Slider value={thumbSize} min={MIN_THUMB} max={MAX_THUMB} step={4} label="Thumbnail size" onChange={(value) => setUi({ thumbSize: value })} /></div>
-        <button type="button" role="menuitem" className="rk-menu__item" onClick={() => setUi({ gridInfo: !ui.gridInfo })}>Grid info: {ui.gridInfo ? 'On' : 'Off'}</button>
-        <button type="button" role="menuitem" className="rk-menu__item" onClick={() => { setDisplayOpen(false); setDialog({ kind: 'copySettings' }); }}>Copy settings</button>
-        <button type="button" role="menuitem" className="rk-menu__item" onClick={() => { setDisplayOpen(false); setDialog({ kind: 'pasteSettings' }); }}>Paste settings</button>
+        <Button variant="ghost" className="lc-display-action lc-display-gridinfo" onClick={() => setUi({ gridInfo: !ui.gridInfo })}>Grid info: {ui.gridInfo ? 'On' : 'Off'}</Button>
+        <Button variant="ghost" className="lc-display-action" onClick={() => { setDisplayOpen(false); setDialog({ kind: 'copySettings' }); }}>Copy settings</Button>
+        <Button variant="ghost" className="lc-display-action" onClick={() => { setDisplayOpen(false); setDialog({ kind: 'pasteSettings' }); }}>Paste settings</Button>
       </Popover>}
-      <button ref={sortButtonRef} type="button" className="lc-header-action" aria-haspopup="menu" aria-expanded={sortOpen} onClick={() => setSortOpen((value) => !value)}>Sort ▾</button>
+      <Button ref={sortButtonRef} variant="ghost" type="button" className="lc-header-action" aria-haspopup="menu" aria-expanded={sortOpen} onClick={() => setSortOpen((value) => !value)}>Sort ▾</Button>
       {sortOpen && sortButtonRef.current && <ContextMenu anchor={sortButtonRef.current} placement="bottom-end" items={sortItems} label="Sort" width={176} onClose={() => setSortOpen(false)} />}
     </div>
   </header>;

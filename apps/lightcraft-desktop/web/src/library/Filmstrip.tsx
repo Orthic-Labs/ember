@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Button } from '@rightkit/react-shell/react';
 import { useDesktop } from '../desktop';
 import type { DesktopSnapshot, PhotoSummary } from '../types';
 import { PhotoPreview } from '../preview/PhotoPreview';
@@ -210,7 +211,7 @@ export default function Filmstrip() {
   const contextLabel = sourceLabel(snapshot.source, snapshot.albums);
   return <div className="lc-filmstrip" aria-label="Filmstrip">
     <div className="lc-filmstrip-context">
-      <button type="button" className="lc-filmstrip-context-chip" title="Back to this source in Library" onClick={() => setUi({ view: 'photoGrid' })}><span aria-hidden="true">▦</span><span>{contextLabel}</span>{contextFilter && <span className="lc-filmstrip-context-filter">· {contextFilter}</span>}</button>
+      <Button variant="ghost" className="lc-filmstrip-context-chip" title="Back to this source in Library" onClick={() => setUi({ view: 'photoGrid' })}><span aria-hidden="true">▦</span><span>{contextLabel}</span>{contextFilter && <span className="lc-filmstrip-context-filter">· {contextFilter}</span>}</Button>
       <span className="lc-filmstrip-position">{position}{snapshot.selection.length > 1 ? ` · ${snapshot.selection.length} selected` : ''}</span>
       <span className="lc-filmstrip-spacer-flex" />
     </div>
