@@ -1,0 +1,13 @@
+{
+  "$comment": "Ratified Ember not-applicable rulings, Orthic-Labs/rightkit#280 (packages/release/ownership-mandatory-set.json appAmendments.ember). M14 is adopted (@rightkit/legal 0.6.1 OSS profile), so its ruling is not claimed.",
+  "notApplicable": {
+    "M3": "No engine child process and no restart-surviving jobs: exports and imports are in-process jobs on the activity stack. The ffmpeg sidecar already runs through rightkit-ffmpeg.",
+    "M4": "No engine child process and no restart-surviving jobs: exports and imports are in-process jobs on the activity stack.",
+    "M6": "No local service or daemon-discovered data location. The control channel and MCP are opt-in developer and agent ports.",
+    "M7": "No local service or daemon-discovered data location. The control channel and MCP are opt-in developer and agent ports.",
+    "M9": "No SQLite app state. Preferences are JSON through rightkit-app-settings; the photo catalog is a JSON-lines journal.",
+    "M12": "Free and open source (MIT OR Apache-2.0): no paid features, activation or signer. rightkit-device identity is adopted. Applies to OSS apps.",
+    "M13": "Free and open source (MIT OR Apache-2.0): no paid features, activation or signer. Applies to OSS apps.",
+    "M22": "rightkit-agent-tools needs a daemon-backed app control service. Ember's agent surface is its own MCP server over engine command ids, being ported to rightkit-mcp. Applies to non-daemon apps."
+  }
+}

@@ -11,66 +11,33 @@
 
 use std::sync::OnceLock;
 
-use rightkit_credentials::{Config, Namespace, Secret, Store, WindowsTarget};
-use rightkit_device::{DeviceService, SecureStore};
+use rightkit_credentials::{Config, Namespace, Store, WindowsTarget};
+use rightkit_device::DeviceService;
+use rightkit_device::credentials::CredentialStore;
 
 /// Keychain service on macOS; the Windows target prefix is "Ember".
 const KEYCHAIN_SERVICE: &str = "com.orthiclabs.ember";
 const WINDOWS_PREFIX: &str = "Ember";
 const DEVICE_ACCOUNT: &str = "DeviceId";
 
-/// `rightkit-device` storage over the per-app OS credential store.
-pub(crate) struct KeyringDeviceStore {
-    store: Store,
+/// The device id lives in RightKit's credential adapter over the per-app OS credential store.
+fn open_store() -> Result<CredentialStore, String> {
+    let namespace = Namespace::new(KEYCHAIN_SERVICE)
+        .map_err(|error| format!("device id namespace is invalid: {error}"))?
+        .windows_target(WindowsTarget::Slash { prefix: Some(WINDOWS_PREFIX.to_string()) });
+    // `EMBER_NO_KEYCHAIN` is the universal RightKit guard for unattended QA: no OS prompts.
+    let config = Config::new(namespace).guard_env("EMBER_NO_KEYCHAIN");
+    // Unit-test binaries never reach the OS store.
+    #[cfg(test)]
+    let config = config.guard_when(true, rightkit_credentials::GuardMode::Memory);
+    CredentialStore::new(Store::open(config), DEVICE_ACCOUNT).map_err(|error| format!("could not open secure storage for the device id: {error}"))
 }
 
-impl KeyringDeviceStore {
-    fn open() -> Result<Self, String> {
-        let namespace = Namespace::new(KEYCHAIN_SERVICE)
-            .map_err(|error| format!("device id namespace is invalid: {error}"))?
-            .windows_target(WindowsTarget::Slash { prefix: Some(WINDOWS_PREFIX.to_string()) });
-        // `EMBER_NO_KEYCHAIN` is the universal RightKit guard for unattended QA: no OS prompts.
-        let config = Config::new(namespace).guard_env("EMBER_NO_KEYCHAIN");
-        // Unit-test binaries never reach the OS store.
-        #[cfg(test)]
-        let config = config.guard_when(true, rightkit_credentials::GuardMode::Memory);
-        Ok(Self { store: Store::open(config) })
-    }
-}
-
-impl SecureStore<String> for KeyringDeviceStore {
-    fn get(&self) -> Result<Option<String>, String> {
-        match self.store.get(DEVICE_ACCOUNT) {
-            Ok(Some(secret)) => {
-                let id = secret.expose_str().map_err(|error| format!("stored device id is unreadable: {error}"))?.trim().to_string();
-                Ok(if id.is_empty() { None } else { Some(id) })
-            }
-            Ok(None) => Ok(None),
-            Err(error) => Err(format!("could not read device id from secure storage: {error}")),
-        }
-    }
-
-    fn set(&self, id: &String) -> Result<(), String> {
-        self.store.set_str(DEVICE_ACCOUNT, id).map_err(|error| format!("could not save device id to secure storage: {error}"))
-    }
-
-    fn delete(&self) -> Result<(), String> {
-        self.store.delete(DEVICE_ACCOUNT).map(|_| ()).map_err(|error| format!("could not remove device id from secure storage: {error}"))
-    }
-
-    /// Native create-new: two Ember processes racing to create cannot overwrite each other.
-    fn set_if_absent(&self, id: &String) -> Result<bool, String> {
-        self.store
-            .add_if_absent(DEVICE_ACCOUNT, &Secret::from_string(id.clone()))
-            .map_err(|error| format!("could not save device id to secure storage: {error}"))
-    }
-}
-
-type Service = DeviceService<KeyringDeviceStore>;
+type Service = DeviceService<CredentialStore>;
 
 fn service() -> Result<&'static Service, String> {
     static SERVICE: OnceLock<Result<Service, String>> = OnceLock::new();
-    SERVICE.get_or_init(|| KeyringDeviceStore::open().map(DeviceService::new)).as_ref().map_err(Clone::clone)
+    SERVICE.get_or_init(|| open_store().map(DeviceService::new)).as_ref().map_err(Clone::clone)
 }
 
 /// The install's device id, created natively exactly once. Blocking: the credential store can wait on the OS.

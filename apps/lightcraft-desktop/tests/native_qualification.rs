@@ -105,6 +105,7 @@ fn launch_hidden(binary: &Path, scenario: &rightkit_qa::harness::Scenario, _cata
         env,
         startup_timeout: Duration::from_secs(90),
         label: "lightcraft-desktop-native".into(),
+        focus: false,
     };
     let startup_started = Instant::now();
     let control = launch(&spec, &ws, scenario.tracker()).expect("hidden native app must expose rightkit-control");

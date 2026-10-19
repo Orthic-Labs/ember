@@ -58,6 +58,10 @@ export function updateNotice(status: AutoUpdateStatus): string {
       return `Ember ${status.version} is available`;
     case 'ready':
       return `Ember ${status.version} is installed; restart Ember to finish`;
+    case 'staged':
+      return `Ember ${status.version} is downloaded and ready to install`;
+    case 'deferred':
+      return `Ember ${status.version} will install later`;
     case 'error':
       return status.message.replace(/^Error: /, '');
     default:

@@ -49,7 +49,7 @@ lightcraft-segment = { workspace = true, optional = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 lightcraft-fetch = { workspace = true }
 # panic hook and reports for contained panics (RightKit owner of crash-reporting; native only, the web build aborts on panic)
-rightkit-crash = { version = "=0.3.0", default-features = false }
+rightkit-crash = { version = "=0.3.3", default-features = false }
 
 [features]
 # AI masks (Object / Describe) with MobileSAM, or SAM 3 when installed. Off for the web and CLI builds.

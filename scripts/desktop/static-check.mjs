@@ -64,14 +64,14 @@ function checkPins() {
   const packageJson = readJson("package.json");
   const all = { ...packageJson.dependencies, ...packageJson.devDependencies };
   const pins = {
-    "@rightkit/react-shell": "0.6.5",
-    "@rightkit/platform-ui": "0.2.8",
+    "@rightkit/react-shell": "0.7.1",
+    "@rightkit/platform-ui": "0.4.0",
     "@rightkit/tauri-shell": "0.1.1",
-    "@rightkit/theme": "0.2.3",
-    "@rightkit/qa-chrome": "0.1.6",
+    "@rightkit/theme": "0.3.1",
+    "@rightkit/qa-chrome": "0.1.8",
     "@rightkit/ci": "0.2.45",
-    "@rightkit/release": "0.3.0",
-    "@rightkit/app-update": "0.2.5",
+    "@rightkit/release": "0.4.0",
+    "@rightkit/app-update": "0.4.0",
   };
   for (const [name, version] of Object.entries(pins)) {
     if (all[name] !== version) fail(`${name} must stay pinned to ${version}`);
@@ -81,9 +81,9 @@ function checkPins() {
     if (forbidden.test(cargo)) fail(`desktop Cargo.toml contains forbidden dependency form or sidecar reference: ${forbidden}`);
   }
   if (!/rightkit-tauri-shell\s*=\s*\{[^}]*default-features\s*=\s*false/.test(cargo)) fail("rightkit-tauri-shell must disable default features");
-  if (!/rightkit-qa\s*=\s*\{[^}]*version\s*=\s*\"=0.6.1\"/.test(cargo)) fail("rightkit-qa must stay pinned to =0.6.1");
+  if (!/rightkit-qa\s*=\s*\{[^}]*version\s*=\s*\"=0.7.0\"/.test(cargo)) fail("rightkit-qa must stay pinned to =0.7.0");
   if (!/rightkit-qa\s*=\s*\{[^}]*default-features\s*=\s*false[^}]*features\s*=\s*\[[^\]]*"control"[^\]]*"wv2-0_39"/.test(cargo)) fail("rightkit-qa must select the control feature and WebView2 0.39 for Tauri 2.12");
-  if (!/rightkit-qa\s*=\s*\"=0.6.1\"/.test(cargo)) fail("rightkit-qa dev pin must stay =0.6.1");
+  if (!/rightkit-qa\s*=\s*\"=0.7.0\"/.test(cargo)) fail("rightkit-qa dev pin must stay =0.7.0");
 }
 
 function checkNativeConfig() {

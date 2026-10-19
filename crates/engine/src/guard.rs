@@ -54,7 +54,10 @@ fn record_caught(_msg: &str) {}
 /// leaves a trace. Call once, early in `main`; a second call does nothing.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn install_hook(crash_dir: PathBuf) {
-    let config = rightkit_crash::CrashConfig::new("Ember", env!("CARGO_PKG_VERSION"), crash_dir).process_kind(rightkit_crash::ProcessKind::Engine);
+    // rightkit-crash 0.3.3 stops chaining the default hook in release builds; keep the stderr report.
+    let config = rightkit_crash::CrashConfig::new("Ember", env!("CARGO_PKG_VERSION"), crash_dir)
+        .process_kind(rightkit_crash::ProcessKind::Engine)
+        .chain_default_hook(true);
     if CRASH.set(config.clone()).is_ok() {
         rightkit_crash::install_process_hook(rightkit_crash::ProcessKind::Engine, config);
     }
