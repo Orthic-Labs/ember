@@ -31,6 +31,8 @@ pollster = { workspace = true }
 log = { workspace = true }
 # Log file sink, rotation and generation names (M15, owner `rightkit-logs`); no tracing or network features.
 rightkit-logs = { version = "=0.3.3", default-features = false }
+# Owned child processes for openers, editors, registry/gsettings lookups and relaunch (M5)
+rightkit-child-process = { version = "=0.5.2" }
 
 [build-dependencies]
 # Icon + VERSIONINFO for lightcraft.exe; build.rs only uses it when targeting Windows.

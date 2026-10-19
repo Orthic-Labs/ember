@@ -720,59 +720,29 @@ fn absolute(path: &str) -> String {
     std::env::current_dir().map(|d| d.join(p).to_string_lossy().to_string()).unwrap_or_else(|_| path.to_string())
 }
 
+/// Most bytes kept from each of osascript's output streams (the rest is drained and discarded).
+#[cfg(target_os = "macos")]
+const OSASCRIPT_OUTPUT_CAP: usize = 16 << 20;
+
 /// The real runner: `/usr/bin/osascript`, stopped after the timeout.
 #[cfg(target_os = "macos")]
 pub fn osascript() -> Runner {
     Arc::new(|args: &[String], timeout: Duration| {
-        use std::io::Read;
-        use std::process::{Command, Stdio};
         if !std::path::Path::new(PHOTOS_APP).exists() {
             return Err(RunError::NoPhotos);
         }
-        let mut child = Command::new("/usr/bin/osascript")
-            .args(args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| RunError::Spawn(e.to_string()))?;
-        // read both pipes while it runs: a long list of ids must not fill a pipe and stall it
-        fn drain(r: Option<impl Read + Send + 'static>) -> std::io::Result<std::thread::JoinHandle<String>> {
-            std::thread::Builder::new().name("osascript-output".into()).spawn(move || {
-                let mut buf = Vec::new();
-                if let Some(mut r) = r {
-                    let _ = r.read_to_end(&mut buf);
-                }
-                String::from_utf8_lossy(&buf).into_owned()
-            })
+        // Stdin is null; the tree is terminated at the timeout. The output cap is well above any
+        // list of ids osascript prints for one batch (see `BATCH`).
+        let options = rightkit_child_process::RunOptions::new(timeout).stdout_cap(OSASCRIPT_OUTPUT_CAP).stderr_cap(OSASCRIPT_OUTPUT_CAP);
+        let out = rightkit_child_process::run("/usr/bin/osascript", args, &options).map_err(|e| RunError::Spawn(e.to_string()))?;
+        if out.timed_out {
+            return Err(RunError::Timeout(timeout));
         }
-        let pipes = drain(child.stdout.take()).and_then(|out| Ok((out, drain(child.stderr.take())?)));
-        let (stdout, stderr) = match pipes {
-            Ok(p) => p,
-            Err(e) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(RunError::Spawn(e.to_string()));
-            }
-        };
-        let deadline = std::time::Instant::now().checked_add(timeout);
-        let status = loop {
-            match child.try_wait() {
-                Ok(Some(status)) => break status,
-                Ok(None) if deadline.is_some_and(|d| std::time::Instant::now() >= d) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err(RunError::Timeout(timeout));
-                }
-                Ok(None) => std::thread::sleep(Duration::from_millis(100)),
-                Err(e) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err(RunError::Spawn(e.to_string()));
-                }
-            }
-        };
-        Ok(Output { status: status.code(), stdout: stdout.join().unwrap_or_default(), stderr: stderr.join().unwrap_or_default() })
+        Ok(Output {
+            status: out.status.code(),
+            stdout: String::from_utf8_lossy(&out.stdout.bytes).into_owned(),
+            stderr: String::from_utf8_lossy(&out.stderr.bytes).into_owned(),
+        })
     })
 }
 

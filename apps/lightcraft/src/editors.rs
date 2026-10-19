@@ -1,8 +1,12 @@
 //! Starting external editors for Photo ▸ Edit In: PhotoCraft, found where its installers put it,
 //! or any other application the user named in Settings ▸ External Editing.
 
+use rightkit_child_process::{OwnedCommand, RunOptions, reveal};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::time::Duration;
+
+/// How long a registry, Flatpak or other lookup may take before it is stopped and counts as absent.
+const LOOKUP_WAIT: Duration = Duration::from_secs(10);
 
 /// The name the UI asks for when it means PhotoCraft (`lightcraft_ui_egui::state::PHOTOCRAFT`).
 const PHOTOCRAFT: &str = lightcraft_ui_egui::state::PHOTOCRAFT;
@@ -30,44 +34,41 @@ pub fn check(app: &str) -> Result<(), String> {
 
 /// Open `path` in `app` (see [`check`]). Spawned, never waited for: the editor runs alongside.
 pub fn open_with(path: &str, app: &str) -> Result<(), String> {
-    let mut c = match launcher(app)? {
-        Launcher::Default if cfg!(target_os = "macos") => {
-            let mut c = Command::new("open");
-            c.arg(path);
-            c
-        }
-        Launcher::Default if cfg!(target_os = "windows") => windows_default_command(path),
+    match launcher(app)? {
+        // The system's default handler goes through RightKit's reveal opener (no shell, no
+        // `cmd /C start`, Explorer's file-name quoting handled there), scoped to the file's volume.
         Launcher::Default => {
-            let mut c = Command::new("xdg-open");
-            c.arg(path);
-            c
+            let (canonical, scope) = crate::canonical_and_scope(Path::new(path)).map_err(|e| e.to_string())?;
+            reveal::open(&canonical, &scope).map_err(|e| e.to_string())
         }
         Launcher::MacApp(app) => {
-            let mut c = Command::new("open");
-            c.args(["-a", &app, path]);
-            c
+            let mut c = OwnedCommand::new("open");
+            c.command_mut().args(["-a", &app, path]);
+            spawn_editor(c)
         }
         Launcher::Program(p) => {
-            let mut c = Command::new(p);
-            c.arg(path);
-            c
+            let mut c = OwnedCommand::new(p);
+            c.command_mut().arg(path);
+            spawn_editor(c)
         }
         Launcher::Flatpak => {
-            let mut c = Command::new("flatpak");
-            c.args(["run", "--file-forwarding", PHOTOCRAFT_ID, "@@", path, "@@"]);
-            c
+            let mut c = OwnedCommand::new("flatpak");
+            c.command_mut().args(["run", "--file-forwarding", PHOTOCRAFT_ID, "@@", path, "@@"]);
+            spawn_editor(c)
         }
-    };
-    c.spawn().map(|_| ()).map_err(|e| e.to_string())
+    }
 }
 
-/// Windows: open `path` in its default application through Explorer, given the path as its one
-/// argument. Not `cmd /C start`: cmd.exe would read `&`, `^`, `%` or `|` in a file name as its own
-/// syntax (running what follows an `&` as a command).
-fn windows_default_command(path: &str) -> Command {
-    let mut c = Command::new("explorer.exe");
-    c.arg(path.replace('/', "\\"));
-    c
+/// Starts an editor detached: it runs alongside Ember and is never waited for or killed by it.
+fn spawn_editor(command: OwnedCommand) -> Result<(), String> {
+    command.spawn_uncontained_detached().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Runs a lookup program through RightKit's owned-process runner. `None` when it cannot start,
+/// times out or exits non-zero.
+fn lookup(program: &str, args: Vec<&str>) -> Option<Vec<u8>> {
+    let out = rightkit_child_process::run(program, args, &RunOptions::new(LOOKUP_WAIT)).ok()?;
+    (!out.timed_out && out.status.success()).then_some(out.stdout.bytes)
 }
 
 fn launcher(app: &str) -> Result<Launcher, String> {
@@ -109,8 +110,7 @@ fn find_photocraft() -> Option<Launcher> {
     if let Some(p) = on_path.or_else(from_entry) {
         return Some(Launcher::Program(p));
     }
-    let flatpak = Command::new("flatpak").args(["info", PHOTOCRAFT_ID]).output().is_ok_and(|o| o.status.success());
-    flatpak.then_some(Launcher::Flatpak)
+    lookup("flatpak", vec!["info", PHOTOCRAFT_ID]).map(|_| Launcher::Flatpak)
 }
 
 /// Where the Windows installers put `photocraft.exe`, most specific first: the folder the MSI
@@ -129,20 +129,14 @@ fn windows_candidates(install_dir: Option<String>, app_path: Option<String>, env
 
 /// A string value from the Windows registry (`reg query`; `None` = the key's default value).
 fn reg_query(key: &str, name: Option<&str>) -> Option<String> {
-    let mut c = Command::new("reg");
-    c.args(["query", key]);
+    // RunOptions hides the console window on Windows by default.
+    let mut args = vec!["query", key];
     match name {
-        Some(n) => c.args(["/v", n]),
-        None => c.arg("/ve"),
-    };
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        c.creation_flags(CREATE_NO_WINDOW);
+        Some(n) => args.extend(["/v", n]),
+        None => args.push("/ve"),
     }
-    let out = c.output().ok().filter(|o| o.status.success())?;
-    reg_value(&String::from_utf8_lossy(&out.stdout))
+    let stdout = lookup("reg", args)?;
+    reg_value(&String::from_utf8_lossy(&stdout))
 }
 
 /// The value in `reg query` output: the text after `REG_SZ` (or `REG_EXPAND_SZ`) on its line.
@@ -180,17 +174,6 @@ fn desktop_exec(entry: &str) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// A file name with cmd.exe syntax in it goes to Explorer as one plain argument, not
-    /// through a shell.
-    #[test]
-    fn windows_default_open_goes_through_explorer_not_cmd() {
-        let path = r"C:/Edits/a & b ^c %PATH% | d.psd";
-        let c = windows_default_command(path);
-        assert_eq!(c.get_program(), "explorer.exe");
-        let args: Vec<_> = c.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
-        assert_eq!(args, [r"C:\Edits\a & b ^c %PATH% | d.psd"]);
-    }
 
     #[test]
     fn windows_lookup_prefers_the_recorded_install_folder() {

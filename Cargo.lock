@@ -4637,6 +4637,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "pollster 1.0.1",
  "rfd",
+ "rightkit-child-process 0.5.2",
  "rightkit-logs",
  "serde_json",
  "winit",
@@ -4650,6 +4651,7 @@ version = "0.7.0"
 dependencies = [
  "rav1d",
  "ravif",
+ "rightkit-child-process 0.5.2",
  "thiserror 2.0.21",
 ]
 
@@ -4887,6 +4889,7 @@ dependencies = [
  "log",
  "miniz_oxide 0.9.1",
  "rayon",
+ "rightkit-child-process 0.5.2",
  "rightkit-crash",
  "serde",
  "serde_json",

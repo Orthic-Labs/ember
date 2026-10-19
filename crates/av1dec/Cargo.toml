@@ -27,6 +27,8 @@ thiserror = { workspace = true }
 # C-ABI `dav1d_*` entry points. No `asm` feature: it needs nasm (non-Rust). wasm32 builds the stub.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rav1d = { workspace = true }
+# Runs the worker (`host`): owned child, bounded output, no console window on Windows.
+rightkit-child-process = { version = "=0.5.2" }
 
 [dev-dependencies]
 # Test streams: a tiny AVIF from the encoder Ember exports with; its `mdat` is the AV1 item.

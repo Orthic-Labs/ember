@@ -7,12 +7,11 @@
 //! malformed answer, never its own death.
 
 use crate::wire::{self, Response};
-use crate::{Error, Picture};
-use std::io::BufReader;
+use crate::{Error, MAX_PIXELS, Picture};
+use rightkit_child_process::RunOptions;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::process::ExitStatus;
+use std::time::Duration;
 
 /// File name of the worker executable (without the platform suffix).
 pub const WORKER_NAME: &str = "ember-av1-worker";
@@ -25,6 +24,14 @@ pub const TIMEOUT: Duration = Duration::from_secs(120);
 pub const CODE_TIMEOUT: i32 = -2;
 /// `Error::Decoder` code for a worker that could not be started or talked to.
 pub const CODE_SPAWN: i32 = -3;
+
+/// Most bytes kept from the worker's stdout: the largest picture the wire reader accepts (a
+/// 4:4:4 picture of [`MAX_PIXELS`] in three 16-bit planes, plus its headers), with slack. A longer
+/// answer is cut here and then fails to parse, so it is an error, not a memory problem.
+fn stdout_cap() -> usize {
+    let bytes = 64u64.saturating_add(6u64.saturating_mul(MAX_PIXELS));
+    usize::try_from(bytes).unwrap_or(usize::MAX)
+}
 
 /// Where the worker lives, if it can be found: [`WORKER_ENV`], else next to the running
 /// executable (or, for a cargo test binary under `target/<profile>/deps`, in `target/<profile>`).
@@ -52,16 +59,6 @@ pub fn decode(data: &[u8]) -> Result<Picture, Error> {
     decode_with_worker(&worker, data, TIMEOUT)
 }
 
-/// Kills and reaps the child when dropped, whatever path leaves the decode.
-struct Reaper(Child);
-
-impl Drop for Reaper {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
-
 fn crashed(status: ExitStatus) -> Error {
     #[cfg(unix)]
     let signal = {
@@ -74,66 +71,31 @@ fn crashed(status: ExitStatus) -> Error {
 }
 
 /// Decode `data` in the given worker executable, killing it after `timeout`.
+///
+/// The worker is run through `rightkit-child-process`: it is owned (its whole tree is terminated
+/// at the deadline), it gets no console window on Windows, and stdin is the framed request.
 pub fn decode_with_worker(worker: &Path, data: &[u8], timeout: Duration) -> Result<Picture, Error> {
     if data.is_empty() {
         return Err(Error::Empty);
     }
-    let mut cmd = Command::new(worker);
-    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        // CREATE_NO_WINDOW: no console window flashes up when a GUI app decodes.
-        cmd.creation_flags(0x0800_0000);
-    }
-    let mut child = match cmd.spawn() {
-        Ok(c) => Reaper(c),
+    let mut request = Vec::with_capacity(data.len().saturating_add(32));
+    wire::write_request(&mut request, data).map_err(|_| Error::Malformed("AV1 request could not be framed"))?;
+    let options = RunOptions::new(timeout).stdout_cap(stdout_cap()).stderr_cap(0);
+    let output = match rightkit_child_process::run_with_stdin(worker, std::iter::empty::<&str>(), &request, &options) {
+        Ok(output) => output,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(Error::HelperMissing),
         Err(_) => return Err(Error::Decoder(CODE_SPAWN)),
     };
-    let (Some(mut stdin), Some(stdout)) = (child.0.stdin.take(), child.0.stdout.take()) else {
-        return Err(Error::Decoder(CODE_SPAWN));
-    };
-
-    let (tx, rx) = mpsc::channel();
-    std::thread::scope(|scope| {
-        // Writer and reader run concurrently so neither pipe can fill up and stall the other.
-        scope.spawn(move || {
-            // A worker that dies early closes the pipe; its status explains it, so ignore this.
-            let _ = wire::write_request(&mut stdin, data);
-            drop(stdin);
-        });
-        scope.spawn(move || {
-            let _ = tx.send(wire::read_response(&mut BufReader::new(stdout)));
-        });
-
-        let answer = rx.recv_timeout(timeout);
-        if answer.is_err() {
-            // Timed out (or the reader died): killing the child closes both pipes, which ends
-            // both threads before the scope returns.
-            let _ = child.0.kill();
-        }
-        // A worker that answered gets a few seconds to exit on its own; any other is killed now.
-        let exit_by = Instant::now() + if answer.is_ok() { Duration::from_secs(5) } else { Duration::ZERO };
-        let status = loop {
-            match child.0.try_wait() {
-                Ok(Some(s)) => break Some(s),
-                Ok(None) if Instant::now() < exit_by => std::thread::sleep(Duration::from_millis(1)),
-                Ok(None) => {
-                    let _ = child.0.kill();
-                    break child.0.wait().ok();
-                }
-                Err(_) => break None,
-            }
-        };
-        match (answer, status) {
-            (Err(_), _) => Err(Error::Decoder(CODE_TIMEOUT)),
-            (Ok(_), None) => Err(Error::Decoder(CODE_SPAWN)),
-            (Ok(Ok(Response::Picture(p))), Some(s)) if s.success() => Ok(p),
-            (Ok(Ok(Response::Picture(_))), Some(s)) => Err(crashed(s)),
-            (Ok(Ok(Response::Failure(e))), _) => Err(e),
-            (Ok(Err(_)), Some(s)) if !s.success() => Err(crashed(s)),
-            (Ok(Err(e)), Some(_)) => Err(e),
-        }
-    })
+    if output.timed_out {
+        return Err(Error::Decoder(CODE_TIMEOUT));
+    }
+    let mut answer = output.stdout.bytes.as_slice();
+    let response = wire::read_response(&mut answer);
+    match (response, output.status.success()) {
+        (Ok(Response::Picture(p)), true) => Ok(p),
+        (Ok(Response::Picture(_)), false) => Err(crashed(output.status)),
+        (Ok(Response::Failure(e)), _) => Err(e),
+        (Err(_), false) => Err(crashed(output.status)),
+        (Err(e), true) => Err(e),
+    }
 }

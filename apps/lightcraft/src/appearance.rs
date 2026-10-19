@@ -52,11 +52,12 @@ fn decode(code: u32) -> Option<egui::Theme> {
 #[cfg(target_os = "linux")]
 fn gtk_theme() -> Option<egui::Theme> {
     let exe = ["/usr/bin/gsettings", "/bin/gsettings", "/usr/local/bin/gsettings"].into_iter().find(|p| std::path::Path::new(p).is_file())?;
-    let output = std::process::Command::new(exe).args(["get", "org.gnome.desktop.interface", "color-scheme"]).output().ok()?;
-    if !output.status.success() {
+    let options = rightkit_child_process::RunOptions::new(std::time::Duration::from_secs(5));
+    let output = rightkit_child_process::run(exe, ["get", "org.gnome.desktop.interface", "color-scheme"], &options).ok()?;
+    if output.timed_out || !output.status.success() {
         return None;
     }
-    parse_gtk_scheme(std::str::from_utf8(&output.stdout).ok()?)
+    parse_gtk_scheme(std::str::from_utf8(&output.stdout.bytes).ok()?)
 }
 
 #[cfg(target_os = "linux")]

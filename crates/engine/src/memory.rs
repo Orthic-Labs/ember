@@ -44,13 +44,11 @@ pub(crate) fn total_ram() -> Option<usize> {
     }
     #[cfg(target_os = "macos")]
     {
-        let out = std::process::Command::new("/usr/sbin/sysctl").args(["-n", "hw.memsize"]).output().ok()?;
-        String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+        sysctl_value("/usr/sbin/sysctl", "hw.memsize")
     }
     #[cfg(target_os = "freebsd")]
     {
-        let out = std::process::Command::new("/sbin/sysctl").args(["-n", "hw.physmem"]).output().ok()?;
-        String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+        sysctl_value("/sbin/sysctl", "hw.physmem")
     }
     #[cfg(windows)]
     {
@@ -60,6 +58,18 @@ pub(crate) fn total_ram() -> Option<usize> {
     {
         None
     }
+}
+
+/// One numeric `sysctl -n <key>` value, through an owned child process (stopped after a few
+/// seconds). `None` when the tool is missing, fails, times out or prints no number.
+#[cfg(any(target_os = "macos", target_os = "freebsd"))]
+fn sysctl_value(program: &str, key: &str) -> Option<usize> {
+    let options = rightkit_child_process::RunOptions::new(std::time::Duration::from_secs(5));
+    let out = rightkit_child_process::run(program, ["-n", key], &options).ok()?;
+    if out.timed_out {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout.bytes).trim().parse().ok()
 }
 
 static BUDGET: AtomicUsize = AtomicUsize::new(0);

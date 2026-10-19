@@ -51,6 +51,10 @@ lightcraft-fetch = { workspace = true }
 # panic hook and reports for contained panics (RightKit owner of crash-reporting; native only, the web build aborts on panic)
 rightkit-crash = { version = "=0.3.3", default-features = false }
 
+# owned child processes: osascript (Apple Photos, macOS) and sysctl for the memory budget (macOS, FreeBSD). Not iOS.
+[target.'cfg(any(target_os = "macos", target_os = "freebsd"))'.dependencies]
+rightkit-child-process = { version = "=0.5.2" }
+
 [features]
 # AI masks (Object / Describe) with MobileSAM, or SAM 3 when installed. Off for the web and CLI builds.
 sam = ["dep:lightcraft-segment"]

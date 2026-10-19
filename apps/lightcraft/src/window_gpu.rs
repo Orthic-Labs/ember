@@ -230,12 +230,10 @@ pub fn relaunch_after_failure(files: &Files) -> bool {
     }
     let Ok(exe) = std::env::current_exe() else { return false };
     log::warn!("window: the renderer failed to start; starting again with the next one");
-    std::process::Command::new(exe)
-        .args(std::env::args_os().skip(1))
-        .env(RETRY_VAR, (tries + 1).to_string())
-        .spawn()
-        .map_err(|e| log::error!("window: could not start again: {e}"))
-        .is_ok()
+    let mut command = rightkit_child_process::OwnedCommand::new(exe);
+    command.command_mut().args(std::env::args_os().skip(1)).env(RETRY_VAR, (tries + 1).to_string());
+    // Detached: the new window must outlive this process, which is about to give up its renderer.
+    command.spawn_uncontained_detached().map_err(|e| log::error!("window: could not start again: {e}")).is_ok()
 }
 
 #[cfg(test)]
