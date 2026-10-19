@@ -2594,11 +2594,15 @@ impl<'a> Placer<'a> {
                             self.out.push(json!({"skipped": path}));
                             return Ok(());
                         }
-                        Conflict::Unique => {
-                            let (stem, ext) = e.file_name.rsplit_once('.').map_or((e.file_name.as_str(), None), |(a, b)| (a, Some(b)));
-                            let name = |n: usize| join_path(dir, &ext.map_or(format!("{stem}-{n}"), |x| format!("{stem}-{n}.{x}")));
-                            (2..1_000_000).map(name).find(|p| !busy(p)).ok_or_else(|| format!("{path}: no free file name"))
-                        }
+                        // Names come from rightkit-fs (`name (1).ext`, …). The free check stays here: the image and its
+                        // sidecars must be free together, names taken earlier in this run count, and `exists` is the
+                        // caller's file layer (the browser build has no real files), so `publish_file_first_free` can't decide it.
+                        Conflict::Unique => lightcraft_catalog::written::numbered(&e.file_name, 10_000)
+                            .into_iter()
+                            .skip(1)
+                            .map(|name| join_path(dir, &name))
+                            .find(|p| !busy(p))
+                            .ok_or_else(|| format!("{path}: no free file name")),
                     }
                 }
             }

@@ -167,7 +167,7 @@ fn presets_conflicts_and_subfolders() {
     // both photos get the same name from the template: the first is renamed past the existing
     // file, the second past the first
     let (files, written) = batch(&mut s, &ids, &o);
-    assert_eq!(written, ["out/Sub/LC01347-2.png", "out/Sub/LC01347-3.png"]);
+    assert_eq!(written, ["out/Sub/LC01347 (1).png", "out/Sub/LC01347 (2).png"]);
     assert_eq!(files[0]["width"], 32);
     let (files, written) = batch(&mut s, &ids, &ExportOptions { conflict: crate::export::Conflict::Skip, ..o.clone() });
     assert_eq!(files.iter().filter(|f| f["skipped"] == "out/Sub/LC01347.png").count(), 2, "{files:?}");
@@ -305,7 +305,7 @@ fn export_never_overwrites_an_original() {
     // Unique moves past it; Overwrite still replaces an ordinary earlier export
     let unique = ExportOptions { conflict: Conflict::Unique, ..o.clone() };
     let files = disk_batch(&mut s, id, &unique, &folder).unwrap();
-    assert!(files[0]["path"].as_str().unwrap().ends_with("IMG_1-2.jpg"), "{files:?}");
+    assert!(files[0]["path"].as_str().unwrap().ends_with("IMG_1 (1).jpg"), "{files:?}");
     let earlier = dir.join("IMG_1-2.jpg");
     std::fs::write(&earlier, b"an earlier export").unwrap();
     let named = ExportOptions { naming: "{name}-2".into(), ..o };
@@ -329,13 +329,13 @@ fn export_sidecars_follow_the_conflict_policy() {
 
     // Unique: the photo and its sidecar both move to the next free name
     let files = disk_batch(&mut s, id, &ExportOptions { conflict: Conflict::Unique, ..o.clone() }, &to).unwrap();
-    assert!(files[0]["path"].as_str().unwrap().ends_with("IMG_1-2.jpg"), "{files:?}");
-    assert!(files[0]["sidecars"][0].as_str().unwrap().ends_with("IMG_1-2.xmp"), "{files:?}");
+    assert!(files[0]["path"].as_str().unwrap().ends_with("IMG_1 (1).jpg"), "{files:?}");
+    assert!(files[0]["sidecars"][0].as_str().unwrap().ends_with("IMG_1 (1).xmp"), "{files:?}");
     assert_eq!(std::fs::read(&theirs).unwrap(), b"someone else's sidecar");
-    assert_eq!(std::fs::read(out.join("IMG_1-2.jpg")).unwrap(), original);
+    assert_eq!(std::fs::read(out.join("IMG_1 (1).jpg")).unwrap(), original);
     // Skip: a taken sidecar name skips the photo
-    std::fs::remove_file(out.join("IMG_1-2.jpg")).unwrap();
-    std::fs::remove_file(out.join("IMG_1-2.xmp")).unwrap();
+    std::fs::remove_file(out.join("IMG_1 (1).jpg")).unwrap();
+    std::fs::remove_file(out.join("IMG_1 (1).xmp")).unwrap();
     let files = disk_batch(&mut s, id, &ExportOptions { conflict: Conflict::Skip, ..o.clone() }, &to).unwrap();
     assert!(files[0]["skipped"].as_str().is_some(), "{files:?}");
     assert!(!out.join("IMG_1.jpg").exists());

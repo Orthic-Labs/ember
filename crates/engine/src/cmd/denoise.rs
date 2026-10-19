@@ -154,8 +154,11 @@ fn install_file(
     std::fs::create_dir_all(&home).map_err(|e| fail("could not create the model's folder", e))?;
     let mut cleanup = InstallCleanup { home: home.clone(), armed: true };
     let final_path = home.join("model.onnx");
-    // The archive reader writes by path, so an archive's model is taken out to a scratch file first; either way the bytes are
-    // then streamed into the staged file and only a checked file is published (`install_checked`).
+    // Staging (documented, like denoise-train's `save_atomic`): `lightcraft_denoise_core::archive::extract` writes an entry
+    // to a path, not to a writer, so an archive's model is first taken out to this scratch file in the model's own folder.
+    // It is never published: its bytes are streamed into rightkit-fs's `AtomicWriter`, and only a file that passes the
+    // sha256 and the model's self-test (`commit_checked` in `install_checked`) appears as `model.onnx`. The scratch file
+    // is removed afterwards and by `InstallCleanup` on any failure.
     let scratch = home.join(".model-extract.tmp");
     let from = match ident.entry {
         Some(entry) => {
