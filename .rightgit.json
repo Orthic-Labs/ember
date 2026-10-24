@@ -26,7 +26,7 @@
     "macAppPath": "target/aarch64-apple-darwin/debug/bundle/macos/Ember.app",
     "windowsGlob": "target/x86_64-pc-windows-msvc/debug/bundle/nsis/**"
   },
-  "packageManager": "pnpm@11.24.0",
+  "packageManager": "pnpm@11.25.0",
   "templateVersion": "1.8.0",
   "profile": "rust-hybrid",
   "ownership": {
