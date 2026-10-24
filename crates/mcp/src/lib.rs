@@ -24,8 +24,8 @@ mod server;
 mod tools;
 
 pub use backend::{Backend, ProgressHook, Remote};
-pub use rightkit_crypto::{base64_decode, base64_encode};
 pub use headless::{Headless, encode_image, expand_paths, write_image};
+pub use rightkit_crypto::{base64_decode, base64_encode};
 pub use server::{PROTOCOL_VERSION, Server};
 pub use tools::{COMMAND_TOOL_PREFIX, ToolResult, call_tool, command_tool_name, helper_tools, tool_definitions};
 
