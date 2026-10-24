@@ -283,8 +283,7 @@ mod tauri_commands {
         }
         if services::is_import_picker(&action) {
             let explicit = services::has_explicit_picker_input(&action, &params)?;
-            let unattended = qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_HIDDEN").as_deref())
-                || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref());
+            let unattended = qa_hidden_requested() || qa_background_requested();
             if unattended && !explicit {
                 return Err("interactive import picker unavailable in hidden QA; supply explicit path(s)".into());
             }
@@ -729,13 +728,28 @@ fn qa_hidden_enabled(_value: Option<&OsStr>) -> bool {
     false
 }
 
+/// `RIGHTKIT_QA_HIDDEN`: read only in a `qa-native` build; any other build reads no environment variable here.
+fn qa_hidden_requested() -> bool {
+    #[cfg(feature = "qa-native")]
+    let value = std::env::var_os("RIGHTKIT_QA_HIDDEN");
+    #[cfg(not(feature = "qa-native"))]
+    let value: Option<std::ffi::OsString> = None;
+    qa_hidden_enabled(value.as_deref())
+}
+
+/// `RIGHTKIT_QA_BACKGROUND`: read only in a `qa-native` build, like [`qa_hidden_requested`].
+fn qa_background_requested() -> bool {
+    #[cfg(feature = "qa-native")]
+    let value = std::env::var_os("RIGHTKIT_QA_BACKGROUND");
+    #[cfg(not(feature = "qa-native"))]
+    let value: Option<std::ffi::OsString> = None;
+    qa_hidden_enabled(value.as_deref())
+}
+
 /// Whether this launch asks for QA mode: the `--qa` argument or one of the QA environment switches.
 #[cfg(feature = "qa-native")]
 fn qa_requested(args: &[String]) -> bool {
-    args.iter().any(|arg| arg == "--qa")
-        || std::env::var_os("LIGHTCRAFT_DESKTOP_QA").is_some()
-        || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_HIDDEN").as_deref())
-        || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref())
+    args.iter().any(|arg| arg == "--qa") || std::env::var_os("LIGHTCRAFT_DESKTOP_QA").is_some() || qa_hidden_requested() || qa_background_requested()
 }
 
 #[cfg(not(feature = "qa-native"))]
@@ -1041,7 +1055,7 @@ pub fn run() {
             // QA hosts run as accessory apps (no Dock icon or menu bar, no activation on launch), so
             // a hidden run can't take the front from whoever is at the machine.
             #[cfg(target_os = "macos")]
-            if qa || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref()) {
+            if qa || qa_background_requested() {
                 app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             }
             let primary = app.config().identifier == PRIMARY_IDENTIFIER;
@@ -1154,11 +1168,7 @@ pub fn run() {
     let builder = {
         let args: Vec<String> = std::env::args().collect();
         // Every QA entry point stays in background, including direct --qa launches.
-        if runtime_modes(&args).0 || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref()) {
-            builder.activate_ignoring_other_apps(false)
-        } else {
-            builder
-        }
+        if runtime_modes(&args).0 || qa_background_requested() { builder.activate_ignoring_other_apps(false) } else { builder }
     };
     #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
     let mut app = match builder.build(context) {
@@ -1174,7 +1184,7 @@ pub fn run() {
     #[cfg(target_os = "macos")]
     {
         let args: Vec<String> = std::env::args().collect();
-        if runtime_modes(&args).0 || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref()) {
+        if runtime_modes(&args).0 || qa_background_requested() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
         }
     }
@@ -1243,6 +1253,9 @@ mod tests {
         assert!(!qa_hidden_enabled(Some(OsStr::new("1"))));
         assert!(!qa_hidden_enabled(Some(OsStr::new("true"))));
         assert!(!qa_hidden_enabled(None));
+        // The environment is not consulted at all, so a stray RIGHTKIT_QA_* value cannot turn on unattended mode.
+        assert!(!qa_hidden_requested());
+        assert!(!qa_background_requested());
     }
 
     #[cfg(feature = "qa-native")]

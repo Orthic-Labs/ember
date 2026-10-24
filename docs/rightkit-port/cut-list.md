@@ -128,6 +128,9 @@ Non-Rust: keep 7,229 ts/tsx/css (desktop web), 1,537 mjs and 4 sh (`scripts/desk
 | QA viewport | deleted `qa_viewport` and `lc_qa_viewport` (no caller) | `apps/lightcraft-desktop/src/native.rs` |
 | mcp base64, `ct_eq` | deleted `crates/mcp/src/base64.rs` and the local `ct_eq`; the crate re-exports the owner's | `crates/mcp/src/lib.rs`, `control_auth.rs`, `Cargo.toml` |
 | every RightKit pin | moved to the registry version (Rust and npm); `cargo update --precise` and `pnpm install --lockfile-only` regenerate the lockfiles | `Cargo.lock`, `pnpm-lock.yaml` |
+| release switches (M21/M23) | added `switches.json` (109 reads, 12 files with a non-literal read) and `releaseSwitches.nonShipped` for the eight directories no release target builds; 17 class S1 to S4 reads are not compiled out and are tracked in Orthic-Labs/ember#271 | `switches.json`, `right-release.config.mjs` |
+| QA env reads | `RIGHTKIT_QA_HIDDEN` and `RIGHTKIT_QA_BACKGROUND` were read outside `qa-native` (the value was then ignored); they now go through two helpers that read nothing without the feature | `apps/lightcraft-desktop/src/native.rs` |
+| release config | `distribution.updaterPublicKey` read from `tauri.conf.json` `plugins.updater.pubkey`; `packageManager` is the tool name `pnpm` (the version lives in `package.json`) | `right-release.config.mjs` |
 
 ## Not verified
 

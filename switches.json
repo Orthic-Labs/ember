@@ -1,0 +1,911 @@
+{
+  "schema": 1,
+  "app": "ember",
+  "switches": [
+    {
+      "name": "RIGHTKIT_QA_HIDDEN",
+      "class": "S1",
+      "channel": "env",
+      "anchor": "apps/lightcraft-desktop/src/native.rs:734",
+      "compiledOut": "feature:qa-native",
+      "note": "QA control: hidden unattended run. Read only through qa_hidden_requested(), which has no read at all without qa-native."
+    },
+    {
+      "name": "RIGHTKIT_QA_BACKGROUND",
+      "class": "S1",
+      "channel": "env",
+      "anchor": "apps/lightcraft-desktop/src/native.rs:743",
+      "compiledOut": "feature:qa-native",
+      "note": "QA control: background unattended run. Read only through qa_background_requested(), which has no read at all without qa-native."
+    },
+    {
+      "name": "RIGHTKIT_QA_DATA_DIR",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "apps/lightcraft-desktop/src/native.rs:776",
+      "compiledOut": "feature:qa-native",
+      "note": "QA state root; runtime_modes() reads it only under qa-native."
+    },
+    {
+      "name": "LIGHTCRAFT_DESKTOP_QA",
+      "class": "S1",
+      "channel": "env",
+      "anchor": "apps/lightcraft-desktop/src/native.rs:752",
+      "compiledOut": "feature:qa-native",
+      "note": "QA mode switch; qa_requested() reads it only under qa-native."
+    },
+    {
+      "name": "--qa",
+      "class": "S1",
+      "channel": "argv",
+      "anchor": "apps/lightcraft-desktop/src/native.rs:752",
+      "compiledOut": "feature:qa-native",
+      "note": "QA mode flag; qa_requested() reads it only under qa-native."
+    },
+    {
+      "name": "LIGHTCRAFT_DHAT_FILE",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "apps/lightcraft-cli/src/main.rs:214",
+      "compiledOut": "feature:dhat-heap",
+      "note": "Heap-profile output path; read only inside the opt-in dhat-heap feature of lightcraft-cli."
+    },
+    {
+      "name": "LIGHTCRAFT_CORPUS",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "crates/engine/src/camera_preview.rs:2210",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LIGHTCRAFT_CR3_CORPUS",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "crates/raw/src/vendor/crx.rs:1110",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LIGHTCRAFT_BENCH_DIR",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "crates/engine/src/tests_import_move.rs:426",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LIGHTCRAFT_BENCH_PRESETS",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "crates/engine/src/tests_presets_scale.rs:105",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "FAVORITES_SCREENSHOT_DIR",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "crates/ui-egui/src/tests_appearance.rs:227",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LIGHTCRAFT_TEST_SHOTS",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "crates/ui-egui/src/tests_library_problem.rs:54",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "CRAFT_UI_VISUAL_FIXTURES",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "crates/ui-egui/src/panels/bottombar.rs:312",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LC_LOCK_CHILD_DIR",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "crates/catalog/src/tests_lock.rs:74",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "GTM_FILE",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "crates/raw/src/gaintable.rs:554",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LC_YUNET_REF",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "crates/faces/src/yunet.rs:332",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LC_DENOISE_DTMODEL",
+      "class": "S3",
+      "channel": "env",
+      "anchor": "crates/denoise-core/src/archive.rs:229",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LC_DENOISE_MODEL",
+      "class": "S3",
+      "channel": "env",
+      "anchor": "crates/denoise/src/cpu/tests.rs:146",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LC_FACE_MODELS",
+      "class": "S3",
+      "channel": "env",
+      "anchor": "crates/faces/src/runtime.rs:283",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LC_YUNET_MODEL",
+      "class": "S3",
+      "channel": "env",
+      "anchor": "crates/faces/src/yunet.rs:258",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LIGHTCRAFT_DENOISE_ONNX",
+      "class": "S3",
+      "channel": "env",
+      "anchor": "crates/denoise-onnx/src/runner.rs:170",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LC_BLOCKS",
+      "class": "S1",
+      "channel": "env",
+      "anchor": "crates/gpu/src/nn.rs:1047",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LC_SHADER",
+      "class": "S1",
+      "channel": "env",
+      "anchor": "crates/gpu/src/nn.rs:1046",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LC_DEMO_BROKEN_GLOBAL_POOL",
+      "class": "S1",
+      "channel": "env",
+      "anchor": "crates/engine/src/demo.rs:620",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "LIGHTCRAFT_DENOISE_TILE",
+      "class": "S1",
+      "channel": "env",
+      "anchor": "crates/denoise-onnx/src/runner.rs:171",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "SCENE",
+      "class": "S1",
+      "channel": "env",
+      "anchor": "crates/pipeline/src/tests_geometry.rs:571",
+      "compiledOut": "cfg:test",
+      "note": "Read only in a #[cfg(test)] module or tests_*.rs file; absent from every non-test build."
+    },
+    {
+      "name": "--demo",
+      "class": "S1",
+      "channel": "argv",
+      "anchor": "apps/lightcraft-cli/src/main.rs:408",
+      "note": "Procedural demo library flag (lightcraft-cli snapshot, mcp, photo-ai; desktop host). Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_DESKTOP_DEMO",
+      "class": "S1",
+      "channel": "env",
+      "anchor": "apps/lightcraft-desktop/src/native.rs:975",
+      "note": "Starts the desktop host with the demo library. Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_DEMO_COUNT",
+      "class": "S1",
+      "channel": "env",
+      "anchor": "apps/lightcraft-desktop/src/native.rs:976",
+      "note": "Size of the demo library the desktop host creates. Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_NO_PREFS",
+      "class": "S1",
+      "channel": "env",
+      "anchor": "apps/lightcraft-desktop/src/native.rs:837",
+      "note": "Writes no settings, GPU marker or log file (tests, scripts). Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "EMBER_NO_KEYCHAIN",
+      "class": "S1",
+      "channel": "env",
+      "anchor": "apps/lightcraft-desktop/src/rk_device.rs:29",
+      "note": "Named to rightkit-credentials guard_env, which reads it: no OS keychain prompts in unattended QA. Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_SAM3_REMOTE",
+      "class": "S2",
+      "channel": "env",
+      "anchor": "crates/segment/src/remote.rs:13",
+      "note": "Address of a remote SAM 3 server. Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_DENOISE_URL",
+      "class": "S2",
+      "channel": "env",
+      "anchor": "crates/engine/src/denoise.rs:226",
+      "note": "Address of a remote denoise server (read through a closure in RemoteSide::from_env). Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_SAM3_DIR",
+      "class": "S3",
+      "channel": "env",
+      "anchor": "apps/lightcraft-desktop/src/native.rs:873",
+      "note": "SAM 3 model folder; the scan registry lists it as S3. Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_DEVICE_ROOTS",
+      "class": "S3",
+      "channel": "env",
+      "anchor": "crates/engine/src/devices.rs:32",
+      "note": "Replaces the volume mount parents (tests, unusual mounts); the scan registry lists it as S3. Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_FACE_MODELS",
+      "class": "S3",
+      "channel": "env",
+      "anchor": "crates/engine/src/config.rs:51",
+      "note": "Face model folder. Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_DENOISE_MODELS",
+      "class": "S3",
+      "channel": "env",
+      "anchor": "crates/engine/src/config.rs:56",
+      "note": "Denoise model folder. Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_SAM3_MIRRORS",
+      "class": "S3",
+      "channel": "env",
+      "anchor": "crates/segment/src/fetch/mod.rs:99",
+      "note": "Model download mirrors. Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_ONNXRUNTIME_DIR",
+      "class": "S3",
+      "channel": "env",
+      "anchor": "crates/denoise-onnx/src/lib.rs:35",
+      "note": "Folder the ONNX Runtime library is loaded from. Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_FFMPEG_DIR",
+      "class": "S3",
+      "channel": "env",
+      "anchor": "crates/video/src/sidecar.rs:71",
+      "note": "Folder searched first for the ffmpeg sidecar; the binaries are still verified against the approved catalog. Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "EMBER_AV1_WORKER",
+      "class": "S3",
+      "channel": "env",
+      "anchor": "crates/av1dec/src/host.rs:19",
+      "note": "Path of the AVIF decode worker executable. Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_CONFIG_DIR",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "crates/engine/src/config.rs:36",
+      "note": "Settings folder, read through the closure passed to config_dir_with. Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "LIGHTCRAFT_CAMERA_PROFILES",
+      "class": "S4",
+      "channel": "env",
+      "anchor": "crates/engine/src/camera_profiles.rs:74",
+      "note": "Camera profile folder (the app writes profiles there). Read in release builds and not compiled out; the release-switch scan refuses it until it is gated or removed (Orthic-Labs/ember#271)."
+    },
+    {
+      "name": "--library",
+      "class": "S5",
+      "channel": "argv",
+      "anchor": "apps/lightcraft-cli/src/main.rs:410",
+      "userGesture": true,
+      "note": "Photo library folder named by the user on the command line."
+    },
+    {
+      "name": "EMBER_LIBRARY",
+      "class": "S5",
+      "channel": "env",
+      "anchor": "crates/engine/src/library.rs:74",
+      "userGesture": true,
+      "note": "Photo library folder the user sets in their own environment; read before the saved preference, the same choice as --library."
+    },
+    {
+      "name": "LIGHTCRAFT_LIBRARY",
+      "class": "S5",
+      "channel": "env",
+      "anchor": "crates/engine/src/library.rs:76",
+      "userGesture": true,
+      "note": "Legacy name of EMBER_LIBRARY."
+    },
+    {
+      "name": "LIGHTCRAFT_LENSFUN_DIR",
+      "class": "S5",
+      "channel": "env",
+      "anchor": "crates/engine/src/lens_profiles.rs:15",
+      "userGesture": true,
+      "note": "The user's own lens-profile folder (Lensfun format), read only."
+    },
+    {
+      "name": "LIGHTCRAFT_LOG",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/engine/src/logging.rs:74",
+      "valueType": "enum",
+      "note": "Log filter."
+    },
+    {
+      "name": "RUST_LOG",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/engine/src/logging.rs:74",
+      "valueType": "enum",
+      "note": "Log filter."
+    },
+    {
+      "name": "LIGHTCRAFT_MEMORY_MB",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/engine/src/memory.rs:26",
+      "valueType": "int",
+      "note": "Memory budget in MB."
+    },
+    {
+      "name": "LIGHTCRAFT_PROFILE",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/catalog/src/journal.rs:174",
+      "valueType": "bool",
+      "note": "Prints per-stage pipeline timings to standard error."
+    },
+    {
+      "name": "LIGHTCRAFT_GPU",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/gpu/src/lib.rs:312",
+      "valueType": "bool",
+      "note": "GPU off for the process when 0, off, false or no."
+    },
+    {
+      "name": "LIGHTCRAFT_GPU_ADAPTER",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/gpu/src/nn.rs:92",
+      "valueType": "enum",
+      "note": "Adapter name filter for the denoise network."
+    },
+    {
+      "name": "LIGHTCRAFT_GPU_BACKEND",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/gpu/src/backend.rs:55",
+      "valueType": "enum",
+      "note": "wgpu backend choice, or off."
+    },
+    {
+      "name": "LIGHTCRAFT_GPU_LIMITS",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/gpu/src/ctx.rs:702",
+      "valueType": "enum",
+      "note": "GPU limit preset."
+    },
+    {
+      "name": "WGPU_BACKEND",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/gpu/src/backend.rs:55",
+      "valueType": "enum",
+      "note": "wgpu backend choice."
+    },
+    {
+      "name": "WGPU_DX12_COMPILER",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/gpu/src/backend.rs:146",
+      "valueType": "enum",
+      "note": "wgpu DX12 shader compiler choice."
+    },
+    {
+      "name": "WGPU_VALIDATION_INDIRECT_CALL",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/gpu/src/backend.rs:166",
+      "valueType": "bool",
+      "note": "wgpu indirect-call validation."
+    },
+    {
+      "name": "LIGHTCRAFT_FACE_THREADS",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/engine/src/faces_worker.rs:96",
+      "valueType": "int",
+      "note": "Face worker thread count."
+    },
+    {
+      "name": "LIGHTCRAFT_LANGUAGE",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/ui-egui/src/i18n.rs:155",
+      "valueType": "enum",
+      "note": "UI language tag for headless runs."
+    },
+    {
+      "name": "OPENROUTER_API_KEY",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "apps/lightcraft-cli/src/photo_ai.rs:120",
+      "valueType": "enum",
+      "note": "Credential the user supplies to this client; it selects no mode, root, executable or identity."
+    },
+    {
+      "name": "SCALEDOWN_API_KEY",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "apps/lightcraft-cli/src/photo_ai.rs:45",
+      "valueType": "enum",
+      "note": "Credential the user supplies to this client; it selects no mode, root, executable or identity."
+    },
+    {
+      "name": "LIGHTCRAFT_CONTROL_TOKEN",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/mcp/src/control_auth.rs:15",
+      "valueType": "enum",
+      "note": "Credential the user supplies to this client; it selects no mode, root, executable or identity."
+    },
+    {
+      "name": "LIGHTCRAFT_DENOISE_TOKEN",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "apps/lightcraft-cli/src/main.rs:1115",
+      "valueType": "enum",
+      "note": "Credential the user supplies to this client; it selects no mode, root, executable or identity."
+    },
+    {
+      "name": "LIGHTCRAFT_SAM3_TOKEN",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/segment/src/fetch/mod.rs:120",
+      "valueType": "enum",
+      "note": "Credential the user supplies to this client; it selects no mode, root, executable or identity."
+    },
+    {
+      "name": "HOME",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "apps/lightcraft-desktop/src/native.rs:820",
+      "valueType": "enum",
+      "note": "OS-provided; used for default folders, the dev-install path in right-release.config.mjs and the release scripts. Selects no test mode, root or executable of its own."
+    },
+    {
+      "name": "USERPROFILE",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/engine/src/library.rs:68",
+      "valueType": "enum",
+      "note": "OS-provided; used for default folders, the dev-install path in right-release.config.mjs and the release scripts. Selects no test mode, root or executable of its own."
+    },
+    {
+      "name": "APPDATA",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "apps/lightcraft-desktop/src/native.rs:816",
+      "valueType": "enum",
+      "note": "OS-provided; used for default folders, the dev-install path in right-release.config.mjs and the release scripts. Selects no test mode, root or executable of its own."
+    },
+    {
+      "name": "XDG_CONFIG_HOME",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "apps/lightcraft-desktop/src/native.rs:824",
+      "valueType": "enum",
+      "note": "OS-provided; used for default folders, the dev-install path in right-release.config.mjs and the release scripts. Selects no test mode, root or executable of its own."
+    },
+    {
+      "name": "USER",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/engine/src/devices.rs:41",
+      "valueType": "enum",
+      "note": "OS-provided; used for default folders, the dev-install path in right-release.config.mjs and the release scripts. Selects no test mode, root or executable of its own."
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "right-release.config.mjs:49",
+      "valueType": "enum",
+      "note": "OS-provided; used for default folders, the dev-install path in right-release.config.mjs and the release scripts. Selects no test mode, root or executable of its own."
+    },
+    {
+      "name": "SystemRoot",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/finalize-candidate.mjs:95",
+      "valueType": "enum",
+      "note": "OS-provided; used for default folders, the dev-install path in right-release.config.mjs and the release scripts. Selects no test mode, root or executable of its own."
+    },
+    {
+      "name": "OUT_DIR",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/engine/build.rs:43",
+      "valueType": "enum",
+      "note": "Read by a build.rs at compile time (crates/engine, crates/ui-egui); the compiled binary reads it nowhere."
+    },
+    {
+      "name": "CARGO_MANIFEST_DIR",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/engine/build.rs:57",
+      "valueType": "enum",
+      "note": "Read by a build.rs at compile time (crates/engine, crates/ui-egui); the compiled binary reads it nowhere."
+    },
+    {
+      "name": "CARGO_CFG_TARGET_ARCH",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/engine/build.rs:68",
+      "valueType": "enum",
+      "note": "Read by a build.rs at compile time (crates/engine, crates/ui-egui); the compiled binary reads it nowhere."
+    },
+    {
+      "name": "CRAFT_FONTS_DIR",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/engine/build.rs:19",
+      "valueType": "enum",
+      "note": "Read by a build.rs at compile time (crates/engine, crates/ui-egui); the compiled binary reads it nowhere."
+    },
+    {
+      "name": "CRAFT_FONTS_REQUIRED",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "crates/engine/build.rs:16",
+      "valueType": "bool",
+      "note": "Read by a build.rs at compile time (crates/engine, crates/ui-egui); the compiled binary reads it nowhere."
+    },
+    {
+      "name": "GITHUB_ACTIONS",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/build-native.mjs:9",
+      "valueType": "bool",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "GITHUB_OUTPUT",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/lib.mjs:59",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "GITHUB_SHA",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/gate.mjs:59",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "GITHUB_STEP_SUMMARY",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/gate.mjs:47",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RUNNER_TEMP",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/build-native.mjs:35",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHTKIT_RELEASE_CONFIG",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/lib.mjs:82",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "LEGION_UNSIGNED_CANDIDATE_ROOT",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/finalize-candidate.mjs:61",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_ARTIFACT_ROOT",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/lib.mjs:94",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_COMPILER_ARTIFACT_RECORD",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/candidate.mjs:55",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_DRY_RUN",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/admit.mjs:17",
+      "valueType": "bool",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_FINALIZED_MACOS_ROOT",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/lib.mjs:99",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_FINALIZED_WINDOWS_ROOT",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/lib.mjs:99",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_PUBLISH",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/admit.mjs:16",
+      "valueType": "bool",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_QUALIFICATION_EVIDENCE_ROOT",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/evidence-verify.mjs:12",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_RELEASE_ARCHITECTURE",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/finalize-candidate.mjs:18",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_RELEASE_PLATFORM",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/finalize-candidate.mjs:17",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_RELEASE_VERSION",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/stage-summary.mjs:41",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_RUN_ATTEMPT",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/stage-summary.mjs:46",
+      "valueType": "int",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_RUN_ID",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/stage-summary.mjs:45",
+      "valueType": "int",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_RUST_REQUIRED",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/gate.mjs:53",
+      "valueType": "bool",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_SIGNED_QUALIFICATION",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/admit.mjs:15",
+      "valueType": "bool",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_SOURCE_REVISION",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/lib.mjs:103",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_STAGE",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/stage-summary.mjs:9",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_STAGE_ACTION",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/stage-summary.mjs:5",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_STAGE_EVIDENCE_ROOT",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/stage-summary.mjs:8",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_STAGE_EXIT_CODE",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/stage-summary.mjs:31",
+      "valueType": "int",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_STAGE_PRODUCER",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/stage-summary.mjs:10",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_STAGE_ROOT",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/stage-summary.mjs:7",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_STAGE_STATUS",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/stage-summary.mjs:30",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_STAGE_SUMMARY_ROOT",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/evidence-verify.mjs:11",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_TARGET_ARCH",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/candidate.mjs:25",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    },
+    {
+      "name": "RIGHT_GIT_WORKFLOW_REF",
+      "class": "S6",
+      "channel": "env",
+      "anchor": "scripts/desktop/admit.mjs:22",
+      "valueType": "enum",
+      "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
+    }
+  ],
+  "dynamicReads": [
+    {
+      "file": "scripts/desktop/lib.mjs",
+      "reason": "requireEnv(name) reads the variable its caller names; every caller passes a literal RIGHT_GIT_*, GITHUB_SHA, RUNNER_TEMP or LEGION_UNSIGNED_CANDIDATE_ROOT name, all listed above."
+    },
+    {
+      "file": "crates/engine/src/config.rs",
+      "reason": "config_dir() hands std::env::var_os to config_dir_with, which asks for LIGHTCRAFT_CONFIG_DIR, HOME, APPDATA and XDG_CONFIG_HOME by literal name (all listed)."
+    },
+    {
+      "file": "crates/video/src/sidecar.rs",
+      "reason": "DIR_ENV is the constant \"LIGHTCRAFT_FFMPEG_DIR\" (listed)."
+    },
+    {
+      "file": "crates/segment/src/remote.rs",
+      "reason": "ENV is the constant \"LIGHTCRAFT_SAM3_REMOTE\" (listed)."
+    },
+    {
+      "file": "crates/mcp/src/control_auth.rs",
+      "reason": "TOKEN_ENV is the constant \"LIGHTCRAFT_CONTROL_TOKEN\" (listed)."
+    },
+    {
+      "file": "crates/fetch/src/lib.rs",
+      "reason": "Options.token_env names the variable that holds the download token; the only caller sets \"LIGHTCRAFT_SAM3_TOKEN\" (listed)."
+    },
+    {
+      "file": "crates/engine/src/denoise.rs",
+      "reason": "ONNX_ENV is \"LIGHTCRAFT_ONNXRUNTIME_DIR\", and RemoteSide::from_env reads LIGHTCRAFT_DENOISE_URL and LIGHTCRAFT_DENOISE_TOKEN through a closure (all listed)."
+    },
+    {
+      "file": "crates/engine/src/lens_profiles.rs",
+      "reason": "ENV is the constant \"LIGHTCRAFT_LENSFUN_DIR\" (listed)."
+    },
+    {
+      "file": "crates/engine/src/segment/mod.rs",
+      "reason": "MIRRORS_ENV is the constant \"LIGHTCRAFT_SAM3_MIRRORS\" (listed)."
+    },
+    {
+      "file": "crates/denoise-onnx/src/runner.rs",
+      "reason": "RUNTIME_DIR_ENV is the constant \"LIGHTCRAFT_ONNXRUNTIME_DIR\" (listed)."
+    },
+    {
+      "file": "crates/av1dec/src/host.rs",
+      "reason": "WORKER_ENV is the constant \"EMBER_AV1_WORKER\" (listed)."
+    },
+    {
+      "file": "apps/lightcraft-cli/src/main.rs",
+      "reason": "denoise-serve reads the variable named by its --token-env option (default LIGHTCRAFT_DENOISE_TOKEN, listed); the user names it."
+    }
+  ]
+}
