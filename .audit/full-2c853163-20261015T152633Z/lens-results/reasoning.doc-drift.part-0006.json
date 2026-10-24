@@ -1,0 +1,119 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.doc-drift",
+ "packetDigest": "sha256:8211c6869f35fe8224b9780742f0fe69381d457c37d1ac4a267e3c9f46923ea0",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "p0006-doc-denoisemodel-doc-says-system-info",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/state.rs:907-921"
+   ],
+   "anchor": {
+    "path": "crates/ui-egui/src/state.rs",
+    "line": 907,
+    "text": "    /// Help ▸ System Info: (label, value) rows."
+   },
+   "failureScenario": "The doc comment on Dialog::DenoiseModel reads 'Help ▸ System Info: (label, value) rows.', but the variant holds {info, accepted} for the AI Denoise model licence and install dialog (rendered by panels::denoise::model_dialog, confirmed by denoise::install). The real SystemInfo variant (919-921) has no doc. Rustdoc and editor hovers send readers to the wrong dialog.",
+   "action": "Move the System Info doc onto SystemInfo, and give DenoiseModel its own doc (the AI Denoise model dialog: model info and the licence 'I accept' box).",
+   "verifyStatus": "verified"
+  },
+  {
+   "id": "p0006-doc-confirm-dialog-doc-on-fmt-gap",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/panels/dialogs.rs:1400-1402",
+    "crates/ui-egui/src/panels/dialogs.rs:1571"
+   ],
+   "anchor": {
+    "path": "crates/ui-egui/src/panels/dialogs.rs",
+    "line": 1400,
+    "text": "/// Apply a dialog's action (also used by `ui.dialog.confirm`)."
+   },
+   "failureScenario": "The comment 'Apply a dialog's action (also used by `ui.dialog.confirm`).' sits directly above fmt_gap and merges into its rustdoc. fmt_gap only formats seconds ('90' → '1 min 30 s'). The function the comment describes, confirm_dialog (1571), is public and the control channel's confirm entry point, yet it has no doc. Readers of fmt_gap's doc are told it applies dialog actions, and the confirm contract is undocumented.",
+   "action": "Move the first line onto pub fn confirm_dialog and leave fmt_gap with only its own one-line doc.",
+   "verifyStatus": "verified"
+  },
+  {
+   "id": "p0006-doc-meta-field-doc-on-copyright-status",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/panels/right.rs:771-774",
+    "crates/ui-egui/src/panels/right.rs:788-811"
+   ],
+   "anchor": {
+    "path": "crates/ui-egui/src/panels/right.rs",
+    "line": 771,
+    "text": "/// A labelled metadata text field: the typed text lives in egui memory while focused and is"
+   },
+   "failureScenario": "The doc for meta_field ('A labelled metadata text field: the typed text lives in egui memory while focused and is saved (photo.setMeta `key`) when the field loses focus.') is stacked onto copyright_status, a ComboBox that saves immediately on selection. The result is one contradictory doc on copyright_status, while meta_field (788) has none. Anyone reading copyright_status's doc expects focus-loss saving that it doesn't do.",
+   "action": "Move lines 771-772 above fn meta_field at line 788, leaving only the Copyright Status line on copyright_status.",
+   "verifyStatus": "verified"
+  },
+  {
+   "id": "p0006-doc-settings-tabs-list-stale",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/state.rs:966-969",
+    "crates/ui-egui/src/panels/settings.rs:20-29"
+   ],
+   "anchor": {
+    "path": "crates/ui-egui/src/state.rs",
+    "line": 966,
+    "text": "    /// Settings (preferences): `tab` = general | import | performance | interface."
+   },
+   "failureScenario": "Dialog::Settings documents `tab` = general | import | performance | interface. settings::TABS (settings.rs:21-29) also has display, faces and denoise, and the dialog body dispatches on them. A control-channel client or agent following the variant doc (Dialog is set and read through ui.set/ui.get) will never open the Display, Faces or AI Denoise tabs, and will treat those values as invalid.",
+   "action": "List every tab id (general | import | performance | display | interface | faces | denoise), or point the doc at settings::TABS as the source of truth.",
+   "verifyStatus": "verified"
+  },
+  {
+   "id": "p0006-doc-sam-help-points-to-upstream-repo",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "crates/ui-egui/src/panels/dialogs.rs:1425",
+    "crates/ui-egui/src/links.rs:10-16",
+    "docs/ai-masks.md:81"
+   ],
+   "anchor": {
+    "path": "crates/ui-egui/src/panels/dialogs.rs",
+    "line": 1425,
+    "text": "const SAM_HELP: &str = \"https://github.com/storytold/lightcraft/blob/main/docs/ai-masks.md#getting-the-model\";"
+   },
+   "failureScenario": "Every user-facing project link is centralized in links.rs and points to the Ember repository (github.com/Orthic-Labs/ember: HELP, GITHUB, FEEDBACK). The SAM 3 install guide link in the dialog is hard-coded to the upstream repository instead: storytold/lightcraft/blob/main/docs/ai-masks.md. Ember ships its own docs/ai-masks.md with the 'Getting the model' section, which describes Ember's own dialog text. A user following the in-app manual-install guide gets the upstream project's instructions, which can diverge from Ember's (model folder, mirrors, env vars), or a dead link if upstream moves the file.",
+   "action": "Point SAM_HELP at the Ember docs, via a constant in links.rs (for example HELP + '/blob/main/docs/ai-masks.md#getting-the-model'), so one module owns the project URL.",
+   "verifyStatus": "verified"
+  },
+  {
+   "id": "p0006-doc-tests-masking-module-scope",
+   "lens": "doc-drift",
+   "severity": "info",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/tests_masking.rs:1",
+    "crates/ui-egui/src/tests_masking.rs:464-654"
+   ],
+   "anchor": {
+    "path": "crates/ui-egui/src/tests_masking.rs",
+    "line": 1,
+    "text": "//! Headless tests of the Masking and Remove tools on the photo: overlay keys, pins, spot editing."
+   },
+   "failureScenario": "The module doc says the file holds headless tests of the Masking and Remove tools. The file also covers the crop tool (464-540), keyword sets (542-561), the smart-album rule editor (563-800+), the Local folder tree, slideshow, external editors, grid performance and soft proofing. Someone looking for smart-album or crop coverage won't find it under the matching tests_* module, and new tests in those areas may duplicate it.",
+   "action": "Move the unrelated tests into matching tests_* modules (for example tests_smart_albums.rs, tests_crop_tool.rs), or widen the module doc to match what is there.",
+   "verifyStatus": "verified"
+  }
+ ],
+ "withdrawn": []
+}

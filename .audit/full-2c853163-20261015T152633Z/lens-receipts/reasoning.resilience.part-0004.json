@@ -1,0 +1,248 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-receipt",
+  "provider": "reasoning.resilience",
+  "result": {
+    "schema_version": 1,
+    "provider": "reasoning.resilience",
+    "applicable": true,
+    "required": true,
+    "status": "partial",
+    "complete": false,
+    "coverage": {
+      "denominator_digest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+      "expected": 730,
+      "examined": 4,
+      "gaps": [
+        "reasoning-part-scope:reasoning.resilience:part 4/4"
+      ]
+    },
+    "findings": [
+      {
+        "id": "p0004-resilience-1",
+        "severity": "low"
+      },
+      {
+        "id": "p0004-resilience-2",
+        "severity": "low"
+      }
+    ],
+    "coverage_gaps": [
+      "reasoning-part-scope:reasoning.resilience:part 4/4"
+    ],
+    "degradation": [],
+    "details": {
+      "executionReceipt": {
+        "schemaVersion": 1,
+        "kind": "legion-reasoning-receipt",
+        "receiptId": "ingest-a751030a4ac2c7db2b0a0919041b3f08",
+        "requestId": "sha256:c5207df6c6e60c43b831b0780e92d7d8654aac7763899071f4fbbe11f7b733fa",
+        "providerId": "reasoning.resilience",
+        "contract": "audit-lens-resilience-v1",
+        "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+        "planSignature": "hmac-sha256:805a23e8a5d736c2a96307bc58b919aa92b271336dbe2dbca01d2a81fe17b6f3",
+        "repositoryId": "/Volumes/D/claude/ember",
+        "inventoryGeneration": "filesystem:sha256:6a2aaea46465c4542b1f39f825efd84edc8f63121b837f8bc64a97418d82ef9a",
+        "inventoryDigest": "sha256:da3157e68029988c594537621af44004cf97f0020364e0c23299c7b13bcc221a",
+        "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+        "denominatorCount": 730,
+        "resultDigest": "sha256:c418cf45c83697f79c4e32c80e7c1504d44ad169d3c313398f3027a65b0a411c",
+        "status": "partial",
+        "complete": false,
+        "gaps": [
+          "reasoning-part-scope:reasoning.resilience:part 4/4"
+        ],
+        "authentication": {
+          "alg": "HMAC-SHA256",
+          "macDomain": "legion-reasoning-receipt:v1",
+          "boundFieldsDigest": "sha256:879de90044d6c1908fca28fc34814e176364267cdd644bb6319c20c234db2e65",
+          "mac": "7095dc7237e44f34ac0218a4b4c8e342bf0d0a00624e8159e6c475e47440fe5d",
+          "host": "legion-cli-ingest",
+          "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb"
+        }
+      },
+      "findingEvidence": {
+        "p0004-resilience-1": {
+          "lens": "resilience",
+          "confidence": "likely",
+          "verifyStatus": "unverified",
+          "action": "Pass --connect-timeout, --max-time and --retry to curl, download to `<name>.part` and rename after the sha256 matches, and keep going after a failed sample, reporting all failures at the end."
+        },
+        "p0004-resilience-2": {
+          "lens": "resilience",
+          "confidence": "likely",
+          "verifyStatus": "unverified",
+          "action": "Delete any stale keychain (`security delete-keychain \"$KEYCHAIN\" 2>/dev/null || rm -f \"$KEYCHAIN\"`) before creating it, and have the EXIT trap restore the original search list and delete the keychain on failure."
+        }
+      },
+      "findingLocations": {
+        "p0004-resilience-1": [
+          "xtask/src/main.rs:913-925"
+        ],
+        "p0004-resilience-2": [
+          "packaging/macos/import-cert.sh:25-36"
+        ]
+      },
+      "findingMessages": {
+        "p0004-resilience-1": "`cargo xtask corpus --download` runs curl with no --connect-timeout/--max-time/--retry, writing straight into the final path. A stalled connection hangs the command indefinitely; a mid-transfer failure leaves a truncated file at `out`. The `?` aborts the whole run, and the next run sees `out.exists()`, skips the download, fails the sha256 check, deletes the file and errors again; only the third run actually re-downloads. One transient network error therefore costs two failed runs, and one bad sample stops every later sample from being fetched.",
+        "p0004-resilience-2": "The script creates a keychain at a fixed path ($TMP/lightcraft-signing.keychain-db), prepends it to the user's keychain search list, and its EXIT trap removes only the .p12. If the script is run again on a machine whose TMP persists (a self-hosted runner or a local run), `security create-keychain` fails because the file exists and `set -e` aborts the signing job. Any failure after line 36 also leaves the temporary keychain on the search list."
+      },
+      "findingTitles": {
+        "p0004-resilience-1": "Pass --connect-timeout, --max-time and --retry to curl, download to `<name>.part` and rename after the sha256 matches, and keep going after a failed sample, reporting all failures at the end.",
+        "p0004-resilience-2": "Delete any stale keychain (`security delete-keychain \"$KEYCHAIN\" 2>/dev/null || rm -f \"$KEYCHAIN\"`) before creating it, and have the EXIT trap restore the original search list and delete the keychain on failure."
+      },
+      "ingest": {
+        "host": "legion-cli-ingest",
+        "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb",
+        "packetDigest": "sha256:fd3f1cd2d9acb64c196b28e88de7eaf0dd99c9af08ca4b675629fbbbdd65c152",
+        "anchorsVerified": 2
+      },
+      "lensFindings": [
+        {
+          "id": "p0004-resilience-1",
+          "lens": "resilience",
+          "severity": "low",
+          "confidence": "likely",
+          "evidence": [
+            "xtask/src/main.rs:913-925"
+          ],
+          "failureScenario": "`cargo xtask corpus --download` runs curl with no --connect-timeout/--max-time/--retry, writing straight into the final path. A stalled connection hangs the command indefinitely; a mid-transfer failure leaves a truncated file at `out`. The `?` aborts the whole run, and the next run sees `out.exists()`, skips the download, fails the sha256 check, deletes the file and errors again; only the third run actually re-downloads. One transient network error therefore costs two failed runs, and one bad sample stops every later sample from being fetched.",
+          "action": "Pass --connect-timeout, --max-time and --retry to curl, download to `<name>.part` and rename after the sha256 matches, and keep going after a failed sample, reporting all failures at the end.",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "xtask/src/main.rs",
+            "line": 916,
+            "text": "            curl.args([\"-fsSL\", \"-o\"]).arg(&out).arg(url);"
+          }
+        },
+        {
+          "id": "p0004-resilience-2",
+          "lens": "resilience",
+          "severity": "low",
+          "confidence": "likely",
+          "evidence": [
+            "packaging/macos/import-cert.sh:25-36"
+          ],
+          "failureScenario": "The script creates a keychain at a fixed path ($TMP/lightcraft-signing.keychain-db), prepends it to the user's keychain search list, and its EXIT trap removes only the .p12. If the script is run again on a machine whose TMP persists (a self-hosted runner or a local run), `security create-keychain` fails because the file exists and `set -e` aborts the signing job. Any failure after line 36 also leaves the temporary keychain on the search list.",
+          "action": "Delete any stale keychain (`security delete-keychain \"$KEYCHAIN\" 2>/dev/null || rm -f \"$KEYCHAIN\"`) before creating it, and have the EXIT trap restore the original search list and delete the keychain on failure.",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "packaging/macos/import-cert.sh",
+            "line": 27,
+            "text": "security create-keychain -p \"$KC_PASS\" \"$KEYCHAIN\""
+          }
+        }
+      ],
+      "lensIds": [
+        "resilience"
+      ],
+      "packetCoverage": {
+        "basis": "bounded-excerpts",
+        "examined": 4,
+        "expected": 730,
+        "part": {
+          "number": 4,
+          "total": 4
+        },
+        "requiredParts": 4,
+        "overCeiling": null,
+        "partPaths": [
+          "crates/ui-egui/src/tests_masking.rs",
+          "crates/ui-egui/src/tests_panels.rs",
+          "packaging/macos/import-cert.sh",
+          "xtask/src/main.rs"
+        ],
+        "examinedPaths": [
+          "crates/ui-egui/src/tests_masking.rs",
+          "crates/ui-egui/src/tests_panels.rs",
+          "packaging/macos/import-cert.sh",
+          "xtask/src/main.rs"
+        ],
+        "chunkedPaths": [
+          {
+            "path": "crates/ui-egui/src/state.rs",
+            "chunk": 2,
+            "chunks": 2,
+            "startLine": 810,
+            "endLine": 1238
+          }
+        ],
+        "omittedPaths": [],
+        "truncatedPaths": [],
+        "coverageMode": "risk-sampled",
+        "bundle": "S1",
+        "reviewSetDigest": "sha256:0979bbe58e2de1a68b710b92c005b16a51d8d0d7126aea91bde0ba8e38823ff4",
+        "reviewSetCount": 79,
+        "reviewExpected": 53,
+        "promotedPaths": [
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs",
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/cmd/geocode.rs"
+        ],
+        "displacedPaths": [
+          "crates/codecs/examples/jpeg_bench.rs",
+          "crates/raw/examples/rawdump.rs",
+          "crates/merge/src/features.rs",
+          "crates/merge/tests/pano.rs",
+          "crates/pipeline/src/dust.rs",
+          "crates/pipeline/src/colorops.rs",
+          "crates/gpu/tests/memory.rs",
+          "crates/raw/src/demosaic/xtrans.rs",
+          "crates/merge/src/pano/finish.rs",
+          "crates/codecs/src/jpeg_par.rs",
+          "crates/meta/src/iptc.rs",
+          "apps/lightcraft-web/src/files.rs",
+          "crates/codecs/src/other.rs",
+          "apps/lightcraft/examples/gen_photos.rs",
+          "crates/merge/src/ransac.rs",
+          "crates/scenes/src/noise.rs",
+          "crates/tiff/src/makernote.rs",
+          "crates/merge/src/align.rs",
+          "crates/catalog/src/tests_local.rs",
+          "apps/lightcraft-cli/src/alloc_release.rs",
+          "crates/codecs/src/exif.rs",
+          "crates/engine/src/cmd/curves.rs",
+          "crates/ui-egui/src/tests_unsaved.rs",
+          "packaging/linux/postinst.sh",
+          "crates/raw/examples/rawinfo.rs",
+          "crates/pipeline/src/upright.rs",
+          "crates/pipeline/src/transform.rs",
+          "crates/ui-egui/src/panels/crop_overlay.rs",
+          "crates/engine/src/tests_forget_local.rs",
+          "crates/pipeline/src/profiles.rs",
+          "crates/engine/src/cmd/develop.rs",
+          "crates/ui-egui/src/widgets.rs",
+          "crates/ui-egui/src/panels/settings.rs",
+          "crates/ui-egui/src/import.rs",
+          "crates/ui-egui/src/tests_preview_limit.rs",
+          "crates/ui-egui/src/render.rs",
+          "crates/desktop-host/src/tasks.rs",
+          "crates/catalog/src/keywords.rs",
+          "crates/ui-egui/src/panels/edit.rs",
+          "crates/ui-egui/src/panels/grid.rs"
+        ],
+        "unpromotedCount": 80,
+        "declaredUnsampled": 677,
+        "excluded": 23,
+        "aliasedPaths": []
+      },
+      "reasoningHostState": "ingested",
+      "withdrawnFindings": []
+    }
+  },
+  "part": {
+    "number": 4,
+    "total": 4
+  }
+}

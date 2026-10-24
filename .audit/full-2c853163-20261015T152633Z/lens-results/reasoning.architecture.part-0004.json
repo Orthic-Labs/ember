@@ -1,0 +1,19 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.architecture",
+ "packetDigest": "sha256:fbdf68b9cb152051bb0fcbc55f070fc6eaf26c39a4d9ff3e0757b4555c0df9f2",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [],
+ "withdrawn": [],
+ "details": {
+  "changeRisk": {
+   "reversibility": "unknown",
+   "blastRadius": "whole-repository audit without change context; no diff supplied for this part",
+   "reason": "Whole-repo run without change context: change risk cannot be assessed from supplied evidence.",
+   "beforeEvidence": [],
+   "afterEvidence": []
+  }
+ }
+}

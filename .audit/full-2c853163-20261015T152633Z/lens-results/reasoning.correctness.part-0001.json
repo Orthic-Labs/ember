@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-result",
+  "provider": "reasoning.correctness",
+  "packetDigest": "sha256:e1b2f14c01fbad598d1f6cf9d48ae8c6875501aa46c04a750d640cdcf708e05a",
+  "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+  "complete": true,
+  "findings": [
+    {
+      "id": "correctness-decision-manifest-source-family-id-splits-virtual-copies",
+      "lens": "correctness",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "evidence": [
+        "apps/lightcraft-cli/src/decision_manifest.rs:109-114",
+        "apps/lightcraft-cli/src/decision_manifest.rs:154",
+        "apps/lightcraft-cli/src/decision_manifest.rs:474-485"
+      ],
+      "failureScenario": "source_family_id is computed with virtual_identity(), which returns \"original:<uuid>\" for a master photo (masterImage 0) but \"master:<master uuid>\" for each of its virtual copies. A master and its virtual copies therefore get different source_family_id values. The manifest's own split_policy says any later split must keep source_family_id groups intact, so a consumer that groups by this field can put the master in train and a virtual copy of the same image in test, leaking the same source pixels across splits. The field is also a byte-for-byte duplicate of virtual_copy_identity, so it adds no family grouping at all.",
+      "action": "Derive source_family_id from the family root, e.g. the master's uuid for both the master and its copies (\"family:<root uuid>\"), and keep virtual_copy_identity as the per-copy identity. Add a test with one master plus one virtual copy that asserts both rows share source_family_id.",
+      "verifyStatus": "verified",
+      "verificationMethod": "adversarial-skeptic-pass",
+      "reviewAxis": "spec",
+      "sourceQuote": "\"split_policy\": \"folder_session_id and source_family_id are grouping evidence; any later split must keep both intact; every split remains unassigned\"",
+      "sourceLocation": "apps/lightcraft-cli/src/decision_manifest.rs:154",
+      "disposition": "wrong",
+      "changeAttribution": {
+        "status": "unknown",
+        "reason": "whole-repo review without a baseline commit",
+        "baselineEvidence": []
+      },
+      "anchor": {
+        "path": "apps/lightcraft-cli/src/decision_manifest.rs",
+        "line": 114,
+        "text": "            \"source_family_id\": virtual_identity(photo, &photos_by_id),"
+      }
+    }
+  ],
+  "withdrawn": [],
+  "details": {
+    "semanticReview": {
+      "axis": "spec",
+      "status": "findings",
+      "reason": "The discovery manifest states its own grouping contract (split_policy): source_family_id must keep families intact across later splits. The implementation emits a value that differs between a master and its virtual copies, so the stated contract does not hold. The other reviewed CLI evaluators (cull score/baseline, personal train/evaluate, decision extract) matched their documented behaviour on the paths read.",
+      "sources": [
+        {
+          "location": "apps/lightcraft-cli/src/decision_manifest.rs:154",
+          "quote": "\"split_policy\": \"folder_session_id and source_family_id are grouping evidence; any later split must keep both intact; every split remains unassigned\""
+        },
+        {
+          "location": "apps/lightcraft-cli/src/decision_manifest.rs:114",
+          "quote": "\"source_family_id\": virtual_identity(photo, &photos_by_id),"
+        }
+      ]
+    }
+  }
+}

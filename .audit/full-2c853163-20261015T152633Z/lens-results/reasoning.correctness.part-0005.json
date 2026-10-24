@@ -1,0 +1,136 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.correctness",
+ "packetDigest": "sha256:ffb488bc91675cb81b27c49d95f482bdb76233bfc4d049e13da34f2b3458305e",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "correctness-lrcat-undo-merge-uses-capped-history-length",
+   "lens": "correctness",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/engine/src/lightroom_catalog.rs:999",
+    "crates/engine/src/lightroom_job.rs:304-308",
+    "crates/engine/src/lib.rs:510-523",
+    "crates/engine/src/lib.rs:597-612"
+   ],
+   "anchor": {
+    "path": "crates/engine/src/lightroom_catalog.rs",
+    "line": 999,
+    "text": "    s.merge_undo(s.undo.len().saturating_sub(undo0), \"Import LRCAT Catalog\");"
+   },
+   "failureScenario": "LRCAT import commits the file additions (import::commit_prepared, one undo step) and then the metadata/album batch (a second step), and merges them by comparing s.undo.len() with undo0 captured at lightroom_job.rs:304. Session::commit drops the oldest entry once the history exceeds 1000 (lib.rs:516-519), so in a session whose undo history is already full (1000 steps from ordinary slider edits) undo.len() stays 1000 after both commits: merge_undo(0) is a no-op. The import is left as two undo steps; one Undo removes the ratings/edits/albums but keeps the added photos, a partial undo of an operation that is supposed to be one step.",
+   "action": "Capture s.commits() before the import and merge s.commits().wrapping_sub(before) steps (as sync.rs:633-639 does), instead of differencing undo.len().",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "reviewAxis": "spec",
+   "sourceQuote": "How many undo steps were committed in this session so far: what a command that commits",
+   "sourceLocation": "crates/engine/src/lib.rs:597",
+   "disposition": "wrong",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit with no baseline commit (reviewContext.baseline not-applicable)",
+    "baselineEvidence": []
+   }
+  },
+  {
+   "id": "correctness-library-switch-keeps-photo-id-keyed-session-state",
+   "lens": "correctness",
+   "severity": "medium",
+   "confidence": "likely",
+   "evidence": [
+    "crates/engine/src/library.rs:420-444",
+    "crates/engine/src/lib.rs:237-238",
+    "crates/engine/src/lib.rs:294-296",
+    "crates/engine/src/cmd/before.rs:17-19",
+    "crates/engine/src/cmd/before.rs:60-66",
+    "crates/engine/src/cmd/develop.rs:917-929"
+   ],
+   "anchor": {
+    "path": "crates/engine/src/library.rs",
+    "line": 438,
+    "text": "        self.undo.clear();"
+   },
+   "failureScenario": "Photo ids are per library (library.rs:420, 512), and the desktop app switches libraries on the same Session (ui-egui panels/settings.rs switch_library: close_library then open_library). open_stores resets undo/redo/selection/source but not Session::before (HashMap<PhotoId, settings>) nor Session::previous_active. After using Before/After 'Set Before' on photo 12 in library A and switching to library B, photo 12 of B renders A's settings as its Before side, and beforeAfter.copyBeforeToAfter/swap commits those foreign settings onto B's photo 12. Likewise develop.pastePrevious in B copies settings from whatever B photo has A's previous-active id.",
+   "action": "In open_stores clear every photo-id-keyed session field when the catalog is replaced (before, previous_active, target_album, folder_changes, active_mask/active_spot), alongside the undo/redo reset.",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit with no baseline commit (reviewContext.baseline not-applicable)",
+    "baselineEvidence": []
+   }
+  },
+  {
+   "id": "correctness-hover-preview-key-omits-photo-identity",
+   "lens": "correctness",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "crates/engine/src/media.rs:1242-1247",
+    "crates/engine/src/media.rs:1195-1211"
+   ],
+   "anchor": {
+    "path": "crates/engine/src/media.rs",
+    "line": 1245,
+    "text": "        job.key = settings.hash64() ^ ((max_w as u64) << 40) ^ ((max_h as u64) << 20) ^ (apply_crop as u64) ^ (job.level as u64) << 60;"
+   },
+   "failureScenario": "preview_job overwrites the key build_job made (which deliberately mixes in photo id and content: media.rs:1195-1197) with one from settings and size only. Two unedited photos from the same camera and aspect have identical develop settings, so hovering preset P on photo A and then stepping to photo B while still hovering P yields the same key. The UI's Renderer::request_needed (ui-egui render.rs:390-399) sees the Slot::Hover texture already holds that key and requests nothing, while the draw path filters that texture by photo (detail.rs:623): photo B never shows the hovered preset's look.",
+   "action": "Fold the photo id and content key into preview_job's key the same way build_job does (or XOR the settings change into job.key instead of replacing it).",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit with no baseline commit (reviewContext.baseline not-applicable)",
+    "baselineEvidence": []
+   }
+  },
+  {
+   "id": "correctness-segment-poll-drops-click-result-race",
+   "lens": "correctness",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "crates/engine/src/segment/mod.rs:643-659",
+    "crates/engine/src/segment/mod.rs:674-679",
+    "crates/engine/src/segment/worker.rs:244-246",
+    "crates/engine/src/segment/worker.rs:276-278"
+   ],
+   "anchor": {
+    "path": "crates/engine/src/segment/mod.rs",
+    "line": 649,
+    "text": "            let idle = !self.segmenter.busy();"
+   },
+   "failureScenario": "segment_poll treats 'pending counter is 0' as 'every reply has been sent', then clears segmenter.pending. The worker decrements the counter (drop(done)) before it sends the reply (worker.rs:277-278). If the UI frame polls in that window, idle is true, try_iter returns nothing, and pending is set to None; when the reply arrives next frame apply_outcome's Tag::Clicks branch sees pending != latest and returns, discarding the segmentation. The user's Object-mask click silently produces nothing and must be repeated.",
+   "action": "Decide idleness from the channel, not the counter: drain results first, then clear pending only if busy() is false and a second try_recv finds nothing; or send the reply before dropping the counter guard.",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit with no baseline commit (reviewContext.baseline not-applicable)",
+    "baselineEvidence": []
+   }
+  }
+ ],
+ "withdrawn": [],
+ "details": {
+  "semanticReview": {
+   "axis": "spec",
+   "status": "findings",
+   "reason": "Spec-level contract checked: the documented commits() contract for merging multi-step commands (lib.rs:597-598) is violated by the LRCAT import's undo merge; other findings are behavioral defects verified by adversarial reading of call sites.",
+   "sources": [
+    {
+     "location": "crates/engine/src/lib.rs:597",
+     "quote": "How many undo steps were committed in this session so far: what a command that commits"
+    },
+    {
+     "location": "crates/engine/src/lightroom_catalog.rs:999",
+     "quote": "s.merge_undo(s.undo.len().saturating_sub(undo0), \"Import LRCAT Catalog\");"
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,1340 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-dispatch",
+  "planDigest": "sha256:935da984e7949fc1ec4b49337d2eb922cb597e7791d2f7b2c41628b59ef00826",
+  "estimateBasis": "estimate: seat excerpt bytes read once + per-lens packet overhead, bytes / 4",
+  "byteBasis": {
+    "packetBytes": "seat-read bytes: each seat's excerpts counted once plus every bundled lens's own packet overhead (equals seatReadBytes)",
+    "seatReadBytes": "bytes the seats read: shared excerpts once per seat plus per-lens overhead",
+    "perLensPacketBytes": "sum of every lens packet written to disk, each carrying its own copy of the shared excerpts (equals seatReadBytes + sharedExcerptBytesSaved)",
+    "uniqueExcerptBytes": "excerpt bytes summed once per seat, overhead excluded",
+    "sharedExcerptBytesSaved": "excerpt bytes the bundled seats do not re-read because lenses share a part"
+  },
+  "coverageMode": "risk-sampled",
+  "limits": {
+    "seatTokenBudget": 150000,
+    "waveWidth": 16,
+    "runTokenBudget": 6000000,
+    "maxTotalSeats": 48
+  },
+  "lenses": [
+    {
+      "provider": "legacy.security.adjudication",
+      "parts": 1,
+      "requiredSeats": 1,
+      "packetBytes": 1001648,
+      "estimatedTokens": 250412,
+      "largestPartBytes": 1001648,
+      "largestPartEstimatedTokens": 250412
+    },
+    {
+      "provider": "reasoning.a11y",
+      "parts": 1,
+      "requiredSeats": 1,
+      "packetBytes": 109160,
+      "estimatedTokens": 27290,
+      "largestPartBytes": 109160,
+      "largestPartEstimatedTokens": 27290
+    },
+    {
+      "provider": "reasoning.ai-slop",
+      "parts": 6,
+      "requiredSeats": 6,
+      "packetBytes": 2307040,
+      "estimatedTokens": 576760,
+      "largestPartBytes": 462559,
+      "largestPartEstimatedTokens": 115640
+    },
+    {
+      "provider": "reasoning.architecture",
+      "parts": 9,
+      "requiredSeats": 9,
+      "packetBytes": 4105971,
+      "estimatedTokens": 1026493,
+      "largestPartBytes": 514208,
+      "largestPartEstimatedTokens": 128552
+    },
+    {
+      "provider": "reasoning.correctness",
+      "parts": 13,
+      "requiredSeats": 13,
+      "packetBytes": 5924205,
+      "estimatedTokens": 1481052,
+      "largestPartBytes": 481474,
+      "largestPartEstimatedTokens": 120369
+    },
+    {
+      "provider": "reasoning.data-safety",
+      "parts": 1,
+      "requiredSeats": 1,
+      "packetBytes": 3919,
+      "estimatedTokens": 980,
+      "largestPartBytes": 3919,
+      "largestPartEstimatedTokens": 980
+    },
+    {
+      "provider": "reasoning.dead-file",
+      "parts": 5,
+      "requiredSeats": 5,
+      "packetBytes": 2507107,
+      "estimatedTokens": 626777,
+      "largestPartBytes": 505456,
+      "largestPartEstimatedTokens": 126364
+    },
+    {
+      "provider": "reasoning.doc-drift",
+      "parts": 9,
+      "requiredSeats": 9,
+      "packetBytes": 4101534,
+      "estimatedTokens": 1025384,
+      "largestPartBytes": 513715,
+      "largestPartEstimatedTokens": 128429
+    },
+    {
+      "provider": "reasoning.minimize",
+      "parts": 12,
+      "requiredSeats": 12,
+      "packetBytes": 5900329,
+      "estimatedTokens": 1475083,
+      "largestPartBytes": 531537,
+      "largestPartEstimatedTokens": 132885
+    },
+    {
+      "provider": "reasoning.naming",
+      "parts": 6,
+      "requiredSeats": 6,
+      "packetBytes": 2292664,
+      "estimatedTokens": 573166,
+      "largestPartBytes": 460163,
+      "largestPartEstimatedTokens": 115041
+    },
+    {
+      "provider": "reasoning.performance",
+      "parts": 6,
+      "requiredSeats": 6,
+      "packetBytes": 2196798,
+      "estimatedTokens": 549200,
+      "largestPartBytes": 374635,
+      "largestPartEstimatedTokens": 93659
+    },
+    {
+      "provider": "reasoning.platform-parity",
+      "parts": 1,
+      "requiredSeats": 1,
+      "packetBytes": 8399,
+      "estimatedTokens": 2100,
+      "largestPartBytes": 8399,
+      "largestPartEstimatedTokens": 2100
+    },
+    {
+      "provider": "reasoning.release-readiness",
+      "parts": 1,
+      "requiredSeats": 1,
+      "packetBytes": 5209,
+      "estimatedTokens": 1303,
+      "largestPartBytes": 5209,
+      "largestPartEstimatedTokens": 1303
+    },
+    {
+      "provider": "reasoning.resilience",
+      "parts": 6,
+      "requiredSeats": 6,
+      "packetBytes": 2203158,
+      "estimatedTokens": 550790,
+      "largestPartBytes": 375695,
+      "largestPartEstimatedTokens": 93924
+    },
+    {
+      "provider": "reasoning.schema",
+      "parts": 13,
+      "requiredSeats": 13,
+      "packetBytes": 5895397,
+      "estimatedTokens": 1473850,
+      "largestPartBytes": 479258,
+      "largestPartEstimatedTokens": 119815
+    },
+    {
+      "provider": "reasoning.security",
+      "parts": 13,
+      "requiredSeats": 13,
+      "packetBytes": 5906434,
+      "estimatedTokens": 1476609,
+      "largestPartBytes": 480107,
+      "largestPartEstimatedTokens": 120027
+    }
+  ],
+  "bundles": [
+    {
+      "bundle": "ADJ",
+      "shareBp": 1000,
+      "seats": 1,
+      "estimatedTokens": 250412,
+      "budgetTokens": 600000,
+      "overBy": 0
+    },
+    {
+      "bundle": "J1",
+      "shareBp": 4000,
+      "seats": 13,
+      "estimatedTokens": 1537758,
+      "budgetTokens": 2400000,
+      "overBy": 0
+    },
+    {
+      "bundle": "J2",
+      "shareBp": 1500,
+      "seats": 9,
+      "estimatedTokens": 1046847,
+      "budgetTokens": 900000,
+      "overBy": 146847
+    },
+    {
+      "bundle": "M1",
+      "shareBp": 1500,
+      "seats": 5,
+      "estimatedTokens": 626779,
+      "budgetTokens": 900000,
+      "overBy": 0
+    },
+    {
+      "bundle": "S1",
+      "shareBp": 700,
+      "seats": 9,
+      "estimatedTokens": 570315,
+      "budgetTokens": 420000,
+      "overBy": 150315
+    },
+    {
+      "bundle": "S2",
+      "shareBp": 800,
+      "seats": 7,
+      "estimatedTokens": 618476,
+      "budgetTokens": 480000,
+      "overBy": 138476
+    },
+    {
+      "bundle": "S3",
+      "shareBp": 500,
+      "seats": 12,
+      "estimatedTokens": 1475087,
+      "budgetTokens": 300000,
+      "overBy": 1175087
+    }
+  ],
+  "seats": [
+    {
+      "seat": 1,
+      "bundle": "ADJ",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 1,
+      "estimatedTokens": 250412,
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "lensIds": [
+        "security"
+      ],
+      "packets": [
+        "legacy.security.adjudication.json"
+      ]
+    },
+    {
+      "seat": 2,
+      "bundle": "J1",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 1,
+      "estimatedTokens": 120990,
+      "providers": [
+        "reasoning.correctness",
+        "reasoning.schema",
+        "reasoning.security"
+      ],
+      "lensIds": [
+        "correctness",
+        "schema",
+        "security"
+      ],
+      "packets": [
+        "reasoning.correctness.part-0001.json",
+        "reasoning.schema.part-0001.json",
+        "reasoning.security.part-0001.json"
+      ]
+    },
+    {
+      "seat": 3,
+      "bundle": "J1",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 2,
+      "estimatedTokens": 114686,
+      "providers": [
+        "reasoning.correctness",
+        "reasoning.schema",
+        "reasoning.security"
+      ],
+      "lensIds": [
+        "correctness",
+        "schema",
+        "security"
+      ],
+      "packets": [
+        "reasoning.correctness.part-0002.json",
+        "reasoning.schema.part-0002.json",
+        "reasoning.security.part-0002.json"
+      ]
+    },
+    {
+      "seat": 4,
+      "bundle": "J1",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 3,
+      "estimatedTokens": 116360,
+      "providers": [
+        "reasoning.correctness",
+        "reasoning.schema",
+        "reasoning.security"
+      ],
+      "lensIds": [
+        "correctness",
+        "schema",
+        "security"
+      ],
+      "packets": [
+        "reasoning.correctness.part-0003.json",
+        "reasoning.schema.part-0003.json",
+        "reasoning.security.part-0003.json"
+      ]
+    },
+    {
+      "seat": 5,
+      "bundle": "J1",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 4,
+      "estimatedTokens": 117667,
+      "providers": [
+        "reasoning.correctness",
+        "reasoning.schema",
+        "reasoning.security"
+      ],
+      "lensIds": [
+        "correctness",
+        "schema",
+        "security"
+      ],
+      "packets": [
+        "reasoning.correctness.part-0004.json",
+        "reasoning.schema.part-0004.json",
+        "reasoning.security.part-0004.json"
+      ]
+    },
+    {
+      "seat": 6,
+      "bundle": "J1",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 5,
+      "estimatedTokens": 123899,
+      "providers": [
+        "reasoning.correctness",
+        "reasoning.schema",
+        "reasoning.security"
+      ],
+      "lensIds": [
+        "correctness",
+        "schema",
+        "security"
+      ],
+      "packets": [
+        "reasoning.correctness.part-0005.json",
+        "reasoning.schema.part-0005.json",
+        "reasoning.security.part-0005.json"
+      ]
+    },
+    {
+      "seat": 7,
+      "bundle": "J1",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 6,
+      "estimatedTokens": 121544,
+      "providers": [
+        "reasoning.correctness",
+        "reasoning.schema",
+        "reasoning.security"
+      ],
+      "lensIds": [
+        "correctness",
+        "schema",
+        "security"
+      ],
+      "packets": [
+        "reasoning.correctness.part-0006.json",
+        "reasoning.schema.part-0006.json",
+        "reasoning.security.part-0006.json"
+      ]
+    },
+    {
+      "seat": 8,
+      "bundle": "J1",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 7,
+      "estimatedTokens": 118658,
+      "providers": [
+        "reasoning.correctness",
+        "reasoning.schema",
+        "reasoning.security"
+      ],
+      "lensIds": [
+        "correctness",
+        "schema",
+        "security"
+      ],
+      "packets": [
+        "reasoning.correctness.part-0007.json",
+        "reasoning.schema.part-0007.json",
+        "reasoning.security.part-0007.json"
+      ]
+    },
+    {
+      "seat": 9,
+      "bundle": "J1",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 8,
+      "estimatedTokens": 113861,
+      "providers": [
+        "reasoning.correctness",
+        "reasoning.schema",
+        "reasoning.security"
+      ],
+      "lensIds": [
+        "correctness",
+        "schema",
+        "security"
+      ],
+      "packets": [
+        "reasoning.correctness.part-0008.json",
+        "reasoning.schema.part-0008.json",
+        "reasoning.security.part-0008.json"
+      ]
+    },
+    {
+      "seat": 10,
+      "bundle": "J1",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 9,
+      "estimatedTokens": 118232,
+      "providers": [
+        "reasoning.correctness",
+        "reasoning.schema",
+        "reasoning.security"
+      ],
+      "lensIds": [
+        "correctness",
+        "schema",
+        "security"
+      ],
+      "packets": [
+        "reasoning.correctness.part-0009.json",
+        "reasoning.schema.part-0009.json",
+        "reasoning.security.part-0009.json"
+      ]
+    },
+    {
+      "seat": 11,
+      "bundle": "J1",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 10,
+      "estimatedTokens": 116670,
+      "providers": [
+        "reasoning.correctness",
+        "reasoning.schema",
+        "reasoning.security"
+      ],
+      "lensIds": [
+        "correctness",
+        "schema",
+        "security"
+      ],
+      "packets": [
+        "reasoning.correctness.part-0010.json",
+        "reasoning.schema.part-0010.json",
+        "reasoning.security.part-0010.json"
+      ]
+    },
+    {
+      "seat": 12,
+      "bundle": "J1",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 11,
+      "estimatedTokens": 116917,
+      "providers": [
+        "reasoning.correctness",
+        "reasoning.schema",
+        "reasoning.security"
+      ],
+      "lensIds": [
+        "correctness",
+        "schema",
+        "security"
+      ],
+      "packets": [
+        "reasoning.correctness.part-0011.json",
+        "reasoning.schema.part-0011.json",
+        "reasoning.security.part-0011.json"
+      ]
+    },
+    {
+      "seat": 13,
+      "bundle": "J1",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 12,
+      "estimatedTokens": 121046,
+      "providers": [
+        "reasoning.correctness",
+        "reasoning.schema",
+        "reasoning.security"
+      ],
+      "lensIds": [
+        "correctness",
+        "schema",
+        "security"
+      ],
+      "packets": [
+        "reasoning.correctness.part-0012.json",
+        "reasoning.schema.part-0012.json",
+        "reasoning.security.part-0012.json"
+      ]
+    },
+    {
+      "seat": 14,
+      "bundle": "J1",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 13,
+      "estimatedTokens": 117228,
+      "providers": [
+        "reasoning.correctness",
+        "reasoning.schema",
+        "reasoning.security"
+      ],
+      "lensIds": [
+        "correctness",
+        "schema",
+        "security"
+      ],
+      "packets": [
+        "reasoning.correctness.part-0013.json",
+        "reasoning.schema.part-0013.json",
+        "reasoning.security.part-0013.json"
+      ]
+    },
+    {
+      "seat": 15,
+      "bundle": "J2",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 1,
+      "estimatedTokens": 127638,
+      "providers": [
+        "reasoning.architecture",
+        "reasoning.doc-drift"
+      ],
+      "lensIds": [
+        "architecture",
+        "doc-drift"
+      ],
+      "packets": [
+        "reasoning.architecture.part-0001.json",
+        "reasoning.doc-drift.part-0001.json"
+      ]
+    },
+    {
+      "seat": 16,
+      "bundle": "J2",
+      "tier": "judgment",
+      "wave": 1,
+      "part": 2,
+      "estimatedTokens": 130644,
+      "providers": [
+        "reasoning.architecture",
+        "reasoning.doc-drift"
+      ],
+      "lensIds": [
+        "architecture",
+        "doc-drift"
+      ],
+      "packets": [
+        "reasoning.architecture.part-0002.json",
+        "reasoning.doc-drift.part-0002.json"
+      ]
+    },
+    {
+      "seat": 17,
+      "bundle": "J2",
+      "tier": "judgment",
+      "wave": 2,
+      "part": 3,
+      "estimatedTokens": 129261,
+      "providers": [
+        "reasoning.architecture",
+        "reasoning.doc-drift"
+      ],
+      "lensIds": [
+        "architecture",
+        "doc-drift"
+      ],
+      "packets": [
+        "reasoning.architecture.part-0003.json",
+        "reasoning.doc-drift.part-0003.json"
+      ]
+    },
+    {
+      "seat": 18,
+      "bundle": "J2",
+      "tier": "judgment",
+      "wave": 2,
+      "part": 4,
+      "estimatedTokens": 128449,
+      "providers": [
+        "reasoning.architecture",
+        "reasoning.doc-drift"
+      ],
+      "lensIds": [
+        "architecture",
+        "doc-drift"
+      ],
+      "packets": [
+        "reasoning.architecture.part-0004.json",
+        "reasoning.doc-drift.part-0004.json"
+      ]
+    },
+    {
+      "seat": 19,
+      "bundle": "J2",
+      "tier": "judgment",
+      "wave": 2,
+      "part": 5,
+      "estimatedTokens": 120666,
+      "providers": [
+        "reasoning.architecture",
+        "reasoning.doc-drift"
+      ],
+      "lensIds": [
+        "architecture",
+        "doc-drift"
+      ],
+      "packets": [
+        "reasoning.architecture.part-0005.json",
+        "reasoning.doc-drift.part-0005.json"
+      ]
+    },
+    {
+      "seat": 20,
+      "bundle": "J2",
+      "tier": "judgment",
+      "wave": 2,
+      "part": 6,
+      "estimatedTokens": 126438,
+      "providers": [
+        "reasoning.architecture",
+        "reasoning.doc-drift"
+      ],
+      "lensIds": [
+        "architecture",
+        "doc-drift"
+      ],
+      "packets": [
+        "reasoning.architecture.part-0006.json",
+        "reasoning.doc-drift.part-0006.json"
+      ]
+    },
+    {
+      "seat": 21,
+      "bundle": "J2",
+      "tier": "judgment",
+      "wave": 2,
+      "part": 7,
+      "estimatedTokens": 126244,
+      "providers": [
+        "reasoning.architecture",
+        "reasoning.doc-drift"
+      ],
+      "lensIds": [
+        "architecture",
+        "doc-drift"
+      ],
+      "packets": [
+        "reasoning.architecture.part-0007.json",
+        "reasoning.doc-drift.part-0007.json"
+      ]
+    },
+    {
+      "seat": 22,
+      "bundle": "J2",
+      "tier": "judgment",
+      "wave": 2,
+      "part": 8,
+      "estimatedTokens": 130813,
+      "providers": [
+        "reasoning.architecture",
+        "reasoning.doc-drift"
+      ],
+      "lensIds": [
+        "architecture",
+        "doc-drift"
+      ],
+      "packets": [
+        "reasoning.architecture.part-0008.json",
+        "reasoning.doc-drift.part-0008.json"
+      ]
+    },
+    {
+      "seat": 23,
+      "bundle": "J2",
+      "tier": "judgment",
+      "wave": 2,
+      "part": 9,
+      "estimatedTokens": 26694,
+      "providers": [
+        "reasoning.architecture",
+        "reasoning.doc-drift"
+      ],
+      "lensIds": [
+        "architecture",
+        "doc-drift"
+      ],
+      "packets": [
+        "reasoning.architecture.part-0009.json",
+        "reasoning.doc-drift.part-0009.json"
+      ]
+    },
+    {
+      "seat": 24,
+      "bundle": "S1",
+      "tier": "specialist",
+      "wave": 2,
+      "part": 1,
+      "estimatedTokens": 980,
+      "providers": [
+        "reasoning.data-safety"
+      ],
+      "lensIds": [
+        "data-safety"
+      ],
+      "packets": [
+        "reasoning.data-safety.json"
+      ]
+    },
+    {
+      "seat": 25,
+      "bundle": "S1",
+      "tier": "specialist",
+      "wave": 2,
+      "part": 1,
+      "estimatedTokens": 94952,
+      "providers": [
+        "reasoning.performance",
+        "reasoning.resilience"
+      ],
+      "lensIds": [
+        "performance",
+        "resilience"
+      ],
+      "packets": [
+        "reasoning.performance.part-0001.json",
+        "reasoning.resilience.part-0001.json"
+      ]
+    },
+    {
+      "seat": 26,
+      "bundle": "S1",
+      "tier": "specialist",
+      "wave": 2,
+      "part": 1,
+      "estimatedTokens": 2100,
+      "providers": [
+        "reasoning.platform-parity"
+      ],
+      "lensIds": [
+        "platform-parity"
+      ],
+      "packets": [
+        "reasoning.platform-parity.json"
+      ]
+    },
+    {
+      "seat": 27,
+      "bundle": "S1",
+      "tier": "specialist",
+      "wave": 2,
+      "part": 1,
+      "estimatedTokens": 1303,
+      "providers": [
+        "reasoning.release-readiness"
+      ],
+      "lensIds": [
+        "release-readiness"
+      ],
+      "packets": [
+        "reasoning.release-readiness.json"
+      ]
+    },
+    {
+      "seat": 28,
+      "bundle": "S1",
+      "tier": "specialist",
+      "wave": 2,
+      "part": 2,
+      "estimatedTokens": 96318,
+      "providers": [
+        "reasoning.performance",
+        "reasoning.resilience"
+      ],
+      "lensIds": [
+        "performance",
+        "resilience"
+      ],
+      "packets": [
+        "reasoning.performance.part-0002.json",
+        "reasoning.resilience.part-0002.json"
+      ]
+    },
+    {
+      "seat": 29,
+      "bundle": "S1",
+      "tier": "specialist",
+      "wave": 2,
+      "part": 3,
+      "estimatedTokens": 93967,
+      "providers": [
+        "reasoning.performance",
+        "reasoning.resilience"
+      ],
+      "lensIds": [
+        "performance",
+        "resilience"
+      ],
+      "packets": [
+        "reasoning.performance.part-0003.json",
+        "reasoning.resilience.part-0003.json"
+      ]
+    },
+    {
+      "seat": 30,
+      "bundle": "S1",
+      "tier": "specialist",
+      "wave": 2,
+      "part": 4,
+      "estimatedTokens": 94414,
+      "providers": [
+        "reasoning.performance",
+        "reasoning.resilience"
+      ],
+      "lensIds": [
+        "performance",
+        "resilience"
+      ],
+      "packets": [
+        "reasoning.performance.part-0004.json",
+        "reasoning.resilience.part-0004.json"
+      ]
+    },
+    {
+      "seat": 31,
+      "bundle": "S1",
+      "tier": "specialist",
+      "wave": 2,
+      "part": 5,
+      "estimatedTokens": 94173,
+      "providers": [
+        "reasoning.performance",
+        "reasoning.resilience"
+      ],
+      "lensIds": [
+        "performance",
+        "resilience"
+      ],
+      "packets": [
+        "reasoning.performance.part-0005.json",
+        "reasoning.resilience.part-0005.json"
+      ]
+    },
+    {
+      "seat": 32,
+      "bundle": "S1",
+      "tier": "specialist",
+      "wave": 2,
+      "part": 6,
+      "estimatedTokens": 92108,
+      "providers": [
+        "reasoning.performance",
+        "reasoning.resilience"
+      ],
+      "lensIds": [
+        "performance",
+        "resilience"
+      ],
+      "packets": [
+        "reasoning.performance.part-0006.json",
+        "reasoning.resilience.part-0006.json"
+      ]
+    },
+    {
+      "seat": 33,
+      "bundle": "S2",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 1,
+      "estimatedTokens": 27290,
+      "providers": [
+        "reasoning.a11y"
+      ],
+      "lensIds": [
+        "a11y"
+      ],
+      "packets": [
+        "reasoning.a11y.json"
+      ]
+    },
+    {
+      "seat": 34,
+      "bundle": "S2",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 1,
+      "estimatedTokens": 116979,
+      "providers": [
+        "reasoning.ai-slop",
+        "reasoning.naming"
+      ],
+      "lensIds": [
+        "ai-slop",
+        "naming"
+      ],
+      "packets": [
+        "reasoning.ai-slop.part-0001.json",
+        "reasoning.naming.part-0001.json"
+      ]
+    },
+    {
+      "seat": 35,
+      "bundle": "S2",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 2,
+      "estimatedTokens": 117975,
+      "providers": [
+        "reasoning.ai-slop",
+        "reasoning.naming"
+      ],
+      "lensIds": [
+        "ai-slop",
+        "naming"
+      ],
+      "packets": [
+        "reasoning.ai-slop.part-0002.json",
+        "reasoning.naming.part-0002.json"
+      ]
+    },
+    {
+      "seat": 36,
+      "bundle": "S2",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 3,
+      "estimatedTokens": 114443,
+      "providers": [
+        "reasoning.ai-slop",
+        "reasoning.naming"
+      ],
+      "lensIds": [
+        "ai-slop",
+        "naming"
+      ],
+      "packets": [
+        "reasoning.ai-slop.part-0003.json",
+        "reasoning.naming.part-0003.json"
+      ]
+    },
+    {
+      "seat": 37,
+      "bundle": "S2",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 4,
+      "estimatedTokens": 114780,
+      "providers": [
+        "reasoning.ai-slop",
+        "reasoning.naming"
+      ],
+      "lensIds": [
+        "ai-slop",
+        "naming"
+      ],
+      "packets": [
+        "reasoning.ai-slop.part-0004.json",
+        "reasoning.naming.part-0004.json"
+      ]
+    },
+    {
+      "seat": 38,
+      "bundle": "S2",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 5,
+      "estimatedTokens": 110176,
+      "providers": [
+        "reasoning.ai-slop",
+        "reasoning.naming"
+      ],
+      "lensIds": [
+        "ai-slop",
+        "naming"
+      ],
+      "packets": [
+        "reasoning.ai-slop.part-0005.json",
+        "reasoning.naming.part-0005.json"
+      ]
+    },
+    {
+      "seat": 39,
+      "bundle": "S2",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 6,
+      "estimatedTokens": 16833,
+      "providers": [
+        "reasoning.ai-slop",
+        "reasoning.naming"
+      ],
+      "lensIds": [
+        "ai-slop",
+        "naming"
+      ],
+      "packets": [
+        "reasoning.ai-slop.part-0006.json",
+        "reasoning.naming.part-0006.json"
+      ]
+    },
+    {
+      "seat": 40,
+      "bundle": "S3",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 1,
+      "estimatedTokens": 125874,
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "lensIds": [
+        "minimize"
+      ],
+      "packets": [
+        "reasoning.minimize.part-0001.json"
+      ]
+    },
+    {
+      "seat": 41,
+      "bundle": "S3",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 2,
+      "estimatedTokens": 129197,
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "lensIds": [
+        "minimize"
+      ],
+      "packets": [
+        "reasoning.minimize.part-0002.json"
+      ]
+    },
+    {
+      "seat": 42,
+      "bundle": "S3",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 3,
+      "estimatedTokens": 128860,
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "lensIds": [
+        "minimize"
+      ],
+      "packets": [
+        "reasoning.minimize.part-0003.json"
+      ]
+    },
+    {
+      "seat": 43,
+      "bundle": "S3",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 4,
+      "estimatedTokens": 130875,
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "lensIds": [
+        "minimize"
+      ],
+      "packets": [
+        "reasoning.minimize.part-0004.json"
+      ]
+    },
+    {
+      "seat": 44,
+      "bundle": "S3",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 5,
+      "estimatedTokens": 129915,
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "lensIds": [
+        "minimize"
+      ],
+      "packets": [
+        "reasoning.minimize.part-0005.json"
+      ]
+    },
+    {
+      "seat": 45,
+      "bundle": "S3",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 6,
+      "estimatedTokens": 127456,
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "lensIds": [
+        "minimize"
+      ],
+      "packets": [
+        "reasoning.minimize.part-0006.json"
+      ]
+    },
+    {
+      "seat": 46,
+      "bundle": "S3",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 7,
+      "estimatedTokens": 128375,
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "lensIds": [
+        "minimize"
+      ],
+      "packets": [
+        "reasoning.minimize.part-0007.json"
+      ]
+    },
+    {
+      "seat": 47,
+      "bundle": "S3",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 8,
+      "estimatedTokens": 132792,
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "lensIds": [
+        "minimize"
+      ],
+      "packets": [
+        "reasoning.minimize.part-0008.json"
+      ]
+    },
+    {
+      "seat": 48,
+      "bundle": "S3",
+      "tier": "specialist",
+      "wave": 3,
+      "part": 9,
+      "estimatedTokens": 132885,
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "lensIds": [
+        "minimize"
+      ],
+      "packets": [
+        "reasoning.minimize.part-0009.json"
+      ]
+    },
+    {
+      "seat": 49,
+      "bundle": "S3",
+      "tier": "specialist",
+      "wave": 4,
+      "part": 10,
+      "estimatedTokens": 131887,
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "lensIds": [
+        "minimize"
+      ],
+      "packets": [
+        "reasoning.minimize.part-0010.json"
+      ]
+    },
+    {
+      "seat": 50,
+      "bundle": "S3",
+      "tier": "specialist",
+      "wave": 4,
+      "part": 11,
+      "estimatedTokens": 131721,
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "lensIds": [
+        "minimize"
+      ],
+      "packets": [
+        "reasoning.minimize.part-0011.json"
+      ]
+    },
+    {
+      "seat": 51,
+      "bundle": "S3",
+      "tier": "specialist",
+      "wave": 4,
+      "part": 12,
+      "estimatedTokens": 45250,
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "lensIds": [
+        "minimize"
+      ],
+      "packets": [
+        "reasoning.minimize.part-0012.json"
+      ]
+    },
+    {
+      "seat": 52,
+      "bundle": "M1",
+      "tier": "mechanical",
+      "wave": 4,
+      "part": 1,
+      "estimatedTokens": 125687,
+      "providers": [
+        "reasoning.dead-file"
+      ],
+      "lensIds": [
+        "dead-file"
+      ],
+      "packets": [
+        "reasoning.dead-file.part-0001.json"
+      ]
+    },
+    {
+      "seat": 53,
+      "bundle": "M1",
+      "tier": "mechanical",
+      "wave": 4,
+      "part": 2,
+      "estimatedTokens": 126364,
+      "providers": [
+        "reasoning.dead-file"
+      ],
+      "lensIds": [
+        "dead-file"
+      ],
+      "packets": [
+        "reasoning.dead-file.part-0002.json"
+      ]
+    },
+    {
+      "seat": 54,
+      "bundle": "M1",
+      "tier": "mechanical",
+      "wave": 4,
+      "part": 3,
+      "estimatedTokens": 125005,
+      "providers": [
+        "reasoning.dead-file"
+      ],
+      "lensIds": [
+        "dead-file"
+      ],
+      "packets": [
+        "reasoning.dead-file.part-0003.json"
+      ]
+    },
+    {
+      "seat": 55,
+      "bundle": "M1",
+      "tier": "mechanical",
+      "wave": 4,
+      "part": 4,
+      "estimatedTokens": 125869,
+      "providers": [
+        "reasoning.dead-file"
+      ],
+      "lensIds": [
+        "dead-file"
+      ],
+      "packets": [
+        "reasoning.dead-file.part-0004.json"
+      ]
+    },
+    {
+      "seat": 56,
+      "bundle": "M1",
+      "tier": "mechanical",
+      "wave": 4,
+      "part": 5,
+      "estimatedTokens": 123854,
+      "providers": [
+        "reasoning.dead-file"
+      ],
+      "lensIds": [
+        "dead-file"
+      ],
+      "packets": [
+        "reasoning.dead-file.part-0005.json"
+      ]
+    }
+  ],
+  "waves": 4,
+  "requiredSeats": 56,
+  "packetBytes": 24502612,
+  "seatReadBytes": 24502612,
+  "perLensPacketBytes": 44468972,
+  "uniqueExcerptBytes": 22473637,
+  "sharedExcerptBytesSaved": 19966360,
+  "estimatedTokens": 6125674,
+  "withinLimits": false,
+  "violations": [
+    "seat 1 (bundle ADJ part 1): ~250412 estimated tokens exceeds the per-seat budget of 150000",
+    "56 seats required exceeds the run cap of 48 seats",
+    "run needs ~6125674 estimated tokens, 125674 over the run budget of 6000000 (bundle J2: ~1046847 estimated tokens is 146847 over its 900000 allocation target (borrowed from other bundles; the run budget is the limit); bundle S1: ~570315 estimated tokens is 150315 over its 420000 allocation target (borrowed from other bundles; the run budget is the limit); bundle S2: ~618476 estimated tokens is 138476 over its 480000 allocation target (borrowed from other bundles; the run budget is the limit); bundle S3: ~1475087 estimated tokens is 1175087 over its 300000 allocation target (borrowed from other bundles; the run budget is the limit))",
+    "legacy.security.adjudication part 1: ~250412 estimated tokens exceeds the per-seat budget of 150000"
+  ],
+  "warnings": [
+    "bundle J2: ~1046847 estimated tokens is 146847 over its 900000 allocation target (borrowed from other bundles; the run budget is the limit)",
+    "bundle S1: ~570315 estimated tokens is 150315 over its 420000 allocation target (borrowed from other bundles; the run budget is the limit)",
+    "bundle S2: ~618476 estimated tokens is 138476 over its 480000 allocation target (borrowed from other bundles; the run budget is the limit)",
+    "bundle S3: ~1475087 estimated tokens is 1175087 over its 300000 allocation target (borrowed from other bundles; the run budget is the limit)"
+  ]
+}

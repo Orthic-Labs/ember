@@ -1,0 +1,35 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.security",
+ "packetDigest": "sha256:f2588da9fe3e0676eebb6fa98f6a63561a3f1ba9f65d049934f3f8163be8e5fd",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "security-unbounded-sidecar-reads-bypass-import-cap",
+   "lens": "security",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "crates/engine/src/sidecar.rs:488-499",
+    "crates/engine/src/sidecar.rs:424-430",
+    "crates/engine/src/import.rs:648-662"
+   ],
+   "anchor": {
+    "path": "crates/engine/src/sidecar.rs",
+    "line": 490,
+    "text": "        && let Ok(s) = std::fs::read_to_string(&sc)"
+   },
+   "failureScenario": "Import caps a sidecar at MAX_SIDECAR_BYTES (4 MiB, import.rs:648-662), but read_packet (photo.readMetadataFromFile and other re-reads) reads any found .xmp whole with read_to_string, and for raws reads the entire original into memory; sidecar_contents (every save and XMP auto-write) likewise std::fs::read()s the existing sidecar unbounded. A hostile or corrupt multi-GB IMG_0001.xmp next to a photo makes the allocation fail, which aborts the process: a local file turns a metadata command into a crash, against the repo's own 'cap allocations sized by input' rule.",
+   "action": "Route read_packet and sidecar_contents through the same bounded reader as import (read_sidecar_packet with MAX_SIDECAR_BYTES) and return an actionable error when the sidecar is larger.",
+   "verifyStatus": "verified",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit with no baseline commit (reviewContext.baseline not-applicable)",
+    "baselineEvidence": []
+   }
+  }
+ ],
+ "withdrawn": []
+}

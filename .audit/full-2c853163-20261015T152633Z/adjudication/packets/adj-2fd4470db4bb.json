@@ -1,0 +1,563 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-audit-adjudication-seat",
+  "stage": "batch",
+  "round": 1,
+  "batchId": "batch-0019",
+  "itemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+  "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+  "parentPacketDigest": "sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5",
+  "packet": {
+    "schemaVersion": 1,
+    "kind": "security-batch-adjudication-packet",
+    "parentPacketDigest": "sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5",
+    "batchId": "batch-0019",
+    "family": "security",
+    "adjudicator": {
+      "provider": "legacy.security.adjudication",
+      "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6"
+    },
+    "requiredEvidence": [
+      "threat model and attacker capability",
+      "attacker-controlled source",
+      "trust-boundary trace",
+      "validation and authorization between source and sink",
+      "reachability",
+      "primary controls and environmental mitigations",
+      "real security impact",
+      "reproduction, trace, PoC sketch, or mathematical proof",
+      "devils-advocate false-positive challenge"
+    ],
+    "note": "one verdict per cluster representative; it is expanded to every member, which is then confirmed or spot-checked alone",
+    "clusters": [
+      {
+        "clusterId": "cluster-be42a03a553be0ac",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:49bae22fe834b092edd61aaa9f44d1588baed9cc3438ba6a7133bc483a3bdd34",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 825,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://rawdb.dnglab.org/api/download/Sony/ILCE-7RM6/arw6/ILCE-7RM6_FF_land_RAW-C.ARW\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:49bae22fe834b092edd61aaa9f44d1588baed9cc3438ba6a7133bc483a3bdd34",
+            "path": "xtask/src/main.rs",
+            "line": 825
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-bf10d37380766500",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:73cd77d5bbdf3c6806932af7550264681ffa4f8685605a3c7d94bb3ca6da07e6",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 880,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/7790/nice/Panasonic%20-%20DC-S5M2%20-%2014bit%20%283:2%29.RW2\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:73cd77d5bbdf3c6806932af7550264681ffa4f8685605a3c7d94bb3ca6da07e6",
+            "path": "xtask/src/main.rs",
+            "line": 880
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-c1d7ff4ce8857faa",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:a2d7af7c4f12ce7cadb98906c988edc19bdeab7fbe98d0b86391bfea0392c8cf",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 596,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/3115/nice/Ricoh%20-%20GR%20III%20-%2014bit%20%283:2%29.DNG\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:a2d7af7c4f12ce7cadb98906c988edc19bdeab7fbe98d0b86391bfea0392c8cf",
+            "path": "xtask/src/main.rs",
+            "line": 596
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-c2ad72a79e2f19ab",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:9a025d9f82ff5dfd43595df6b726550946d09a71bd304f2db1f631b508ec79ee",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 405,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/data/Sony/DSC-RX100/DSC00838.ARW\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:9a025d9f82ff5dfd43595df6b726550946d09a71bd304f2db1f631b508ec79ee",
+            "path": "xtask/src/main.rs",
+            "line": 405
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-c58e64ccd68914fc",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:d2f283748f01a38113fd94a665ea93220ddc03ff9752dd4d7acc9899c6fdab6a",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 430,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/data/Sony/ILCE-3500/DSC06923.ARW\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:d2f283748f01a38113fd94a665ea93220ddc03ff9752dd4d7acc9899c6fdab6a",
+            "path": "xtask/src/main.rs",
+            "line": 430
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-c724f71912c07c0f",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:894d9b4fcf7141dfc4b83315fe8b84567d1cfcd21f15f4eec977c7818ded74db",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 565,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/1023/nice/Adobe%20DNG%20Converter%20-%20Canon%20EOS%205D%20Mark%20III%20-%20Lossy%20JPEG%20compression%20%283:2%29.DNG\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:894d9b4fcf7141dfc4b83315fe8b84567d1cfcd21f15f4eec977c7818ded74db",
+            "path": "xtask/src/main.rs",
+            "line": 565
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-c73221fa0e88e57b",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:0b8e90437cc6f25ae558a8fd8ab672fcd254d1da68e1e1e8c422112fe174e072",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 376,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/data/Sony/ILCE-7CR/DSC00798.ARW\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:0b8e90437cc6f25ae558a8fd8ab672fcd254d1da68e1e1e8c422112fe174e072",
+            "path": "xtask/src/main.rs",
+            "line": 376
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-ceff7a4f0d88131b",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:ac2ed88c070a36ea612be81519ed63ae71e2ad4544b9832e12e1a5afb7ac210e",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 514,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/7896/nice/Canon%20-%20EOS%20R100%20-%20RAW%20%283:2%29.CR3\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:ac2ed88c070a36ea612be81519ed63ae71e2ad4544b9832e12e1a5afb7ac210e",
+            "path": "xtask/src/main.rs",
+            "line": 514
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-d1a1b18e2717fd5b",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:50967831ff0ab375c399eadac5ca1077b554035ad6fa9a58d28e1278fcc87bbb",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 323,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/4822/nice/Sony%20-%20ILCE-7RM4A%20-%2014bit%2014bit%20compressed%20%283:2%29.ARW\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:50967831ff0ab375c399eadac5ca1077b554035ad6fa9a58d28e1278fcc87bbb",
+            "path": "xtask/src/main.rs",
+            "line": 323
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-d3b4ac3779048413",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:696b4b01205d58a70df64d73621432f1e1bc6796564a356607cc7688047943f9",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 778,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/6002/nice/Fujifilm%20-%20X-H2%20-%2014bit%2014bit%20compressed%20%283:2%29.RAF\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:696b4b01205d58a70df64d73621432f1e1bc6796564a356607cc7688047943f9",
+            "path": "xtask/src/main.rs",
+            "line": 778
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-d6a3d75710b3458a",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:0a8e42f445d3fcfddf40b6873a0e0be7e5688a23b46b0de174bc4c2eeab3226d",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 835,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/2585/nice/Panasonic%20-%20DC-G9%20-%204:3.RW2\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:0a8e42f445d3fcfddf40b6873a0e0be7e5688a23b46b0de174bc4c2eeab3226d",
+            "path": "xtask/src/main.rs",
+            "line": 835
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-d6a7b9ddb87593da",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:053d1f5aa0c275fe9d27b8b1f59ae7334ab68222d0a7e96e70f43e444fdd84bd",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 371,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/data/Sony/ILCE-7CR/DSC00796.ARW\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:053d1f5aa0c275fe9d27b8b1f59ae7334ab68222d0a7e96e70f43e444fdd84bd",
+            "path": "xtask/src/main.rs",
+            "line": 371
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-dd8ecaba36b3dcfb",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:b03f41d53e0ca80a1a38f45fad4a6dec667d914fde0f34c686fa5f20c26d37c1",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 687,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/5370/nice/Samsung%20-%20NX20%20-%2012bit%20%283:2%29.SRW\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:b03f41d53e0ca80a1a38f45fad4a6dec667d914fde0f34c686fa5f20c26d37c1",
+            "path": "xtask/src/main.rs",
+            "line": 687
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-e034fe9ac5ffe3e1",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:19df9e8ccdcf1859db0cc189ea6cac00695524140c34dee64363382a050de304",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 641,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/1800/nice/Olympus%20-%20E-1%20-%2016bit%20%284:3%29.ORF\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:19df9e8ccdcf1859db0cc189ea6cac00695524140c34dee64363382a050de304",
+            "path": "xtask/src/main.rs",
+            "line": 641
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-e4671d73c07c84ef",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:dcf761c3f9a2bf861838c631c356d4a28104dd8a6dda51e3651af56499d0dbcf",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 676,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/1198/nice/Pentax%20-%20K-5%20II%20s%20-%2014bit%20%283:2%29.PEF\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:dcf761c3f9a2bf861838c631c356d4a28104dd8a6dda51e3651af56499d0dbcf",
+            "path": "xtask/src/main.rs",
+            "line": 676
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-e64d0f3989b1ab16",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:40fd05257c67ead8c58cd3d2a7ee9fd2abe73078ec7957ac963e34bc8b97168d",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 366,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/data/Sony/ILCE-7CR/DSC00795.ARW\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:40fd05257c67ead8c58cd3d2a7ee9fd2abe73078ec7957ac963e34bc8b97168d",
+            "path": "xtask/src/main.rs",
+            "line": 366
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-e9bb3a48f93b2193",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:0b6a4ff05f209319869183e3bb981927065eb71e121e85daec5a43c32dbaa43a",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 753,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/4495/nice/Fujifilm%20-%20GFX100S%20-%2016bit%2016bit%20lossless%20compressed%20%284:3%29.RAF\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:0b6a4ff05f209319869183e3bb981927065eb71e121e85daec5a43c32dbaa43a",
+            "path": "xtask/src/main.rs",
+            "line": 753
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-ef85fc356b68c6d0",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:bc95850ea0db96487476d9a0d1145bdfa39c870d7c820893e51f989bc404446b",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 427,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "(\"arw-sony-a33.arw\", \"https://raw.pixls.us/data/Sony/SLT-A33/DSC01867.ARW\", \"1a59856394f10d4fadb40f5ab9c6d1c89f473f4dbcdefd216fbbbbf1ad8d21f9\"),"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:bc95850ea0db96487476d9a0d1145bdfa39c870d7c820893e51f989bc404446b",
+            "path": "xtask/src/main.rs",
+            "line": 427
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-f3cf70c456e998e7",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:e7e71e8dceb6b8425a4071f1b409691bb9bf44673cdd953947e78453b8acecc8",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 349,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/data/Sony/ILCE-7M4/ILCE-7M4_DSC06674_FullFrame-LossLess-Compressed-Large.ARW\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:e7e71e8dceb6b8425a4071f1b409691bb9bf44673cdd953947e78453b8acecc8",
+            "path": "xtask/src/main.rs",
+            "line": 349
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-f628a9c7eb0da1b7",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:14a14090ea86612efc41496fbaa1989b7fecdf341b9d217eb11e20439a6f406e",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 763,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/1435/nice/Fujifilm%20-%20GFX%2050S%20-%2014bit%2014bit%20compressed%20%283:2%29.RAF\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:14a14090ea86612efc41496fbaa1989b7fecdf341b9d217eb11e20439a6f406e",
+            "path": "xtask/src/main.rs",
+            "line": 763
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-fe7ce26a415cb0d1",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:bfef4f0f8a122ac7ab367b8afb87eb772a4770af99111953cf2ac932c929e49d",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 793,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/3914/nice/Fujifilm%20-%20X-T4%20-%2014bit%2014bit%20lossless%20compressed%20%283:2%29.RAF\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:bfef4f0f8a122ac7ab367b8afb87eb772a4770af99111953cf2ac932c929e49d",
+            "path": "xtask/src/main.rs",
+            "line": 793
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-fea1f2fce242bcd3",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:bf27974b0e9cee8b0c4d3a36f80dc9c750f6b1d643d2d12859191ee3a42c4d19",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/main.rs",
+          "line": 646,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://raw.pixls.us/getfile.php/2151/nice/Olympus%20-%20E-400%20-%2016bit%20%284:3%29.ORF\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:bf27974b0e9cee8b0c4d3a36f80dc9c750f6b1d643d2d12859191ee3a42c4d19",
+            "path": "xtask/src/main.rs",
+            "line": 646
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-5912e1f1a3e82daa",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:df56f4f402ea9c47ea23f64ef83661ecaaa165db87e0678b2f775c43da16908b",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/web.rs",
+          "line": 169,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "println!(\"serve it with `cargo xtask web --serve` (or any static HTTP server; see docs/web.md) and open http://127.0.0.1:8080/\");"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:df56f4f402ea9c47ea23f64ef83661ecaaa165db87e0678b2f775c43da16908b",
+            "path": "xtask/src/web.rs",
+            "line": 169
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-ff7e84571fa6afc9",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:19b1d726b61c1d5be81ce57f1b693c283008229de744f45fbf8b7bd3d6ccdf40",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "xtask/src/web.rs",
+          "line": 223,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "println!(\"serving {} at http://127.0.0.1:{port}/  (Ctrl+C to stop)\", dir.display());"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:19b1d726b61c1d5be81ce57f1b693c283008229de744f45fbf8b7bd3d6ccdf40",
+            "path": "xtask/src/web.rs",
+            "line": 223
+          }
+        ]
+      }
+    ]
+  }
+}

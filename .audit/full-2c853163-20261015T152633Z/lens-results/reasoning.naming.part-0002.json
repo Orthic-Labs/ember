@@ -1,0 +1,10 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.naming",
+ "packetDigest": "sha256:e933282298c43d83c075312d4549ae338b1fa155f32dcd87d533280e0c4b7225",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [],
+ "withdrawn": []
+}

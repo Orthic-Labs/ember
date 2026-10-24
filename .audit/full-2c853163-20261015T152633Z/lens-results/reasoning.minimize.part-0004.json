@@ -1,0 +1,69 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.minimize",
+ "packetDigest": "sha256:d9934347863f6abb8422f2f3180247131b094256f7af0bb33983497e7d51d95d",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "p0004-corpus-skip-boilerplate",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/raw/tests/corpus.rs:161",
+    "crates/raw/tests/corpus.rs:397-404"
+   ],
+   "failureScenario": "crates/raw/tests/corpus.rs repeats the 'read corpus file, else eprintln skip: <name> absent and continue/return' block at 22 sites (two spellings: let-else Ok and a match on ErrorKind::NotFound), roughly 4-8 lines each. Each new corpus test copies it again, and the spellings already differ on whether a non-NotFound IO error panics (match form) or is silently skipped (let-else form).",
+   "action": "Add one helper such as fn corpus_file(dir: &Path, name: &str) -> Option<Vec<u8>> that reads the file, prints the skip line on NotFound and panics on other errors, and use it in every test; expected net cut of about 60-80 lines.",
+   "verifyStatus": "verified",
+   "ponytailTag": "shrink",
+   "anchor": {
+    "path": "crates/raw/tests/corpus.rs",
+    "line": 161,
+    "text": "let Ok(bytes) = std::fs::read(dir.join(name)) else {"
+   }
+  },
+  {
+   "id": "p0004-headless-tempdir-boilerplate",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/headless.rs:505-507",
+    "crates/ui-egui/src/headless.rs:562",
+    "crates/ui-egui/src/tests_preset_import.rs:21-26"
+   ],
+   "failureScenario": "headless.rs open-codes std::env::temp_dir().join(format!(\"lc-...-{pid}\")) + remove_dir_all + create_dir_all in 30 tests, and the same helper is separately redefined as fn temp_dir(tag) in about 19 other test modules (engine tests_*.rs, tests_preset_import.rs, tests_keyword_files.rs, preview/src/tests.rs, catalog/src/tests_lock.rs). Each also hand-rolls cleanup, so a failing assert leaks the directory and a stale pid-named dir can collide.",
+   "action": "Provide one shared test helper (a test-support crate fn or the tempfile crate's TempDir with auto-cleanup) and replace the 30 inline sites and the per-module temp_dir copies.",
+   "verifyStatus": "verified",
+   "ponytailTag": "native",
+   "anchor": {
+    "path": "crates/ui-egui/src/headless.rs",
+    "line": 505,
+    "text": "let dir = std::env::temp_dir().join(format!(\"lc-ui-denoise-{}\", std::process::id()));"
+   }
+  },
+  {
+   "id": "p0004-engine-tests-group-validation-dup",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "crates/engine/src/tests.rs:1455-1626",
+    "crates/engine/src/tests.rs:1628-1684"
+   ],
+   "failureScenario": "develop_paste_validates..., develop_sync_validates..., develop_copy_and_paste_previous_validate_groups and presets_validate_groups_on_create_and_update re-state the same sequence (bogus group names, a 5-7 entry list of wrong-typed JSON, valid subset, omitted, explicit null) with only the command name changed; paste and sync are near line-for-line copies of about 70 lines each. A new group-taking command needs another 70-line copy.",
+   "action": "Drive the shared cases from one table: a helper taking (command, params-builder) that runs the invalid-name and invalid-type lists and asserts BadParams plus zero mutation, then keep only the command-specific happy-path assertions per test.",
+   "verifyStatus": "verified",
+   "ponytailTag": "shrink",
+   "anchor": {
+    "path": "crates/engine/src/tests.rs",
+    "line": 1478,
+    "text": "for invalid_param in ["
+   }
+  }
+ ],
+ "withdrawn": []
+}

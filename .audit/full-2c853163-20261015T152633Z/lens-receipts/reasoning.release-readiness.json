@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-receipt",
+  "provider": "reasoning.release-readiness",
+  "result": {
+    "schema_version": 1,
+    "provider": "reasoning.release-readiness",
+    "applicable": true,
+    "required": true,
+    "status": "partial",
+    "complete": false,
+    "coverage": {
+      "denominator_digest": "sha256:651b7a3e1170ad2581d9286f3df697ddf8223c9682a0f6c39230c252e71cf704",
+      "expected": 42,
+      "examined": 42,
+      "gaps": [
+        "lens-promotion-capped:1"
+      ]
+    },
+    "findings": [],
+    "coverage_gaps": [
+      "lens-promotion-capped:1"
+    ],
+    "degradation": [],
+    "details": {
+      "executionReceipt": {
+        "schemaVersion": 1,
+        "kind": "legion-reasoning-receipt",
+        "receiptId": "ingest-11fcde5785e7ba4cd9c269ef5ac9d9e6",
+        "requestId": "sha256:108067dc56ae62528357b2c306f628a140070fbcbe51f2a86c4620932c7dbbe7",
+        "providerId": "reasoning.release-readiness",
+        "contract": "audit-lens-release-readiness-v1",
+        "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+        "planSignature": "hmac-sha256:805a23e8a5d736c2a96307bc58b919aa92b271336dbe2dbca01d2a81fe17b6f3",
+        "repositoryId": "/Volumes/D/claude/ember",
+        "inventoryGeneration": "filesystem:sha256:6a2aaea46465c4542b1f39f825efd84edc8f63121b837f8bc64a97418d82ef9a",
+        "inventoryDigest": "sha256:da3157e68029988c594537621af44004cf97f0020364e0c23299c7b13bcc221a",
+        "denominatorDigest": "sha256:651b7a3e1170ad2581d9286f3df697ddf8223c9682a0f6c39230c252e71cf704",
+        "denominatorCount": 42,
+        "resultDigest": "sha256:22c56d92fc1e9db0a1f36e1efa7365e1b971d041d82b9ef1d6b585c2a8953fee",
+        "status": "partial",
+        "complete": false,
+        "gaps": [
+          "lens-promotion-capped:1"
+        ],
+        "authentication": {
+          "alg": "HMAC-SHA256",
+          "macDomain": "legion-reasoning-receipt:v1",
+          "boundFieldsDigest": "sha256:879de90044d6c1908fca28fc34814e176364267cdd644bb6319c20c234db2e65",
+          "mac": "86dfccd5a36f6baf4adb604a32267f03cfac2bf29ed4df88da2dacee49cb83c8",
+          "host": "legion-cli-ingest",
+          "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb"
+        }
+      },
+      "findingEvidence": {},
+      "findingLocations": {},
+      "findingMessages": {},
+      "findingTitles": {},
+      "ingest": {
+        "host": "legion-cli-ingest",
+        "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb",
+        "packetDigest": "sha256:c8ca1a20894baf5198e333c8382c1a2cea917a0ff69a78801c02ba7f126a57f9",
+        "anchorsVerified": 0
+      },
+      "lensFindings": [],
+      "lensIds": [
+        "release-readiness"
+      ],
+      "packetCoverage": {
+        "basis": "bounded-excerpts",
+        "examined": 0,
+        "expected": 42,
+        "omittedPaths": [],
+        "truncatedPaths": [],
+        "coverageMode": "risk-sampled",
+        "bundle": "S1",
+        "reviewSetDigest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "reviewSetCount": 0,
+        "reviewExpected": 0,
+        "promotedPaths": [],
+        "displacedPaths": [],
+        "unpromotedCount": 1,
+        "declaredUnsampled": 42,
+        "excluded": 0,
+        "aliasedPaths": [],
+        "reviewExamined": 0
+      },
+      "reasoningHostState": "ingested",
+      "withdrawnFindings": []
+    }
+  }
+}

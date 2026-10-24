@@ -1,0 +1,64 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.security",
+ "packetDigest": "sha256:3eaff337fb632c214123781c44c79d9d74cd841596bcf556d5306ec4c3b3adfc",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "p0012-security-web-serve-windows-absolute-path",
+   "lens": "security",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "xtask/src/web.rs:249-263",
+    "xtask/src/web.rs:222"
+   ],
+   "failureScenario": "The `cargo xtask web --serve` static server only rejects `..` components and backslashes. On Windows a request such as `GET /C:/Users/<u>/.ssh/id_rsa` yields rel `C:/Users/...`; Path::join with a path carrying a drive prefix replaces the base, so dir.join(rel) reads any file on disk and returns it with 200. The server binds 127.0.0.1 but performs no Host validation, so any local process, or a remote page via DNS rebinding, can read arbitrary developer files while the dev server runs.",
+   "action": "Reject rel values containing ':' or any non-Normal path component (use Path::components and require Component::Normal only), and canonicalize the result and require it to start with the canonical serve dir; optionally validate the Host header.",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "xtask/src/web.rs",
+    "line": 256,
+    "text": "    let safe = !rel.split('/').any(|c| c == \"..\" || c.contains('\\\\'));"
+   }
+  },
+  {
+   "id": "p0012-security-sign-unpinned-trusted-signing-client",
+   "lens": "security",
+   "severity": "medium",
+   "confidence": "likely",
+   "evidence": [
+    "packaging/windows/sign.ps1:76-89"
+   ],
+   "failureScenario": "Azure Trusted Signing downloads whatever version of Microsoft.Trusted.Signing.Client nuget.org currently serves as latest, with no version pin, hash or signature check, then loads Azure.CodeSigning.Dlib.dll into signtool while AZURE_CLIENT_SECRET and the other signing credentials are in the environment. A changed or compromised latest package executes arbitrary code with release-signing credentials, and an upstream breaking release silently changes the signing path of a release build.",
+   "action": "Pin the package version in the URL and verify a recorded SHA-256 (or the package's NuGet signature) before extracting and loading the dlib.",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "packaging/windows/sign.ps1",
+    "line": 77,
+    "text": "    Invoke-WebRequest -Uri 'https://www.nuget.org/api/v2/package/Microsoft.Trusted.Signing.Client' -OutFile $pkg"
+   }
+  },
+  {
+   "id": "p0012-security-appimagetool-continuous-unverified",
+   "lens": "security",
+   "severity": "medium",
+   "confidence": "likely",
+   "evidence": [
+    "packaging/linux/package.sh:109-116",
+    "packaging/linux/package.sh:133"
+   ],
+   "failureScenario": "When appimagetool is not on PATH the release packaging script downloads it from the moving `continuous` GitHub release with no version pin or checksum, executes it, and the AppImage it produces embeds that tool's runtime, which runs on every user's machine. A changed or compromised continuous build alters the shipped AppImage runtime without any change in this repository, and the cached copy in CARGO_TARGET_DIR is reused without re-verification.",
+   "action": "Download a pinned appimagetool release by tag and verify a recorded SHA-256 before chmod +x and execution (also when reusing the cached file).",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "packaging/linux/package.sh",
+    "line": 113,
+    "text": "      curl -fsSL -o \"$TOOL\" \"https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage\""
+   }
+  }
+ ],
+ "withdrawn": []
+}

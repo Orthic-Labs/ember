@@ -1,0 +1,280 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-receipt",
+  "provider": "reasoning.resilience",
+  "result": {
+    "schema_version": 1,
+    "provider": "reasoning.resilience",
+    "applicable": true,
+    "required": true,
+    "status": "partial",
+    "complete": false,
+    "coverage": {
+      "denominator_digest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+      "expected": 730,
+      "examined": 15,
+      "gaps": [
+        "reasoning-part-scope:reasoning.resilience:part 3/4"
+      ]
+    },
+    "findings": [
+      {
+        "id": "res-dns-resolve-ignores-cancel-and-deadline",
+        "severity": "low"
+      },
+      {
+        "id": "res-startup-settings-failures-swallowed-and-marked-applied",
+        "severity": "low"
+      }
+    ],
+    "coverage_gaps": [
+      "reasoning-part-scope:reasoning.resilience:part 3/4"
+    ],
+    "degradation": [],
+    "details": {
+      "executionReceipt": {
+        "schemaVersion": 1,
+        "kind": "legion-reasoning-receipt",
+        "receiptId": "ingest-77c18c1b1fee659f919f73907099d9ab",
+        "requestId": "sha256:07d9774fec106a959fa2ffe5c6a4689c960312b636c2cb81a3ac2c7e20402ce6",
+        "providerId": "reasoning.resilience",
+        "contract": "audit-lens-resilience-v1",
+        "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+        "planSignature": "hmac-sha256:805a23e8a5d736c2a96307bc58b919aa92b271336dbe2dbca01d2a81fe17b6f3",
+        "repositoryId": "/Volumes/D/claude/ember",
+        "inventoryGeneration": "filesystem:sha256:6a2aaea46465c4542b1f39f825efd84edc8f63121b837f8bc64a97418d82ef9a",
+        "inventoryDigest": "sha256:da3157e68029988c594537621af44004cf97f0020364e0c23299c7b13bcc221a",
+        "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+        "denominatorCount": 730,
+        "resultDigest": "sha256:cdcfc35c26be59d23ff3e1b72138dc7a2f4646deb93231ab3c2f006185449b79",
+        "status": "partial",
+        "complete": false,
+        "gaps": [
+          "reasoning-part-scope:reasoning.resilience:part 3/4"
+        ],
+        "authentication": {
+          "alg": "HMAC-SHA256",
+          "macDomain": "legion-reasoning-receipt:v1",
+          "boundFieldsDigest": "sha256:879de90044d6c1908fca28fc34814e176364267cdd644bb6319c20c234db2e65",
+          "mac": "f18111fa1acd0178cdaddd8f6ea36b92f6969d71ddd5bb775913e14bd83e9994",
+          "host": "legion-cli-ingest",
+          "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb"
+        }
+      },
+      "findingEvidence": {
+        "res-dns-resolve-ignores-cancel-and-deadline": {
+          "lens": "resilience",
+          "confidence": "likely",
+          "verifyStatus": "unverified",
+          "action": "Resolve on a helper thread and wait on a channel with the connect timeout, cancel and deadline checks, or document the exception."
+        },
+        "res-startup-settings-failures-swallowed-and-marked-applied": {
+          "lens": "resilience",
+          "confidence": "likely",
+          "verifyStatus": "unverified",
+          "action": "Log (and surface) the Err, and only mark the setting applied when execute succeeds."
+        }
+      },
+      "findingLocations": {
+        "res-dns-resolve-ignores-cancel-and-deadline": [
+          "crates/fetch/src/http.rs:200-218",
+          "crates/fetch/src/http.rs:8-10"
+        ],
+        "res-startup-settings-failures-swallowed-and-marked-applied": [
+          "crates/ui-egui/src/lib.rs:1121-1139"
+        ]
+      },
+      "findingMessages": {
+        "res-dns-resolve-ignores-cancel-and-deadline": "Stream::connect resolves the host with to_socket_addrs(), a blocking getaddrinfo call that honours neither the cancel flag, the connect timeout, nor the whole-operation deadline (limits.check() runs only before and after). With a broken resolver or captive network the worker thread blocks for the OS resolver timeout (often tens of seconds) after the user cancels a download or after the 20/45 s deadline of an OpenRouter request, contradicting the module's stated guarantee that a dead server or cancelled download never hangs the thread. Quit-time task waits are held up as well.",
+        "res-startup-settings-failures-swallowed-and-marked-applied": "apply_settings records gpu_applied and memory_applied before executing app.gpu and app.memoryBudget and discards both results with let _ =. If the engine refuses the command (invalid budget, GPU init error) there is no log line, no toast and no retry, yet the Settings UI shows the value as active; a field report of 'memory budget ignored' leaves zero signal in the persisted log."
+      },
+      "findingTitles": {
+        "res-dns-resolve-ignores-cancel-and-deadline": "Resolve on a helper thread and wait on a channel with the connect timeout, cancel and deadline checks, or document the exception.",
+        "res-startup-settings-failures-swallowed-and-marked-applied": "Log (and surface) the Err, and only mark the setting applied when execute succeeds."
+      },
+      "ingest": {
+        "host": "legion-cli-ingest",
+        "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb",
+        "packetDigest": "sha256:4686608c6c9f06629c0b5047987c243debbbc3ae68dde54baa72d04283308f74",
+        "anchorsVerified": 2
+      },
+      "lensFindings": [
+        {
+          "id": "res-dns-resolve-ignores-cancel-and-deadline",
+          "lens": "resilience",
+          "severity": "low",
+          "confidence": "likely",
+          "evidence": [
+            "crates/fetch/src/http.rs:200-218",
+            "crates/fetch/src/http.rs:8-10"
+          ],
+          "failureScenario": "Stream::connect resolves the host with to_socket_addrs(), a blocking getaddrinfo call that honours neither the cancel flag, the connect timeout, nor the whole-operation deadline (limits.check() runs only before and after). With a broken resolver or captive network the worker thread blocks for the OS resolver timeout (often tens of seconds) after the user cancels a download or after the 20/45 s deadline of an OpenRouter request, contradicting the module's stated guarantee that a dead server or cancelled download never hangs the thread. Quit-time task waits are held up as well.",
+          "action": "Resolve on a helper thread and wait on a channel with the connect timeout, cancel and deadline checks, or document the exception.",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "crates/fetch/src/http.rs",
+            "line": 202,
+            "text": "        let addrs: Vec<_> = (url.host.as_str(), url.port).to_socket_addrs().map_err(|e| HttpError::Connect(format!(\"{}: {e}\", url.host)))?.collect();"
+          }
+        },
+        {
+          "id": "res-startup-settings-failures-swallowed-and-marked-applied",
+          "lens": "resilience",
+          "severity": "low",
+          "confidence": "likely",
+          "evidence": [
+            "crates/ui-egui/src/lib.rs:1121-1139"
+          ],
+          "failureScenario": "apply_settings records gpu_applied and memory_applied before executing app.gpu and app.memoryBudget and discards both results with let _ =. If the engine refuses the command (invalid budget, GPU init error) there is no log line, no toast and no retry, yet the Settings UI shows the value as active; a field report of 'memory budget ignored' leaves zero signal in the persisted log.",
+          "action": "Log (and surface) the Err, and only mark the setting applied when execute succeeds.",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "crates/ui-egui/src/lib.rs",
+            "line": 1136,
+            "text": "            let _ = self.session.execute(\"app.memoryBudget\", &serde_json::json!({\"mb\": mb}));"
+          }
+        }
+      ],
+      "lensIds": [
+        "resilience"
+      ],
+      "packetCoverage": {
+        "basis": "bounded-excerpts",
+        "examined": 15,
+        "expected": 730,
+        "part": {
+          "number": 3,
+          "total": 4
+        },
+        "requiredParts": 4,
+        "overCeiling": null,
+        "partPaths": [
+          "crates/fetch/src/http.rs",
+          "crates/mcp/src/server.rs",
+          "crates/photo-ai/src/network.rs",
+          "crates/raw/src/lib.rs",
+          "crates/raw/tests/corpus.rs",
+          "crates/segment/src/bin/lightcraft-sam3-worker.rs",
+          "crates/ui-egui/src/headless.rs",
+          "crates/ui-egui/src/i18n.rs",
+          "crates/ui-egui/src/lib.rs",
+          "crates/ui-egui/src/menubar.rs",
+          "crates/ui-egui/src/menus.rs",
+          "crates/ui-egui/src/panels/detail.rs",
+          "crates/ui-egui/src/panels/dialogs.rs",
+          "crates/ui-egui/src/panels/left.rs",
+          "crates/ui-egui/src/panels/right.rs",
+          "crates/ui-egui/src/state.rs"
+        ],
+        "examinedPaths": [
+          "crates/fetch/src/http.rs",
+          "crates/mcp/src/server.rs",
+          "crates/photo-ai/src/network.rs",
+          "crates/raw/src/lib.rs",
+          "crates/raw/tests/corpus.rs",
+          "crates/segment/src/bin/lightcraft-sam3-worker.rs",
+          "crates/ui-egui/src/headless.rs",
+          "crates/ui-egui/src/i18n.rs",
+          "crates/ui-egui/src/lib.rs",
+          "crates/ui-egui/src/menubar.rs",
+          "crates/ui-egui/src/menus.rs",
+          "crates/ui-egui/src/panels/detail.rs",
+          "crates/ui-egui/src/panels/dialogs.rs",
+          "crates/ui-egui/src/panels/left.rs",
+          "crates/ui-egui/src/panels/right.rs"
+        ],
+        "chunkedPaths": [
+          {
+            "path": "crates/engine/src/tests_import.rs",
+            "chunk": 3,
+            "chunks": 3,
+            "startLine": 1199,
+            "endLine": 1614
+          },
+          {
+            "path": "crates/ui-egui/src/state.rs",
+            "chunk": 1,
+            "chunks": 2,
+            "startLine": 1,
+            "endLine": 809
+          }
+        ],
+        "omittedPaths": [],
+        "truncatedPaths": [],
+        "coverageMode": "risk-sampled",
+        "bundle": "S1",
+        "reviewSetDigest": "sha256:0979bbe58e2de1a68b710b92c005b16a51d8d0d7126aea91bde0ba8e38823ff4",
+        "reviewSetCount": 79,
+        "reviewExpected": 53,
+        "promotedPaths": [
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs",
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/cmd/geocode.rs"
+        ],
+        "displacedPaths": [
+          "crates/codecs/examples/jpeg_bench.rs",
+          "crates/raw/examples/rawdump.rs",
+          "crates/merge/src/features.rs",
+          "crates/merge/tests/pano.rs",
+          "crates/pipeline/src/dust.rs",
+          "crates/pipeline/src/colorops.rs",
+          "crates/gpu/tests/memory.rs",
+          "crates/raw/src/demosaic/xtrans.rs",
+          "crates/merge/src/pano/finish.rs",
+          "crates/codecs/src/jpeg_par.rs",
+          "crates/meta/src/iptc.rs",
+          "apps/lightcraft-web/src/files.rs",
+          "crates/codecs/src/other.rs",
+          "apps/lightcraft/examples/gen_photos.rs",
+          "crates/merge/src/ransac.rs",
+          "crates/scenes/src/noise.rs",
+          "crates/tiff/src/makernote.rs",
+          "crates/merge/src/align.rs",
+          "crates/catalog/src/tests_local.rs",
+          "apps/lightcraft-cli/src/alloc_release.rs",
+          "crates/codecs/src/exif.rs",
+          "crates/engine/src/cmd/curves.rs",
+          "crates/ui-egui/src/tests_unsaved.rs",
+          "packaging/linux/postinst.sh",
+          "crates/raw/examples/rawinfo.rs",
+          "crates/pipeline/src/upright.rs",
+          "crates/pipeline/src/transform.rs",
+          "crates/ui-egui/src/panels/crop_overlay.rs",
+          "crates/engine/src/tests_forget_local.rs",
+          "crates/pipeline/src/profiles.rs",
+          "crates/engine/src/cmd/develop.rs",
+          "crates/ui-egui/src/widgets.rs",
+          "crates/ui-egui/src/panels/settings.rs",
+          "crates/ui-egui/src/import.rs",
+          "crates/ui-egui/src/tests_preview_limit.rs",
+          "crates/ui-egui/src/render.rs",
+          "crates/desktop-host/src/tasks.rs",
+          "crates/catalog/src/keywords.rs",
+          "crates/ui-egui/src/panels/edit.rs",
+          "crates/ui-egui/src/panels/grid.rs"
+        ],
+        "unpromotedCount": 80,
+        "declaredUnsampled": 677,
+        "excluded": 23,
+        "aliasedPaths": []
+      },
+      "reasoningHostState": "ingested",
+      "withdrawnFindings": []
+    }
+  },
+  "part": {
+    "number": 3,
+    "total": 4
+  }
+}

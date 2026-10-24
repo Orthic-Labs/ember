@@ -1,0 +1,111 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.doc-drift",
+ "packetDigest": "sha256:0d3c9d0c41724d8294c43cd77f6846ba5132142ba0c63f007493eadf3d0acbf3",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "doc-drift-p7-corpus-pngsuite-not-downloaded",
+   "lens": "doc-drift",
+   "severity": "medium",
+   "confidence": "confirmed",
+   "evidence": [
+    "xtask/src/main.rs:36-38",
+    "xtask/src/main.rs:895-925",
+    "crates/codecs/tests/corpus.rs:1-2",
+    "crates/codecs/tests/corpus.rs:57-62"
+   ],
+   "failureScenario": "`cargo xtask` usage and crates/codecs/tests/corpus.rs both state that `cargo xtask corpus --download` fetches PngSuite into corpus/, but cmd_corpus only iterates RAW_SAMPLES into corpus/raw. corpus/pngsuite is never populated, so corpus_pngsuite always prints 'skip: ... absent' and returns; developers and CI believe PNG conformance coverage exists when it never runs.",
+   "action": "Either add PngSuite (pinned URL + sha256) to the corpus download into corpus/pngsuite, or remove the PngSuite claim from the USAGE text and the corpus.rs module doc and document how corpus/pngsuite is obtained.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "xtask/src/main.rs",
+    "line": 38,
+    "text": "                  show where test corpora live; --download fetches PngSuite and CC0 raw samples (raw.pixls.us) into corpus/ and checks their sha256"
+   }
+  },
+  {
+   "id": "doc-drift-p7-sony-corpus-count-stale",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "xtask/src/main.rs:379-390",
+    "xtask/src/main.rs:816-827",
+    "docs/sony-lens-corrections.md:102-104",
+    "crates/raw/tests/corpus.rs:977-1003"
+   ],
+   "failureScenario": "docs/sony-lens-corrections.md says the current `cargo xtask corpus --download` manifest holds 23 Sony samples across 17 bodies and that all of them are checked by sony_embedded_distortion_is_limited_to_validated_models. RAW_SAMPLES now also pins ILCE-7CM2 (2 files, issue #697) and ILCE-7RM6 ARW6 (2 files): 27 Sony files across 19 bodies. The 4 newer files are absent from the model-boundary test list, so the documented guarantee that every Sony corpus file is checked against the distortion model boundary is false for those bodies.",
+   "action": "Update the Sony doc counts/table to the current manifest, and add the ILCE-7CM2 and ILCE-7RM6 samples (expected 0 warps) to sony_embedded_distortion_is_limited_to_validated_models, or state explicitly why they are excluded.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "xtask/src/main.rs",
+    "line": 379,
+    "text": "    // ILCE-7CM2 (33 MP, issue #697): lossless compressed L, and the compressed \"M-size\" coding, which is Bayer at"
+   }
+  },
+  {
+   "id": "doc-drift-p7-xtask-layering-doc-pointer-local-only",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "xtask/src/main.rs:28",
+    "xtask/src/main.rs:178",
+    "xtask/src/layers.rs:154",
+    "docs/architecture.md:3-12"
+   ],
+   "failureScenario": "xtask usage, the `layers` report header and the unregistered-crate violation message all direct the reader to plan/architecture.md §3, but plan/ is git-ignored and docs/architecture.md states that file is local-only. A contributor on a fresh clone who hits 'register it in xtask/src/layers.rs TABLE (see plan/architecture.md §3)' finds no such file; the tracked rules live in docs/architecture.md '## Layers'.",
+   "action": "Point the xtask USAGE, cmd_layers header and layers.rs messages at docs/architecture.md#layers (the tracked document).",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "xtask/src/main.rs",
+    "line": 28,
+    "text": "  layers          enforce the crate dependency layering (plan/architecture.md §3)"
+   }
+  },
+  {
+   "id": "doc-drift-p7-xtask-usage-omits-version",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "xtask/src/main.rs:18-40",
+    "xtask/src/main.rs:47",
+    "xtask/src/version.rs:1"
+   ],
+   "failureScenario": "main dispatches `cargo xtask version [set X.Y.Z]` (the documented single source of truth for the workspace version used by packaging), but USAGE lists no `version` command, so `cargo xtask help` hides the version-bump entry point.",
+   "action": "Add `version [set X.Y.Z[-pre]]` to the USAGE command list.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "xtask/src/main.rs",
+    "line": 47,
+    "text": "        Some(\"version\") => version::run(&root(), &rest),"
+   }
+  },
+  {
+   "id": "doc-drift-p7-tests-masking-module-doc-scope",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/tests_masking.rs:1",
+    "crates/ui-egui/src/tests_masking.rs:675",
+    "crates/ui-egui/src/tests_masking.rs:942",
+    "crates/ui-egui/src/tests_masking.rs:1089",
+    "crates/ui-egui/src/tests_masking.rs:1193"
+   ],
+   "failureScenario": "The module doc says tests_masking.rs holds headless tests of the Masking and Remove tools, but it also holds smart-album editor, slideshow, Local folder tree, external-editor, soft-proofing and 100k-grid performance tests. A developer changing those features searches the appropriately named modules, misses these regression tests, and the doc misdirects test ownership.",
+   "action": "Move the unrelated tests into modules named for their features, or widen the module doc to describe what the file actually covers.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/ui-egui/src/tests_masking.rs",
+    "line": 675,
+    "text": "fn smart_album_editor_picks_an_album_from_a_list() {"
+   }
+  }
+ ],
+ "withdrawn": []
+}

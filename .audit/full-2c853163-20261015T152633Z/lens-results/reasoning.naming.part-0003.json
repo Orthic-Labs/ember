@@ -1,0 +1,96 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.naming",
+ "packetDigest": "sha256:536e7208ec461da54b015673c25646ad037feb1089e7fdcf6be40ccfd2ed3f4b",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "naming.pick-lightroom-catalog-typed-pick-folder",
+   "lens": "naming",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/lib.rs:155",
+    "crates/ui-egui/src/lib.rs:224-225",
+    "apps/lightcraft/src/main.rs:484-490",
+    "crates/ui-egui/src/menus.rs:1350"
+   ],
+   "failureScenario": "`pick_lightroom_catalog` is typed `Option<PickFolder>` (alias doc: 'A folder chooser') but the only implementation calls `.pick_file()` with a `.lrcat` filter and returns a file path. The alias is used for a file picker, so a new host (web/Linux/test) reading the type will implement a folder dialog and hand back a directory that the importer then rejects, and `PickFolder` no longer means 'folder'.",
+   "action": "Type it with a name that means a single-path picker (e.g. a `PickFile` alias for `FnMut() -> Option<String>`) and reserve `PickFolder` for folder choosers.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/ui-egui/src/lib.rs",
+    "line": 225,
+    "text": "    pub pick_lightroom_catalog: Option<PickFolder>,"
+   }
+  },
+  {
+   "id": "naming.crop-and-mask-overlay-name-collision",
+   "lens": "naming",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/panels/detail.rs:1364",
+    "crates/ui-egui/src/panels/detail.rs:1398",
+    "crates/ui-egui/src/panels/detail.rs:1820",
+    "crates/ui-egui/src/state.rs:550",
+    "crates/ui-egui/src/state.rs:560"
+   ],
+   "failureScenario": "In panels/detail.rs `fn crop_overlay` draws the crop box and its handles, while `app.ui.crop_overlay` (state.rs:560) is the guide style (thirds/grid/spiral) and `super::crop_overlay::paths` (line 1398, inside that very function) is a third `crop_overlay` module; `fn mask_overlay` draws outlines/pins/brush while `ui.mask_overlay` (state.rs:550) toggles the rendered overlay of the mask (its own doc says the mask itself shows as `view_overlay`). The same word names four different things in one file, so a reader or grep for 'crop_overlay'/'mask_overlay' lands on the wrong concept and an edit to the toggle gets applied to the drawing function.",
+   "action": "Rename the drawing functions for what they draw (e.g. `crop_box_tool`, `mask_handles`) and keep `*_overlay` for the guide/overlay setting.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/ui-egui/src/panels/detail.rs",
+    "line": 1364,
+    "text": "fn crop_overlay(app: &mut LightcraftApp, ui: &mut egui::Ui, resp: &egui::Response, map: &CanvasMap, frame: &Frame, d: &DevelopSettings, id: PhotoId) {"
+   }
+  },
+  {
+   "id": "naming.ui-commands-fn-vs-const",
+   "lens": "naming",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "crates/ui-egui/src/menus.rs:29-33",
+    "crates/ui-egui/src/menus.rs:16",
+    "crates/ui-egui/src/menus.rs:53",
+    "xtask/src/parity.rs:4"
+   ],
+   "failureScenario": "`menus::ui_commands()` iterates LANGUAGE_COMMANDS then UI_COMMANDS, so the function named `ui_commands` returns a superset of the constant `UI_COMMANDS`. Callers that need every UI command must use the function while anyone grepping or reading `UI_COMMANDS` (xtask/src/parity.rs:4 cites 'a UI command from `UI_COMMANDS`') silently misses the language commands.",
+   "action": "Rename the function to `all_ui_commands` (or name the constant `NON_LANGUAGE_UI_COMMANDS`) and update parity doc text.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/ui-egui/src/menus.rs",
+    "line": 31,
+    "text": "pub fn ui_commands() -> impl Iterator<Item = &'static UiCommand> {"
+   }
+  },
+  {
+   "id": "naming.left-panel-folder-polysemy",
+   "lens": "naming",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "crates/ui-egui/src/panels/left.rs:1548",
+    "crates/ui-egui/src/panels/left.rs:1895",
+    "crates/ui-egui/src/panels/left.rs:1037",
+    "crates/ui-egui/src/panels/left.rs:1741",
+    "crates/ui-egui/src/panels/left.rs:1797",
+    "crates/ui-egui/src/panels/left.rs:888",
+    "crates/ui-egui/src/panels/left.rs:1881",
+    "crates/ui-egui/src/lib.rs:1587"
+   ],
+   "failureScenario": "'folder' means three things in left.rs: `folder_menu(.., a: &Album)` is the context menu of an album folder, `folder_menu_for_library(.., n: &FolderNode)` (with sibling `row_menu`) is the library Folders row menu, and `folder_tree` is a Local on-disk folder row while `folder_rows`/`folder_row` draw the library Folders section (and `Caches::folder_tree` in lib.rs:1587 is the library tree, not the Local one). Separately `folder_label(path)` returns a display name while `folder_label_menu` is the colour-label submenu. A change to 'folder_tree' or 'folder_menu' is easy to apply to the wrong sidebar section.",
+   "action": "Prefix by section (`album_folder_menu`, `library_folder_menu`, `local_folder_row`, `folder_display_name`) so each name identifies the sidebar section it serves.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/ui-egui/src/panels/left.rs",
+    "line": 1548,
+    "text": "fn folder_menu(app: &mut LightcraftApp, resp: &egui::Response, a: &Album) {"
+   }
+  }
+ ],
+ "withdrawn": []
+}

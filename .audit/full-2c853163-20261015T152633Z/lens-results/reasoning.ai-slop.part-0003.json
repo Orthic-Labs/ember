@@ -1,0 +1,168 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.ai-slop",
+ "packetDigest": "sha256:b8d0001fc99665ab72496a1a9cba94ee888bdb3310070fb1286a52659d80ee9a",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "ai-slop.orphaned-doc-comments-ui-lib",
+   "lens": "ai-slop",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/lib.rs:639-641",
+    "crates/ui-egui/src/lib.rs:720",
+    "crates/ui-egui/src/lib.rs:1379-1389",
+    "crates/ui-egui/src/lib.rs:1756-1764",
+    "crates/ui-egui/src/lib.rs:1811"
+   ],
+   "failureScenario": "Doc comments in ui-egui/src/lib.rs are stacked on the wrong item, a copy-paste/merge tell. `slideshow_tick` carries 'Show a transient toast at the bottom of the canvas' while `pub fn toast` (line 720) has no doc; `HoverPreview` carries 'Whether the settings render in black & white' while `pub fn is_bw` (line 1389) is undocumented; the 'Every album's photo count for the sidebar... follow the clock within a minute' block sits above `rules_view` (merged with rules_view's own doc) while `album_counts` (line 1811) is undocumented. rustdoc then shows a wrong description for slideshow_tick, HoverPreview, rules_view and no description for toast, is_bw, album_counts.",
+   "action": "Move each doc paragraph onto the item it describes (toast, is_bw, album_counts) and delete it from slideshow_tick, HoverPreview and rules_view.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/ui-egui/src/lib.rs",
+    "line": 639,
+    "text": "    /// Show a transient toast at the bottom of the canvas (like the reference app's HUD)."
+   }
+  },
+  {
+   "id": "ai-slop.orphaned-doc-comments-headless",
+   "lens": "ai-slop",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/headless.rs:177-179",
+    "crates/ui-egui/src/headless.rs:191",
+    "crates/ui-egui/src/headless.rs:2958-2962",
+    "crates/ui-egui/src/headless.rs:2994"
+   ],
+   "failureScenario": "In headless.rs `HeadlessView::painted_shapes` carries two stacked docs ('Every piece of text the last frame painted...' then 'Every shape of the last frame...'), so the first describes the wrong function and `painted_text` (line 191) has no doc. In the test module the doc 'The folder scan runs in the background: the request returns at once and the review opens when the scan finishes' is merged onto `browsing_the_same_folder_again_does_not_restart` (line 2962) while `add_folder_scans_in_the_background` (line 2994), the test it describes, has none; the first test's intent becomes unreadable.",
+   "action": "Split each merged doc block and attach each paragraph to the function it describes.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/ui-egui/src/headless.rs",
+    "line": 177,
+    "text": "    /// Every piece of text the last frame painted (labels, tooltips, values), in paint order."
+   }
+  },
+  {
+   "id": "ai-slop.orphaned-doc-comments-i18n",
+   "lens": "ai-slop",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/i18n.rs:203-207",
+    "crates/ui-egui/src/i18n.rs:215",
+    "crates/ui-egui/src/i18n.rs:483-487",
+    "crates/ui-egui/src/i18n.rs:494-495"
+   ],
+   "failureScenario": "`builtin_label` (i18n.rs:215) is undocumented while its doc 'A stock preset's or profile's name in the UI language...' is stacked on top of `startup_failed_message`'s doc, so startup_failed_message's rustdoc opens with preset-name text. In tests, 'Locale tags are matched leniently, so a system locale reaches a shipped language.' is merged onto `startup_failure_message_names_the_error_and_the_log` instead of `locale_tags_normalize` (line 495).",
+   "action": "Move the 'stock preset' paragraph onto builtin_label and the 'Locale tags' sentence onto locale_tags_normalize.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/ui-egui/src/i18n.rs",
+    "line": 203,
+    "text": "/// A stock preset's or profile's name in the UI language; an imported or user-edited name stays"
+   }
+  },
+  {
+   "id": "ai-slop.orphaned-doc-comments-panels-and-corpus",
+   "lens": "ai-slop",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/panels/dialogs.rs:1400-1402",
+    "crates/ui-egui/src/panels/dialogs.rs:1571",
+    "crates/ui-egui/src/panels/right.rs:771-774",
+    "crates/ui-egui/src/panels/right.rs:788",
+    "crates/ui-egui/src/menubar.rs:281-283",
+    "crates/raw/tests/corpus.rs:226-231"
+   ],
+   "failureScenario": "Misattached docs: `fmt_gap` is documented 'Apply a dialog's action (also used by `ui.dialog.confirm`).' above its own '`90` -> `1 min 30 s`' line while `confirm_dialog` (dialogs.rs:1571), the function that sentence describes, has no doc; right.rs documents `copyright_status` with 'A labelled metadata text field: the typed text lives in egui memory...' while `meta_field` (right.rs:788) has none; menubar.rs `host_supports` ends with 'Restore and Delete Permanently replace Delete for photos in Recently Deleted', a sentence about a different item; corpus.rs documents `corpus_nef_high_efficiency_is_named` with the D7500 12/14-bit black-level paragraph, belonging to `corpus_nef_12_bit_black_level_matches_14_bit` (a test that has no doc). A reader of fmt_gap is told it applies dialog actions, and a failing corpus test points at the wrong stated intent.",
+   "action": "Move each stray doc paragraph to the item it describes; remove the sentences that no longer belong.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/ui-egui/src/panels/dialogs.rs",
+    "line": 1400,
+    "text": "/// Apply a dialog's action (also used by `ui.dialog.confirm`)."
+   }
+  },
+  {
+   "id": "ai-slop.duplicate-stacked-doc-raw-samples",
+   "lens": "ai-slop",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "xtask/src/main.rs:316-320"
+   ],
+   "failureScenario": "`RAW_SAMPLES` has four stacked doc lines, the first two restating each other ('CC0 raw samples (raw.pixls.us). Small, representative set; extend freely (CC0 only).' / 'CC0 raw samples from raw.pixls.us (each verified CC0 on the site).'): two generations of the comment were appended instead of replaced, so the rustdoc is duplicated and the instruction pair reads as contradictory scope ('small set' vs 'one per format / compression variant').",
+   "action": "Collapse to one summary line plus the SHA-256 and per-variant notes.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "xtask/src/main.rs",
+    "line": 316,
+    "text": "/// CC0 raw samples (raw.pixls.us). Small, representative set; extend freely (CC0 only)."
+   }
+  },
+  {
+   "id": "ai-slop.test-only-helper-ignores-param",
+   "lens": "ai-slop",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "crates/ui-egui/src/panels/detail.rs:252-257",
+    "crates/ui-egui/src/panels/detail.rs:2410-2417"
+   ],
+   "failureScenario": "`loupe_request_dimensions` is `#[cfg(test)]`-only (no production caller) and accepts `_interactive: bool` that it never reads. Its test `interactive_loupe_request_keeps_full_display_dimensions` asserts `draft == full` between calls differing only in that ignored flag, which holds for any implementation, and the sizing it checks is a test-local reimplementation (`want = ...min(max_edge)`) rather than the production `AppSettings::loupe_edge` path, so the assertion cannot fail if the real loupe sizing regresses.",
+   "action": "Drop the unused parameter and the tautological assert, and test the production sizing function (`loupe_edge` / `loupe_job`) directly.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/ui-egui/src/panels/detail.rs",
+    "line": 254,
+    "text": "fn loupe_request_dimensions(target: Rect, ppp: f32, max_edge: f32, aspect: f32, _interactive: bool) -> (usize, usize) {"
+   }
+  },
+  {
+   "id": "ai-slop.test-parses-serialized-json-text",
+   "lens": "ai-slop",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "crates/ui-egui/src/tests_panels.rs:348-354",
+    "crates/ui-egui/src/tests_panels.rs:300-322"
+   ],
+   "failureScenario": "`resetting_the_sidebar_brings_every_section_back` decides whether the Reset item is enabled by serializing the whole menu bar to a string, `find(\"view.sidebarReset\")`, then splitting the rest of the text on `enabled\":` and checking `starts_with(\"true\")`. It reads whatever 'enabled' key follows the first textual hit, so a new field or reordered serialization (or the id appearing earlier in params/labels) makes it assert on another node's state; the typed `MenuNode::Item { enabled, .. }` walk is already used by `sidebar_menu_items` in the same file.",
+   "action": "Walk the typed MenuNode tree (as `sidebar_menu_items` does) to read the item's `enabled` flag.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/ui-egui/src/tests_panels.rs",
+    "line": 348,
+    "text": "    let reset_enabled = |h: &Headless| {"
+   }
+  }
+ ],
+ "withdrawn": [],
+ "details": {
+  "semanticReview": {
+   "axis": "standards",
+   "status": "pass",
+   "reason": "Repository-local standard (AGENTS.md 'Never crash': non-test code never panics, production crate roots carry the clippy deny attribute) is satisfied by every production crate root in this packet (raw lib.rs, ui-egui lib.rs, sam3 worker main.rs); the findings reported are plain code-quality defects with no repo-local standard or spec behind them, so none carries reviewAxis.",
+   "sources": [
+    {
+     "location": "AGENTS.md:37",
+     "quote": "- **Non-test code never panics:** no `unwrap()`, `expect()`, `panic!`, `unreachable!`, `todo!`, `unimplemented!`, and"
+    },
+    {
+     "location": "crates/ui-egui/src/lib.rs:7",
+     "quote": "#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]"
+    },
+    {
+     "location": "crates/raw/src/lib.rs:26",
+     "quote": "#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]"
+    }
+   ]
+  }
+ }
+}

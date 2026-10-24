@@ -1,0 +1,354 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-audit-next",
+  "run": "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z",
+  "status": "wave",
+  "wave": null,
+  "leaseMs": 1200000,
+  "seats": [
+    {
+      "seatId": "adj-6fceb8bc553d",
+      "kind": "adjudication",
+      "key": "batch:batch-0008",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0008",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-6fceb8bc553d.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-6fceb8bc553d.json"
+      ],
+      "estimatedTokens": 4735,
+      "attempt": 1,
+      "issuedAtMs": 1792079790873,
+      "leaseExpiresAtMs": 1792080990873
+    },
+    {
+      "seatId": "adj-dcb8e8e19c93",
+      "kind": "adjudication",
+      "key": "batch:batch-0009",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0009",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-dcb8e8e19c93.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-dcb8e8e19c93.json"
+      ],
+      "estimatedTokens": 4347,
+      "attempt": 1,
+      "issuedAtMs": 1792079790873,
+      "leaseExpiresAtMs": 1792080990873
+    },
+    {
+      "seatId": "adj-c1529deb53f8",
+      "kind": "adjudication",
+      "key": "batch:batch-0010",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0010",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-c1529deb53f8.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-c1529deb53f8.json"
+      ],
+      "estimatedTokens": 4026,
+      "attempt": 1,
+      "issuedAtMs": 1792079790873,
+      "leaseExpiresAtMs": 1792080990873
+    },
+    {
+      "seatId": "adj-b496a3a6adea",
+      "kind": "adjudication",
+      "key": "batch:batch-0011",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0011",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-b496a3a6adea.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-b496a3a6adea.json"
+      ],
+      "estimatedTokens": 4056,
+      "attempt": 1,
+      "issuedAtMs": 1792079790873,
+      "leaseExpiresAtMs": 1792080990873
+    },
+    {
+      "seatId": "adj-030898c0a003",
+      "kind": "adjudication",
+      "key": "batch:batch-0012",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0012",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-030898c0a003.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-030898c0a003.json"
+      ],
+      "estimatedTokens": 4169,
+      "attempt": 1,
+      "issuedAtMs": 1792079790873,
+      "leaseExpiresAtMs": 1792080990873
+    },
+    {
+      "seatId": "adj-892caf030e3d",
+      "kind": "adjudication",
+      "key": "batch:batch-0013",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0013",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-892caf030e3d.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-892caf030e3d.json"
+      ],
+      "estimatedTokens": 4224,
+      "attempt": 1,
+      "issuedAtMs": 1792079790873,
+      "leaseExpiresAtMs": 1792080990873
+    },
+    {
+      "seatId": "adj-b686c8a2ddd2",
+      "kind": "adjudication",
+      "key": "batch:batch-0014",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0014",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-b686c8a2ddd2.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-b686c8a2ddd2.json"
+      ],
+      "estimatedTokens": 4205,
+      "attempt": 1,
+      "issuedAtMs": 1792079790873,
+      "leaseExpiresAtMs": 1792080990873
+    },
+    {
+      "seatId": "adj-5968a378500d",
+      "kind": "adjudication",
+      "key": "batch:batch-0015",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0015",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-5968a378500d.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-5968a378500d.json"
+      ],
+      "estimatedTokens": 4072,
+      "attempt": 1,
+      "issuedAtMs": 1792079790873,
+      "leaseExpiresAtMs": 1792080990873
+    },
+    {
+      "seatId": "adj-378dd6b8b8e4",
+      "kind": "adjudication",
+      "key": "batch:batch-0016",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0016",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-378dd6b8b8e4.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-378dd6b8b8e4.json"
+      ],
+      "estimatedTokens": 4030,
+      "attempt": 1,
+      "issuedAtMs": 1792079790873,
+      "leaseExpiresAtMs": 1792080990873
+    },
+    {
+      "seatId": "adj-deb028a143d9",
+      "kind": "adjudication",
+      "key": "batch:batch-0017",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0017",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-deb028a143d9.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-deb028a143d9.json"
+      ],
+      "estimatedTokens": 4082,
+      "attempt": 1,
+      "issuedAtMs": 1792079790873,
+      "leaseExpiresAtMs": 1792080990873
+    },
+    {
+      "seatId": "adj-733a8a51c6c4",
+      "kind": "adjudication",
+      "key": "batch:batch-0018",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0018",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-733a8a51c6c4.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-733a8a51c6c4.json"
+      ],
+      "estimatedTokens": 4079,
+      "attempt": 1,
+      "issuedAtMs": 1792079790873,
+      "leaseExpiresAtMs": 1792080990873
+    },
+    {
+      "seatId": "adj-2fd4470db4bb",
+      "kind": "adjudication",
+      "key": "batch:batch-0019",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0019",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-2fd4470db4bb.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-2fd4470db4bb.json"
+      ],
+      "estimatedTokens": 3914,
+      "attempt": 1,
+      "issuedAtMs": 1792079790873,
+      "leaseExpiresAtMs": 1792080990873
+    }
+  ],
+  "progress": {
+    "lensSeats": {
+      "total": 41,
+      "done": 41
+    },
+    "adjudication": {
+      "round": 1,
+      "maxRounds": 4,
+      "required": 199,
+      "complete": false
+    },
+    "issuances": 60,
+    "issuanceCap": 4164,
+    "attemptLimit": 2,
+    "waveWidth": 16
+  },
+  "exhausted": [],
+  "budgetBlocked": [],
+  "blockers": [],
+  "next": "dispatch every seat (at most 16 in parallel, each at its modelTier), write each result to its resultPaths, ingest the wave's results in one batch ingest, then run `legion audit next --run /Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z` again"
+}

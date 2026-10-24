@@ -1,0 +1,676 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "legacy.security.adjudication",
+ "packetDigest": "sha256:9731d9ec20900bf2c4446f4a78356ba29a0746d1fcc94691bfdf7b55bf9f0345",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [],
+ "withdrawn": [],
+ "verdicts": [
+  {
+   "candidateId": "sha256:49bae22fe834b092edd61aaa9f44d1588baed9cc3438ba6a7133bc483a3bdd34",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-be42a03a553be0ac",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://rawdb.dnglab.org/api/download/Sony/ILCE-7RM6/arw6/ILCE-7RM6_FF_land_RAW-C.ARW to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/arw6-sony-ilce7rm6-ff-land-c.arw.",
+   "reachability": "main.rs:825 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 d900d6cbe838be86... at main.rs:826.",
+   "impact": "None for arw6-sony-ilce7rm6-ff-land-c.arw: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from d900d6cbe838..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 825; the immutable digest for arw6-sony-ilce7rm6-ff-land-c.arw sits in the same tuple (main.rs:826) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 825
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 826
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:73cd77d5bbdf3c6806932af7550264681ffa4f8685605a3c7d94bb3ca6da07e6",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-bf10d37380766500",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/7790/nice/Panasonic%20-%20DC-S5M2%20-%2014bit%20%283:2%29.RW2 to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/rw2-panasonic-s5m2.rw2.",
+   "reachability": "main.rs:880 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 53a171521a7f9af6... at main.rs:881.",
+   "impact": "None for rw2-panasonic-s5m2.rw2: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 53a171521a7f..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 880; the immutable digest for rw2-panasonic-s5m2.rw2 sits in the same tuple (main.rs:881) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 880
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 881
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:a2d7af7c4f12ce7cadb98906c988edc19bdeab7fbe98d0b86391bfea0392c8cf",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-c1d7ff4ce8857faa",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/3115/nice/Ricoh%20-%20GR%20III%20-%2014bit%20%283:2%29.DNG to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/dng-ricoh-gr3.dng.",
+   "reachability": "main.rs:596 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 05513ee72f7cac41... at main.rs:597.",
+   "impact": "None for dng-ricoh-gr3.dng: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 05513ee72f7c..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 596; the immutable digest for dng-ricoh-gr3.dng sits in the same tuple (main.rs:597) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 596
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 597
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:9a025d9f82ff5dfd43595df6b726550946d09a71bd304f2db1f631b508ec79ee",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-c2ad72a79e2f19ab",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/data/Sony/DSC-RX100/DSC00838.ARW to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/arw-sony-rx100.arw.",
+   "reachability": "main.rs:405 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 579a485b5126a25c... at main.rs:406.",
+   "impact": "None for arw-sony-rx100.arw: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 579a485b5126..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 405; the immutable digest for arw-sony-rx100.arw sits in the same tuple (main.rs:406) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 405
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 406
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:d2f283748f01a38113fd94a665ea93220ddc03ff9752dd4d7acc9899c6fdab6a",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-c58e64ccd68914fc",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/data/Sony/ILCE-3500/DSC06923.ARW to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/arw-sony-a3500-5600k.arw.",
+   "reachability": "main.rs:430 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 04c4fe04425c3e6f... at main.rs:431.",
+   "impact": "None for arw-sony-a3500-5600k.arw: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 04c4fe04425c..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 430; the immutable digest for arw-sony-a3500-5600k.arw sits in the same tuple (main.rs:431) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 430
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 431
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:894d9b4fcf7141dfc4b83315fe8b84567d1cfcd21f15f4eec977c7818ded74db",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-c724f71912c07c0f",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/1023/nice/Adobe%20DNG%20Converter%20-%20Canon%20EOS%205D%20Mark%20III%20-%20Lossy%20JPEG%20compression%20%283:2%29.DNG to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/dng-adobe-canon-5d3-lossy.dng.",
+   "reachability": "main.rs:565 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 159326856c29073e... at main.rs:566.",
+   "impact": "None for dng-adobe-canon-5d3-lossy.dng: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 159326856c29..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 565; the immutable digest for dng-adobe-canon-5d3-lossy.dng sits in the same tuple (main.rs:566) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 565
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 566
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:0b8e90437cc6f25ae558a8fd8ab672fcd254d1da68e1e1e8c422112fe174e072",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-c73221fa0e88e57b",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/data/Sony/ILCE-7CR/DSC00798.ARW to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/arw-sony-a7cr-compressed.arw.",
+   "reachability": "main.rs:376 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 f5096e8fbccf0842... at main.rs:377.",
+   "impact": "None for arw-sony-a7cr-compressed.arw: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from f5096e8fbccf..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 376; the immutable digest for arw-sony-a7cr-compressed.arw sits in the same tuple (main.rs:377) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 376
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 377
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:ac2ed88c070a36ea612be81519ed63ae71e2ad4544b9832e12e1a5afb7ac210e",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-ceff7a4f0d88131b",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/7896/nice/Canon%20-%20EOS%20R100%20-%20RAW%20%283:2%29.CR3 to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/cr3-canon-r100-raw.cr3.",
+   "reachability": "main.rs:514 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 6d83217d58a5e6d2... at main.rs:515.",
+   "impact": "None for cr3-canon-r100-raw.cr3: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 6d83217d58a5..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 514; the immutable digest for cr3-canon-r100-raw.cr3 sits in the same tuple (main.rs:515) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 514
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 515
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:50967831ff0ab375c399eadac5ca1077b554035ad6fa9a58d28e1278fcc87bbb",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-d1a1b18e2717fd5b",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/4822/nice/Sony%20-%20ILCE-7RM4A%20-%2014bit%2014bit%20compressed%20%283:2%29.ARW to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/arw-sony-a7rm4a-compressed.arw.",
+   "reachability": "main.rs:323 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 690c774f1d7bc1db... at main.rs:324.",
+   "impact": "None for arw-sony-a7rm4a-compressed.arw: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 690c774f1d7b..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 323; the immutable digest for arw-sony-a7rm4a-compressed.arw sits in the same tuple (main.rs:324) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 323
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 324
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:696b4b01205d58a70df64d73621432f1e1bc6796564a356607cc7688047943f9",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-d3b4ac3779048413",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/6002/nice/Fujifilm%20-%20X-H2%20-%2014bit%2014bit%20compressed%20%283:2%29.RAF to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/raf-fuji-xh2-6002.raf.",
+   "reachability": "main.rs:778 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 109be38f59963c9b... at main.rs:779.",
+   "impact": "None for raf-fuji-xh2-6002.raf: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 109be38f5996..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 778; the immutable digest for raf-fuji-xh2-6002.raf sits in the same tuple (main.rs:779) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 778
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 779
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:0a8e42f445d3fcfddf40b6873a0e0be7e5688a23b46b0de174bc4c2eeab3226d",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-d6a3d75710b3458a",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/2585/nice/Panasonic%20-%20DC-G9%20-%204:3.RW2 to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/rw2-panasonic-g9.rw2.",
+   "reachability": "main.rs:835 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 7a56babeb19f9bde... at main.rs:836.",
+   "impact": "None for rw2-panasonic-g9.rw2: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 7a56babeb19f..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 835; the immutable digest for rw2-panasonic-g9.rw2 sits in the same tuple (main.rs:836) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 835
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 836
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:053d1f5aa0c275fe9d27b8b1f59ae7334ab68222d0a7e96e70f43e444fdd84bd",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-d6a7b9ddb87593da",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/data/Sony/ILCE-7CR/DSC00796.ARW to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/arw-sony-a7cr-lossless-m.arw.",
+   "reachability": "main.rs:371 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 5bcba4acc52a5b90... at main.rs:372.",
+   "impact": "None for arw-sony-a7cr-lossless-m.arw: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 5bcba4acc52a..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 371; the immutable digest for arw-sony-a7cr-lossless-m.arw sits in the same tuple (main.rs:372) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 371
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 372
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:b03f41d53e0ca80a1a38f45fad4a6dec667d914fde0f34c686fa5f20c26d37c1",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-dd8ecaba36b3dcfb",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/5370/nice/Samsung%20-%20NX20%20-%2012bit%20%283:2%29.SRW to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/srw-samsung-nx20.srw.",
+   "reachability": "main.rs:687 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 8a367db506b8f7a6... at main.rs:688.",
+   "impact": "None for srw-samsung-nx20.srw: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 8a367db506b8..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 687; the immutable digest for srw-samsung-nx20.srw sits in the same tuple (main.rs:688) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 687
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 688
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:19df9e8ccdcf1859db0cc189ea6cac00695524140c34dee64363382a050de304",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-e034fe9ac5ffe3e1",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/1800/nice/Olympus%20-%20E-1%20-%2016bit%20%284:3%29.ORF to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/orf-olympus-e1.orf.",
+   "reachability": "main.rs:641 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 042286653fbae5b0... at main.rs:642.",
+   "impact": "None for orf-olympus-e1.orf: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 042286653fba..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 641; the immutable digest for orf-olympus-e1.orf sits in the same tuple (main.rs:642) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 641
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 642
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:dcf761c3f9a2bf861838c631c356d4a28104dd8a6dda51e3651af56499d0dbcf",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-e4671d73c07c84ef",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/1198/nice/Pentax%20-%20K-5%20II%20s%20-%2014bit%20%283:2%29.PEF to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/pef-pentax-k5iis.pef.",
+   "reachability": "main.rs:676 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 e579e7360c35e512... at main.rs:677.",
+   "impact": "None for pef-pentax-k5iis.pef: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from e579e7360c35..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 676; the immutable digest for pef-pentax-k5iis.pef sits in the same tuple (main.rs:677) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 676
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 677
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:40fd05257c67ead8c58cd3d2a7ee9fd2abe73078ec7957ac963e34bc8b97168d",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-e64d0f3989b1ab16",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/data/Sony/ILCE-7CR/DSC00795.ARW to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/arw-sony-a7cr-lossless-l.arw.",
+   "reachability": "main.rs:366 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 3e1642f3a1ae7c9f... at main.rs:367.",
+   "impact": "None for arw-sony-a7cr-lossless-l.arw: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 3e1642f3a1ae..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 366; the immutable digest for arw-sony-a7cr-lossless-l.arw sits in the same tuple (main.rs:367) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 366
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 367
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:0b6a4ff05f209319869183e3bb981927065eb71e121e85daec5a43c32dbaa43a",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-e9bb3a48f93b2193",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/4495/nice/Fujifilm%20-%20GFX100S%20-%2016bit%2016bit%20lossless%20compressed%20%284:3%29.RAF to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/raf-fuji-gfx100s-4495.raf.",
+   "reachability": "main.rs:753 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 a7bf8f061b603f7e... at main.rs:754.",
+   "impact": "None for raf-fuji-gfx100s-4495.raf: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from a7bf8f061b60..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 753; the immutable digest for raf-fuji-gfx100s-4495.raf sits in the same tuple (main.rs:754) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 753
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 754
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:bc95850ea0db96487476d9a0d1145bdfa39c870d7c820893e51f989bc404446b",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-ef85fc356b68c6d0",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/data/Sony/SLT-A33/DSC01867.ARW to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/arw-sony-a33.arw.",
+   "reachability": "main.rs:427 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 1a59856394f10d4f... at main.rs:427.",
+   "impact": "None for arw-sony-a33.arw: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 1a59856394f1..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 427; the immutable digest for arw-sony-a33.arw sits in the same tuple (main.rs:427) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 427
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 427
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:e7e71e8dceb6b8425a4071f1b409691bb9bf44673cdd953947e78453b8acecc8",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-f3cf70c456e998e7",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/data/Sony/ILCE-7M4/ILCE-7M4_DSC06674_FullFrame-LossLess-Compressed-Large.ARW to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/arw-sony-a7m4-lossless-l.arw.",
+   "reachability": "main.rs:349 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 851b43c2116c4139... at main.rs:350.",
+   "impact": "None for arw-sony-a7m4-lossless-l.arw: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 851b43c2116c..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 349; the immutable digest for arw-sony-a7m4-lossless-l.arw sits in the same tuple (main.rs:350) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 349
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 350
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:14a14090ea86612efc41496fbaa1989b7fecdf341b9d217eb11e20439a6f406e",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-f628a9c7eb0da1b7",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/1435/nice/Fujifilm%20-%20GFX%2050S%20-%2014bit%2014bit%20compressed%20%283:2%29.RAF to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/raf-fuji-gfx50s-1435.raf.",
+   "reachability": "main.rs:763 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 a7124d13910e0241... at main.rs:764.",
+   "impact": "None for raf-fuji-gfx50s-1435.raf: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from a7124d13910e..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 763; the immutable digest for raf-fuji-gfx50s-1435.raf sits in the same tuple (main.rs:764) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 763
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 764
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:bfef4f0f8a122ac7ab367b8afb87eb772a4770af99111953cf2ac932c929e49d",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-fe7ce26a415cb0d1",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/3914/nice/Fujifilm%20-%20X-T4%20-%2014bit%2014bit%20lossless%20compressed%20%283:2%29.RAF to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/raf-fuji-xt4-3914.raf.",
+   "reachability": "main.rs:793 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 07ea642656074834... at main.rs:794.",
+   "impact": "None for raf-fuji-xt4-3914.raf: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 07ea64265607..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 793; the immutable digest for raf-fuji-xt4-3914.raf sits in the same tuple (main.rs:794) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 793
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 794
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:bf27974b0e9cee8b0c4d3a36f80dc9c750f6b1d643d2d12859191ee3a42c4d19",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-fea1f2fce242bcd3",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "Attacker would be a compromised or spoofed host serving https://raw.pixls.us/getfile.php/2151/nice/Olympus%20-%20E-400%20-%2016bit%20%284:3%29.ORF to a developer who runs `cargo xtask corpus --download`, attempting to substitute the raw test sample saved as corpus/raw/orf-olympus-e400.orf.",
+   "reachability": "main.rs:646 is one RAW_SAMPLES tuple entry; it is fetched only by the opt-in developer command cmd_corpus(download=true) (main.rs:911-917, curl -fsSL over HTTPS), never by the product build or at runtime, and the tuple's third field pins sha256 1354e0ac98ea9082... at main.rs:647.",
+   "impact": "None for orf-olympus-e400.orf: main.rs:919-924 hashes the downloaded file with file_sha256 and, if it differs from 1354e0ac98ea..., deletes it and fails the command, so a substituted payload is never kept; the file is image test data consumed by decoder tests, not an executed binary.",
+   "rationale": "The scanner saw only the URL line 646; the immutable digest for orf-olympus-e400.orf sits in the same tuple (main.rs:647) and is enforced at main.rs:920, so the 'no visible immutable digest' claim is disproved.",
+   "evidence": [
+    {
+     "file": "xtask/src/main.rs",
+     "line": 646
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 647
+    },
+    {
+     "file": "xtask/src/main.rs",
+     "line": 920
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:df56f4f402ea9c47ea23f64ef83661ecaaa165db87e0678b2f775c43da16908b",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-5912e1f1a3e82daa",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "No download occurs at web.rs:169; the line is a println! of the `cargo xtask web` no-serve hint pointing at http://127.0.0.1:8080/, so there is no remote binary source an attacker could swap.",
+   "reachability": "web.rs:169 runs only in the `None` arm of `match serve` after a local web build, printing guidance text; no network request or Command is issued there.",
+   "impact": "None: printing a loopback URL hint fetches and executes nothing, so integrity of any binary is unaffected at web.rs:169.",
+   "rationale": "Scanner matched an http:// substring in a string literal at web.rs:169; the code is println!, not curl/HTTP client, so the binary-unpinned rule is inapplicable.",
+   "evidence": [
+    {
+     "file": "xtask/src/web.rs",
+     "line": 169
+    },
+    {
+     "file": "xtask/src/web.rs",
+     "line": 168
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:19b1d726b61c1d5be81ce57f1b693c283008229de744f45fbf8b7bd3d6ccdf40",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0019",
+   "clusterId": "cluster-ff7e84571fa6afc9",
+   "workItemId": "sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "workPacketDigest": "sha256:2409d0cfbb85537c9e722c73368440fe55016998f5b69e649d76fce382a4a569",
+   "contextId": "adjudicator:sha256:7200726679199d8aefbd54f3f507acf342754518d94545746ef6fe771e9e18e6",
+   "threatModel": "No download occurs at web.rs:223; the line is a println! of the serve_dir startup banner printing http://127.0.0.1:{port}/ after binding the local TcpListener, so there is no remote binary source an attacker could swap.",
+   "reachability": "web.rs:223 runs inside serve_dir after TcpListener::bind((\"127.0.0.1\", port)) at web.rs:222; it is an outbound log line for a loopback dev server, not a fetch.",
+   "impact": "None: the banner at web.rs:223 only reports the directory being served on loopback; it downloads no artifact, so digest pinning does not apply.",
+   "rationale": "Scanner matched an http:// substring in a string literal at web.rs:223; the code is println!, not curl/HTTP client, so the binary-unpinned rule is inapplicable.",
+   "evidence": [
+    {
+     "file": "xtask/src/web.rs",
+     "line": 223
+    },
+    {
+     "file": "xtask/src/web.rs",
+     "line": 222
+    }
+   ]
+  }
+ ]
+}

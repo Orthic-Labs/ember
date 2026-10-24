@@ -1,0 +1,402 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-audit-next",
+  "run": "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z",
+  "status": "wave",
+  "wave": 3,
+  "leaseMs": 1200000,
+  "seats": [
+    {
+      "seatId": "seat-033",
+      "kind": "lens",
+      "wave": 3,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S3",
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.minimize.part-0003.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.minimize.part-0003.json"
+      ],
+      "estimatedTokens": 129439,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "seat-034",
+      "kind": "lens",
+      "wave": 3,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S3",
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.minimize.part-0004.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.minimize.part-0004.json"
+      ],
+      "estimatedTokens": 131668,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "seat-035",
+      "kind": "lens",
+      "wave": 3,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S3",
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.minimize.part-0005.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.minimize.part-0005.json"
+      ],
+      "estimatedTokens": 126810,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "seat-036",
+      "kind": "lens",
+      "wave": 3,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S3",
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.minimize.part-0006.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.minimize.part-0006.json"
+      ],
+      "estimatedTokens": 125405,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "seat-037",
+      "kind": "lens",
+      "wave": 3,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S3",
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.minimize.part-0007.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.minimize.part-0007.json"
+      ],
+      "estimatedTokens": 14268,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "seat-038",
+      "kind": "lens",
+      "wave": 3,
+      "tier": "mechanical",
+      "modelTier": "mechanical-cheap",
+      "bundle": "M1",
+      "providers": [
+        "reasoning.dead-file"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.dead-file.part-0001.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.dead-file.part-0001.json"
+      ],
+      "estimatedTokens": 125727,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "seat-039",
+      "kind": "lens",
+      "wave": 3,
+      "tier": "mechanical",
+      "modelTier": "mechanical-cheap",
+      "bundle": "M1",
+      "providers": [
+        "reasoning.dead-file"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.dead-file.part-0002.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.dead-file.part-0002.json"
+      ],
+      "estimatedTokens": 125246,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "seat-040",
+      "kind": "lens",
+      "wave": 3,
+      "tier": "mechanical",
+      "modelTier": "mechanical-cheap",
+      "bundle": "M1",
+      "providers": [
+        "reasoning.dead-file"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.dead-file.part-0003.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.dead-file.part-0003.json"
+      ],
+      "estimatedTokens": 126226,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "seat-041",
+      "kind": "lens",
+      "wave": 3,
+      "tier": "mechanical",
+      "modelTier": "mechanical-cheap",
+      "bundle": "M1",
+      "providers": [
+        "reasoning.dead-file"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.dead-file.part-0004.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.dead-file.part-0004.json"
+      ],
+      "estimatedTokens": 120921,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "seat-042",
+      "kind": "lens",
+      "wave": 3,
+      "tier": "mechanical",
+      "modelTier": "mechanical-cheap",
+      "bundle": "M1",
+      "providers": [
+        "reasoning.dead-file"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.dead-file.part-0005.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.dead-file.part-0005.json"
+      ],
+      "estimatedTokens": 39313,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "adj-70ca22fb9e1d",
+      "kind": "adjudication",
+      "key": "batch:batch-0002",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0002",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-70ca22fb9e1d.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-70ca22fb9e1d.json"
+      ],
+      "estimatedTokens": 2003,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "adj-ed2b5fb70c79",
+      "kind": "adjudication",
+      "key": "batch:batch-0003",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0003",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-ed2b5fb70c79.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-ed2b5fb70c79.json"
+      ],
+      "estimatedTokens": 130,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "adj-f18e2b4bd0da",
+      "kind": "adjudication",
+      "key": "batch:batch-0004",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0004",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-f18e2b4bd0da.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-f18e2b4bd0da.json"
+      ],
+      "estimatedTokens": 166,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "adj-5f599fa2e88f",
+      "kind": "adjudication",
+      "key": "batch:batch-0005",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0005",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-5f599fa2e88f.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-5f599fa2e88f.json"
+      ],
+      "estimatedTokens": 4468,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "adj-d723835ca1b7",
+      "kind": "adjudication",
+      "key": "batch:batch-0006",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0006",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-d723835ca1b7.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-d723835ca1b7.json"
+      ],
+      "estimatedTokens": 4387,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    },
+    {
+      "seatId": "adj-5358895ec539",
+      "kind": "adjudication",
+      "key": "batch:batch-0007",
+      "stage": "batch",
+      "round": 1,
+      "candidateId": null,
+      "batchId": "batch-0007",
+      "reason": null,
+      "wave": null,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "adjudication",
+      "providers": [
+        "legacy.security.adjudication"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/packets/adj-5358895ec539.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/adjudication/results/adj-5358895ec539.json"
+      ],
+      "estimatedTokens": 5325,
+      "attempt": 1,
+      "issuedAtMs": 1792079427126,
+      "leaseExpiresAtMs": 1792080627126
+    }
+  ],
+  "progress": {
+    "lensSeats": {
+      "total": 41,
+      "done": 31
+    },
+    "adjudication": {
+      "round": 1,
+      "maxRounds": 4,
+      "required": 19,
+      "complete": false
+    },
+    "issuances": 48,
+    "issuanceCap": 4164,
+    "attemptLimit": 2,
+    "waveWidth": 16
+  },
+  "exhausted": [],
+  "budgetBlocked": [],
+  "blockers": [],
+  "next": "dispatch every seat (at most 16 in parallel, each at its modelTier), write each result to its resultPaths, ingest the wave's results in one batch ingest, then run `legion audit next --run /Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z` again"
+}

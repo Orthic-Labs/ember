@@ -1,0 +1,620 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-audit-adjudication-seat",
+  "stage": "batch",
+  "round": 1,
+  "batchId": "batch-0006",
+  "itemId": "sha256:8f5d656842a5360170f092add41a048f4a19dfa2423f395edc94a9f739ca921c",
+  "contextId": "adjudicator:sha256:8f5d656842a5360170f092add41a048f4a19dfa2423f395edc94a9f739ca921c",
+  "parentPacketDigest": "sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5",
+  "packet": {
+    "schemaVersion": 1,
+    "kind": "security-batch-adjudication-packet",
+    "parentPacketDigest": "sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5",
+    "batchId": "batch-0006",
+    "family": "security",
+    "adjudicator": {
+      "provider": "legacy.security.adjudication",
+      "contextId": "adjudicator:sha256:8f5d656842a5360170f092add41a048f4a19dfa2423f395edc94a9f739ca921c"
+    },
+    "requiredEvidence": [
+      "threat model and attacker capability",
+      "attacker-controlled source",
+      "trust-boundary trace",
+      "validation and authorization between source and sink",
+      "reachability",
+      "primary controls and environmental mitigations",
+      "real security impact",
+      "reproduction, trace, PoC sketch, or mathematical proof",
+      "devils-advocate false-positive challenge"
+    ],
+    "note": "one verdict per cluster representative; it is expanded to every member, which is then confirmed or spot-checked alone",
+    "clusters": [
+      {
+        "clusterId": "cluster-f22bbf062e67f743",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:d05bdf1d99c6472fa852df8da648fd2475e2b2e62db7535054df9a88dae68c35",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/denoise-core/src/known.rs",
+          "line": 33,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "url: Some(\"https://www.gnu.org/licenses/gpl-3.0.html\".into()),"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:d05bdf1d99c6472fa852df8da648fd2475e2b2e62db7535054df9a88dae68c35",
+            "path": "crates/denoise-core/src/known.rs",
+            "line": 33
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-ffdfa92d753a037d",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:0e16927720ce54c391246754507db862eb765368eefd29098b881af51fa414bc",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/denoise-core/src/known.rs",
+          "line": 39,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "source: Some(\"https://github.com/darktable-org/darktable-ai/tree/master/models/rawdenoise-nind\".into()),"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:0e16927720ce54c391246754507db862eb765368eefd29098b881af51fa414bc",
+            "path": "crates/denoise-core/src/known.rs",
+            "line": 39
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-5c55009a4620b3b7",
+        "rule": "security.binary-unpinned",
+        "memberCount": 2,
+        "representative": {
+          "findingId": "sha256:3077d3c0933d8e94bd659db41d9da1fa6ba62feb7a5e31c356743e52bb281054",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/denoise-core/src/manifest.rs",
+          "line": 96,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "Some(_) => bad(field, \"must be an https:// address of at most 500 characters\"),"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:3077d3c0933d8e94bd659db41d9da1fa6ba62feb7a5e31c356743e52bb281054",
+            "path": "crates/denoise-core/src/manifest.rs",
+            "line": 96
+          },
+          {
+            "findingId": "sha256:55f93fb74f4cbf2a80b7210a892f262f21f9bd0e387bafb671d169872fee5da0",
+            "path": "crates/faces/src/manifest.rs",
+            "line": 196
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-794fa958460503c0",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:8ce8dfa068aa43c148796bef648d15061dc004e9fce24c91bcf4cce838832a7a",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/denoise-core/src/manifest.rs",
+          "line": 186,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "(\"source\", Box::new(|m| m.source = Some(\"http://insecure\".into()))),"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:8ce8dfa068aa43c148796bef648d15061dc004e9fce24c91bcf4cce838832a7a",
+            "path": "crates/denoise-core/src/manifest.rs",
+            "line": 186
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-b7e214f5a43f2027",
+        "rule": "security.binary-unpinned",
+        "memberCount": 2,
+        "representative": {
+          "findingId": "sha256:42caaba7e876997c5020afa272dce6576d5e5510deaf1704454e645e169af347",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/denoise-core/src/manifest.rs",
+          "line": 48,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "/// Where the weights come from (an `https://` page or file), for the user's information."
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:42caaba7e876997c5020afa272dce6576d5e5510deaf1704454e645e169af347",
+            "path": "crates/denoise-core/src/manifest.rs",
+            "line": 48
+          },
+          {
+            "findingId": "sha256:a99f419ae9ae77d918862055c2423953d3bca68c4db4cbb23012929270def00f",
+            "path": "crates/faces/src/manifest.rs",
+            "line": 116
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-cab545623afcb9c3",
+        "rule": "security.binary-unpinned",
+        "memberCount": 2,
+        "representative": {
+          "findingId": "sha256:a9bdf7748454629e55b6d47f5b60779e356955317970255a231fa746ac6fc66c",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/denoise-core/src/manifest.rs",
+          "line": 95,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "Some(u) if u.len() <= 500 && u.starts_with(\"https://\") && !u.chars().any(|c| c.is_control() || c.is_whitespace()) => Ok(()),"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:451de6b0d1c7e850e836d8bf918759defe73fc4f5e15687924048f3087d0c2d8",
+            "path": "crates/faces/src/manifest.rs",
+            "line": 195
+          },
+          {
+            "findingId": "sha256:a9bdf7748454629e55b6d47f5b60779e356955317970255a231fa746ac6fc66c",
+            "path": "crates/denoise-core/src/manifest.rs",
+            "line": 95
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-fc4054846c7ff0e4",
+        "rule": "security.binary-unpinned",
+        "memberCount": 2,
+        "representative": {
+          "findingId": "sha256:e051acc047de709638bb763c8905654901d268291cce05297569f2402c606ed8",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/denoise-core/src/manifest.rs",
+          "line": 162,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "source: Some(\"https://example.org/model.onnx\".into()),"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:9f1060806b1d8068e6c62d5c37b339835602e52182880f163a0e99c9377c6a7b",
+            "path": "crates/faces/src/manifest.rs",
+            "line": 289
+          },
+          {
+            "findingId": "sha256:e051acc047de709638bb763c8905654901d268291cce05297569f2402c606ed8",
+            "path": "crates/denoise-core/src/manifest.rs",
+            "line": 162
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-1568f3b792419494",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:5f564d61a12004a19881aff1e3fdf21986fae4f5789273bbd651614d3dfe6490",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/denoise/src/onnx_proto.rs",
+          "line": 2,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "//! https://github.com/onnx/onnx/blob/main/onnx/onnx.proto3"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:5f564d61a12004a19881aff1e3fdf21986fae4f5789273bbd651614d3dfe6490",
+            "path": "crates/denoise/src/onnx_proto.rs",
+            "line": 2
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-19aa49fb17dec5dc",
+        "rule": "security.insecure-default.secret",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:59ad5bc017c3e250b4afc5d7b871034474f06bcc71c11bbced062f3047cdcc7f",
+          "provider": "security.insecure-defaults",
+          "rule": "security.insecure-default.secret",
+          "severity": "high",
+          "path": "crates/denoise/src/remote.rs",
+          "line": 553,
+          "message": "A security-sensitive secret has a tracked fallback value instead of failing closed.",
+          "excerpt": "let opts = ServerOptions { token: [REDACTED].into(), ..Default::default() };"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:59ad5bc017c3e250b4afc5d7b871034474f06bcc71c11bbced062f3047cdcc7f",
+            "path": "crates/denoise/src/remote.rs",
+            "line": 553
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-bcbebba594fc9ef2",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:bf5f696277cf2532aeb20855a65df6f4859202f10b11fbc2b2d59268ce609b47",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/build.rs",
+          "line": 39,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "Clone https://github.com/storytold/craft-fonts next to this repo and rebuild with \\"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:bf5f696277cf2532aeb20855a65df6f4859202f10b11fbc2b2d59268ce609b47",
+            "path": "crates/engine/build.rs",
+            "line": 39
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-18ffd775aa1a4380",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:e01fdb7a4282d1722236bd904d9a9019cbd8156176b220f5e112cf20e0f3cfa9",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/cmd/geocode.rs",
+          "line": 410,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "format!(\"http://127.0.0.1:{port}\")"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:e01fdb7a4282d1722236bd904d9a9019cbd8156176b220f5e112cf20e0f3cfa9",
+            "path": "crates/engine/src/cmd/geocode.rs",
+            "line": 410
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-238d905451671d16",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:1c71e040adb081687ce56be4ea578dddc49f8149cd738eedb6cf50b9e62a2a77",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/cmd/geocode.rs",
+          "line": 470,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "assert!(!download::base_allowed(\"http://download.geonames.org/\"));"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:1c71e040adb081687ce56be4ea578dddc49f8149cd738eedb6cf50b9e62a2a77",
+            "path": "crates/engine/src/cmd/geocode.rs",
+            "line": 470
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-2ed1c10e6e291277",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:27896e5dd51fa8b3708c9be0cef92b9b5610f936a249c77fc78db058b68c15e1",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/cmd/geocode.rs",
+          "line": 440,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "assert!(s.execute(\"metadata.downloadPlaceNames\", &json!({\"dataset\": dir, \"base\": \"http://example.com/\"})).is_err());"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:27896e5dd51fa8b3708c9be0cef92b9b5610f936a249c77fc78db058b68c15e1",
+            "path": "crates/engine/src/cmd/geocode.rs",
+            "line": 440
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-3c67860fcec5ce18",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:9539ed59266b736f27c5b957870d1e85443d1591a268ff7879324ba0fa28fd67",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/cmd/geocode.rs",
+          "line": 213,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "base.starts_with(\"https://\")"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:9539ed59266b736f27c5b957870d1e85443d1591a268ff7879324ba0fa28fd67",
+            "path": "crates/engine/src/cmd/geocode.rs",
+            "line": 213
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-48a66a8743103254",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:2cbee9224f06553f1757f9b9cbaddcf5b259feed65a631894f5e3400bb12db78",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/cmd/geocode.rs",
+          "line": 223,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "return Err(bad(C, \"`base` must be an https:// address\"));"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:2cbee9224f06553f1757f9b9cbaddcf5b259feed65a631894f5e3400bb12db78",
+            "path": "crates/engine/src/cmd/geocode.rs",
+            "line": 223
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-51e355a5a8386b14",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:5d88d06e77ac0b8bd18371656204b71988bce0b55e098f6cd50d666a2f8ad9eb",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/cmd/geocode.rs",
+          "line": 210,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "/// server), with nothing but a port or path after the host, so `http://127.0.0.1.example.com/`"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:5d88d06e77ac0b8bd18371656204b71988bce0b55e098f6cd50d666a2f8ad9eb",
+            "path": "crates/engine/src/cmd/geocode.rs",
+            "line": 210
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-5a100609895fbd8c",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:4762048b464d86a129787997f31a36abe396e6d6efaedcfa5b36eb12d133ed2b",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/cmd/geocode.rs",
+          "line": 465,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "assert!(download::base_allowed(\"https://download.geonames.org/export/dump/\"));"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:4762048b464d86a129787997f31a36abe396e6d6efaedcfa5b36eb12d133ed2b",
+            "path": "crates/engine/src/cmd/geocode.rs",
+            "line": 465
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-78cbc8eac3712b01",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:c2e456b0ef7d3081ed4cf3d9d0137fb5520a13512eafc0bf695580a14c78cd26",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/cmd/geocode.rs",
+          "line": 466,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "assert!(download::base_allowed(\"http://127.0.0.1:8080\"));"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:c2e456b0ef7d3081ed4cf3d9d0137fb5520a13512eafc0bf695580a14c78cd26",
+            "path": "crates/engine/src/cmd/geocode.rs",
+            "line": 466
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-83f777e08c6ef182",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:1aa776acc9d746d4598787bfa0bf440501f62e9468152db7d8e9e5f386764e3c",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/cmd/geocode.rs",
+          "line": 467,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "assert!(download::base_allowed(\"http://127.0.0.1/dump\"));"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:1aa776acc9d746d4598787bfa0bf440501f62e9468152db7d8e9e5f386764e3c",
+            "path": "crates/engine/src/cmd/geocode.rs",
+            "line": 467
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-d2e40e973d1168ea",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:1c8822b2c7bd81f75278e86b67bacab7656a6719660c6cca68456cde2d6e210e",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/cmd/geocode.rs",
+          "line": 468,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "assert!(!download::base_allowed(\"http://127.0.0.1.example.com/\"));"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:1c8822b2c7bd81f75278e86b67bacab7656a6719660c6cca68456cde2d6e210e",
+            "path": "crates/engine/src/cmd/geocode.rs",
+            "line": 468
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-d3875d9caef5580b",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:66c82f645cdba410ff33d1dfd215615c25ab87b6c9aa2576e67cfa94f3ed4860",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/cmd/geocode.rs",
+          "line": 214,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "|| base.strip_prefix(\"http://127.0.0.1\").is_some_and(|rest| rest.is_empty() || rest.starts_with(':') || rest.starts_with('/'))"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:66c82f645cdba410ff33d1dfd215615c25ab87b6c9aa2576e67cfa94f3ed4860",
+            "path": "crates/engine/src/cmd/geocode.rs",
+            "line": 214
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-2ad5b448afe092fc",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:ca668466033daa41f7f048abd53aaa3a6a3c1d839e65bc6e4ae79561d4ddd43b",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/crs.rs",
+          "line": 644,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "let x = r#\"<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:ca668466033daa41f7f048abd53aaa3a6a3c1d839e65bc6e4ae79561d4ddd43b",
+            "path": "crates/engine/src/crs.rs",
+            "line": 644
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-2b5f4c47f4fe475d",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:ca6db23765bbb9b4698f775228b71c396991f7d648b890c71cd6748e58a64622",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/crs.rs",
+          "line": 654,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "r#\"<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:ca6db23765bbb9b4698f775228b71c396991f7d648b890c71cd6748e58a64622",
+            "path": "crates/engine/src/crs.rs",
+            "line": 654
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-3fd69e8ff95d9304",
+        "rule": "security.binary-unpinned",
+        "memberCount": 4,
+        "representative": {
+          "findingId": "sha256:6ff6a7eec2ad43d8aab74d63210b4b76dde28ef01f5c1b31cd93ecf1891af055",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/crs.rs",
+          "line": 695,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "let x = r#\"<rdf:Description xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:crs=\"http://ns.adobe.com/camera-raw-settings/1.0/\""
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:6ff6a7eec2ad43d8aab74d63210b4b76dde28ef01f5c1b31cd93ecf1891af055",
+            "path": "crates/engine/src/crs.rs",
+            "line": 695
+          },
+          {
+            "findingId": "sha256:922fb0a514a3306d5903bb29b290f54e649b2fe8056cf43c75a580f19d24ae7a",
+            "path": "crates/engine/src/crs.rs",
+            "line": 738
+          },
+          {
+            "findingId": "sha256:98fa75ad45f68ecbb98afcab4966bed3a548b3d208311ed7d1103f9f56672513",
+            "path": "crates/engine/src/crs.rs",
+            "line": 785
+          },
+          {
+            "findingId": "sha256:f4ea838205b216c8260e64591198ed225ba3ac412657154666ee1b7d890ece0e",
+            "path": "crates/engine/src/crs.rs",
+            "line": 709
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-56d2884474c523c7",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:3004703711299859d461d9f723699718a430ac8e2e2c8bbe90e33166eb1be3f8",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/crs.rs",
+          "line": 676,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "<rdf:Description rdf:about=\"\" xmlns:crs=\"http://ns.adobe.com/camera-raw-settings/1.0/\">"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:3004703711299859d461d9f723699718a430ac8e2e2c8bbe90e33166eb1be3f8",
+            "path": "crates/engine/src/crs.rs",
+            "line": 676
+          }
+        ]
+      }
+    ]
+  }
+}

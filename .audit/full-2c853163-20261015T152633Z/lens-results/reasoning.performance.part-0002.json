@@ -1,0 +1,65 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.performance",
+ "packetDigest": "sha256:71376894401a520a3d19c5bc7194f9972162ab9658791a04f251fa6c33c8a901",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "perf-album-order-quadratic",
+   "lens": "performance",
+   "severity": "high",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/engine/src/lib.rs:922-933"
+   ],
+   "failureScenario": "Viewing a manual album sorted by capture date with the default filter re-sorts `visible` with `order.iter().position(..)` as the sort key. `position` is a linear scan of the album's photo list, and `sort_by_key` calls the key function O(n log n) times, so the sort costs O(n*m*log n). A 40k-photo album does on the order of 10^10 comparisons. `visible()` recomputes whenever the catalog revision changes, so every edit, rating or flag change in that album stalls the command or UI thread for seconds.",
+   "action": "Build a HashMap<PhotoId, usize> from `order` once and sort with `sort_by_cached_key`, or use `sort_by_key` over that map.",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "crates/engine/src/lib.rs",
+    "line": 929,
+    "text": "                visible.sort_by_key(|id| order.iter().position(|x| x == id).unwrap_or(usize::MAX));"
+   }
+  },
+  {
+   "id": "perf-album-vec-contains-quadratic",
+   "lens": "performance",
+   "severity": "medium",
+   "confidence": "likely",
+   "evidence": [
+    "crates/engine/src/cmd/library.rs:313-318",
+    "crates/engine/src/cmd/library.rs:1196-1203",
+    "crates/engine/src/cmd/library.rs:1360-1368"
+   ],
+   "failureScenario": "`album.addPhotos` tests `photos.contains(&t)` against the album's Vec for every target, `album.removePhotos` and `album.toggleTarget` test `targets.contains(..)` / `al.photos.contains(..)` per album photo, and select-by-criteria with `add` tests `ids.contains(&id)` per visible photo. Each is O(album x targets). Importing into an album calls `album.addPhotos` once per batch of 8-16 photos against the growing album (`import_batch_done`). Adding 20k photos to a 20k-photo album, or a 40k-photo import into one album, costs hundreds of millions to billions of comparisons on the command thread. Each call also clones the full album Vec into `SetAlbumPhotos` and its undo inverse.",
+   "action": "Build a HashSet of the existing/target ids once per command and use it for membership tests.",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "crates/engine/src/cmd/library.rs",
+    "line": 1199,
+    "text": "                    if !photos.contains(&t) {"
+   }
+  },
+  {
+   "id": "perf-lrcat-row-materialization",
+   "lens": "performance",
+   "severity": "medium",
+   "confidence": "likely",
+   "evidence": [
+    "crates/engine/src/lightroom_catalog.rs:55-77",
+    "crates/engine/src/lightroom_catalog.rs:383-390"
+   ],
+   "failureScenario": "`Reader::table` reads every record of a table with `read_table` into memory and then converts each row to a `BTreeMap<String, Value>`. It clones every column name `String` for every row, on top of the whole database and WAL file bytes already held in RAM (up to 4 GiB). For a large Lightroom catalog, `Adobe_images` (about 40 columns) and the history-step and keyword tables, with hundreds of thousands of photos, create tens of millions of small String and BTreeMap node allocations. Resident memory is multiples of the catalog size and import start-up takes minutes. Tables over 1M rows are rejected, which for the optional history and keyword tables silently drops them with only a warning.",
+   "action": "Share column names (Arc<str> or index-based rows, or typed row structs) instead of cloning a String per cell, and extract only the needed columns while streaming rows into the per-photo structures.",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "crates/engine/src/lightroom_catalog.rs",
+    "line": 57,
+    "text": "        let rows = self.db.read_table(t.rootpage, columns.len()).map_err(|e| format!(\"{name}: {e:?}\"))?;"
+   }
+  }
+ ],
+ "withdrawn": []
+}

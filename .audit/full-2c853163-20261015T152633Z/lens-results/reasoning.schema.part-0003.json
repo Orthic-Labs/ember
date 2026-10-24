@@ -1,0 +1,50 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.schema",
+ "packetDigest": "sha256:1746e554a661ee5e8f4630ecc714c4873fd7ceac6d28ec33500c18461f30632a",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "schema-gain-max-deviation-key-not-camelcase",
+   "lens": "schema",
+   "severity": "medium",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/denoise-core/src/manifest.rs:36",
+    "crates/denoise-core/src/manifest.rs:27-28",
+    "crates/denoise-core/src/manifest.rs:34",
+    "crates/denoise-core/src/manifest.rs:135"
+   ],
+   "failureScenario": "`#[serde(rename_all = \"camelCase\")]` on an enum renames only the variant names, not the fields inside struct variants. The JSON key is therefore `max_deviation`, while every other manifest key is camelCase, and the docs (line 34) and the validator error (`gain.maxDeviation`) say `maxDeviation`. A third-party denoise-model.json written as documented, `{\"kind\":\"matchMean\",\"nominal\":1e6,\"maxDeviation\":0.05}`, fails manifest::parse with 'missing field max_deviation', so the model cannot be installed.",
+   "action": "Add `rename_all_fields = \"camelCase\"` to the enum (or `#[serde(rename = \"maxDeviation\", alias = \"max_deviation\")]` on the field) so that existing installed manifests still read.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/denoise-core/src/manifest.rs",
+    "line": 36,
+    "text": "    MatchMean { nominal: f32, max_deviation: f32 },"
+   }
+  },
+  {
+   "id": "schema-manifest-tile-exceeds-remote-limit",
+   "lens": "schema",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/denoise-core/src/manifest.rs:123",
+    "crates/denoise/src/remote.rs:39-40",
+    "crates/denoise/src/remote.rs:153-155"
+   ],
+   "failureScenario": "Manifest validation accepts tiles up to 2048 cells, but the remote denoise protocol caps tiles at MAX_TILE = 1024, and serve() refuses to start beyond that. A valid model with tile 1536 installs and runs locally, but `lightcraft-cli denoise-serve` fails with 'tile size 1536 is outside 1..=1024', so its remote denoise can never be used. The two contracts disagree on the accepted range.",
+   "action": "Use one shared tile limit: either cap manifest tiles at the remote/GPU limit (1024) or raise remote::MAX_TILE (and its payload bounds) to the manifest's 2048.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/denoise-core/src/manifest.rs",
+    "line": 123,
+    "text": "    if !(64..=2048).contains(&m.tile) || !m.tile.is_multiple_of(16) {"
+   }
+  }
+ ],
+ "withdrawn": []
+}

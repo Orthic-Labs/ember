@@ -1,0 +1,85 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.correctness",
+ "packetDigest": "sha256:929e3c42e5c6ad260afdecc5e8d9a261a112f8c3ec4da798a7bab1f864bf4ea8",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "correctness-keywords-panel-overwrites-selection",
+   "lens": "correctness",
+   "severity": "high",
+   "confidence": "confirmed",
+   "evidence": [
+    "apps/lightcraft-desktop/web/src/inspector/Inspector.tsx:421",
+    "crates/engine/src/cmd/library.rs:909-915",
+    "crates/engine/src/cmd/library.rs:847"
+   ],
+   "failureScenario": "KeywordsPanel loads the keyword list of the active photo only (photo.inspect {id}), but add() and remove() send photo.setMeta {ids: snapshot.selection, keywords: next}. In the engine, `keywords` replaces the list (m.keywords.clear() then re-add) for every id. With photos A (active, keywords [beach]) and B (keywords [wedding, family]) selected, typing 'sunset' and pressing Add sets B's keywords to [beach, sunset]: B silently loses wedding/family and gains beach. Removing a chip likewise rewrites every selected photo to the active photo's remaining list.",
+   "action": "Use addKeywords / removeKeywords (which the command already supports) for add/remove on a multi-selection, or send the replacing `keywords` list only for the active photo id; reload the shown list after the command instead of trusting local state.",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "reviewAxis": "spec",
+   "sourceQuote": "keywords?: [..], addKeywords?: [..], removeKeywords?: [..]",
+   "sourceLocation": "crates/engine/src/cmd/library.rs:847",
+   "disposition": "wrong",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit with no baseline (reviewContext.baseline not-applicable)",
+    "baselineEvidence": []
+   },
+   "anchor": {
+    "path": "apps/lightcraft-desktop/web/src/inspector/Inspector.tsx",
+    "line": 421,
+    "text": "function KeywordsPanel({ desktop }: { desktop: InspectorDesktop }) {"
+   }
+  },
+  {
+   "id": "correctness-remove-panel-size-control-unused",
+   "lens": "correctness",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "apps/lightcraft-desktop/web/src/inspector/Inspector.tsx:377",
+    "apps/lightcraft-desktop/web/src/stage/StageWorkspace.tsx:635-637"
+   ],
+   "failureScenario": "The Remove panel's Size slider and number field only update local state `size`, which is never read or sent; spot.add takes its size from the drag distance in StageWorkspace (Math.max(0.005, |dx| || 0.025)). A user who sets Size to 0.2 and clicks the photo still gets a 0.025 spot, so the control does nothing.",
+   "action": "Store the size in UI state (setUi) and pass it to spot.add when the drag is a click, or remove the dead control.",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "reviewAxis": "spec",
+   "sourceQuote": "const [size, setSize] = useState(0.04);",
+   "sourceLocation": "apps/lightcraft-desktop/web/src/inspector/Inspector.tsx:377",
+   "disposition": "partial",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit with no baseline (reviewContext.baseline not-applicable)",
+    "baselineEvidence": []
+   },
+   "anchor": {
+    "path": "apps/lightcraft-desktop/web/src/inspector/Inspector.tsx",
+    "line": 377,
+    "text": "function RemovePanel({ desktop }: { desktop: InspectorDesktop }) {"
+   }
+  }
+ ],
+ "withdrawn": [],
+ "details": {
+  "semanticReview": {
+   "axis": "spec",
+   "status": "findings",
+   "reason": "Desktop inspector panels compared against the engine command contract they call: the Keywords panel uses the replacing `keywords` parameter on a multi-selection built from the active photo's list (wrong), and the Remove panel's Size control is never sent (partial). Catalog rules, journal recovery, prefs persistence and preview lifecycle matched their documented behavior.",
+   "sources": [
+    {
+     "location": "crates/engine/src/cmd/library.rs:847",
+     "quote": "keywords?: [..], addKeywords?: [..], removeKeywords?: [..]"
+    },
+    {
+     "location": "apps/lightcraft-desktop/web/src/inspector/Inspector.tsx:377",
+     "quote": "const [size, setSize] = useState(0.04);"
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,177 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.doc-drift",
+ "packetDigest": "sha256:0d9771af32e067927aa1bd36f22e764f58c334f150f2d29977eecc5b1acc763c",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "doc-cli-orphaned-library-error-doc",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "apps/lightcraft-cli/src/main.rs:180-188",
+    "apps/lightcraft-cli/src/main.rs:190-200"
+   ],
+   "failureScenario": "The doc comment 'Why `--library DIR` can't be opened; for a library open in another program, how to work with that one instead (issue #99)' is attached to library_warnings, which only prints warnings; it describes library_error two items below. rustdoc and IDE hover show the wrong contract for both functions.",
+   "action": "Move the first two lines of the doc comment onto library_error.",
+   "verifyStatus": "unverified",
+   "reviewAxis": "standards",
+   "disposition": "wrong",
+   "sourceQuote": "/// Why `--library DIR` can't be opened; for a library open in another program, how to work with",
+   "sourceLocation": "apps/lightcraft-cli/src/main.rs:180",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit without change context; no baseline to attribute against",
+    "baselineEvidence": []
+   },
+   "anchor": {
+    "path": "apps/lightcraft-cli/src/main.rs",
+    "line": 180,
+    "text": "/// Why `--library DIR` can't be opened; for a library open in another program, how to work with"
+   }
+  },
+  {
+   "id": "doc-cli-mcp-connect-comment-describes-run",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "apps/lightcraft-cli/src/main.rs:385-398",
+    "apps/lightcraft-cli/src/main.rs:404-412",
+    "apps/lightcraft-cli/src/main.rs:658-664"
+   ],
+   "failureScenario": "The --connect comment in mcp() says a non-address token such as a command id 'leaves the address at its default so the command is still consumed next', but mcp has no command tokens: such a token becomes a FILE and immediately fails with 'FILES, --demo and --library apply to headless mode only'. The comment was copied from run(), whose filter also differs (run rejects tokens containing '='), so the two parsers are documented as identical while behaving differently.",
+   "action": "Rewrite the mcp comment to state that a non-address token is treated as a file (and rejected in connect mode), or share one connect-argument parser between run and mcp.",
+   "verifyStatus": "unverified",
+   "reviewAxis": "standards",
+   "disposition": "wrong",
+   "sourceQuote": "// Optional address argument. A bare port (all digits) is taken as a port on the",
+   "sourceLocation": "apps/lightcraft-cli/src/main.rs:386",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit without change context; no baseline to attribute against",
+    "baselineEvidence": []
+   },
+   "anchor": {
+    "path": "apps/lightcraft-cli/src/main.rs",
+    "line": 386,
+    "text": "                // Optional address argument. A bare port (all digits) is taken as a port on the"
+   }
+  },
+  {
+   "id": "doc-cli-run-output-ms-on-failure",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "apps/lightcraft-cli/src/main.rs:54-57",
+    "apps/lightcraft-cli/src/main.rs:737-742"
+   ],
+   "failureScenario": "USAGE promises one JSON line per command shaped {\"command\", \"ok\", \"result\" | \"error\", \"ms\"}, but a failed step is emitted as {command, ok:false, error} with no ms field. A script parsing the documented shape (e.g. summing ms) breaks on the first failure line.",
+   "action": "Either include ms on failure lines or document that ms is present only when ok is true.",
+   "verifyStatus": "unverified",
+   "reviewAxis": "spec",
+   "disposition": "partial",
+   "sourceQuote": "{\\\"command\\\", \\\"ok\\\", \\\"result\\\" | \\\"error\\\", \\\"ms\\\"}. A word without `=` starts the next",
+   "sourceLocation": "apps/lightcraft-cli/src/main.rs:55",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit without change context; no baseline to attribute against",
+    "baselineEvidence": []
+   },
+   "anchor": {
+    "path": "apps/lightcraft-cli/src/main.rs",
+    "line": 55,
+    "text": "      {\\\"command\\\", \\\"ok\\\", \\\"result\\\" | \\\"error\\\", \\\"ms\\\"}. A word without `=` starts the next"
+   }
+  },
+  {
+   "id": "doc-cli-render-extension-hint-stale",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "apps/lightcraft-cli/src/main.rs:80-81",
+    "apps/lightcraft-cli/src/main.rs:860-864"
+   ],
+   "failureScenario": "render's unknown-extension error tells users to 'use .jpg .png .tif .webp .avif .dng', omitting .jxl and .psd, which USAGE advertises for render and ExportFormat::parse (crates/engine/src/export.rs:36-50) accepts. Users following the error text are steered away from supported formats.",
+   "action": "Generate the hint from the supported ExportFormat list, or update it to match USAGE.",
+   "verifyStatus": "unverified",
+   "reviewAxis": "standards",
+   "disposition": "partial",
+   "sourceQuote": ".ok_or_else(|| format!(\"{output}: unknown extension (use .jpg .png .tif .webp .avif .dng or --opt format=…)\"))?;",
+   "sourceLocation": "apps/lightcraft-cli/src/main.rs:863",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit without change context; no baseline to attribute against",
+    "baselineEvidence": []
+   },
+   "anchor": {
+    "path": "apps/lightcraft-cli/src/main.rs",
+    "line": 863,
+    "text": "            .ok_or_else(|| format!(\"{output}: unknown extension (use .jpg .png .tif .webp .avif .dng or --opt format=…)\"))?;"
+   }
+  },
+  {
+   "id": "doc-cli-module-header-omits-subcommands",
+   "lens": "doc-drift",
+   "severity": "info",
+   "confidence": "confirmed",
+   "evidence": [
+    "apps/lightcraft-cli/src/main.rs:1-24",
+    "apps/lightcraft-cli/src/main.rs:67-71",
+    "apps/lightcraft-cli/src/main.rs:163-166",
+    "apps/lightcraft-cli/src/main.rs:245"
+   ],
+   "failureScenario": "The crate-level usage block lists subcommands but omits `look extract` and `ai compare`, both dispatched in main() and documented in USAGE, and omits denoise-serve's --max-connections. Readers of the source/rustdoc get an incomplete command inventory.",
+   "action": "Add the missing subcommands to the header or replace it with a pointer to USAGE.",
+   "verifyStatus": "unverified",
+   "reviewAxis": "standards",
+   "disposition": "partial",
+   "sourceQuote": "//! ```text",
+   "sourceLocation": "apps/lightcraft-cli/src/main.rs:3",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit without change context; no baseline to attribute against",
+    "baselineEvidence": []
+   },
+   "anchor": {
+    "path": "apps/lightcraft-cli/src/main.rs",
+    "line": 3,
+    "text": "//! ```text"
+   }
+  },
+  {
+   "id": "doc-desktop-gpu-crash-notice-wrong-on-macos",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "apps/lightcraft-desktop/src/native.rs:950-954",
+    "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx:662",
+    "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx:801"
+   ],
+   "failureScenario": "After a GPU startup crash the user-facing notice says to re-enable 'Settings > Performance > Use the GPU for rendering' and to try LIGHTCRAFT_GPU_BACKEND=dx12, vulkan or off. The Settings checkbox is actually labelled 'Use GPU rendering when available', and on macOS (a supported host for this binary) neither dx12 nor vulkan is a usable backend; metal, which parse_backends accepts (crates/gpu/src/backend.rs:11), is not mentioned. A macOS user following the recovery instructions sets a backend that cannot initialise.",
+   "action": "Make the notice platform-specific (metal/off on macOS, dx12/vulkan/off on Windows) and quote the actual Settings label.",
+   "verifyStatus": "unverified",
+   "reviewAxis": "spec",
+   "disposition": "wrong",
+   "sourceQuote": "\"Ember closed unexpectedly while starting the GPU last time ({what}), so GPU rendering is now off and photos render on the CPU. To try the GPU again, turn on Settings ▸ Performance ▸ Use the GPU for rendering; to try another graphics backend, start Ember with LIGHTCRAFT_GPU_BACKEND=dx12, vulkan or off.\"",
+   "sourceLocation": "apps/lightcraft-desktop/src/native.rs:952",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit without change context; no baseline to attribute against",
+    "baselineEvidence": []
+   },
+   "anchor": {
+    "path": "apps/lightcraft-desktop/src/native.rs",
+    "line": 952,
+    "text": "        \"Ember closed unexpectedly while starting the GPU last time ({what}), so GPU rendering is now off and photos render on the CPU. To try the GPU again, turn on Settings ▸ Performance ▸ Use the GPU for rendering; to try another graphics backend, start Ember with LIGHTCRAFT_GPU_BACKEND=dx12, vulkan or off.\""
+   }
+  }
+ ],
+ "withdrawn": []
+}

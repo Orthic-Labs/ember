@@ -1,0 +1,584 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "legacy.security.adjudication",
+ "packetDigest": "sha256:9731d9ec20900bf2c4446f4a78356ba29a0746d1fcc94691bfdf7b55bf9f0345",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [],
+ "withdrawn": [],
+ "verdicts": [
+  {
+   "candidateId": "sha256:56863dab32b6754a5bffc1c9f7e72f4b9a722f245a4e60d8bf004cd60e86462c",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-655bb59f93f3be2a",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "No attacker: links.rs:28 FEEDBACK is a compile-time &'static str naming the GitHub new-issue page of Orthic-Labs/ember, with no untrusted input feeding it.",
+   "reachability": "Reached only via LINKS entry app.feedback (links.rs:24) and url_of, then links::open hands the string to the host open_url service, which launches the user's browser; nothing is fetched or executed by Ember.",
+   "impact": "None. A browser navigation to an HTML issue form is not a downloaded binary, so the digest-pinning rule has nothing to pin; integrity is provided by HTTPS to github.com.",
+   "rationale": "The scanner matched an https URL literal; the value is a hyperlink opened in a browser, never downloaded or executed by the app.",
+   "evidence": [
+    {
+     "file": "crates/ui-egui/src/links.rs",
+     "line": 28
+    },
+    {
+     "file": "crates/ui-egui/src/links.rs",
+     "line": 36
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:1371707fc76770b666a9c60213105d3f5a9fd091864049a694db9422e5ccacf9",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-7dd8fd5f080dee52",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "No attacker model applies to the GITHUB constant at links.rs:12: it is a hard-coded repository homepage URL with no external data source.",
+   "reachability": "Used by the Help menu entry app.github (links.rs:22) and the About dialog list (panels/dialogs.rs:1183), both passing it to links::open, which only asks the OS to open a browser tab.",
+   "impact": "None. The repository landing page is browsed by the user, not retrieved as an executable; there is no binary whose digest could be pinned.",
+   "rationale": "Hyperlink literal misclassified as a binary download by a URL-pattern scanner.",
+   "evidence": [
+    {
+     "file": "crates/ui-egui/src/links.rs",
+     "line": 12
+    },
+    {
+     "file": "crates/ui-egui/src/panels/dialogs.rs",
+     "line": 1183
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:b3243231f2b0c31a6c5d3d95dcacd816a55693d12192306da802f33e4da0ff7d",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-b6039cd9128a6e63",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "No threat exists at links.rs:49: the line is an assert inside #[cfg(test)] mod tests that checks every LINKS entry starts with the https:// prefix.",
+   "reachability": "Compiled only under cfg(test) (links.rs:42); it is never part of a shipped binary and performs no network access at all.",
+   "impact": "None. The line is itself a defensive check that link URLs use TLS; it downloads nothing and cannot weaken any binary supply chain.",
+   "rationale": "The scanner matched the substring https:// inside a test assertion string literal, not a URL being fetched.",
+   "evidence": [
+    {
+     "file": "crates/ui-egui/src/links.rs",
+     "line": 42
+    },
+    {
+     "file": "crates/ui-egui/src/links.rs",
+     "line": 49
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:dd7676f52190a5c1a4c30433553bc3ba9b395cc782293f4b0bc781a1581cc174",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-cb2b0ad11fafc32d",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "No attacker controls APP_PAGE at links.rs:10; it is a static project-page string for the Ember fork, fixed at build time.",
+   "reachability": "Consumed by the app.website menu link (links.rs:21) and the About dialog (panels/dialogs.rs:1182); both route through links::open to the host browser launcher, with no fetch inside Ember.",
+   "impact": "None. Opening a project web page in the user's browser carries no binary-integrity risk, so a content digest is inapplicable.",
+   "rationale": "Static web-page constant flagged only because it is an https URL; the test at links.rs:53 even asserts it equals GITHUB.",
+   "evidence": [
+    {
+     "file": "crates/ui-egui/src/links.rs",
+     "line": 10
+    },
+    {
+     "file": "crates/ui-egui/src/panels/dialogs.rs",
+     "line": 1182
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:e9e97da2d970c41e2c878d4cf672fdb4a33fc89a1f62780066d61aa9c8f2f136",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-d8ea533d5283cf06",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "WEBSITE at links.rs:8 is a fixed organisation profile URL (github.com/Orthic-Labs); no untrusted party supplies or alters it at runtime.",
+   "reachability": "Reached from the app.artcraft menu entry (links.rs:23), the About dialog (panels/dialogs.rs:1184) and as the url_of fallback in menus.rs:1871, always ending in a browser open request.",
+   "impact": "None. It names an organisation landing page for a human to browse; Ember never downloads content from it, so pinning a digest is meaningless.",
+   "rationale": "URL-shaped constant mistaken for a binary download; its only sink is the browser launcher.",
+   "evidence": [
+    {
+     "file": "crates/ui-egui/src/links.rs",
+     "line": 8
+    },
+    {
+     "file": "crates/ui-egui/src/menus.rs",
+     "line": 1871
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:833ca03108dffd224c518d0736a1b0925406eff20a9c88b6740b7b3af26ab43a",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-f2020cdfaa132f97",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "DISCORD at links.rs:6 is a legacy-named constant pointing to the GitHub issues list; it is compiled in and has no attacker-controlled source.",
+   "reachability": "Used by the app.discord menu item (links.rs:20) and the About dialog button (panels/dialogs.rs:1175-1178), which call links::open to show the page in the browser.",
+   "impact": "None. An issues listing page is navigated, not downloaded or executed, so the absence of an immutable digest has no security consequence.",
+   "rationale": "The scanner's binary-pin rule fires on any https literal; this one is a community link.",
+   "evidence": [
+    {
+     "file": "crates/ui-egui/src/links.rs",
+     "line": 6
+    },
+    {
+     "file": "crates/ui-egui/src/panels/dialogs.rs",
+     "line": 1178
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:8211face3d264ad378504a55a7ac9ea42b2cc08155aa5d815e6e3c05acdc0087",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-5a61ca1c80711ae1",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "No attacker: menubar.rs:1456 is the opening of a raw-string GPX fixture inside the auto_tag_from_tracklog unit test, and http://www.topografix.com/GPX/1/1 is an XML namespace identifier.",
+   "reachability": "The string is written to a temp file by std::fs::write in test code (menubar.rs:1454-1458) and parsed as a tracklog; XML namespace URIs are never dereferenced by the parser.",
+   "impact": "None. A namespace URI is an opaque identifier, nothing is downloaded, and the code is test-only, so no binary supply-chain exposure exists.",
+   "rationale": "Namespace URI inside a test GPX document matched the URL regex.",
+   "evidence": [
+    {
+     "file": "crates/ui-egui/src/menubar.rs",
+     "line": 1456
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:36c129aaf6b8da0afa38abf0b1c5d768f00cb69ac201d3c6203e16c69eb55b80",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-18abe5bc6f86f3d9",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "SAM_HELP at panels/dialogs.rs:1425 is a constant documentation anchor (ai-masks.md#getting-the-model); no untrusted input reaches it.",
+   "reachability": "Shown as hover text and opened with links::open from the SAM model dialog (dialogs.rs:1487-1490, 1539-1542); it opens a Markdown help page in the browser and does not fetch the model.",
+   "impact": "None at this line. The help page is read by a human; the actual model download path (Segmenter mirrors) is separate code not referenced by this candidate, so no unpinned binary is fetched here.",
+   "rationale": "Help-page hyperlink flagged by URL pattern; it is documentation, not the download source.",
+   "evidence": [
+    {
+     "file": "crates/ui-egui/src/panels/dialogs.rs",
+     "line": 1425
+    },
+    {
+     "file": "crates/ui-egui/src/panels/dialogs.rs",
+     "line": 1490
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:e048cdc6fb15aa9196df1d3bd8517571d345a34d50a7a513c043693660872f3c",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-a983a328c2cd618f",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "At panels/right.rs:667 the URL is formatted from the photo's own GPS latitude/longitude as {:.6} floats; an attacker crafting EXIF can only choose two numbers.",
+   "reachability": "Triggered when the user clicks Show on Map; the format! output goes to links::open (right.rs:668) which opens openstreetmap.org in the browser. Float formatting cannot inject path or scheme characters.",
+   "impact": "None. It is a map page navigation, not a binary download, and numeric formatting removes any URL-injection vector; the scheme and host are fixed to https://www.openstreetmap.org.",
+   "rationale": "Map hyperlink built from numeric coordinates, misread as an unpinned binary URL.",
+   "evidence": [
+    {
+     "file": "crates/ui-egui/src/panels/right.rs",
+     "line": 667
+    },
+    {
+     "file": "crates/ui-egui/src/panels/right.rs",
+     "line": 668
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:4a1f3440351430cd464b32a5731fdc05484f4b48cec3398725108d660f6175f9",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-c4434f5f11dc3a53",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "tests_panels.rs:2017 is a one-line GPX fixture string in a test module; its topografix URI is the GPX XML namespace, not a resource location used by code.",
+   "reachability": "Written to a per-process temp directory by std::fs::write in test code and parsed by the tracklog importer; XML namespaces are not fetched, and the file is excluded from release builds.",
+   "impact": "None. No network retrieval occurs and the code ships in no product binary, so the binary-pinning concern cannot apply.",
+   "rationale": "Test-fixture XML namespace matched the scanner's URL heuristic.",
+   "evidence": [
+    {
+     "file": "crates/ui-egui/src/tests_panels.rs",
+     "line": 2017
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:293e46ea869eeb23439d80796cdcdaea31d8550400b6e4546b840cea40ed1ec8",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-0e3d5642dde7c59f",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "docs/showcase/run.py:13 opens sys.argv[1], the JSON-lines script path the developer passes on the command line; the only actor choosing that path is the local user who already has full filesystem access.",
+   "reachability": "The script is a developer showcase driver (docs/showcase, documented in CLAUDE.md as run.py file.jsonl) invoked by hand; it has no network, service or privileged entry point that could supply the argument.",
+   "impact": "None. Reading a file the invoking user names grants no capability across a trust boundary; the file is only parsed as JSON control requests sent to the user's own localhost:7980 app.",
+   "rationale": "Path-traversal rule assumes attacker-controlled path data, but argv of a local CLI tool is the operator's own input.",
+   "evidence": [
+    {
+     "file": "docs/showcase/run.py",
+     "line": 13
+    },
+    {
+     "file": "docs/showcase/run.py",
+     "line": 2
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:3caeb4d1078623720be14bba374a398e3531f62137f01eeeee194ed2f486ec50",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-6abb4d7dbfcaf88e",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "Threat considered: tampering with the Flathub remote used at flatpak-bundle.sh:20 to install the freedesktop runtime/SDK during release bundling.",
+   "reachability": "FLATHUB is passed to flatpak remote-add (line 55) and --runtime-repo (line 62) in the release workflow (release.yml:274). The .flatpakrepo file carries Flathub's GPG key and flatpak verifies every OSTree commit signature against it.",
+   "impact": "None beyond normal trust in Flathub. Runtimes are integrity-verified by flatpak's GPG-signed OSTree commits, and a repo descriptor is not a binary; pinning a file digest would add nothing over signature verification.",
+   "rationale": "A remote descriptor URL over HTTPS whose content is signature-verified by flatpak, not an unverified binary download.",
+   "evidence": [
+    {
+     "file": "packaging/linux/flatpak-bundle.sh",
+     "line": 20
+    },
+    {
+     "file": "packaging/linux/flatpak-bundle.sh",
+     "line": 55
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:3267c1fe4b6bb6d13e8355a1c07dfc60627f7d58fee519c9fe744007a8ebad8f",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-1f6da4d2d7bad5df",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "package.sh:12 is a shell comment documenting that nfpm is needed and where its homepage is; there is no code and no attacker-influenced data on the line.",
+   "reachability": "Comments are not executed. The real nfpm install in CI is release.yml:209-211, which downloads a version-pinned release (NFPM_VERSION 2.47.0), a separate location from this candidate.",
+   "impact": "None. A documentation link in a usage comment cannot download or run anything.",
+   "rationale": "Scanner matched a URL inside a '#' comment.",
+   "evidence": [
+    {
+     "file": "packaging/linux/package.sh",
+     "line": 12
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:f4d420865fa62e0edd7c8504ab9199521df3a02e654e60ad3f112ee0ecdc4c23",
+   "verdict": "HARDENING_GAP",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-3a38d929724b3591",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "Supply-chain threat: whoever can alter the AppImage/appimagetool 'continuous' GitHub release (compromised upstream maintainer or release asset) substitutes the appimagetool executable that package.sh:113 downloads and then runs.",
+   "reachability": "Reached in the release workflow: release.yml:223 runs packaging/linux/package.sh with no APPIMAGETOOL set, so when appimagetool is not on PATH the script curls the mutable 'continuous' asset (package.sh:113), chmod +x's it and executes it to build the published AppImage.",
+   "impact": "A replaced tool would execute on the release runner and could embed a modified runtime into the shipped Ember AppImage. Exploitation requires compromise of the upstream project, not of Ember, so this is defense-in-depth rather than a demonstrated vulnerability; TLS protects only transport.",
+   "rationale": "Mutable 'continuous' tag plus no sha256 check on an executable run in the release pipeline; pin a tagged release and verify its digest.",
+   "evidence": [
+    {
+     "file": "packaging/linux/package.sh",
+     "line": 113
+    },
+    {
+     "file": "packaging/linux/package.sh",
+     "line": 114
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:6bd60cd1d321b9ad935415f8860af2e56ea1436c0c028399e1c0bb010666c728",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-da7b44290fb1ce55",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "package.sh:89 only checks `command -v nfpm` and prints an error message containing the nfpm install-docs URL; no data from any attacker is involved.",
+   "reachability": "The URL appears inside an echo string sent to stderr before exit 1; the script never fetches it. In CI nfpm is pre-installed from a pinned version at release.yml:209-211.",
+   "impact": "None. Printing a help URL in an error message has no integrity or execution effect.",
+   "rationale": "URL inside an error-message string, not a download.",
+   "evidence": [
+    {
+     "file": "packaging/linux/package.sh",
+     "line": 89
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:c118209ebed47054abd0b58dd118eaef8f9fbbdf5a78155ec1323a33e82a6a27",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-2b9de96f0b602752",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "render-icons.py:39 builds an SVG wrapper whose xmlns attribute is the W3C SVG namespace; the only variable data is the base64 of a locally rendered PNG.",
+   "reachability": "embedded_svg is a local build helper that concatenates strings into an SVG document; the namespace http://www.w3.org/2000/svg is an identifier never requested over the network.",
+   "impact": "None. No download occurs and the namespace identifier has no content to pin.",
+   "rationale": "W3C SVG namespace literal matched the URL rule.",
+   "evidence": [
+    {
+     "file": "packaging/render-icons.py",
+     "line": 39
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:7bf8070c5c3914600319a9ab84f6c1f6a819b6c7a6737d45a52b4225d4a0e977",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-0aa6097f6a971ed3",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "sign.ps1:9 is in the comment-based help block (.DESCRIPTION), giving an example Azure Trusted Signing endpoint; no runtime value is set here.",
+   "reachability": "Lines 1-19 are a PowerShell <# #> help comment and are never executed; the real endpoint comes from the AZURE_SIGNING_ENDPOINT environment secret at line 84.",
+   "impact": "None. Example text in documentation fetches nothing.",
+   "rationale": "Example URL inside a help comment.",
+   "evidence": [
+    {
+     "file": "packaging/windows/sign.ps1",
+     "line": 9
+    },
+    {
+     "file": "packaging/windows/sign.ps1",
+     "line": 84
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:2661967bb0394a7d368d84f5ebdffaca139940fd55cf65f6439ad404053de82d",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-17bf9edffab5a54f",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "Threat considered at sign.ps1:67: an on-path attacker interfering with the plain-http DigiCert RFC 3161 timestamp request made by signtool /tr.",
+   "reachability": "Used only when signing with WINDOWS_CERTIFICATE; signtool sends a hash to the TSA and receives a timestamp token. Line 91 then runs signtool verify /pa on the result.",
+   "impact": "None material. RFC 3161 tokens are signed by the TSA and validated by signtool, so tampering yields a failed signature/verify rather than a forged timestamp; nothing executable is downloaded. HTTP is DigiCert's documented endpoint.",
+   "rationale": "A timestamp authority URL is not a binary download; token integrity comes from the TSA's signature.",
+   "evidence": [
+    {
+     "file": "packaging/windows/sign.ps1",
+     "line": 67
+    },
+    {
+     "file": "packaging/windows/sign.ps1",
+     "line": 91
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:9507d0c6009e6f25030f34798edb1596c0f4e6c637fdaeefe31abccb8261db64",
+   "verdict": "HARDENING_GAP",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-72ee749d1a0e383a",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "Supply-chain threat: a compromise or account takeover of the Microsoft.Trusted.Signing.Client NuGet package lets the attacker publish a new latest version that sign.ps1:77 downloads without a version or hash.",
+   "reachability": "Reached when Azure signing secrets are set (sign.ps1:49-50) via package.ps1:116/143. The unversioned v2 package URL resolves to the latest release; the extracted Azure.CodeSigning.Dlib.dll is loaded into signtool (line 89) in a process whose environment holds AZURE_CLIENT_SECRET.",
+   "impact": "A malicious DLL would run inside the signing step with the Azure client secret available and could sign arbitrary binaries or exfiltrate the credential. Requires upstream package compromise, so it is a hardening gap; pinning a version and checking the nupkg sha256 closes it.",
+   "rationale": "Unpinned latest-version download of code that is executed with signing credentials present.",
+   "evidence": [
+    {
+     "file": "packaging/windows/sign.ps1",
+     "line": 77
+    },
+    {
+     "file": "packaging/windows/sign.ps1",
+     "line": 89
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:9190f84541285fd2c62d7b3921e267411f56e25fc342d8d3aaaedcfa167793b5",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-ab2bd3d3c0fd4cdd",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "Threat considered at sign.ps1:88: tampering with the http Microsoft ACS timestamp service used in the Azure Trusted Signing branch.",
+   "reachability": "signtool /tr posts a digest to timestamp.acs.microsoft.com and embeds the returned RFC 3161 token; signtool verify /pa at line 91 validates the resulting signatures.",
+   "impact": "None material. Microsoft's TSA signs its tokens, so an altered response fails validation; no file is downloaded or executed, so a content digest cannot apply. This is Microsoft's documented Trusted Signing timestamp URL.",
+   "rationale": "Timestamp endpoint, distinct from a binary download; integrity rests on the TSA signature.",
+   "evidence": [
+    {
+     "file": "packaging/windows/sign.ps1",
+     "line": 88
+    },
+    {
+     "file": "packaging/windows/sign.ps1",
+     "line": 91
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:4024136485419aa0b55f610c011a2667505d6b033c05cdcfd200690103e5cc9c",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-3227fb5d6a12999c",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "test-install-folder.ps1:41 registers the WiX v4 XML namespace with an XmlNamespaceManager for XPath queries over the local lightcraft.wxs; no attacker input is involved.",
+   "reachability": "AddNamespace binds the prefix 'w' to the URI string for SelectNodes; .NET never dereferences namespace URIs, and the script runs only as a local installer test.",
+   "impact": "None. Nothing is downloaded, so there is no binary to pin.",
+   "rationale": "XML namespace identifier flagged as a download URL.",
+   "evidence": [
+    {
+     "file": "packaging/windows/test-install-folder.ps1",
+     "line": 41
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:f4300519230f5ffc56e854490e3ee7e07e589a8329c88b63aae31177a014bb2a",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-9e6a86b94b0a3a04",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "test-install-folder.ps1:55 is the root element of a generated WiX probe document in a here-string; the xmlns value is a schema identifier with no attacker involvement.",
+   "reachability": "The here-string is written as WiX source for a test package built by the local WiX toolchain; the WiX compiler treats the namespace as an identifier and performs no network fetch.",
+   "impact": "None. No retrieval of any binary occurs from this URI in a test-only script.",
+   "rationale": "WiX namespace in a test XML template matched the URL rule.",
+   "evidence": [
+    {
+     "file": "packaging/windows/test-install-folder.ps1",
+     "line": 55
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:2e1809ba0f7543012bb4eb0fdc1a75ede7dc17998c025291aae2bf54b312511a",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-ffe7b60c18c5fa55",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "Threat considered: a modified craft-fonts repository serving altered font files to the build cloned at build-native.mjs:29.",
+   "reachability": "The clone is immediately followed by `git checkout 8dcdacd5153e64560d109541a47d806f26f048c0` (line 31), and the build fails if that checkout fails (line 32); only the pinned commit's tree is used as CRAFT_FONTS_DIR.",
+   "impact": "None. A full git commit SHA is an immutable content address over the whole tree, which is exactly the pin the rule asks for; an attacker cannot make different content match that commit.",
+   "rationale": "The scanner looked only at the clone line and missed the pinned-commit checkout two lines below.",
+   "evidence": [
+    {
+     "file": "scripts/desktop/build-native.mjs",
+     "line": 29
+    },
+    {
+     "file": "scripts/desktop/build-native.mjs",
+     "line": 31
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:bda19da3a5ee26e497d711e7b6f37748868ac18ad347e1838afb5311c0118f35",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-57c7ef5dad0f5bf8",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "Threat considered: a substituted face_landmarker.task model behind the ARTIFACT_URL at line 43.",
+   "reachability": "The script does not download ARTIFACT_URL; inspect() reads a local file argument and rejects it unless length equals ARTIFACT_BYTES and SHA-256 equals ARTIFACT_SHA256 (lines 347-350). The URL is only echoed in the report (line 385).",
+   "impact": "None. An immutable digest (line 42) and byte length (line 41) are pinned and enforced before parsing, so a tampered artifact is refused.",
+   "rationale": "The digest sits on the adjacent line; the scanner missed it.",
+   "evidence": [
+    {
+     "file": "tools/inspect-mediapipe-image-metadata.py",
+     "line": 42
+    },
+    {
+     "file": "tools/inspect-mediapipe-image-metadata.py",
+     "line": 350
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:e3dbdee85178006272f27a455df4b753e9d46ed577261779e86bff81d49557ff",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0014",
+   "clusterId": "cluster-c0fbd4253770bfcc",
+   "workItemId": "sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "workPacketDigest": "sha256:6d38d18aaaf1245e4eb3698f6dbdedccc01e2325eb454d020dd1563d11e7a328",
+   "contextId": "adjudicator:sha256:464a99d8165fabcf7500231d1383eb5040054ed18b42d527587dc4ee1e02b47c",
+   "threatModel": "Threat considered: an altered metadata_schema.fbs at the METADATA_SCHEMA_URL formatted at line 51.",
+   "reachability": "The URL embeds a fixed git revision (line 48), and the local schema file passed in is checked against METADATA_SCHEMA_BYTES and METADATA_SCHEMA_SHA256 (lines 49-50, 355-358) before use; the script never fetches the URL itself.",
+   "impact": "None. Commit-pinned URL plus enforced SHA-256 and size make substitution detectable and fatal.",
+   "rationale": "Pinned revision and sha256 are both present; rule fired on the URL text alone.",
+   "evidence": [
+    {
+     "file": "tools/inspect-mediapipe-image-metadata.py",
+     "line": 49
+    },
+    {
+     "file": "tools/inspect-mediapipe-image-metadata.py",
+     "line": 358
+    }
+   ]
+  }
+ ]
+}

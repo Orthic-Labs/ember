@@ -1,0 +1,70 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.doc-drift",
+ "packetDigest": "sha256:d206a877c7e0189f10e49596ba85fc6b771577ab4d633141e00721f7aa12d31b",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "doc-drift.corpus-sraw-allowlisted-though-decoded",
+   "lens": "doc-drift",
+   "severity": "medium",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/raw/tests/corpus.rs:16-22",
+    "crates/raw/tests/corpus.rs:87",
+    "crates/raw/src/vendor/cr2.rs:22",
+    "crates/raw/src/vendor/cr2.rs:151-156",
+    "crates/raw/src/vendor/cr2/sraw.rs:1-3"
+   ],
+   "anchor": {
+    "path": "crates/raw/tests/corpus.rs",
+    "line": 21,
+    "text": "    \"sraw\",           // Canon sRAW / mRAW"
+   },
+   "failureScenario": "KNOWN_UNSUPPORTED still lists \"sraw\" as 'Canon sRAW / mRAW' not decoded, but cr2.rs now routes SRAW_TYPE=4 frames to vendor::cr2::sraw::decode, measured on the 31 CC0 sRAW/mRAW corpus samples. The corpus test accepts RawError::Unsupported for any file whose name contains 'sraw' (corpus.rs:87), so a regression that makes every sRAW/mRAW file Unsupported again passes the corpus gate silently instead of failing.",
+   "action": "Remove \"sraw\" from KNOWN_UNSUPPORTED (or narrow it to the specific non-YCbCr raw types still refused) so sRAW/mRAW corpus files must decode.",
+   "verifyStatus": "verified"
+  },
+  {
+   "id": "doc-drift.raw-crate-doc-format-list-stale",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/raw/src/lib.rs:16-21",
+    "crates/raw/src/lib.rs:109-116",
+    "crates/raw/src/lib.rs:122-139",
+    "crates/raw/src/lib.rs:383-398",
+    "crates/raw/tests/corpus.rs:16-21"
+   ],
+   "anchor": {
+    "path": "crates/raw/src/lib.rs",
+    "line": 16,
+    "text": "//! Formats: DNG (uncompressed, lossless JPEG, lossy JPEG (Smart Previews), Deflate incl. floating point, JPEG XL (DNG 1.7,"
+   },
+   "failureScenario": "The crate-level 'Formats' list omits containers decode() supports (Samsung SRW, Hasselblad 3FR/FFF via RawFormat::CfaTiff, Kodak DCS via RawFormat::KodakDcs) and its 'can't decode yet' list names only compressed ORF and CR3 variants, while corpus.rs:16 points to 'the crate docs' for a list that also includes Nikon HE NEF. RawFormat::OtherTiff's doc (line 115) still lists 3FR among undecoded TIFF raws although CfaTiff (line 109-112) says 3FR/FFF are read by the DNG reader. A maintainer or user reading the docs gets the wrong support matrix.",
+   "action": "Update the crate doc format list and unsupported list to match decode_with/is_supported, and drop 3FR from the OtherTiff variant doc.",
+   "verifyStatus": "verified"
+  },
+  {
+   "id": "doc-drift.headless-painted-text-doc-misattached",
+   "lens": "doc-drift",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/headless.rs:177-191"
+   ],
+   "anchor": {
+    "path": "crates/ui-egui/src/headless.rs",
+    "line": 177,
+    "text": "    /// Every piece of text the last frame painted (labels, tooltips, values), in paint order."
+   },
+   "failureScenario": "The doc line for painted_text ('Every piece of text the last frame painted...') sits above painted_shapes, so rustdoc shows painted_shapes as returning text in paint order and painted_text (line 191) has no doc at all; Headless::painted_text (line 295) links to HeadlessView::painted_text expecting that description.",
+   "action": "Move line 177 to directly above `pub fn painted_text` at line 191.",
+   "verifyStatus": "verified"
+  }
+ ],
+ "withdrawn": []
+}

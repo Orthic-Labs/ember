@@ -1,0 +1,600 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "legacy.security.adjudication",
+ "packetDigest": "sha256:9731d9ec20900bf2c4446f4a78356ba29a0746d1fcc94691bfdf7b55bf9f0345",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [],
+ "withdrawn": [],
+ "verdicts": [
+  {
+   "candidateId": "sha256:6d5a56d2ff8d7f13c8c1f04b9f2b89a12b7f261c2e9a9447bf38b823f9998146",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-f40bdaeb3380c7ba",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: the string `https://b.example/z` is a redirect-target literal inside the `resolves_redirects` unit test asserting that a plain-http base may upgrade to TLS on redirect.",
+   "reachability": "http.rs:553 opens `#[cfg(test)] mod tests`, so line 590 is compiled only under `cargo test`; `Url::join` is called on a parsed value and no network request or file write happens.",
+   "impact": "None. Nothing is downloaded at http.rs:590; the assert checks a parsed `tls` flag, so there is no artifact whose digest could be missing.",
+   "rationale": "Test-only URL-join assertion under the cfg(test) module at http.rs:553-554; no download sink.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 553
+    },
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 590
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:d9daf62edd787a453d74a761e6a6bd4df2ab167ceb139514eced24719113fb0b",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-f9c70355855115be",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: `https://cdn.example.com/models/sam3/model.safetensors` is an expected value for `Url::display()` in the `parses_urls` unit test, checking the query string is stripped from the shown URL.",
+   "reachability": "Inside `#[cfg(test)] mod tests` (http.rs:553); the URL is parsed from a literal at http.rs:565 and never fetched, and example.com is a reserved documentation domain.",
+   "impact": "None at this line: it compares strings only. Production model downloads pass a `FileSpec` with a sha256 through lightcraft_fetch, which this assertion does not touch.",
+   "rationale": "Display-formatting assertion inside the test module; no network or write sink is reached from http.rs:567.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 553
+    },
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 567
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:4ba2a60d146f7a5f7da39a0827fe1f64d27c9f731975cacc3b6eb97f13288c8f",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-0c0a3bcc22e8c205",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: the URL at tests.rs:358 points at a TcpListener the test itself bound on 127.0.0.1:0 to check that the query `?file=weights&sig=secret` is sent unchanged.",
+   "reachability": "tests.rs is included only via `#[cfg(test)] mod tests;` at fetch/src/lib.rs:549-550; the peer is an in-process loopback thread, not a remote host.",
+   "impact": "None. The bytes come from the test's own listener thread, so any integrity gap is confined to a hermetic unit test and never reaches a shipped binary.",
+   "rationale": "Loopback request-line test fixture compiled only under cfg(test) (lib.rs:549); not a distributed download.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/lib.rs",
+     "line": 549
+    },
+    {
+     "file": "crates/fetch/src/tests.rs",
+     "line": 358
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:6523d9f5af45427239638c95e58b7e86c366f53caf745a732a7f3ec52a601334",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-3213043cb4a16d34",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: tests.rs:321 writes a temp mirrors file with `https://b.example/m/` and `https://a.example/x` to test comment, blank-line and invalid-entry parsing in `mirrors()`.",
+   "reachability": "Test-only (fetch/src/lib.rs:549-550 cfg(test)); the `mirrors` helper just returns a deduplicated list and nothing is fetched from the reserved `.example` hosts.",
+   "impact": "None. The test asserts list order; it downloads nothing, so no digest-less artifact is installed.",
+   "rationale": "Mirror-list parsing fixture written to a temp file in a cfg(test) module; no download sink.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/lib.rs",
+     "line": 549
+    },
+    {
+     "file": "crates/fetch/src/tests.rs",
+     "line": 321
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:9c5894d50c93265286aafbfdc51c86441099b2197066f254dd087297be1f0651",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-34cff08cdf14df9c",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: line 323 passes the env-style string `https://a.example/x/, ftp://no` to `mirrors()` to check that the non-https `ftp://` entry is dropped and trailing slashes are normalised.",
+   "reachability": "Compiled only in the cfg(test) module declared at fetch/src/lib.rs:549-550; the call returns a Vec<String> and performs no I/O beyond the temp file read.",
+   "impact": "None. It is a pure parsing check with reserved example hosts; no binary is retrieved or executed.",
+   "rationale": "Environment-override parsing assertion in a test; the scanner matched a URL literal, not a fetch.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/lib.rs",
+     "line": 549
+    },
+    {
+     "file": "crates/fetch/src/tests.rs",
+     "line": 323
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:31fb75d79a425988734f75513b268f48d40336761503aaa111a70352cb222914",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-6859a122beeffc32",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: `http://127.0.0.1:1/unreachable` is a deliberately dead loopback mirror (port 1) used to prove the fetcher falls through to the next mirror.",
+   "reachability": "Within the cfg(test) tests module (lib.rs:549-550); the connection is expected to fail, and the test at tests.rs:158 runs with `pinned()`, a FileSpec carrying a sha256 that is verified after fallback.",
+   "impact": "None. The download in this test is digest-pinned via `pinned()`, which is the opposite of the scanner's claim, and the endpoint is unreachable by design.",
+   "rationale": "Dead-mirror fixture in the fallback-and-verify test; the run uses a pinned FileSpec (tests.rs:158).",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/tests.rs",
+     "line": 156
+    },
+    {
+     "file": "crates/fetch/src/tests.rs",
+     "line": 158
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:50b820ab8e1adb5a8bdcda95578cb0239e36a4089757e157d9000b4819dbcb64",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-6952efd4eff68dc4",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: tests.rs:348 asserts that `bearer()` returns None for plain `http://huggingface.co/x`, i.e. a token is never sent over cleartext.",
+   "reachability": "cfg(test) only (lib.rs:549-550); `bearer` is a pure function of its arguments and nothing is requested from huggingface.co.",
+   "impact": "None, and the asserted behaviour is itself a security control (no token over http); no artifact is downloaded at this line.",
+   "rationale": "Token-scoping assertion over a parsed URL; no network sink and no binary.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/lib.rs",
+     "line": 549
+    },
+    {
+     "file": "crates/fetch/src/tests.rs",
+     "line": 348
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:47a0c6da47b8f42925473daf774737b08c721113a81ff0d5abe0f7cbae71d758",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-a7a7e49eb805b334",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: tests.rs:347 checks that `bearer()` withholds the token when a redirect leads to a different storage host `https://cdn-lfs.example/x`.",
+   "reachability": "Unit test under cfg(test) (lib.rs:549-550); `bearer` only compares host strings and does no I/O.",
+   "impact": "None. The line verifies cross-host credential containment; nothing is fetched, so a missing digest cannot apply.",
+   "rationale": "Pure host-comparison assertion in the test module; the URL literal is not a download.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/lib.rs",
+     "line": 549
+    },
+    {
+     "file": "crates/fetch/src/tests.rs",
+     "line": 347
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:0c101847a32d4b5e5524237ac88eb12ae416416c4d361d83d43ecba602e71b2e",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-aaf3f035ccdef52d",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: tests.rs:325 is the expected value `[a.example/x, b.example/m, c.example/d]` for mirror ordering and deduplication.",
+   "reachability": "Test-only module (lib.rs:549-550); `assert_eq!` on a Vec, with reserved example hosts that are never contacted.",
+   "impact": "None. Comparing strings cannot install or execute anything.",
+   "rationale": "Expected-result literal of a parsing test; no download sink reachable.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/lib.rs",
+     "line": 549
+    },
+    {
+     "file": "crates/fetch/src/tests.rs",
+     "line": 325
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:7973dc7b86d4af90fa5e088f6e4db78f35cd7b54b3494aad960d974878941fb3",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-cfae017d4de9c3ca",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: tests.rs:322 defines a `defaults` array of two example.com-style mirror bases fed to `mirrors()` to test precedence.",
+   "reachability": "Compiled under cfg(test) only (lib.rs:549-550); the array is passed to a list-merging helper and no request is issued.",
+   "impact": "None. The defaults are fixture strings for a merge test, not shipped mirror URLs.",
+   "rationale": "Fixture default-mirror array inside a unit test; nothing is retrieved.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/lib.rs",
+     "line": 549
+    },
+    {
+     "file": "crates/fetch/src/tests.rs",
+     "line": 322
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:1247cf8c4413c734d341cc4d774aeed6a9942ba3955a54ce166b996da455217b",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-d31ff28a265d6517",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: tests.rs:38 builds the base URL of the test's own HTTP server bound to `127.0.0.1:0` at tests.rs:37.",
+   "reachability": "The `server()` helper exists only in the cfg(test) module (lib.rs:549-550); every request to this base hits an in-process thread that serves synthetic bodies.",
+   "impact": "None. The tests that use this base check sha256 verification and mirror fallback; the content never leaves the test process.",
+   "rationale": "Loopback test-server base URL; hermetic fixture, no external binary.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/tests.rs",
+     "line": 37
+    },
+    {
+     "file": "crates/fetch/src/tests.rs",
+     "line": 38
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:2bc7ad2dd6d10fff1765237d5468c62fcfa654fecb902618cc1f23aeb8de0d89",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-f8ac3cbba5228008",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: tests.rs:344 parses `https://huggingface.co/x/model.bin` as the first-host value for `bearer()` token-scoping checks.",
+   "reachability": "cfg(test) only (lib.rs:549-550); the parsed URL is passed to a pure function, no connection to huggingface.co is made.",
+   "impact": "None. No model file is downloaded by this test; it checks only when an auth header would be attached.",
+   "rationale": "URL parse fixture for credential scoping in a unit test; not a download.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/lib.rs",
+     "line": 549
+    },
+    {
+     "file": "crates/fetch/src/tests.rs",
+     "line": 344
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:a33e9a53add3fbb977289c74ee3edcfb29a4d1cfeec105bded71002ce411ac30",
+   "verdict": "LIKELY_FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-60b4e7f2e34dd8eb",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "Attacker would need to tamper with the GeoNames dump (compromise download.geonames.org or break TLS) to feed altered place-name data to `metadata.downloadPlaceNames`; there is no local attacker-controlled source.",
+   "reachability": "Reachable: engine/src/cmd/geocode.rs:176-177 calls `download_url` with `FileSpec{sha256: None}` on `GEONAMES_BASE` (https); `base_allowed` (geocode.rs:213) forces https or loopback http. The payload is a zip of tab-separated text, read with MAX_ZIP 64 MiB, extracted with MAX_TEXT, and parsed into bounded place records (MAX_PLACES, MAX_NAME); it is never executed or loaded as code.",
+   "impact": "Low. A tampered dump could only yield wrong or junk place names offered for photo location metadata; caps and the never-crash parser bound availability effects. It is a data file, not a binary, and GeoNames republishes the dump daily, so a fixed digest cannot be pinned.",
+   "rationale": "Scanner rule targets unpinned binaries; this is a TLS-fetched, size-capped, parsed-only text dataset from a rolling upstream. Devil's advocate: an integrity pin is absent, but with no code execution and mutable upstream it is not a vulnerability; at most a data-integrity hardening idea.",
+   "evidence": [
+    {
+     "file": "crates/geocode/src/lib.rs",
+     "line": 21
+    },
+    {
+     "file": "crates/engine/src/cmd/geocode.rs",
+     "line": 176
+    },
+    {
+     "file": "crates/engine/src/cmd/geocode.rs",
+     "line": 213
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:e8fa2285a459bff8c9ae80cbe213d50004b7440cd9bc3d9e1fbff616e66bb70d",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-1202ca61153b89d4",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: mcp/src/lib.rs:3 is a `//!` crate doc comment linking to modelcontextprotocol.io for the protocol description.",
+   "reachability": "A doc comment has no runtime behaviour; it is not compiled into code that issues requests.",
+   "impact": "None. A documentation hyperlink downloads nothing.",
+   "rationale": "Doc-comment link matched the URL regex; no sink.",
+   "evidence": [
+    {
+     "file": "crates/mcp/src/lib.rs",
+     "line": 3
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:af46e2812f480cc13dfcb828a92b8647137b0c59366846e52ebff8d80b8fb80a",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-196e320de8dd39bd",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: container.rs:4 is crate documentation naming the extended-XMP APP1 marker `http://ns.adobe.com/xmp/extension/` used in JPEG files.",
+   "reachability": "`//!` doc comment; never executed.",
+   "impact": "None. It documents a byte signature, not a download location.",
+   "rationale": "Module doc for JPEG segment layout; the string is a namespace identifier.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/container.rs",
+     "line": 4
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:2abc219cc6db0103330e08ec23fc1807b4d564098d96374a2468d685cbb4c8ec",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-4cf52646c4d72881",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: container.rs:3 is a doc line listing the standard XMP APP1 identifier `http://ns.adobe.com/xap/1.0/` among JPEG markers.",
+   "reachability": "Doc comment only; no code path reads it.",
+   "impact": "None. Describing a marker string cannot fetch a binary.",
+   "rationale": "Documentation of JPEG marker structure; URL-shaped namespace, no network.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/container.rs",
+     "line": 3
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:23dbbcd0c1706057136fe3802c1846198bbfeb6a103eaf14bd33fe11762e124e",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-934a00a4187857db",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker reaches a download: `XMP_SIG` at container.rs:65 is a byte-string prefix compared against JPEG APP1 payloads.",
+   "reachability": "Used at container.rs:101-102 via `payload.starts_with(XMP_SIG)` to locate the XMP packet in a file being parsed; the crate performs no networking.",
+   "impact": "None. It is a constant matched against local file bytes, never dereferenced as a URL.",
+   "rationale": "Byte-signature constant for segment detection (container.rs:101); the http:// prefix is the XMP namespace.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/container.rs",
+     "line": 65
+    },
+    {
+     "file": "crates/meta/src/container.rs",
+     "line": 101
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:b47a9ef22443b7f30adae1641d3efcbe8579fac5dbf485e9ebc0098bf020525a",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-f069ac9c868cecfb",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker reaches a download: `XMP_EXT_SIG` at container.rs:66 is the extended-XMP segment signature.",
+   "reachability": "Compared with `payload.starts_with(XMP_EXT_SIG)` at container.rs:104 while reassembling extended XMP from a local JPEG; no fetch exists in lightcraft-meta.",
+   "impact": "None. A signature constant used for parsing has no integrity relationship to downloaded binaries.",
+   "rationale": "Extended-XMP marker constant used at container.rs:104; not a URL that is requested.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/container.rs",
+     "line": 66
+    },
+    {
+     "file": "crates/meta/src/container.rs",
+     "line": 104
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:a78a2e83cc27e4ff04daf0bf4d9efa09489fcef6fb9efa1c4aadbfdd032bc36d",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-3330ab281b678069",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: gpx.rs:348 is a GPX 1.0 sample with a prefixed `xmlns:gpx` namespace in a parser unit test.",
+   "reachability": "gpx.rs:271 opens `#[cfg(test)]`; the namespace URI is parsed as XML text and never resolved.",
+   "impact": "None. XML namespace URIs are identifiers; nothing is downloaded.",
+   "rationale": "Prefixed-namespace parsing test fixture under cfg(test) at gpx.rs:271.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/gpx.rs",
+     "line": 271
+    },
+    {
+     "file": "crates/meta/src/gpx.rs",
+     "line": 348
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:28e26556059ccd08ad59747a088c6d122bdc29eedaea670192419cf658e93ad6",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-d63c40c477b4ca30",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: gpx.rs:276 is a GPX 1.1 sample document root (`xmlns=\"http://www.topografix.com/GPX/1/1\"`) inside the test module.",
+   "reachability": "Follows `#[cfg(test)]` at gpx.rs:271; the string is input to the in-memory GPX parser.",
+   "impact": "None. A default-namespace attribute in test XML is not a binary download.",
+   "rationale": "GPX 1.1 fixture string in tests; namespace identifier only.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/gpx.rs",
+     "line": 271
+    },
+    {
+     "file": "crates/meta/src/gpx.rs",
+     "line": 276
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:5be5c1105fa8b180c9b695640380bb74654250f878e7db6d6cfe880a38642bba",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-e5412d788ff2669a",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: gpx.rs:1 is the module doc citing the GPX format page at topografix.com.",
+   "reachability": "Doc comment; no executable code.",
+   "impact": "None. A citation link fetches nothing.",
+   "rationale": "Module documentation link matched by the URL pattern.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/gpx.rs",
+     "line": 1
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:23bf47b96d1873bc39e75c6694e1eb6424b6c82fdc9582c4c03e173dd152d49f",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-016dad550cf58768",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: xmp.rs:803 asserts that a parsed XMP packet yields copyright_url `https://example.org/c`.",
+   "reachability": "In the test module opened at xmp.rs:680 (`#[cfg(test)]`); the value is a field of a parsed struct, never requested.",
+   "impact": "None. Copyright URL metadata is stored text; comparing it downloads nothing.",
+   "rationale": "Metadata-field assertion in xmp tests; no network sink.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 680
+    },
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 803
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:33f290cce125c37ec9b0d029f74d1b598fede7e9f633a3d91c1bacc2c3ec96b0",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-1576c18382550dfb",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: xmp.rs:829 is a test XMP snippet declaring the RDF namespace `http://www.w3.org/1999/02/22-rdf-syntax-ns#`.",
+   "reachability": "Under `#[cfg(test)]` (xmp.rs:680); the parser treats namespace URIs as strings and resolves no external entities.",
+   "impact": "None. RDF namespace identifiers in a fixture are not retrieved.",
+   "rationale": "Foreign-packet fixture in the xmp test module; namespace string only.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 680
+    },
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 829
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:ca2ad6bb4ab4679f76c8a83ebb6f12d4ab491b3a375e58e2aa79bb46fb449a1a",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-2099320dba60f19d",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: xmp.rs:26 is the `photoshop` prefix-to-namespace pair in the `NAMESPACES` canonicalisation table.",
+   "reachability": "Production table used for prefix mapping when reading/writing XMP; the URI is emitted as an xmlns attribute value and never fetched (lightcraft-meta has no HTTP client).",
+   "impact": "None. A namespace mapping cannot pull in a binary.",
+   "rationale": "Static XMP namespace table entry (xmp.rs:20-40).",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 20
+    },
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 26
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:d55a48362d034d7bac20ffd84df526715b9747fc6708c145167ee92d84612ba1",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0011",
+   "clusterId": "cluster-2137b10e3c2f412d",
+   "workItemId": "sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "workPacketDigest": "sha256:717ab7d879e480f1f731d03d459421faae3459ec25ddbde04fab0490626a47ef",
+   "contextId": "adjudicator:sha256:f156070e10762333f14ae40347bd77a28fefb53fdb6f23d909fcac02710b3403",
+   "threatModel": "No attacker: xmp.rs:38 maps prefix `mwg-rs` to the MWG Regions schema URI so packets with any prefix canonicalise.",
+   "reachability": "Read-only canonicalisation table (`NAMESPACES`, xmp.rs:20); the URI is matched as a string during parsing and never dereferenced.",
+   "impact": "None. MWG region namespace strings have no download path.",
+   "rationale": "MWG namespace constant in the prefix table; URL-shaped identifier, not a fetch.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 20
+    },
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 38
+    }
+   ]
+  }
+ ]
+}

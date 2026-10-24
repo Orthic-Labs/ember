@@ -1,0 +1,316 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-receipt",
+  "provider": "reasoning.resilience",
+  "result": {
+    "schema_version": 1,
+    "provider": "reasoning.resilience",
+    "applicable": true,
+    "required": true,
+    "status": "partial",
+    "complete": false,
+    "coverage": {
+      "denominator_digest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+      "expected": 730,
+      "examined": 14,
+      "gaps": [
+        "reasoning-part-scope:reasoning.resilience:part 2/4"
+      ]
+    },
+    "findings": [
+      {
+        "id": "resil-import-probe-panic-aborts-scan",
+        "severity": "medium"
+      },
+      {
+        "id": "resil-geocode-nonatomic-dataset-write",
+        "severity": "low"
+      },
+      {
+        "id": "resil-remote-denoise-permanent-giveup",
+        "severity": "medium"
+      }
+    ],
+    "coverage_gaps": [
+      "reasoning-part-scope:reasoning.resilience:part 2/4"
+    ],
+    "degradation": [],
+    "details": {
+      "executionReceipt": {
+        "schemaVersion": 1,
+        "kind": "legion-reasoning-receipt",
+        "receiptId": "ingest-668cb57010e49e2af4399a9ad476d217",
+        "requestId": "sha256:081e0e82f2b039fa473b3966a8da3cd3432f68c3a6b453c5d14a22955cbb594d",
+        "providerId": "reasoning.resilience",
+        "contract": "audit-lens-resilience-v1",
+        "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+        "planSignature": "hmac-sha256:805a23e8a5d736c2a96307bc58b919aa92b271336dbe2dbca01d2a81fe17b6f3",
+        "repositoryId": "/Volumes/D/claude/ember",
+        "inventoryGeneration": "filesystem:sha256:6a2aaea46465c4542b1f39f825efd84edc8f63121b837f8bc64a97418d82ef9a",
+        "inventoryDigest": "sha256:da3157e68029988c594537621af44004cf97f0020364e0c23299c7b13bcc221a",
+        "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+        "denominatorCount": 730,
+        "resultDigest": "sha256:9c900f368df8022c1e88de326d288f12fc66cb05d49b0e1801b631f0f40086bc",
+        "status": "partial",
+        "complete": false,
+        "gaps": [
+          "reasoning-part-scope:reasoning.resilience:part 2/4"
+        ],
+        "authentication": {
+          "alg": "HMAC-SHA256",
+          "macDomain": "legion-reasoning-receipt:v1",
+          "boundFieldsDigest": "sha256:879de90044d6c1908fca28fc34814e176364267cdd644bb6319c20c234db2e65",
+          "mac": "bd61cefaa3d1218ea45ffbbc44c5a6410ed94089ca989e030c392a0b11ac15e4",
+          "host": "legion-cli-ingest",
+          "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb"
+        }
+      },
+      "findingEvidence": {
+        "resil-import-probe-panic-aborts-scan": {
+          "lens": "resilience",
+          "confidence": "likely",
+          "verifyStatus": "unverified",
+          "action": "Wrap each `probe(..)` call in `crate::guard::catch` and map a panic to `Err(msg)` for that file, as `run_transfers` does."
+        },
+        "resil-geocode-nonatomic-dataset-write": {
+          "lens": "resilience",
+          "confidence": "likely",
+          "verifyStatus": "unverified",
+          "action": "Write each file into `.download` and `std::fs::rename` it into place, with the cities file last."
+        },
+        "resil-remote-denoise-permanent-giveup": {
+          "lens": "resilience",
+          "confidence": "likely",
+          "verifyStatus": "unverified",
+          "action": "On an I/O failure of a pooled connection, retry once on a fresh connection before counting a failure, and make the failure count consecutive (reset on success) or time-decayed."
+        }
+      },
+      "findingLocations": {
+        "resil-import-probe-panic-aborts-scan": [
+          "crates/engine/src/import.rs:586-616",
+          "crates/engine/src/import.rs:623-640",
+          "crates/engine/src/import.rs:1550-1553"
+        ],
+        "resil-geocode-nonatomic-dataset-write": [
+          "crates/engine/src/cmd/geocode.rs:182-206"
+        ],
+        "resil-remote-denoise-permanent-giveup": [
+          "crates/denoise/src/remote.rs:383-395",
+          "crates/denoise/src/remote.rs:402-410",
+          "crates/denoise/src/remote.rs:192-200"
+        ]
+      },
+      "findingMessages": {
+        "resil-import-probe-panic-aborts-scan": "Import probes run untrusted camera/image files through `probe_bytes` (raw/EXIF/header parsing) on `thread::scope` workers with no per-file panic guard. The copy stage wraps each file in `guard::catch` (import.rs:1552) so one bad file becomes `PreparedItem::Failed`, but the probe stage has no such wrapper. A panic in the parser on one corrupt file kills that worker and `thread::scope` re-panics in the caller after the workers join. The whole scan or import of the folder fails, or on the app's scan worker thread the result is never delivered. The serial branch has the same gap. One damaged file among thousands blocks the import of all the others.",
+        "resil-geocode-nonatomic-dataset-write": "The doc comment says the new place-name files replace the old ones only when complete, but `run` writes them with `std::fs::write` straight over the live files (states and countries first, then the cities file), not to staging followed by a rename. If the disk fills, the app is killed or a write fails part-way, the live `cities` file is left truncated (size and mtime changed) or the three files come from different downloads. `PlaceNames::load` then re-parses the truncated file and reverse geocoding silently fills wrong or missing places. A previously good dataset is destroyed by a failed refresh, and the user is told only that the download failed.",
+        "resil-remote-denoise-permanent-giveup": "`Remote` keeps pooled TCP connections open and the server closes idle connections after its 120 s timeout. `run_now` pops a pooled connection and, when the write or reply fails on a connection the server already closed, returns the error with no retry on a fresh connection. `try_run` adds it to `failures`, a cumulative counter that is never reset on success and has no time decay. After an idle gap or a brief network blip, up to `slots` (4) stale pooled connections each fail one tile. After `MAX_FAILURES` = 3 total failures `healthy()` stays false for the life of the loaded model. The remote GPU is permanently abandoned (\"given up\") for the session although the server is fine, and denoise silently runs on the local runner only."
+      },
+      "findingTitles": {
+        "resil-import-probe-panic-aborts-scan": "Wrap each `probe(..)` call in `crate::guard::catch` and map a panic to `Err(msg)` for that file, as `run_transfers` does.",
+        "resil-geocode-nonatomic-dataset-write": "Write each file into `.download` and `std::fs::rename` it into place, with the cities file last.",
+        "resil-remote-denoise-permanent-giveup": "On an I/O failure of a pooled connection, retry once on a fresh connection before counting a failure, and make the failure count consecutive (reset on success) or time-decayed."
+      },
+      "ingest": {
+        "host": "legion-cli-ingest",
+        "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb",
+        "packetDigest": "sha256:2ea3bf67a8ad7c52bc8338366d4758b242a3f7f1cb49952a096d08a46582573b",
+        "anchorsVerified": 3
+      },
+      "lensFindings": [
+        {
+          "id": "resil-import-probe-panic-aborts-scan",
+          "lens": "resilience",
+          "severity": "medium",
+          "confidence": "likely",
+          "evidence": [
+            "crates/engine/src/import.rs:586-616",
+            "crates/engine/src/import.rs:623-640",
+            "crates/engine/src/import.rs:1550-1553"
+          ],
+          "failureScenario": "Import probes run untrusted camera/image files through `probe_bytes` (raw/EXIF/header parsing) on `thread::scope` workers with no per-file panic guard. The copy stage wraps each file in `guard::catch` (import.rs:1552) so one bad file becomes `PreparedItem::Failed`, but the probe stage has no such wrapper. A panic in the parser on one corrupt file kills that worker and `thread::scope` re-panics in the caller after the workers join. The whole scan or import of the folder fails, or on the app's scan worker thread the result is never delivered. The serial branch has the same gap. One damaged file among thousands blocks the import of all the others.",
+          "action": "Wrap each `probe(..)` call in `crate::guard::catch` and map a panic to `Err(msg)` for that file, as `run_transfers` does.",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "crates/engine/src/import.rs",
+            "line": 599,
+            "text": "                            let r = probe(&paths[i]);"
+          }
+        },
+        {
+          "id": "resil-geocode-nonatomic-dataset-write",
+          "lens": "resilience",
+          "severity": "low",
+          "confidence": "likely",
+          "evidence": [
+            "crates/engine/src/cmd/geocode.rs:182-206"
+          ],
+          "failureScenario": "The doc comment says the new place-name files replace the old ones only when complete, but `run` writes them with `std::fs::write` straight over the live files (states and countries first, then the cities file), not to staging followed by a rename. If the disk fills, the app is killed or a write fails part-way, the live `cities` file is left truncated (size and mtime changed) or the three files come from different downloads. `PlaceNames::load` then re-parses the truncated file and reverse geocoding silently fills wrong or missing places. A previously good dataset is destroyed by a failed refresh, and the user is told only that the download failed.",
+          "action": "Write each file into `.download` and `std::fs::rename` it into place, with the cities file last.",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "crates/engine/src/cmd/geocode.rs",
+            "line": 204,
+            "text": "        write(GEONAMES_FILES[0], &cities)?;"
+          }
+        },
+        {
+          "id": "resil-remote-denoise-permanent-giveup",
+          "lens": "resilience",
+          "severity": "medium",
+          "confidence": "likely",
+          "evidence": [
+            "crates/denoise/src/remote.rs:383-395",
+            "crates/denoise/src/remote.rs:402-410",
+            "crates/denoise/src/remote.rs:192-200"
+          ],
+          "failureScenario": "`Remote` keeps pooled TCP connections open and the server closes idle connections after its 120 s timeout. `run_now` pops a pooled connection and, when the write or reply fails on a connection the server already closed, returns the error with no retry on a fresh connection. `try_run` adds it to `failures`, a cumulative counter that is never reset on success and has no time decay. After an idle gap or a brief network blip, up to `slots` (4) stale pooled connections each fail one tile. After `MAX_FAILURES` = 3 total failures `healthy()` stays false for the life of the loaded model. The remote GPU is permanently abandoned (\"given up\") for the session although the server is fine, and denoise silently runs on the local runner only.",
+          "action": "On an I/O failure of a pooled connection, retry once on a fresh connection before counting a failure, and make the failure count consecutive (reset on success) or time-decayed.",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "crates/denoise/src/remote.rs",
+            "line": 404,
+            "text": "        let pooled = self.pool.lock().unwrap_or_else(PoisonError::into_inner).pop();"
+          }
+        }
+      ],
+      "lensIds": [
+        "resilience"
+      ],
+      "packetCoverage": {
+        "basis": "bounded-excerpts",
+        "examined": 14,
+        "expected": 730,
+        "part": {
+          "number": 2,
+          "total": 4
+        },
+        "requiredParts": 4,
+        "overCeiling": null,
+        "partPaths": [
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/camera_preview.rs",
+          "crates/engine/src/cmd/geocode.rs",
+          "crates/engine/src/cmd/library.rs",
+          "crates/engine/src/export.rs",
+          "crates/engine/src/files.rs",
+          "crates/engine/src/guard.rs",
+          "crates/engine/src/import.rs",
+          "crates/engine/src/lib.rs",
+          "crates/engine/src/lightroom_catalog.rs",
+          "crates/engine/src/media.rs",
+          "crates/engine/src/tests.rs",
+          "crates/engine/src/tests_import.rs"
+        ],
+        "examinedPaths": [
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/camera_preview.rs",
+          "crates/engine/src/cmd/geocode.rs",
+          "crates/engine/src/cmd/library.rs",
+          "crates/engine/src/export.rs",
+          "crates/engine/src/files.rs",
+          "crates/engine/src/guard.rs",
+          "crates/engine/src/import.rs",
+          "crates/engine/src/lib.rs",
+          "crates/engine/src/lightroom_catalog.rs",
+          "crates/engine/src/media.rs",
+          "crates/engine/src/tests.rs"
+        ],
+        "chunkedPaths": [
+          {
+            "path": "crates/engine/src/tests_import.rs",
+            "chunk": 1,
+            "chunks": 3,
+            "startLine": 1,
+            "endLine": 600
+          },
+          {
+            "path": "crates/engine/src/tests_import.rs",
+            "chunk": 2,
+            "chunks": 3,
+            "startLine": 601,
+            "endLine": 1198
+          }
+        ],
+        "omittedPaths": [],
+        "truncatedPaths": [],
+        "coverageMode": "risk-sampled",
+        "bundle": "S1",
+        "reviewSetDigest": "sha256:0979bbe58e2de1a68b710b92c005b16a51d8d0d7126aea91bde0ba8e38823ff4",
+        "reviewSetCount": 79,
+        "reviewExpected": 53,
+        "promotedPaths": [
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs",
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/cmd/geocode.rs"
+        ],
+        "displacedPaths": [
+          "crates/codecs/examples/jpeg_bench.rs",
+          "crates/raw/examples/rawdump.rs",
+          "crates/merge/src/features.rs",
+          "crates/merge/tests/pano.rs",
+          "crates/pipeline/src/dust.rs",
+          "crates/pipeline/src/colorops.rs",
+          "crates/gpu/tests/memory.rs",
+          "crates/raw/src/demosaic/xtrans.rs",
+          "crates/merge/src/pano/finish.rs",
+          "crates/codecs/src/jpeg_par.rs",
+          "crates/meta/src/iptc.rs",
+          "apps/lightcraft-web/src/files.rs",
+          "crates/codecs/src/other.rs",
+          "apps/lightcraft/examples/gen_photos.rs",
+          "crates/merge/src/ransac.rs",
+          "crates/scenes/src/noise.rs",
+          "crates/tiff/src/makernote.rs",
+          "crates/merge/src/align.rs",
+          "crates/catalog/src/tests_local.rs",
+          "apps/lightcraft-cli/src/alloc_release.rs",
+          "crates/codecs/src/exif.rs",
+          "crates/engine/src/cmd/curves.rs",
+          "crates/ui-egui/src/tests_unsaved.rs",
+          "packaging/linux/postinst.sh",
+          "crates/raw/examples/rawinfo.rs",
+          "crates/pipeline/src/upright.rs",
+          "crates/pipeline/src/transform.rs",
+          "crates/ui-egui/src/panels/crop_overlay.rs",
+          "crates/engine/src/tests_forget_local.rs",
+          "crates/pipeline/src/profiles.rs",
+          "crates/engine/src/cmd/develop.rs",
+          "crates/ui-egui/src/widgets.rs",
+          "crates/ui-egui/src/panels/settings.rs",
+          "crates/ui-egui/src/import.rs",
+          "crates/ui-egui/src/tests_preview_limit.rs",
+          "crates/ui-egui/src/render.rs",
+          "crates/desktop-host/src/tasks.rs",
+          "crates/catalog/src/keywords.rs",
+          "crates/ui-egui/src/panels/edit.rs",
+          "crates/ui-egui/src/panels/grid.rs"
+        ],
+        "unpromotedCount": 80,
+        "declaredUnsampled": 677,
+        "excluded": 23,
+        "aliasedPaths": []
+      },
+      "reasoningHostState": "ingested",
+      "withdrawnFindings": []
+    }
+  },
+  "part": {
+    "number": 2,
+    "total": 4
+  }
+}

@@ -1,0 +1,77 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.architecture",
+ "packetDigest": "sha256:ec171dcc07356f9657d4b61bc329bfd9dcfc9d808ca8a53264e6e3c2e2090303",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "arch-session-catalog-public-bypasses-ops",
+   "lens": "architecture",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "crates/engine/src/lib.rs:7-8",
+    "crates/engine/src/lib.rs:190",
+    "crates/engine/src/lib.rs:526-538",
+    "crates/desktop-host/src/controller.rs:68-75"
+   ],
+   "anchor": {
+    "path": "crates/engine/src/lib.rs",
+    "line": 190,
+    "text": "    pub catalog: Catalog,"
+   },
+   "failureScenario": "lib.rs:7 documents the Catalog as 'mutated only by ops, so every change is undoable and journaled', but Session exposes it as a public mutable field. A frontend already bypasses it: desktop-host controller.rs:73 calls session.catalog.apply(Op::RemovePhoto) directly when --demo-count trims an opened library. That removal is not pushed to pending_log, not on the undo stack and skips apply_catalog's media.forget, so the in-memory catalog and the library's op log diverge (the photos come back on reopen, or a later snapshot/compaction persists the removal with no undo step).",
+   "action": "Make Session::catalog read-only to frontends (pub(crate) field plus a &Catalog accessor) and route non-user bookkeeping through an engine API such as apply_system/commit so the documented ops-only invariant is enforced by visibility, not convention.",
+   "verifyStatus": "verified",
+   "reviewAxis": "standards",
+   "disposition": "documented-violation",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "Whole-repository run at a frozen HEAD with no change context or baseline revision supplied; when the drift was introduced was not established.",
+    "baselineEvidence": []
+   },
+   "sourceQuote": "State: a [`Catalog`] (mutated only by ops, so every change is undoable and journaled), the",
+   "sourceLocation": "crates/engine/src/lib.rs:7"
+  },
+  {
+   "id": "arch-export-location-policy-two-authorities",
+   "lens": "architecture",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "crates/engine/src/export.rs:1567-1571",
+    "crates/engine/src/export.rs:1573-1612",
+    "crates/engine/src/export.rs:1753-1755"
+   ],
+   "anchor": {
+    "path": "crates/engine/src/export.rs",
+    "line": 1569,
+    "text": "pub fn removes_location(_photo: &lightcraft_catalog::Photo, _catalog: &lightcraft_catalog::Catalog, o: &ExportOptions) -> bool {"
+   },
+   "failureScenario": "removes_location() is the declared seam for location policy ('photo and catalog let library-level privacy rules add to the export option') and the Original/DNG path (prepare_guarded, export.rs:1753-1755) goes through it, but export_metadata() for every rendered format reads o.remove_location directly (export.rs:1597, 1610). The moment a library-level rule is added to removes_location as its doc invites, Original/DNG exports drop GPS while JPEG/TIFF/PSD/WebP/AVIF/JXL exports still embed GPS and place names, leaking the location the rule was meant to strip.",
+   "action": "Have export_metadata take the resolved removes_location(photo, catalog, o) result (or call it) instead of reading o.remove_location, so one function owns the location decision for all export formats.",
+   "verifyStatus": "verified",
+   "reviewAxis": "standards",
+   "disposition": "design-heuristic",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "Whole-repository run at a frozen HEAD with no change context or baseline revision supplied; when the drift was introduced was not established.",
+    "baselineEvidence": []
+   },
+   "sourceQuote": "(`photo` and `catalog` let library-level privacy rules add to the export option.)",
+   "sourceLocation": "crates/engine/src/export.rs:1568"
+  }
+ ],
+ "withdrawn": [],
+ "details": {
+  "changeRisk": {
+   "reversibility": "unknown",
+   "blastRadius": "whole-repository review without change context; no diff supplied",
+   "reason": "Whole-repo run without change context: change risk cannot be assessed from evidence.",
+   "beforeEvidence": [],
+   "afterEvidence": []
+  }
+ }
+}

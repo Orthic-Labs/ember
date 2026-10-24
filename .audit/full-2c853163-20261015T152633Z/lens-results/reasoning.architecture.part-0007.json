@@ -1,0 +1,19 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.architecture",
+ "packetDigest": "sha256:eee0c6a333c283d65293a03988c74b68d8db05241b6bfbba376c31326fe415ab",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [],
+ "withdrawn": [],
+ "details": {
+  "changeRisk": {
+   "reversibility": "unknown",
+   "blastRadius": "whole-repository audit part 7 (ui-egui headless test modules, macOS CI signing script, xtask workspace tooling); no change context supplied",
+   "reason": "Whole-repo run without diff context; change risk cannot be assessed from bounded excerpts.",
+   "beforeEvidence": [],
+   "afterEvidence": []
+  }
+ }
+}

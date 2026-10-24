@@ -1,0 +1,30 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.minimize",
+ "packetDigest": "sha256:7b8fe1ece63a1cca676e560fc7bf2265bdc8497bed6a8de4b926c0ec13c439c3",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "p0007-total-ram-fallback",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "speculative",
+   "evidence": [
+    "xtask/src/main.rs:90",
+    "xtask/src/main.rs:142-160"
+   ],
+   "failureScenario": "total_ram_gb is a second per-OS probe (/proc/meminfo, powershell, sysctl) that only runs when available_ram_mb already failed, and halves installed RAM as a guess. On Linux and Windows the same file/PowerShell source that failed for available RAM is very likely to fail here too, so the fallback is largely dead flexibility; only a macOS vm_stat parse failure reaches it usefully.",
+   "action": "Delete total_ram_gb and its or_else at line 90; let ci_jobs(None, cpus) use its existing default of 4 when available RAM is unknown (about 35 lines removed).",
+   "verifyStatus": "unverified",
+   "ponytailTag": "yagni",
+   "anchor": {
+    "path": "xtask/src/main.rs",
+    "line": 144,
+    "text": "fn total_ram_gb() -> Option<u64> {"
+   }
+  }
+ ],
+ "withdrawn": []
+}

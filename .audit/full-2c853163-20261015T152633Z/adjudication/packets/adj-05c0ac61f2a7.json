@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-audit-adjudication-seat",
+  "stage": "individual",
+  "round": 2,
+  "candidateId": "sha256:04cd69c5c2e270a2e288db428a8ff80f9ec468c8bdbc8e687ca639a935b30a85",
+  "reason": "high-risk-dismissal",
+  "itemId": "sha256:c564cf014d1c1b2dcea5b670f6735dc39a068b12636d2bc673aa6ebd5d19eb38",
+  "contextId": "adjudicator:sha256:c564cf014d1c1b2dcea5b670f6735dc39a068b12636d2bc673aa6ebd5d19eb38",
+  "parentPacketDigest": "sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5",
+  "packet": {
+    "schemaVersion": 1,
+    "kind": "security-adjudication-packet",
+    "candidate": {
+      "schemaVersion": 1,
+      "kind": "security-candidate",
+      "id": "sha256:04cd69c5c2e270a2e288db428a8ff80f9ec468c8bdbc8e687ca639a935b30a85",
+      "provider": "legacy.security.binary-pins",
+      "contextId": "scanner:legacy.security.binary-pins",
+      "claim": "security.binary-unpinned: downloaded binary URL has no visible immutable digest",
+      "allegedRootCause": null,
+      "allegedTrigger": null,
+      "allegedImpact": null,
+      "evidence": [
+        {
+          "findingId": "sha256:04cd69c5c2e270a2e288db428a8ff80f9ec468c8bdbc8e687ca639a935b30a85",
+          "path": "xtask/src/main.rs",
+          "line": 727,
+          "excerpt": "\"https://raw.pixls.us/getfile.php/2282/nice/Panasonic%20-%20DMC-FZ8%20-%204:3.RAW\","
+        }
+      ],
+      "generatedAt": "frozen:sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5"
+    },
+    "adjudicator": {
+      "provider": "legacy.security.adjudication",
+      "contextId": "adjudicator:sha256:c564cf014d1c1b2dcea5b670f6735dc39a068b12636d2bc673aa6ebd5d19eb38",
+      "contextStartedAt": "frozen:sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5"
+    },
+    "requiredEvidence": [
+      "threat model and attacker capability",
+      "attacker-controlled source",
+      "trust-boundary trace",
+      "validation and authorization between source and sink",
+      "reachability",
+      "primary controls and environmental mitigations",
+      "real security impact",
+      "reproduction, trace, PoC sketch, or mathematical proof",
+      "devils-advocate false-positive challenge"
+    ],
+    "packetDigest": "sha256:482f48ad649776d5617ff2f53bde9bd06e1360cea6c630fa1144c6b46051166e"
+  }
+}

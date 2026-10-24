@@ -1,0 +1,76 @@
+{
+  "@rightkit/ci": {
+    "latest": "0.2.43",
+    "wanted": "0.2.43",
+    "isDeprecated": false,
+    "dependencyType": "devDependencies"
+  },
+  "@rightkit/platform-ui": {
+    "current": "0.1.2",
+    "latest": "0.2.8",
+    "wanted": "0.2.8",
+    "isDeprecated": false,
+    "dependencyType": "dependencies"
+  },
+  "@rightkit/react-shell": {
+    "latest": "0.6.4",
+    "wanted": "0.6.4",
+    "isDeprecated": false,
+    "dependencyType": "dependencies"
+  },
+  "@rightkit/tauri-shell": {
+    "latest": "0.1.1",
+    "wanted": "0.1.1",
+    "isDeprecated": false,
+    "dependencyType": "dependencies"
+  },
+  "@tauri-apps/api": {
+    "current": "2.12.1",
+    "latest": "2.12.3",
+    "wanted": "2.12.1",
+    "isDeprecated": false,
+    "dependencyType": "dependencies"
+  },
+  "@tauri-apps/cli": {
+    "current": "2.12.1",
+    "latest": "2.12.2",
+    "wanted": "2.12.1",
+    "isDeprecated": false,
+    "dependencyType": "devDependencies"
+  },
+  "vite": {
+    "current": "8.3.3",
+    "latest": "8.3.4",
+    "wanted": "8.3.3",
+    "isDeprecated": false,
+    "dependencyType": "devDependencies"
+  },
+  "typescript": {
+    "current": "5.9.3",
+    "latest": "7.0.2",
+    "wanted": "5.9.3",
+    "isDeprecated": false,
+    "dependencyType": "devDependencies"
+  },
+  "@rightkit/qa-chrome": {
+    "current": "0.1.0",
+    "latest": "0.1.6",
+    "wanted": "0.1.0",
+    "isDeprecated": false,
+    "dependencyType": "devDependencies"
+  },
+  "@rightkit/release": {
+    "current": "0.2.124",
+    "latest": "0.2.156",
+    "wanted": "0.2.124",
+    "isDeprecated": false,
+    "dependencyType": "devDependencies"
+  },
+  "@rightkit/theme": {
+    "current": "0.2.1",
+    "latest": "0.2.3",
+    "wanted": "0.2.1",
+    "isDeprecated": false,
+    "dependencyType": "devDependencies"
+  }
+}

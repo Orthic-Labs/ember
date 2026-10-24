@@ -1,0 +1,612 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "legacy.security.adjudication",
+ "packetDigest": "sha256:9731d9ec20900bf2c4446f4a78356ba29a0746d1fcc94691bfdf7b55bf9f0345",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [],
+ "withdrawn": [],
+ "verdicts": [
+  {
+   "candidateId": "sha256:d11b02e0670b6f92fec41f8337ffb68033f659b9bcf54363419778a0127adf32",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-3fe459cc6cadda4e",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:6 the match is a //! module doc comment describing prefix canonicalisation by namespace URI; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:6, it is a comment stripped by rustc and never reaches any runtime value. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:6: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:6 (a //! module doc comment describing prefix canonicalisation by namespace URI); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 6
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:02e5786942dd922e97a206e108de34199ae2419a5b764c08a28f128105e11e53",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-419535ae80ecab45",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:40 the match is the MWG `stDim` struct namespace entry used for applied-to dimensions; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:40, it is only matched to canonicalise region dimension fields. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:40: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:40 (the MWG `stDim` struct namespace entry used for applied-to dimensions); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 40
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:9355fc2b2a47f6d186b17f2cfe36ad4abd0c4b4a9138d21e1233953f3af0c9ad",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-448aaac7d423d8f5",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:27 the match is the `exif` entry of the NAMESPACES table; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:27, lookup is pure string comparison inside the quick-xml tree walk. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:27: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:27 (the `exif` entry of the NAMESPACES table); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 27
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:18cf5e5eb04410621b9c40035c09ffb21198fae199ac5c9edc661c29f6fad045",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-4a3ccd149cda35e6",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:39 the match is the MWG `stArea` struct namespace entry used for region rectangles; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:39, it is compared against xmlns values when reading face/focus regions. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:39: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:39 (the MWG `stArea` struct namespace entry used for region rectangles); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 39
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:86e9b682e699170da44eadb41e5f5324f7692f32dad58631207d933124b3aa59",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-5038adad5cdcc5e1",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:25 the match is the `xmpRights` entry of the NAMESPACES table; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:25, its only use is equality matching of xmlns declarations to yield canonical `xmpRights:` names. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:25: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:25 (the `xmpRights` entry of the NAMESPACES table); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 25
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:7385f4adad57f35426806688c2da4fa20893f7f44b0eef38798d472806057775",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-60e4ddebde82e60b",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:621 the match is the writer's `push_str` emitting the rdf:RDF xmlns declaration into a serialized packet; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:621, the URI is literal output text written into a sidecar/embedded XMP string. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:621: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:621 (the writer's `push_str` emitting the rdf:RDF xmlns declaration into a serialized packet); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 621
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:89013fd139aac336b194221b8d75dd92afc6cb040686aeedf6a3269aec927506",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-7f0aeb788e49068e",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:23 the match is the `dc` (Dublin Core) entry of the NAMESPACES table; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:23, the URI is an identifier matched by equality against packet xmlns values. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:23: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:23 (the `dc` (Dublin Core) entry of the NAMESPACES table); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 23
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:8e5f3d54d947f948b501c836e6960dac74fd463ae61fb432c656f7446b0ad548",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-7f42b8a56b617b7a",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:28 the match is the CIPA `exifEX` entry of the NAMESPACES table; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:28, it identifies EXIF 2.3 XMP properties by namespace equality and is never resolved. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:28: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:28 (the CIPA `exifEX` entry of the NAMESPACES table); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 28
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:1619c57a910130f75c21cefc66a20487be1a7e3a61732bd727432193e7e75de0",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-86299b70ee1f7766",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:29 the match is the `tiff` entry of the NAMESPACES table; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:29, it is matched against parsed xmlns attribute values to produce `tiff:` keys. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:29: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:29 (the `tiff` entry of the NAMESPACES table); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 29
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:4534546ca4a0fb59a04e32d2b1debc8c456f43dadc75c5eb80cc25588dd463ca",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-8bafbccd73fdee53",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:942 the match is a raw-string test packet opening rdf:RDF with the RDF namespace (members at 974, 1002 are the same opener); no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:942, these are test fixtures inside #[cfg(test)] (xmp.rs:680) fed to the in-memory parser. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:942: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:942 (a raw-string test packet opening rdf:RDF with the RDF namespace (members at 974, 1002 are the same opener)); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 942
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:9c506064fbd55262a4b7db9c3328db2627c45b5c228b418f5a5f8ca36f2260c8",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-91ab3be483e22e61",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:31 the match is the `lr` (Lightroom hierarchical keywords) entry of the NAMESPACES table; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:31, it canonicalises `lr:hierarchicalSubject` by namespace equality with no fetch. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:31: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:31 (the `lr` (Lightroom hierarchical keywords) entry of the NAMESPACES table); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 31
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:e822a002f726b930582ca5c3b13c922871a7152a7b57e7f83e92506821d7ed23",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-92f87621bc3f12e0",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:830 the match is a test packet declaring xmlns:cr for camera-raw-settings with cr:Exposure2012; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:830, it is test data in #[cfg(test)] (xmp.rs:680) exercising CRS interchange import. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:830: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:830 (a test packet declaring xmlns:cr for camera-raw-settings with cr:Exposure2012); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 830
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:c7269d71fe2cb7e985070c64e06af4b02c7a9ae467ce6411c39fe95f70fc3b2b",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-9ab0d05b55472f8c",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:904 the match is a test packet declaring xmlns:stArea for MWG region parsing (members at 945, 977, 1005 repeat that declaration); no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:904, these are raw-string test inputs inside #[cfg(test)] (xmp.rs:680). crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:904: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:904 (a test packet declaring xmlns:stArea for MWG region parsing (members at 945, 977, 1005 repeat that declaration)); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 904
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:cb22f065ffc4b8fca6ca530673d87806b707ee642cc8ac621cb2e200a79711d4",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-9bffab373bc4a800",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:44 the match is the `CRS_NS` constant for read-only camera-raw-settings interchange; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:44, it is matched against xmlns bindings to import foreign develop values. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:44: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:44 (the `CRS_NS` constant for read-only camera-raw-settings interchange); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 44
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:f4442e91420065634ac2607f04730a51b5ec05a3c24a6c45748d2973da6f4c98",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-a1aeb8bce8c02fa1",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:716 the match is a test fixture `copyright_url` value https://example.com/licence?a=1&b=2 used to check XML escaping of `&`; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:716, it lives inside the #[cfg(test)] module at xmp.rs:680 and is only round-tripped through the writer and parser. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:716: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:716 (a test fixture `copyright_url` value https://example.com/licence?a=1&b=2 used to check XML escaping of `&`); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 716
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:84d600f6b23df3efc0c391f5327044f1dbf55685a209017228b5484d9c0e38b2",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-a50fa8d8e99a2845",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:32 the match is the IPTC Core `Iptc4xmpCore` entry of the NAMESPACES table; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:32, IPTC core properties are matched by this URI string and nothing dereferences it. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:32: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:32 (the IPTC Core `Iptc4xmpCore` entry of the NAMESPACES table); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 32
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:d0e1c761cc70336429c641872c132c2a77899d161059cbf2128a6c843731b862",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-c660fbe42f3322ae",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:760 the match is an inline test packet declaring xmlns:a and xmlns:d with nonstandard prefixes; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:760, it is in the #[cfg(test)] module (xmp.rs:680) proving prefix canonicalisation. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:760: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:760 (an inline test packet declaring xmlns:a and xmlns:d with nonstandard prefixes); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 760
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:a38a06590e8fdd821593e93edf80d1f52c5e857f272fd53ecc20a2cd24b09a1c",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-c851b3259707f5e0",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:794 the match is a formatted test packet with xmlns:r rights namespace and an r:WebStatement value; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:794, it is test-only data in #[cfg(test)] (xmp.rs:680) checking xmpRights:Marked parsing. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:794: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:794 (a formatted test packet with xmlns:r rights namespace and an r:WebStatement value); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 794
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:bf559d1c567048cdc2ffb8c26035043c873d965efc85c049a58c61fd5fe66814",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-d53003a3d0b6ca9f",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:22 the match is the `rdf` entry of the NAMESPACES table, the W3C RDF syntax namespace URI; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:22, the table is consulted by string equality to canonicalise prefixes while parsing a packet. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:22: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:22 (the `rdf` entry of the NAMESPACES table, the W3C RDF syntax namespace URI); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 22
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:49fbbb7db39f17405b2ca8759f30c8f0a2589003b46c66e9564370f509703f68",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-df678c83a16fc0f2",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:30 the match is the `aux` (EXIF auxiliary) entry of the NAMESPACES table; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:30, it is only a comparison string for lens/serial properties. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:30: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:30 (the `aux` (EXIF auxiliary) entry of the NAMESPACES table); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 30
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:50f00fef1650e34fea0df0e15b6b48fca15882dee17e243a617c9106fbd8b502",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-e25341f5bfeb6dc5",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:24 the match is the `xmp` basic-schema entry of the NAMESPACES table; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:24, it serves only as a lookup key for prefix canonicalisation and as an emitted xmlns value. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:24: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:24 (the `xmp` basic-schema entry of the NAMESPACES table); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 24
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:f6fb4b403cbfc3b94ae877168f766fd200857de2f184ea41b2ae75f10cd87246",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-fc44e35c022ea8b6",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:219 the match is the predeclared `xml` prefix binding to http://www.w3.org/XML/1998/namespace seeding the resolver scope stack (member xmp_merge.rs:102 is the identical seed); no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:219, the XML 1.0 Namespaces spec fixes this binding; the resolver pushes it as the root scope string. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:219: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:219 (the predeclared `xml` prefix binding to http://www.w3.org/XML/1998/namespace seeding the resolver scope stack (member xmp_merge.rs:102 is the identical seed)); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 219
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:4c1dd5c1ea8da7d59985eec6003e56f19aacde3033e98ba44873ce815ccde977",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-fd2b390ae1915104",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:761 the match is the continuation of that inline test packet declaring xmlns:e for exif with Rating/FNumber/GPS attributes; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:761, it is test input inside #[cfg(test)] (xmp.rs:680) parsed in-memory. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:761: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:761 (the continuation of that inline test packet declaring xmlns:e for exif with Rating/FNumber/GPS attributes); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 761
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:54fff334c13d60a3bdf68c96f55db914658bb2ed02b9ba49b274b92fae188298",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-ffac15aee91d9cd2",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp.rs:18 the match is the `LC_NS` constant naming Ember's own XMP namespace URI http://ns.lightcraft.app/lc/1.0/; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp.rs:18, it is only compared against xmlns bindings and emitted as an xmlns attribute when writing lc:settings. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp.rs:18: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp.rs:18 (the `LC_NS` constant naming Ember's own XMP namespace URI http://ns.lightcraft.app/lc/1.0/); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp.rs",
+     "line": 18
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:897134fbdacb9a5dba199f8dc82ec91ac30e1496ade49b04c5753059d2852aac",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0012",
+   "clusterId": "cluster-00fc3374577cbb02",
+   "workItemId": "sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "workPacketDigest": "sha256:30d3a9bcfa56cc39660206d2c5ff7c54f2182d3ef4ac1d30f5cfbbd9977da0ac",
+   "contextId": "adjudicator:sha256:4fd0b1447aedf61395fa32d23039ecc4e69bc4733a9c35ffc4dfffdf2903cf62",
+   "threatModel": "Rule security.binary-unpinned models a supply-chain attacker substituting a downloaded executable or archive. At crates/meta/src/xmp_merge.rs:304 the match is an xmlns:xmp declaration inside the FOREIGN test packet constant in xmp_merge.rs; no download, executable or archive is involved, so no attacker capability over a fetched artifact exists.",
+   "reachability": "At crates/meta/src/xmp_merge.rs:304, it sits in the #[cfg(test)] module at xmp_merge.rs:291 and is merged in memory. crates/meta/Cargo.toml depends only on lightcraft-tiff, lightcraft-geom, serde and quick-xml (no HTTP client), and no fetch/download call exists in crates/meta/src, so this URI string never reaches a network sink.",
+   "impact": "None for crates/meta/src/xmp_merge.rs:304: an XML namespace name is an opaque identifier per Namespaces in XML 1.0, not a locator to retrieve; pinning a digest is inapplicable, and altering remote content at that host cannot change Ember's behaviour for this line.",
+   "rationale": "Provable non-issue: the scanner matched an http(s) URL literal at crates/meta/src/xmp_merge.rs:304 (an xmlns:xmp declaration inside the FOREIGN test packet constant in xmp_merge.rs); there is no downloaded binary, so 'missing immutable digest' does not apply. Devil's advocate: even if the host were hostile, the string is never dereferenced because crates/meta has no network dependency.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 304
+    },
+    {
+     "file": "crates/meta/Cargo.toml",
+     "line": 11
+    }
+   ]
+  }
+ ]
+}

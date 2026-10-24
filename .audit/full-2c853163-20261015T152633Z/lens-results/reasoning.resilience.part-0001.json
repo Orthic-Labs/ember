@@ -1,0 +1,142 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.resilience",
+ "packetDigest": "sha256:3ff849c5b755cef861f2a4ef235891baf6af1a483422685ebc57cae64cb1c83e",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "res-close-handler-blocks-main-thread",
+   "lens": "resilience",
+   "severity": "medium",
+   "confidence": "likely",
+   "evidence": [
+    "apps/lightcraft-desktop/src/native.rs:1139-1165",
+    "crates/desktop-host/src/lib.rs:87-96",
+    "crates/desktop-host/src/lib.rs:120-126"
+   ],
+   "failureScenario": "The CloseRequested branch of on_window_event runs on the main (event-loop) thread and calls host.snapshot(), whose call() waits on reply_rx.recv() with no timeout, and then host.shutdown_process(), which blocks for up to 30 s. If the session-owner thread is busy or wedged (a long synchronous command, a stalled volume, a deadlock), clicking the window close button freezes the entire UI, including the unsaved-changes and 'still running' prompts that depend on that snapshot, with no way to close short of killing the process; even a healthy slow shutdown freezes the window for up to 30 s with no feedback.",
+   "action": "Give DesktopHandle::snapshot a bounded recv_timeout and treat a timeout as 'busy' (prevent close and emit a notice); move shutdown_process off the event-loop thread (spawn it, then close the window from the completion) so the UI keeps painting.",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "apps/lightcraft-desktop/src/native.rs",
+    "line": 1143,
+    "text": "                    let snapshot = match host.snapshot() {"
+   }
+  },
+  {
+   "id": "res-refresh-inflight-never-settles",
+   "lens": "resilience",
+   "severity": "medium",
+   "confidence": "likely",
+   "evidence": [
+    "apps/lightcraft-desktop/web/src/desktop.tsx:273-312",
+    "apps/lightcraft-desktop/web/src/desktop.tsx:583-585",
+    "apps/lightcraft-desktop/src/native.rs:43-48",
+    "crates/desktop-host/src/lib.rs:94-96"
+   ],
+   "failureScenario": "refresh() deduplicates through refreshInFlight and returns the stored promise to every caller, and run() awaits refresh() after almost every command. getSnapshot() reaches host.snapshot(), which waits for the session owner with an unbounded recv(). If the owner is wedged (or the snapshot never replies), the in-flight promise never settles, refreshInFlight stays set forever, every later poll and every command awaiting refresh() hangs on the same pending promise, and no error is ever surfaced because neither .then nor .catch runs: the UI stops updating and every menu action appears to do nothing, with no recovery short of restarting.",
+   "action": "Add a timeout to the snapshot IPC (reject after a few seconds, clear refreshInFlight in finally as now, and surface the error), and make the host-side recv bounded; do not make command completion wait on the shared in-flight promise.",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+    "line": 274,
+    "text": "    if (refreshInFlight.current) return refreshInFlight.current;"
+   }
+  },
+  {
+   "id": "res-png-encode-error-swallowed",
+   "lens": "resilience",
+   "severity": "medium",
+   "confidence": "confirmed",
+   "evidence": [
+    "apps/lightcraft/src/main.rs:634-636",
+    "apps/lightcraft-cli/src/main.rs:942-944",
+    "crates/ui-egui/src/control.rs:423-427",
+    "crates/ui-egui/src/control.rs:538-546"
+   ],
+   "failureScenario": "The png service wraps encode_png(...).unwrap_or_default(); PngEncode returns Vec<u8>, so an encoding failure (zero or oversize dimensions, png writer error, out of memory) becomes an empty byte vector with no log and no telemetry. ui.screenshot / app.screenshot then pass those bytes to write() and reply ok:true with the path, leaving a zero-byte .png that scripts and CI treat as a successful screenshot (the CLI snapshot prints 'wrote ...' for it too).",
+   "action": "Make PngEncode return Result<Vec<u8>, String> and propagate the error through the control reply, or at minimum log the error and return an error reply when the encoded buffer is empty.",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "apps/lightcraft/src/main.rs",
+    "line": 635,
+    "text": "            lightcraft_codecs::encode_png(&lightcraft_codecs::EncodeImage::rgba8(img), &lightcraft_codecs::EncodeMeta::default()).unwrap_or_default()"
+   }
+  },
+  {
+   "id": "res-hdr-avif-packet-loop-accepts-empty",
+   "lens": "resilience",
+   "severity": "medium",
+   "confidence": "likely",
+   "evidence": [
+    "crates/codecs/src/encode.rs:516-524",
+    "crates/codecs/src/encode.rs:540"
+   ],
+   "failureScenario": "The rav1e receive loop treats EncoderStatus::Encoded as the terminal state (break) alongside LimitReached, but rav1e documents Encoded as 'a frame was encoded but no packet emitted yet, call receive_packet again' (ravif's own loop continues on it). If the first call after flush() returns Encoded, av1 stays empty, nothing checks av1.is_empty(), and avif_serialize::Aviffy::to_vec wraps zero bytes of image data in a valid-looking AVIF, so the HDR export reports success while writing an undecodable file (the originals may already be skipped or overwritten per the export conflict setting).",
+   "action": "Continue the loop on EncoderStatus::Encoded, break only on LimitReached, and return Error::Encode when no KEY packet was produced (av1.is_empty()); add a round-trip test for encode_avif_hdr's success path.",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "crates/codecs/src/encode.rs",
+    "line": 521,
+    "text": "                Err(EncoderStatus::Encoded | EncoderStatus::LimitReached) => break,"
+   }
+  },
+  {
+   "id": "res-windows-launchers-regress-known-issues",
+   "lens": "resilience",
+   "severity": "medium",
+   "confidence": "likely",
+   "evidence": [
+    "apps/lightcraft-desktop/src/services.rs:400-425",
+    "apps/lightcraft/src/main.rs:385-413",
+    "apps/lightcraft/src/main.rs:526-528"
+   ],
+   "failureScenario": "The desktop host's reveal() runs explorer with arg(format!(\"/select,{path}\")) and requires a zero exit status. The egui app documents (issues #272 and #234, lightcraft/src/main.rs:395-413 and 385-388) that Rust quotes the whole switch when the path has a space so Explorer opens Documents instead of selecting the file, that the path must be backslashed and quoted via raw_arg, and that explorer exits non-zero even when it worked (hence its 's.success() || cfg!(windows)'). services.rs does none of this, so on Windows Show in Explorer opens the wrong folder for paths with spaces and returns 'reveal failed' when it did work; open_url likewise uses explorer, which the same file documents as opening File Explorer for URLs with a query or fragment.",
+   "action": "Share one launcher implementation with the egui app (rundll32 url.dll,FileProtocolHandler for URLs, raw_arg-quoted /select for reveal, ignore explorer's exit code on Windows).",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "apps/lightcraft-desktop/src/services.rs",
+    "line": 419,
+    "text": "        Command::new(\"explorer\").arg(format!(\"/select,{path}\")).status()"
+   }
+  },
+  {
+   "id": "res-fs-read-before-size-cap",
+   "lens": "resilience",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "apps/lightcraft-desktop/src/services.rs:48-55",
+    "apps/lightcraft-desktop/src/native.rs:878-881"
+   ],
+   "failureScenario": "migrate_preferences and persisted_library_path read the whole file with fs::read and only then compare the length to the 4 MiB cap, on the startup path in setup(). A pathological or corrupt legacy ui.json (multi-GB file, or a symlink to a device/FIFO such as /dev/zero) is fully loaded (or never returns) before being rejected, so a bad settings file can hang or OOM app launch instead of producing the intended 'exceeds N bytes' warning.",
+   "action": "Check metadata().len() (and that it is a regular file) first, or read through Read::take(MAX + 1) and fail if the limit is exceeded.",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "apps/lightcraft-desktop/src/services.rs",
+    "line": 48,
+    "text": "    let bytes = match fs::read(source) {"
+   }
+  },
+  {
+   "id": "res-open-external-child-never-reaped",
+   "lens": "resilience",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "apps/lightcraft-desktop/src/services.rs:377-398"
+   ],
+   "failureScenario": "open_external spawns the opener (open -a, cmd start, xdg-open) and immediately drops the Child without wait(); Rust does not reap on drop, so on macOS every Edit in External Editor / Show in Folder leaves a defunct 'open' process until Ember exits, and the spawn error path logs nothing about the exit status, so an opener that fails after spawning (editor not found) is reported as success.",
+   "action": "Wait for the short-lived launcher on a background thread (spawn a thread that calls child.wait() and logs a non-zero status) or use status() inside spawn_blocking.",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "apps/lightcraft-desktop/src/services.rs",
+    "line": 397,
+    "text": "    command.arg(path).spawn().map(|_| ()).map_err(|error| format!(\"opening external editor: {error}\"))"
+   }
+  }
+ ],
+ "withdrawn": []
+}

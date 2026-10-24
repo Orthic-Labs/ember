@@ -1,0 +1,56 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.correctness",
+ "packetDigest": "sha256:a594db1472b1e8449f0ce32bc80e0a7e9eeccfd33aabb809582e4bbb3f611c22",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "correctness-credits-undated-sort-descending",
+   "lens": "correctness",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/credits.rs:159-161",
+    "crates/ui-egui/src/credits.rs:165-176"
+   ],
+   "failureScenario": "compare() orders undated (PR-only) contributors via dated()=(is_empty, date) so they sort after everyone with a date, as the comment at line 159 states. sorted() then applies o.reverse() for descending order, which also reverses that rule: with First/Last commit sorted descending (the ▼ toggle in the About window), every PR-only contributor with an empty date jumps to the top of the list ahead of the newest committers.",
+   "action": "Apply the direction only to the date comparison and keep undated entries last, e.g. compare (a.is_empty()).cmp(b.is_empty()) first and reverse only the date part when !ascending; add a descending date test.",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "reviewAxis": "spec",
+   "sourceQuote": "// A PR-only contributor (no commit date) sorts after everyone with a date.",
+   "sourceLocation": "crates/ui-egui/src/credits.rs:159",
+   "disposition": "wrong",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit without a baseline revision",
+    "baselineEvidence": []
+   },
+   "anchor": {
+    "path": "crates/ui-egui/src/credits.rs",
+    "line": 174,
+    "text": "        let o = if ascending { o } else { o.reverse() };"
+   }
+  }
+ ],
+ "withdrawn": [],
+ "details": {
+  "semanticReview": {
+   "axis": "spec",
+   "status": "findings",
+   "reason": "Public behaviour checked against the code's own stated contracts. The credits sort contradicts its documented ordering for undated contributors when sorted in descending order. Pinned-model loaders (YuNet, DINOv2, MediaPipe), the decoder size guards and the export task matched their stated behaviour.",
+   "sources": [
+    {
+     "location": "crates/ui-egui/src/credits.rs:159",
+     "quote": "// A PR-only contributor (no commit date) sorts after everyone with a date."
+    },
+    {
+     "location": "crates/segment/src/yunet.rs:800",
+     "quote": "if width == 0 || height == 0 || expected != rgb.len() || width > 16_384 || height > 16_384 {"
+    }
+   ]
+  }
+ }
+}

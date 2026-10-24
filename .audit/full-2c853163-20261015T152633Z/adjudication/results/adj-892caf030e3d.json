@@ -1,0 +1,580 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "legacy.security.adjudication",
+ "packetDigest": "sha256:9731d9ec20900bf2c4446f4a78356ba29a0746d1fcc94691bfdf7b55bf9f0345",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [],
+ "withdrawn": [],
+ "verdicts": [
+  {
+   "candidateId": "sha256:fb77251bd70479d7a243ceb30313fd08a0aece6e838c50270d5fbdc66a7c6210",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-0665d4d6839aff0e",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "Rule assumes an attacker who swaps a downloaded executable; at xmp_merge.rs:246 the URL is the W3C RDF namespace IRI written into a String that becomes an rdf:Description element of an XMP sidecar, so no download and no attacker-controlled fetch exists.",
+   "reachability": "Production merge_xmp path builds the replacement block with String::from at line 246; the IRI is only serialized as an xmlns:rdf attribute value and no HTTP client, fetch crate or process spawn is invoked on it anywhere in the function.",
+   "impact": "None: an XML namespace identifier is an opaque name per the Namespaces in XML spec and is never dereferenced, so there is no binary, no integrity gap and no code-execution vector.",
+   "rationale": "Provable non-issue: line 246 pushes the literal \"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" into an output text buffer; nothing retrieves it. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/meta/src/xmp_merge.rs:246 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 246
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:0f6a76595d257293bb93acb787fe7ace2361832951308da94a4b37b5357cb21f",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-0d1eee501afbd24a",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No attacker model applies: xmp_merge.rs:307 is the xmlns:crs camera-raw-settings namespace inside the FOREIGN fixture constant used only by unit tests.",
+   "reachability": "Line 307 lies inside `mod tests` gated by #[cfg(test)] at line 291, so it is not compiled into any shipped binary and is only parsed as test XMP text.",
+   "impact": "None: the crs namespace IRI is a name in fixture XML, never fetched, and test-only code carries no runtime exposure.",
+   "rationale": "Test fixture namespace declaration under #[cfg(test)] (line 291); no download occurs. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/meta/src/xmp_merge.rs:307 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 307
+    },
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 291
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:ec8e1d2058ed8f5ef50981dad1b5b40b8a98929ba8073d5b1d97a16665d092ed",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-2a1a3d8c7e0920a5",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No adversary is relevant to xmp_merge.rs:306, the stEvt ResourceEvent namespace attribute in the FOREIGN sidecar fixture string.",
+   "reachability": "Compiled only under #[cfg(test)] (xmp_merge.rs:291); the string is fed to merge_xmp/parse_xmp as input text, and the parser treats xmlns values as identifiers without network access.",
+   "impact": "None: a sType/ResourceEvent# namespace URI is not a binary download, so no supply-chain integrity impact exists.",
+   "rationale": "Scanner matched an http URL in a test-only XML literal; line 306 declares a namespace prefix and is never retrieved. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/meta/src/xmp_merge.rs:306 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 306
+    },
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 291
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:1708d1bd7032780b39d385840a5cebd01f7208a59de353dc0c969da13c3c50ed",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-2e40b583b500016c",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "Threat of an unpinned binary download does not fit xmp_merge.rs:408, which is the opening of a synthetic xmpmeta/RDF document in the many_attributes_scan_in_linear_time test.",
+   "reachability": "Inside the #[cfg(test)] module beginning at line 291; the String built here is a 200,000-attribute performance input to the scanner, never sent to a network sink.",
+   "impact": "None: test-only performance fixture text; the RDF IRI is an XML namespace name with no download semantics.",
+   "rationale": "Line 408 is a String::from literal for a linear-time scan test; no fetch call in the test or in parse_xmp. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/meta/src/xmp_merge.rs:408 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 408
+    },
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 291
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:44291485a2f677a596c51b6bb33bd2628f55f20438ac11ba4789e4c12c0344c9",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-a3482a6e9b7489fa",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "Not an attack surface: xmp_merge.rs:309 declares xmlns:foo=\"http://example.com/foo/\" to model an unknown third-party namespace in the FOREIGN test fixture.",
+   "reachability": "Test-only (#[cfg(test)] at line 291); example.com is an IANA-reserved documentation domain used to check that unknown namespaces survive merging.",
+   "impact": "None: the value is preserved as text in the merged XMP and never dereferenced, so no executable is obtained.",
+   "rationale": "Unknown-namespace preservation fixture, not a download URL. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/meta/src/xmp_merge.rs:309 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 309
+    },
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 291
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:dc4d3cb66baf25e4186015bd97bb8cc54df6719056b12d91d9d1eb398e87f726",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-a5dfbb57a6a66f7c",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No attacker capability is in play at xmp_merge.rs:389, which binds the xap and exif namespaces to alternate prefixes a: and e: in the owned_if_present_and_prefix_independence test.",
+   "reachability": "Reached only by cargo test (#[cfg(test)] at line 291); the &str is passed to merge_xmp to prove prefix independence and is never handed to an HTTP client.",
+   "impact": "None: namespace IRIs in a test input; no artifact is downloaded, so integrity pinning is not applicable.",
+   "rationale": "Prefix-independence fixture literal; the URLs are XML namespace names. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/meta/src/xmp_merge.rs:389 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 389
+    },
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 291
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:10637d82922bc72e75f6ceba27b294cc8266b07c4630e5a45e94d00613d4eaaa",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-c9f08e1df15b4490",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No threat: xmp_merge.rs:388 is `let ex = \"<x:xmpmeta ...\"` containing the RDF syntax namespace bound to prefix r: for a unit test.",
+   "reachability": "Within the cfg(test) module at line 291; `ex` flows only into merge_xmp and parse_xmp assertions in the same test function.",
+   "impact": "None: test input string with a namespace identifier; nothing downloads or executes a binary.",
+   "rationale": "Test-local XMP literal bound to `ex`; scanner pattern matched an http IRI that is not a fetch target. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/meta/src/xmp_merge.rs:388 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 388
+    },
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 291
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:129ca9a48f6f14875bfaeefc322ac692dee3a6fef1ce069d353fd7799452ecd7",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-ec68a1acf681ac63",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "Rule's attacker (tampering with a fetched binary) has no foothold at xmp_merge.rs:305, the xmlns:xmpMM media-management namespace in the FOREIGN fixture.",
+   "reachability": "Test-only via #[cfg(test)] at line 291; parsed as fixture XML text to simulate a sidecar written by another raw developer.",
+   "impact": "None: the xap/1.0/mm/ IRI is a namespace name inside test data and is not retrieved.",
+   "rationale": "Namespace declaration inside a test constant, not a download. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/meta/src/xmp_merge.rs:305 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 305
+    },
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 291
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:f3c05bb81dd6b35468d817e5ecedc37f02896f24d588523ceff6e80858705ac8",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-f123eda3ee10ee9d",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No adversary applies to xmp_merge.rs:409, the rdf:Description opener with xmlns:foo=example.com inside the linear-time attribute scan test.",
+   "reachability": "Under #[cfg(test)] (line 291); the foo prefix exists only so the loop can append 200,000 foo:aN attributes to stress the scanner.",
+   "impact": "None: synthetic benchmark text; example.com is reserved for documentation and is never contacted.",
+   "rationale": "Performance-test literal whose URL serves as a namespace binding for generated attributes. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/meta/src/xmp_merge.rs:409 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 409
+    },
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 291
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:0788d1a9cafc5faa55978a7a5af4d51500971e173d2e8d111bfbf4d8286eb1db",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-f8f3d9029c7ef7a0",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No threat model fits xmp_merge.rs:302, the <rdf:RDF xmlns:rdf=...> line of the FOREIGN multi-line test constant.",
+   "reachability": "The FOREIGN const sits inside the #[cfg(test)] module opened at line 291 and is consumed only by merge tests.",
+   "impact": "None: the W3C RDF IRI here is XML syntax inside fixture text; no binary is fetched.",
+   "rationale": "Test fixture RDF root element; the URL is a namespace IRI, not a download. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/meta/src/xmp_merge.rs:302 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 302
+    },
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 291
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:33c22112162b5c3d566a1a21ea4fd08bae75fffe3e1be2123941059aa98c2d8d",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-ff3d58c95c25ab91",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No attacker-controlled fetch exists at xmp_merge.rs:308, the Dublin Core xmlns:dc=purl.org declaration in the FOREIGN fixture.",
+   "reachability": "Compiled only for tests (line 291); used to carry dc:subject/dc:title properties exercised by the owned-property merge rules.",
+   "impact": "None: purl.org/dc/elements/1.1/ is the standard Dublin Core namespace name and is never dereferenced.",
+   "rationale": "Dublin Core namespace in test XML; no download sink. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/meta/src/xmp_merge.rs:308 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 308
+    },
+    {
+     "file": "crates/meta/src/xmp_merge.rs",
+     "line": 291
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:1807d915bb5d1d6aa5a9a701a6c362e8b922aa825c83ccbfecb13a91edb8234a",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-0da014f3ed753b4d",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "Considered a network attacker against the OpenRouter chat-completions endpoint at photo-ai/src/network.rs:10; the rule's concern (executing an unpinned downloaded binary) does not apply because this is a TLS JSON API, not an artifact download.",
+   "reachability": "ENDPOINT is used by OpenRouter::assess (network.rs:38-40) for post_json with a bearer key; the response body is read under MAX_RESPONSE_BYTES and parsed by parse_response as JSON, never written as an executable or loaded as code.",
+   "impact": "None for this rule: the response is untrusted JSON data validated by parse_response; there is no binary whose digest could be pinned, and an API response cannot carry a stable digest.",
+   "rationale": "Fixed HTTPS API endpoint constant; digest pinning is inapplicable to a dynamic JSON API response. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/photo-ai/src/network.rs:10 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/photo-ai/src/network.rs",
+     "line": 10
+    },
+    {
+     "file": "crates/photo-ai/src/network.rs",
+     "line": 38
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:ade0a00ec95c7856a89afdcb6732ca8248fa7878f125164e49c6c8fe60817e49",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-964634e9f98a5181",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "Network adversary versus the OpenRouter model-catalog GET at photo-ai/src/network.rs:28; the response is metadata, not an executable, so the unpinned-binary threat does not arise.",
+   "reachability": "OpenRouter::catalog parses the hard-coded https URL, issues get without credentials, reads at most 4 MiB via read_body (line 30) and deserializes with serde_json::from_slice (line 31).",
+   "impact": "None: a model catalog is mutable JSON listing; it is bounded and parsed as data, never executed or persisted as a binary.",
+   "rationale": "HTTPS JSON catalog request with size cap and JSON parse; no binary download. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/photo-ai/src/network.rs:28 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/photo-ai/src/network.rs",
+     "line": 28
+    },
+    {
+     "file": "crates/photo-ai/src/network.rs",
+     "line": 30
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:9b8b2f1d068da5821c2d1258a841ebc773a228647ffa14025f6bc37b186ab903",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-9956a03cd44bde58",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No attacker: raw/src/gaintable.rs:37 is a //! doc comment citing the DNG Specification page as the source for GainTable byte-order handling.",
+   "reachability": "Doc comments are stripped from compiled code; nothing in the crate fetches helpx.adobe.com.",
+   "impact": "None: a citation in rustdoc text has no runtime effect and downloads nothing.",
+   "rationale": "Module documentation citation, not a download URL. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/raw/src/gaintable.rs:37 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/raw/src/gaintable.rs",
+     "line": 37
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:629a3f19cbaea216c57c61ccb5129cbf718a71f9a9e98f6917662835edc721be",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-df43e75f1234775c",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No adversary at raw/src/spectral_table.rs:1, a generated-file header comment naming the rawtoaces-data source repository.",
+   "reachability": "Plain // comment; the table data is compiled-in Rust constants, and the header already records the immutable commit 5cfa53707b053594b2d0d48e8019fb56e6582d6c.",
+   "impact": "None: nothing is downloaded at build or run time, and the provenance reference is pinned to a full commit hash.",
+   "rationale": "Provenance comment already pinned by commit SHA; no fetch. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/raw/src/spectral_table.rs:1 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/raw/src/spectral_table.rs",
+     "line": 1
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:d932017af037730d15797a2fd59290c9b3509f7ff2e5fcb738410c5964a0b542",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-066d042531962311",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No threat at segment/src/dinov2.rs:16, a rustdoc reference to DINOv2 layers/block.py.",
+   "reachability": "Doc comment only; the URL embeds the full commit 7764ea0f912e53c92e82eb78a2a1631e92725fc8 and no code path retrieves it.",
+   "impact": "None: architecture reference text; model weights are loaded through the separately size- and SHA-256-verified dinov2_artifact (dinov2.rs:6-7).",
+   "rationale": "Commit-pinned source citation for block.py in documentation. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/segment/src/dinov2.rs:16 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/segment/src/dinov2.rs",
+     "line": 16
+    },
+    {
+     "file": "crates/segment/src/dinov2.rs",
+     "line": 6
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:6a369c02dee7954fc77aef537e4315b88db9f553f327a53d38d2ac150f095434",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-21205e04455bbebf",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No attacker at segment/src/dinov2.rs:15, the doc link to DINOv2 layers/attention.py.",
+   "reachability": "Rustdoc text, not compiled into behavior; the raw.githubusercontent URL is pinned to commit 7764ea0f and nothing fetches it.",
+   "impact": "None: a commit-pinned citation of the attention implementation used for translation.",
+   "rationale": "attention.py reference in module docs; immutable commit path, no download. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/segment/src/dinov2.rs:15 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/segment/src/dinov2.rs",
+     "line": 15
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:efdd86c184f9533122bc1885ecf28c8590914f77623dac4ff2122235e1b4a695",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-c344e3366905ba32",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No threat at segment/src/dinov2.rs:14, the 'References:' doc line pointing at vision_transformer.py.",
+   "reachability": "Documentation comment; no HTTP client consumes it, and the path includes the immutable commit hash 7764ea0f912e53c92e82eb78a2a1631e92725fc8.",
+   "impact": "None: source attribution under Apache-2.0 section 4(b) obligations; no binary obtained.",
+   "rationale": "vision_transformer.py citation in rustdoc, commit-pinned. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/segment/src/dinov2.rs:14 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/segment/src/dinov2.rs",
+     "line": 14
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:abef6f2b7b31c96efafa5958a2029cbf9870d17c0f9daf8d80df5b9e96616584",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-539901109e24646e",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No adversary at segment/src/dinov2_input.rs:8, the 'Source facts' doc link to DINOv2 data/transforms.py.",
+   "reachability": "Doc comment describing where input normalization constants came from; never fetched at runtime or build time.",
+   "impact": "None: commit-pinned citation in documentation with no executable artifact.",
+   "rationale": "transforms.py provenance note, not a download. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/segment/src/dinov2_input.rs:8 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/segment/src/dinov2_input.rs",
+     "line": 8
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:81a6490851805327e9c29aa58fb895b7bdcd0b8a1475510232ce5dfc3159abc5",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-a8e29f426f9a8f22",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No attacker at segment/src/dinov2_positions.rs:8, a doc link to PyTorch UpSample.cuh at tag v2.4.0.",
+   "reachability": "Rustdoc cites the bicubic coefficient source; the crate reimplements the math in Rust and never downloads PyTorch source or binaries.",
+   "impact": "None: a documentation reference; the tag-based path is not a dependency, so mutability of the tag has no security effect.",
+   "rationale": "Reference to PyTorch source for coefficient provenance only. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/segment/src/dinov2_positions.rs:8 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/segment/src/dinov2_positions.rs",
+     "line": 8
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:c9020abd0bcbbddb73a6de6caa1a04736591249762aa9397df8c35abdb06f5c7",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-c304876c5fec7164",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No threat at segment/src/dinov2_positions.rs:4, the doc link to the non-register DINOv2 vision_transformer.py path.",
+   "reachability": "Doc comment pinned to blob/7764ea0f\u2026; interpolation is implemented locally and nothing retrieves the URL.",
+   "impact": "None: commit-pinned provenance text in rustdoc.",
+   "rationale": "Positional-table interpolation source citation, not a fetch. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/segment/src/dinov2_positions.rs:4 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/segment/src/dinov2_positions.rs",
+     "line": 4
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:4b26d44b99439044de320fbe9c5ce71e9730e69602da216b6db1885b76cfd0ee",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-841cbe82b8a339c4",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No attacker at segment/src/fetch/mod.rs:75, where a unit test passes \"https://a.example/x/\" as the mirrors env value.",
+   "reachability": "Inside #[cfg(test)] mod tests (fetch/mod.rs:69); mirrors() only builds a Vec<String> list and the test asserts its length; no download is initiated.",
+   "impact": "None: .example is a reserved TLD and the test performs no network I/O; downloaded SAM 3 weights are SHA-256 pinned in SAM3_FILES regardless of mirror.",
+   "rationale": "Test input to the mirror-list parser; no fetch, and weights verification is by digest. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/segment/src/fetch/mod.rs:75 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/segment/src/fetch/mod.rs",
+     "line": 75
+    },
+    {
+     "file": "crates/segment/src/fetch/mod.rs",
+     "line": 69
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:82d17e148d13f039ffbccb78281dc85d967feb487220196ef5e4fa1bdc3ad752",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-8792792ad61826d0",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "Considered a malicious mirror serving tampered SAM 3 weights; fetch/mod.rs:41 is a TODO comment template with a <cdn-host> placeholder, and DEFAULT_MIRRORS at line 42 is empty.",
+   "reachability": "The comment is not code; actual mirrors come from LIGHTCRAFT_SAM3_MIRRORS or a user file, and model.safetensors in SAM3_FILES carries a size and SHA-256 that lightcraft_fetch::verify_bytes checks (fetch/src/lib.rs:61).",
+   "impact": "None at this line: there is no URL to download, and the weights downloaded through any mirror are digest-verified. (Tokenizer files lacking a hash are a separate location at lines 20-21, not this candidate.)",
+   "rationale": "Placeholder comment; the binary weights are pinned by SHA-256 at fetch/mod.rs:25. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/segment/src/fetch/mod.rs:41 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/segment/src/fetch/mod.rs",
+     "line": 41
+    },
+    {
+     "file": "crates/segment/src/fetch/mod.rs",
+     "line": 25
+    },
+    {
+     "file": "crates/fetch/src/lib.rs",
+     "line": 61
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:e137daa82f988a0080b5b6f8585af2d39d346c2365988192906771990f19c132",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-1e1778d31df644e7",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "Considered a crafted contributor login forming a malicious link at ui-egui/src/credits.rs:219; no binary is downloaded.",
+   "reachability": "profile_url builds a github.com profile URL from bundled contributor data and links::open passes it to the host open_url service (links.rs:36-38), which hands it to the system browser.",
+   "impact": "None for this rule: opening a web profile page in the user's browser fetches no executable and runs nothing in-process.",
+   "rationale": "Browser hyperlink to a GitHub profile, not a binary download. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/ui-egui/src/credits.rs:219 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/ui-egui/src/credits.rs",
+     "line": 219
+    },
+    {
+     "file": "crates/ui-egui/src/links.rs",
+     "line": 37
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:ba382584d6225c081438c6a8387cbd485724ce438b77e635326e47ff27fc5179",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0013",
+   "clusterId": "cluster-089c0632da41040f",
+   "workItemId": "sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "workPacketDigest": "sha256:312862fc48c8c7225114a61b32df702f6e76c46cba716e258784fbcaa4f0af3a",
+   "contextId": "adjudicator:sha256:f966625fd95d8e2a5d1f41bcb63a86b48b10d1b5f15b7e4e0e72a8de87e6d906",
+   "threatModel": "No attacker at ui-egui/src/links.rs:16, the HELP constant pointing at the project's GitHub repository.",
+   "reachability": "Used in LINKS for the app.help menu command and opened via links::open in the user's browser; Ember itself never downloads from it.",
+   "impact": "None: a static help hyperlink; no artifact is fetched or executed by the app.",
+   "rationale": "Help-menu URL constant, not a download source. Devil's advocate: the scanner flags any http(s) URL as a binary download; at crates/ui-egui/src/links.rs:16 that heuristic is disproved by the code facts above.",
+   "evidence": [
+    {
+     "file": "crates/ui-egui/src/links.rs",
+     "line": 16
+    }
+   ]
+  }
+ ]
+}

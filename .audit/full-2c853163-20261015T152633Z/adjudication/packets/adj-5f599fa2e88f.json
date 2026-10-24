@@ -1,0 +1,595 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-audit-adjudication-seat",
+  "stage": "batch",
+  "round": 1,
+  "batchId": "batch-0005",
+  "itemId": "sha256:b95cb31275a0499fe0f303c666eee2270d9822679e1c6ae25f4e1822fea2d687",
+  "contextId": "adjudicator:sha256:b95cb31275a0499fe0f303c666eee2270d9822679e1c6ae25f4e1822fea2d687",
+  "parentPacketDigest": "sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5",
+  "packet": {
+    "schemaVersion": 1,
+    "kind": "security-batch-adjudication-packet",
+    "parentPacketDigest": "sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5",
+    "batchId": "batch-0005",
+    "family": "security",
+    "adjudicator": {
+      "provider": "legacy.security.adjudication",
+      "contextId": "adjudicator:sha256:b95cb31275a0499fe0f303c666eee2270d9822679e1c6ae25f4e1822fea2d687"
+    },
+    "requiredEvidence": [
+      "threat model and attacker capability",
+      "attacker-controlled source",
+      "trust-boundary trace",
+      "validation and authorization between source and sink",
+      "reachability",
+      "primary controls and environmental mitigations",
+      "real security impact",
+      "reproduction, trace, PoC sketch, or mathematical proof",
+      "devils-advocate false-positive challenge"
+    ],
+    "note": "one verdict per cluster representative; it is expanded to every member, which is then confirmed or spot-checked alone",
+    "clusters": [
+      {
+        "clusterId": "cluster-fdc1643c87ae2643",
+        "rule": "security.credential-literal",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:ad1b06bd66b475e812cd8598a64534c0f9c9d03783598bdb6403723cb2ee97c9",
+          "provider": "security.credentials",
+          "rule": "security.credential-literal",
+          "severity": "high",
+          "path": "apps/lightcraft-cli/tests/cli.rs",
+          "line": 779,
+          "message": "A non-placeholder, credential-shaped literal is committed in a security-relevant file context.",
+          "excerpt": "let token = [REDACTED];"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:ad1b06bd66b475e812cd8598a64534c0f9c9d03783598bdb6403723cb2ee97c9",
+            "path": "apps/lightcraft-cli/tests/cli.rs",
+            "line": 779
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-44227748f800eced",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:6fe8495884f402400ba5c6c6d1b44ec24ab46dfb49cf75ecfe117eb9eafe6df3",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft-cli/tests/personal_auto.rs",
+          "line": 13,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\""
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:6fe8495884f402400ba5c6c6d1b44ec24ab46dfb49cf75ecfe117eb9eafe6df3",
+            "path": "apps/lightcraft-cli/tests/personal_auto.rs",
+            "line": 13
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-55ef9dc81a575979",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:a43b0210a22fe89852db903ce0125a7d5f5199d3e070eb736a9a062b0b725ca2",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft-cli/tests/personal_auto.rs",
+          "line": 11,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:a43b0210a22fe89852db903ce0125a7d5f5199d3e070eb736a9a062b0b725ca2",
+            "path": "apps/lightcraft-cli/tests/personal_auto.rs",
+            "line": 11
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-7708d889ef603705",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:1128068f484cd1105eecfd76cf638b08f8884ffe875a54b9a01c31ca76c49160",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft-desktop/src/native.rs",
+          "line": 338,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"repository\": \"https://github.com/Orthic-Labs/ember\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:1128068f484cd1105eecfd76cf638b08f8884ffe875a54b9a01c31ca76c49160",
+            "path": "apps/lightcraft-desktop/src/native.rs",
+            "line": 338
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-040fcdc254c482a3",
+        "rule": "security.binary-unpinned",
+        "memberCount": 2,
+        "representative": {
+          "findingId": "sha256:8b7781d1e584809c219cf8a4fe8a6fb162c9ddb9d071b62ff38f73a0cedd47a8",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft-desktop/src/services.rs",
+          "line": 401,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "if !url.starts_with(\"https://\") {"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:8b7781d1e584809c219cf8a4fe8a6fb162c9ddb9d071b62ff38f73a0cedd47a8",
+            "path": "apps/lightcraft-desktop/src/services.rs",
+            "line": 401
+          },
+          {
+            "findingId": "sha256:f7d7df4bb3d9d1cf50aa37c30a508d571e14d3c6570fcb33ad0b4ea5c0968404",
+            "path": "apps/lightcraft/src/main.rs",
+            "line": 505
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-c200cdb1f419b60f",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:13c683edc3f33c07b70081e9d205acf5bf239c6902c4272404bbe8e585a387a5",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft-desktop/tests/native_qualification.rs",
+          "line": 978,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "let prefix = if cfg!(target_os = \"windows\") { \"http://lightcraft-preview.localhost/\" } else { \"lightcraft-preview://localhost/\" };"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:13c683edc3f33c07b70081e9d205acf5bf239c6902c4272404bbe8e585a387a5",
+            "path": "apps/lightcraft-desktop/tests/native_qualification.rs",
+            "line": 978
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-06021012f8277114",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:c47bc60d6c777cf205741ca57349e17580aef55f5abd54cb55aab3d7a1833d07",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "line": 239,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "'app.discord': 'https://github.com/Orthic-Labs/ember/issues',"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:c47bc60d6c777cf205741ca57349e17580aef55f5abd54cb55aab3d7a1833d07",
+            "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+            "line": 239
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-092ce36b6fe665dd",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:42ba3e1cd1c5b36b4d14118a0a6a89d03f9101b70166ec98968fbb11d35b889c",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "line": 241,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "'app.website': 'https://github.com/Orthic-Labs/ember',"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:42ba3e1cd1c5b36b4d14118a0a6a89d03f9101b70166ec98968fbb11d35b889c",
+            "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+            "line": 241
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-0b13bc79a2f5598d",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:2ae940fe5e9ce030e5015cf989cdf56947e88e82099a77e47f31b5b8a4e1e985",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "line": 242,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "'app.github': 'https://github.com/Orthic-Labs/ember',"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:2ae940fe5e9ce030e5015cf989cdf56947e88e82099a77e47f31b5b8a4e1e985",
+            "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+            "line": 242
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-19eecb58a30c6f17",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:d70aa051c4ba16178d55c43cd38903d78ef6bef063028bb36f9a0ef1e0b1ddf6",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "line": 238,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "'app.help': 'https://github.com/Orthic-Labs/ember/tree/main/docs',"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:d70aa051c4ba16178d55c43cd38903d78ef6bef063028bb36f9a0ef1e0b1ddf6",
+            "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+            "line": 238
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-320e61bf9a54dee9",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:e49edb02939973690a011afd9bc4698205b42d4bc3b9c8dc1888811f145f6e20",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "line": 243,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "'app.artcraft': 'https://github.com/Orthic-Labs',"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:e49edb02939973690a011afd9bc4698205b42d4bc3b9c8dc1888811f145f6e20",
+            "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+            "line": 243
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-f6b90d499cec029b",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:3344d2157d22c433d0cd073c40ec0612013a9232317a8b9a0f15ec7cc0a3b512",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "line": 240,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "'app.feedback': 'https://github.com/Orthic-Labs/ember/issues/new',"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:3344d2157d22c433d0cd073c40ec0612013a9232317a8b9a0f15ec7cc0a3b512",
+            "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+            "line": 240
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-22fe63a7808efe0c",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:f6ae707762aaddf8d85f2d2365a06e73eb7e74fb24af4829a5e7d23d218951fd",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
+          "line": 962,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "<div className=\"lc-dialog-toolbar\"><Button onClick={() => void desktop.native('openUrl', { url: licenseUrl })}>Read SAM License</Button><Button onClick={() => void desktop.native('openUrl', { url: 'https://github.com/Orthic-Labs/ember/blob/"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:f6ae707762aaddf8d85f2d2365a06e73eb7e74fb24af4829a5e7d23d218951fd",
+            "path": "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
+            "line": 962
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-5898457cc5745aad",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:6ac432f13dedc9ccc72a796ac9d0974d5a0931899274c64814822c7f3b91955e",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
+          "line": 882,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "const licenseUrl = 'https://github.com/facebookresearch/sam3/blob/main/LICENSE';"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:6ac432f13dedc9ccc72a796ac9d0974d5a0931899274c64814822c7f3b91955e",
+            "path": "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
+            "line": 882
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-67499099dd3d9925",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:3a42adcb77516435aae9d807351d5324ceba1cca93d5a96d4e1d451054b15fe5",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "apps/lightcraft/src/main.rs",
+          "line": 1267,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "let url = \"https://www.openstreetmap.org/?mlat=48.856600&mlon=2.352200#map=15/48.856600/2.352200\";"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:3a42adcb77516435aae9d807351d5324ceba1cca93d5a96d4e1d451054b15fe5",
+            "path": "apps/lightcraft/src/main.rs",
+            "line": 1267
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-210f56301311fe9d",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:5e533cf4de0c3238c0e4965dd55e50bea605e85c2a1562646d7fbd3d13577adb",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/codecs/src/encode.rs",
+          "line": 80,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "const XMP_NS: &[u8] = b\"http://ns.adobe.com/xap/1.0/\\0\";"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:5e533cf4de0c3238c0e4965dd55e50bea605e85c2a1562646d7fbd3d13577adb",
+            "path": "crates/codecs/src/encode.rs",
+            "line": 80
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-0f6632582db8f3d8",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:2c52cdea6ec60d76ca2a461b1f71d82a5074c82a9187d3e32b7c7e748c79aa68",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/codecs/src/gainmap.rs",
+          "line": 254,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "r#\"<rdf:Description rdf:about=\"\" xmlns:apdi=\"http://ns.apple.com/pixeldatainfo/1.0/\" xmlns:HDRGainMap=\"http://ns.apple.com/HDRGainMap/1.0/\" xmlns:HDRToneMap=\"http://ns.apple.com/HDRToneMap/1.0/\">\"#,"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:2c52cdea6ec60d76ca2a461b1f71d82a5074c82a9187d3e32b7c7e748c79aa68",
+            "path": "crates/codecs/src/gainmap.rs",
+            "line": 254
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-26c3a84df5cd4687",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:eeb77b55823696f3b5f1a5340294c77b18018afea65f9d7aeb1bd7d6e32a7161",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/codecs/src/gainmap.rs",
+          "line": 286,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "const XMP_OPEN: &str = \"<?xpacket begin=\\\"\\u{feff}\\\" id=\\\"W5M0MpCehiHzreSzNTczkc9d\\\"?><x:xmpmeta xmlns:x=\\\"adobe:ns:meta/\\\"><rdf:RDF xmlns:rdf=\\\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\\\">\";"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:eeb77b55823696f3b5f1a5340294c77b18018afea65f9d7aeb1bd7d6e32a7161",
+            "path": "crates/codecs/src/gainmap.rs",
+            "line": 286
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-5190483b99e8b756",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:c3c1dc6785a772380a3ebce63087530b036e08b67c213571a6735dd287c85663",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/codecs/src/gainmap.rs",
+          "line": 223,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "s.push_str(r#\"<rdf:Description rdf:about=\"\" xmlns:hdrgm=\"http://ns.adobe.com/hdr-gain-map/1.0/\" hdrgm:Version=\"1.0\"\"#);"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:c3c1dc6785a772380a3ebce63087530b036e08b67c213571a6735dd287c85663",
+            "path": "crates/codecs/src/gainmap.rs",
+            "line": 223
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-5ab3063d3855db2a",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:024f7b16d13e5613abea73e994b12afd8ebcd1477d51fad7734463c26cd66cb5",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/codecs/src/gainmap.rs",
+          "line": 796,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "let user_xmp = r#\"<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\"/></rdf:RDF></x:xmpmeta>\"#;"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:024f7b16d13e5613abea73e994b12afd8ebcd1477d51fad7734463c26cd66cb5",
+            "path": "crates/codecs/src/gainmap.rs",
+            "line": 796
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-78e668bd40e73fa7",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:b7424c124fadef889820e83ce3bfba8156d781513be447fc4c47923d7288e203",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/codecs/src/gainmap.rs",
+          "line": 523,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "r#\"<rdf:Description rdf:about=\"\" xmlns:Container=\"http://ns.google.com/photos/1.0/container/\" xmlns:Item=\"http://ns.google.com/photos/1.0/container/item/\" xmlns:hdrgm=\"http://ns.adobe.com/hdr-gain-map/1.0/\" hdrgm:Version=\"1.0\">\"#,"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:b7424c124fadef889820e83ce3bfba8156d781513be447fc4c47923d7288e203",
+            "path": "crates/codecs/src/gainmap.rs",
+            "line": 523
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-5100cf71e5be0dd8",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:e6f8bbf6b6ebf63eb1707761db61a95c6b82b0fb4a7c1c1301574c57569c9e5d",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/codecs/src/jpeg.rs",
+          "line": 91,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "} else if let Some(x) = seg.strip_prefix(b\"http://ns.adobe.com/xap/1.0/\\0\")"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:e6f8bbf6b6ebf63eb1707761db61a95c6b82b0fb4a7c1c1301574c57569c9e5d",
+            "path": "crates/codecs/src/jpeg.rs",
+            "line": 91
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-d6d3d64a50989eef",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:194a53f5da4b5ef34f863c0ea4bc78028f29faeb862a24548169913577c83833",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/codecs/tests/roundtrip.rs",
+          "line": 17,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "let xmp = \"<x:xmpmeta xmlns:x='adobe:ns:meta/'><rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description xmlns:crs='http://ns.adobe.com/camera-raw-settings/1.0/' crs:AlreadyApplied='True' crs:Exposure2012='0.25'/></r"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:194a53f5da4b5ef34f863c0ea4bc78028f29faeb862a24548169913577c83833",
+            "path": "crates/codecs/tests/roundtrip.rs",
+            "line": 17
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-0c890930380776fd",
+        "rule": "security.binary-unpinned",
+        "memberCount": 2,
+        "representative": {
+          "findingId": "sha256:a357bdda0c158a572e0dd03d8376f3c43a6f675a4aa5269309e069d962bd824a",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/denoise-core/src/known.rs",
+          "line": 127,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "url.strip_prefix(\"https://\").and_then(|r| r.split('/').next()).unwrap_or(\"\")"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:0fb228512025caea218daa8a00101062359485c24c4fb3971cb38a54ba3ea846",
+            "path": "crates/faces/src/known.rs",
+            "line": 148
+          },
+          {
+            "findingId": "sha256:a357bdda0c158a572e0dd03d8376f3c43a6f675a4aa5269309e069d962bd824a",
+            "path": "crates/denoise-core/src/known.rs",
+            "line": 127
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-cde44d5393926f14",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:e561f5907d9e881a97e716830295c23998466522b791f20dcb352621967da384",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/denoise-core/src/known.rs",
+          "line": 52,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "url: \"https://github.com/darktable-org/darktable-ai/releases/download/release-5.6.0/rawdenoise-nind.dtmodel\".into(),"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:e561f5907d9e881a97e716830295c23998466522b791f20dcb352621967da384",
+            "path": "crates/denoise-core/src/known.rs",
+            "line": 52
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,452 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-receipt",
+  "provider": "reasoning.resilience",
+  "result": {
+    "schema_version": 1,
+    "provider": "reasoning.resilience",
+    "applicable": true,
+    "required": true,
+    "status": "partial",
+    "complete": false,
+    "coverage": {
+      "denominator_digest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+      "expected": 730,
+      "examined": 18,
+      "gaps": [
+        "reasoning-part-scope:reasoning.resilience:part 1/4"
+      ]
+    },
+    "findings": [
+      {
+        "id": "res-close-handler-blocks-main-thread",
+        "severity": "medium"
+      },
+      {
+        "id": "res-refresh-inflight-never-settles",
+        "severity": "medium"
+      },
+      {
+        "id": "res-png-encode-error-swallowed",
+        "severity": "medium"
+      },
+      {
+        "id": "res-hdr-avif-packet-loop-accepts-empty",
+        "severity": "medium"
+      },
+      {
+        "id": "res-windows-launchers-regress-known-issues",
+        "severity": "medium"
+      },
+      {
+        "id": "res-fs-read-before-size-cap",
+        "severity": "low"
+      },
+      {
+        "id": "res-open-external-child-never-reaped",
+        "severity": "low"
+      }
+    ],
+    "coverage_gaps": [
+      "reasoning-part-scope:reasoning.resilience:part 1/4"
+    ],
+    "degradation": [],
+    "details": {
+      "executionReceipt": {
+        "schemaVersion": 1,
+        "kind": "legion-reasoning-receipt",
+        "receiptId": "ingest-a3efe2abf157b6ce1898ae63100b94e9",
+        "requestId": "sha256:4ebf8cc97f7f03eccc32b1ab659bf1e5f786567de3f7f0d0897e8dc235c4068b",
+        "providerId": "reasoning.resilience",
+        "contract": "audit-lens-resilience-v1",
+        "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+        "planSignature": "hmac-sha256:805a23e8a5d736c2a96307bc58b919aa92b271336dbe2dbca01d2a81fe17b6f3",
+        "repositoryId": "/Volumes/D/claude/ember",
+        "inventoryGeneration": "filesystem:sha256:6a2aaea46465c4542b1f39f825efd84edc8f63121b837f8bc64a97418d82ef9a",
+        "inventoryDigest": "sha256:da3157e68029988c594537621af44004cf97f0020364e0c23299c7b13bcc221a",
+        "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+        "denominatorCount": 730,
+        "resultDigest": "sha256:55ae3a050873de9f923d61e0b66348308f9b62d09ece380d9cf16d96b5e4cc77",
+        "status": "partial",
+        "complete": false,
+        "gaps": [
+          "reasoning-part-scope:reasoning.resilience:part 1/4"
+        ],
+        "authentication": {
+          "alg": "HMAC-SHA256",
+          "macDomain": "legion-reasoning-receipt:v1",
+          "boundFieldsDigest": "sha256:879de90044d6c1908fca28fc34814e176364267cdd644bb6319c20c234db2e65",
+          "mac": "5b336dd47228088961fbb4937899ded5fee8839c1429a002b9a18fb88a12e556",
+          "host": "legion-cli-ingest",
+          "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb"
+        }
+      },
+      "findingEvidence": {
+        "res-close-handler-blocks-main-thread": {
+          "lens": "resilience",
+          "confidence": "likely",
+          "verifyStatus": "unverified",
+          "action": "Give DesktopHandle::snapshot a bounded recv_timeout and treat a timeout as 'busy' (prevent close and emit a notice); move shutdown_process off the event-loop thread (spawn it, then close the window from the completion) so the UI keeps painting."
+        },
+        "res-refresh-inflight-never-settles": {
+          "lens": "resilience",
+          "confidence": "likely",
+          "verifyStatus": "unverified",
+          "action": "Add a timeout to the snapshot IPC (reject after a few seconds, clear refreshInFlight in finally as now, and surface the error), and make the host-side recv bounded; do not make command completion wait on the shared in-flight promise."
+        },
+        "res-png-encode-error-swallowed": {
+          "lens": "resilience",
+          "confidence": "confirmed",
+          "verifyStatus": "unverified",
+          "action": "Make PngEncode return Result<Vec<u8>, String> and propagate the error through the control reply, or at minimum log the error and return an error reply when the encoded buffer is empty."
+        },
+        "res-hdr-avif-packet-loop-accepts-empty": {
+          "lens": "resilience",
+          "confidence": "likely",
+          "verifyStatus": "unverified",
+          "action": "Continue the loop on EncoderStatus::Encoded, break only on LimitReached, and return Error::Encode when no KEY packet was produced (av1.is_empty()); add a round-trip test for encode_avif_hdr's success path."
+        },
+        "res-windows-launchers-regress-known-issues": {
+          "lens": "resilience",
+          "confidence": "likely",
+          "verifyStatus": "unverified",
+          "action": "Share one launcher implementation with the egui app (rundll32 url.dll,FileProtocolHandler for URLs, raw_arg-quoted /select for reveal, ignore explorer's exit code on Windows)."
+        },
+        "res-fs-read-before-size-cap": {
+          "lens": "resilience",
+          "confidence": "confirmed",
+          "verifyStatus": "unverified",
+          "action": "Check metadata().len() (and that it is a regular file) first, or read through Read::take(MAX + 1) and fail if the limit is exceeded."
+        },
+        "res-open-external-child-never-reaped": {
+          "lens": "resilience",
+          "confidence": "confirmed",
+          "verifyStatus": "unverified",
+          "action": "Wait for the short-lived launcher on a background thread (spawn a thread that calls child.wait() and logs a non-zero status) or use status() inside spawn_blocking."
+        }
+      },
+      "findingLocations": {
+        "res-close-handler-blocks-main-thread": [
+          "apps/lightcraft-desktop/src/native.rs:1139-1165",
+          "crates/desktop-host/src/lib.rs:87-96",
+          "crates/desktop-host/src/lib.rs:120-126"
+        ],
+        "res-refresh-inflight-never-settles": [
+          "apps/lightcraft-desktop/web/src/desktop.tsx:273-312",
+          "apps/lightcraft-desktop/web/src/desktop.tsx:583-585",
+          "apps/lightcraft-desktop/src/native.rs:43-48",
+          "crates/desktop-host/src/lib.rs:94-96"
+        ],
+        "res-png-encode-error-swallowed": [
+          "apps/lightcraft/src/main.rs:634-636",
+          "apps/lightcraft-cli/src/main.rs:942-944",
+          "crates/ui-egui/src/control.rs:423-427",
+          "crates/ui-egui/src/control.rs:538-546"
+        ],
+        "res-hdr-avif-packet-loop-accepts-empty": [
+          "crates/codecs/src/encode.rs:516-524",
+          "crates/codecs/src/encode.rs:540"
+        ],
+        "res-windows-launchers-regress-known-issues": [
+          "apps/lightcraft-desktop/src/services.rs:400-425",
+          "apps/lightcraft/src/main.rs:385-413",
+          "apps/lightcraft/src/main.rs:526-528"
+        ],
+        "res-fs-read-before-size-cap": [
+          "apps/lightcraft-desktop/src/services.rs:48-55",
+          "apps/lightcraft-desktop/src/native.rs:878-881"
+        ],
+        "res-open-external-child-never-reaped": [
+          "apps/lightcraft-desktop/src/services.rs:377-398"
+        ]
+      },
+      "findingMessages": {
+        "res-close-handler-blocks-main-thread": "The CloseRequested branch of on_window_event runs on the main (event-loop) thread and calls host.snapshot(), whose call() waits on reply_rx.recv() with no timeout, and then host.shutdown_process(), which blocks for up to 30 s. If the session-owner thread is busy or wedged (a long synchronous command, a stalled volume, a deadlock), clicking the window close button freezes the entire UI, including the unsaved-changes and 'still running' prompts that depend on that snapshot, with no way to close short of killing the process; even a healthy slow shutdown freezes the window for up to 30 s with no feedback.",
+        "res-refresh-inflight-never-settles": "refresh() deduplicates through refreshInFlight and returns the stored promise to every caller, and run() awaits refresh() after almost every command. getSnapshot() reaches host.snapshot(), which waits for the session owner with an unbounded recv(). If the owner is wedged (or the snapshot never replies), the in-flight promise never settles, refreshInFlight stays set forever, every later poll and every command awaiting refresh() hangs on the same pending promise, and no error is ever surfaced because neither .then nor .catch runs: the UI stops updating and every menu action appears to do nothing, with no recovery short of restarting.",
+        "res-png-encode-error-swallowed": "The png service wraps encode_png(...).unwrap_or_default(); PngEncode returns Vec<u8>, so an encoding failure (zero or oversize dimensions, png writer error, out of memory) becomes an empty byte vector with no log and no telemetry. ui.screenshot / app.screenshot then pass those bytes to write() and reply ok:true with the path, leaving a zero-byte .png that scripts and CI treat as a successful screenshot (the CLI snapshot prints 'wrote ...' for it too).",
+        "res-hdr-avif-packet-loop-accepts-empty": "The rav1e receive loop treats EncoderStatus::Encoded as the terminal state (break) alongside LimitReached, but rav1e documents Encoded as 'a frame was encoded but no packet emitted yet, call receive_packet again' (ravif's own loop continues on it). If the first call after flush() returns Encoded, av1 stays empty, nothing checks av1.is_empty(), and avif_serialize::Aviffy::to_vec wraps zero bytes of image data in a valid-looking AVIF, so the HDR export reports success while writing an undecodable file (the originals may already be skipped or overwritten per the export conflict setting).",
+        "res-windows-launchers-regress-known-issues": "The desktop host's reveal() runs explorer with arg(format!(\"/select,{path}\")) and requires a zero exit status. The egui app documents (issues #272 and #234, lightcraft/src/main.rs:395-413 and 385-388) that Rust quotes the whole switch when the path has a space so Explorer opens Documents instead of selecting the file, that the path must be backslashed and quoted via raw_arg, and that explorer exits non-zero even when it worked (hence its 's.success() || cfg!(windows)'). services.rs does none of this, so on Windows Show in Explorer opens the wrong folder for paths with spaces and returns 'reveal failed' when it did work; open_url likewise uses explorer, which the same file documents as opening File Explorer for URLs with a query or fragment.",
+        "res-fs-read-before-size-cap": "migrate_preferences and persisted_library_path read the whole file with fs::read and only then compare the length to the 4 MiB cap, on the startup path in setup(). A pathological or corrupt legacy ui.json (multi-GB file, or a symlink to a device/FIFO such as /dev/zero) is fully loaded (or never returns) before being rejected, so a bad settings file can hang or OOM app launch instead of producing the intended 'exceeds N bytes' warning.",
+        "res-open-external-child-never-reaped": "open_external spawns the opener (open -a, cmd start, xdg-open) and immediately drops the Child without wait(); Rust does not reap on drop, so on macOS every Edit in External Editor / Show in Folder leaves a defunct 'open' process until Ember exits, and the spawn error path logs nothing about the exit status, so an opener that fails after spawning (editor not found) is reported as success."
+      },
+      "findingTitles": {
+        "res-close-handler-blocks-main-thread": "Give DesktopHandle::snapshot a bounded recv_timeout and treat a timeout as 'busy' (prevent close and emit a notice); move shutdown_process off the event-loop thread (spawn it, then close the window from the completion) so the UI keeps painting.",
+        "res-refresh-inflight-never-settles": "Add a timeout to the snapshot IPC (reject after a few seconds, clear refreshInFlight in finally as now, and surface the error), and make the host-side recv bounded; do not make command completion wait on the shared in-flight promise.",
+        "res-png-encode-error-swallowed": "Make PngEncode return Result<Vec<u8>, String> and propagate the error through the control reply, or at minimum log the error and return an error reply when the encoded buffer is empty.",
+        "res-hdr-avif-packet-loop-accepts-empty": "Continue the loop on EncoderStatus::Encoded, break only on LimitReached, and return Error::Encode when no KEY packet was produced (av1.is_empty()); add a round-trip test for encode_avif_hdr's success path.",
+        "res-windows-launchers-regress-known-issues": "Share one launcher implementation with the egui app (rundll32 url.dll,FileProtocolHandler for URLs, raw_arg-quoted /select for reveal, ignore explorer's exit code on Windows).",
+        "res-fs-read-before-size-cap": "Check metadata().len() (and that it is a regular file) first, or read through Read::take(MAX + 1) and fail if the limit is exceeded.",
+        "res-open-external-child-never-reaped": "Wait for the short-lived launcher on a background thread (spawn a thread that calls child.wait() and logs a non-zero status) or use status() inside spawn_blocking."
+      },
+      "ingest": {
+        "host": "legion-cli-ingest",
+        "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb",
+        "packetDigest": "sha256:3ff849c5b755cef861f2a4ef235891baf6af1a483422685ebc57cae64cb1c83e",
+        "anchorsVerified": 7
+      },
+      "lensFindings": [
+        {
+          "id": "res-close-handler-blocks-main-thread",
+          "lens": "resilience",
+          "severity": "medium",
+          "confidence": "likely",
+          "evidence": [
+            "apps/lightcraft-desktop/src/native.rs:1139-1165",
+            "crates/desktop-host/src/lib.rs:87-96",
+            "crates/desktop-host/src/lib.rs:120-126"
+          ],
+          "failureScenario": "The CloseRequested branch of on_window_event runs on the main (event-loop) thread and calls host.snapshot(), whose call() waits on reply_rx.recv() with no timeout, and then host.shutdown_process(), which blocks for up to 30 s. If the session-owner thread is busy or wedged (a long synchronous command, a stalled volume, a deadlock), clicking the window close button freezes the entire UI, including the unsaved-changes and 'still running' prompts that depend on that snapshot, with no way to close short of killing the process; even a healthy slow shutdown freezes the window for up to 30 s with no feedback.",
+          "action": "Give DesktopHandle::snapshot a bounded recv_timeout and treat a timeout as 'busy' (prevent close and emit a notice); move shutdown_process off the event-loop thread (spawn it, then close the window from the completion) so the UI keeps painting.",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "apps/lightcraft-desktop/src/native.rs",
+            "line": 1143,
+            "text": "                    let snapshot = match host.snapshot() {"
+          }
+        },
+        {
+          "id": "res-refresh-inflight-never-settles",
+          "lens": "resilience",
+          "severity": "medium",
+          "confidence": "likely",
+          "evidence": [
+            "apps/lightcraft-desktop/web/src/desktop.tsx:273-312",
+            "apps/lightcraft-desktop/web/src/desktop.tsx:583-585",
+            "apps/lightcraft-desktop/src/native.rs:43-48",
+            "crates/desktop-host/src/lib.rs:94-96"
+          ],
+          "failureScenario": "refresh() deduplicates through refreshInFlight and returns the stored promise to every caller, and run() awaits refresh() after almost every command. getSnapshot() reaches host.snapshot(), which waits for the session owner with an unbounded recv(). If the owner is wedged (or the snapshot never replies), the in-flight promise never settles, refreshInFlight stays set forever, every later poll and every command awaiting refresh() hangs on the same pending promise, and no error is ever surfaced because neither .then nor .catch runs: the UI stops updating and every menu action appears to do nothing, with no recovery short of restarting.",
+          "action": "Add a timeout to the snapshot IPC (reject after a few seconds, clear refreshInFlight in finally as now, and surface the error), and make the host-side recv bounded; do not make command completion wait on the shared in-flight promise.",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "apps/lightcraft-desktop/web/src/desktop.tsx",
+            "line": 274,
+            "text": "    if (refreshInFlight.current) return refreshInFlight.current;"
+          }
+        },
+        {
+          "id": "res-png-encode-error-swallowed",
+          "lens": "resilience",
+          "severity": "medium",
+          "confidence": "confirmed",
+          "evidence": [
+            "apps/lightcraft/src/main.rs:634-636",
+            "apps/lightcraft-cli/src/main.rs:942-944",
+            "crates/ui-egui/src/control.rs:423-427",
+            "crates/ui-egui/src/control.rs:538-546"
+          ],
+          "failureScenario": "The png service wraps encode_png(...).unwrap_or_default(); PngEncode returns Vec<u8>, so an encoding failure (zero or oversize dimensions, png writer error, out of memory) becomes an empty byte vector with no log and no telemetry. ui.screenshot / app.screenshot then pass those bytes to write() and reply ok:true with the path, leaving a zero-byte .png that scripts and CI treat as a successful screenshot (the CLI snapshot prints 'wrote ...' for it too).",
+          "action": "Make PngEncode return Result<Vec<u8>, String> and propagate the error through the control reply, or at minimum log the error and return an error reply when the encoded buffer is empty.",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "apps/lightcraft/src/main.rs",
+            "line": 635,
+            "text": "            lightcraft_codecs::encode_png(&lightcraft_codecs::EncodeImage::rgba8(img), &lightcraft_codecs::EncodeMeta::default()).unwrap_or_default()"
+          }
+        },
+        {
+          "id": "res-hdr-avif-packet-loop-accepts-empty",
+          "lens": "resilience",
+          "severity": "medium",
+          "confidence": "likely",
+          "evidence": [
+            "crates/codecs/src/encode.rs:516-524",
+            "crates/codecs/src/encode.rs:540"
+          ],
+          "failureScenario": "The rav1e receive loop treats EncoderStatus::Encoded as the terminal state (break) alongside LimitReached, but rav1e documents Encoded as 'a frame was encoded but no packet emitted yet, call receive_packet again' (ravif's own loop continues on it). If the first call after flush() returns Encoded, av1 stays empty, nothing checks av1.is_empty(), and avif_serialize::Aviffy::to_vec wraps zero bytes of image data in a valid-looking AVIF, so the HDR export reports success while writing an undecodable file (the originals may already be skipped or overwritten per the export conflict setting).",
+          "action": "Continue the loop on EncoderStatus::Encoded, break only on LimitReached, and return Error::Encode when no KEY packet was produced (av1.is_empty()); add a round-trip test for encode_avif_hdr's success path.",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "crates/codecs/src/encode.rs",
+            "line": 521,
+            "text": "                Err(EncoderStatus::Encoded | EncoderStatus::LimitReached) => break,"
+          }
+        },
+        {
+          "id": "res-windows-launchers-regress-known-issues",
+          "lens": "resilience",
+          "severity": "medium",
+          "confidence": "likely",
+          "evidence": [
+            "apps/lightcraft-desktop/src/services.rs:400-425",
+            "apps/lightcraft/src/main.rs:385-413",
+            "apps/lightcraft/src/main.rs:526-528"
+          ],
+          "failureScenario": "The desktop host's reveal() runs explorer with arg(format!(\"/select,{path}\")) and requires a zero exit status. The egui app documents (issues #272 and #234, lightcraft/src/main.rs:395-413 and 385-388) that Rust quotes the whole switch when the path has a space so Explorer opens Documents instead of selecting the file, that the path must be backslashed and quoted via raw_arg, and that explorer exits non-zero even when it worked (hence its 's.success() || cfg!(windows)'). services.rs does none of this, so on Windows Show in Explorer opens the wrong folder for paths with spaces and returns 'reveal failed' when it did work; open_url likewise uses explorer, which the same file documents as opening File Explorer for URLs with a query or fragment.",
+          "action": "Share one launcher implementation with the egui app (rundll32 url.dll,FileProtocolHandler for URLs, raw_arg-quoted /select for reveal, ignore explorer's exit code on Windows).",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "apps/lightcraft-desktop/src/services.rs",
+            "line": 419,
+            "text": "        Command::new(\"explorer\").arg(format!(\"/select,{path}\")).status()"
+          }
+        },
+        {
+          "id": "res-fs-read-before-size-cap",
+          "lens": "resilience",
+          "severity": "low",
+          "confidence": "confirmed",
+          "evidence": [
+            "apps/lightcraft-desktop/src/services.rs:48-55",
+            "apps/lightcraft-desktop/src/native.rs:878-881"
+          ],
+          "failureScenario": "migrate_preferences and persisted_library_path read the whole file with fs::read and only then compare the length to the 4 MiB cap, on the startup path in setup(). A pathological or corrupt legacy ui.json (multi-GB file, or a symlink to a device/FIFO such as /dev/zero) is fully loaded (or never returns) before being rejected, so a bad settings file can hang or OOM app launch instead of producing the intended 'exceeds N bytes' warning.",
+          "action": "Check metadata().len() (and that it is a regular file) first, or read through Read::take(MAX + 1) and fail if the limit is exceeded.",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "apps/lightcraft-desktop/src/services.rs",
+            "line": 48,
+            "text": "    let bytes = match fs::read(source) {"
+          }
+        },
+        {
+          "id": "res-open-external-child-never-reaped",
+          "lens": "resilience",
+          "severity": "low",
+          "confidence": "confirmed",
+          "evidence": [
+            "apps/lightcraft-desktop/src/services.rs:377-398"
+          ],
+          "failureScenario": "open_external spawns the opener (open -a, cmd start, xdg-open) and immediately drops the Child without wait(); Rust does not reap on drop, so on macOS every Edit in External Editor / Show in Folder leaves a defunct 'open' process until Ember exits, and the spawn error path logs nothing about the exit status, so an opener that fails after spawning (editor not found) is reported as success.",
+          "action": "Wait for the short-lived launcher on a background thread (spawn a thread that calls child.wait() and logs a non-zero status) or use status() inside spawn_blocking.",
+          "verifyStatus": "unverified",
+          "anchor": {
+            "path": "apps/lightcraft-desktop/src/services.rs",
+            "line": 397,
+            "text": "    command.arg(path).spawn().map(|_| ()).map_err(|error| format!(\"opening external editor: {error}\"))"
+          }
+        }
+      ],
+      "lensIds": [
+        "resilience"
+      ],
+      "packetCoverage": {
+        "basis": "bounded-excerpts",
+        "examined": 18,
+        "expected": 730,
+        "part": {
+          "number": 1,
+          "total": 4
+        },
+        "requiredParts": 4,
+        "overCeiling": null,
+        "partPaths": [
+          "apps/lightcraft-cli/src/main.rs",
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/main.rs",
+          "apps/lightcraft-desktop/src/native.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/tests/native_qualification.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
+          "apps/lightcraft-desktop/web/src/main.tsx",
+          "apps/lightcraft/src/main.rs",
+          "crates/catalog/src/rules.rs",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs"
+        ],
+        "examinedPaths": [
+          "apps/lightcraft-cli/src/main.rs",
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/main.rs",
+          "apps/lightcraft-desktop/src/native.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/tests/native_qualification.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
+          "apps/lightcraft-desktop/web/src/main.tsx",
+          "apps/lightcraft/src/main.rs",
+          "crates/catalog/src/rules.rs",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs"
+        ],
+        "chunkedPaths": [],
+        "omittedPaths": [],
+        "truncatedPaths": [],
+        "coverageMode": "risk-sampled",
+        "bundle": "S1",
+        "reviewSetDigest": "sha256:0979bbe58e2de1a68b710b92c005b16a51d8d0d7126aea91bde0ba8e38823ff4",
+        "reviewSetCount": 79,
+        "reviewExpected": 53,
+        "promotedPaths": [
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs",
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/cmd/geocode.rs"
+        ],
+        "displacedPaths": [
+          "crates/codecs/examples/jpeg_bench.rs",
+          "crates/raw/examples/rawdump.rs",
+          "crates/merge/src/features.rs",
+          "crates/merge/tests/pano.rs",
+          "crates/pipeline/src/dust.rs",
+          "crates/pipeline/src/colorops.rs",
+          "crates/gpu/tests/memory.rs",
+          "crates/raw/src/demosaic/xtrans.rs",
+          "crates/merge/src/pano/finish.rs",
+          "crates/codecs/src/jpeg_par.rs",
+          "crates/meta/src/iptc.rs",
+          "apps/lightcraft-web/src/files.rs",
+          "crates/codecs/src/other.rs",
+          "apps/lightcraft/examples/gen_photos.rs",
+          "crates/merge/src/ransac.rs",
+          "crates/scenes/src/noise.rs",
+          "crates/tiff/src/makernote.rs",
+          "crates/merge/src/align.rs",
+          "crates/catalog/src/tests_local.rs",
+          "apps/lightcraft-cli/src/alloc_release.rs",
+          "crates/codecs/src/exif.rs",
+          "crates/engine/src/cmd/curves.rs",
+          "crates/ui-egui/src/tests_unsaved.rs",
+          "packaging/linux/postinst.sh",
+          "crates/raw/examples/rawinfo.rs",
+          "crates/pipeline/src/upright.rs",
+          "crates/pipeline/src/transform.rs",
+          "crates/ui-egui/src/panels/crop_overlay.rs",
+          "crates/engine/src/tests_forget_local.rs",
+          "crates/pipeline/src/profiles.rs",
+          "crates/engine/src/cmd/develop.rs",
+          "crates/ui-egui/src/widgets.rs",
+          "crates/ui-egui/src/panels/settings.rs",
+          "crates/ui-egui/src/import.rs",
+          "crates/ui-egui/src/tests_preview_limit.rs",
+          "crates/ui-egui/src/render.rs",
+          "crates/desktop-host/src/tasks.rs",
+          "crates/catalog/src/keywords.rs",
+          "crates/ui-egui/src/panels/edit.rs",
+          "crates/ui-egui/src/panels/grid.rs"
+        ],
+        "unpromotedCount": 80,
+        "declaredUnsampled": 677,
+        "excluded": 23,
+        "aliasedPaths": []
+      },
+      "reasoningHostState": "ingested",
+      "withdrawnFindings": []
+    }
+  },
+  "part": {
+    "number": 1,
+    "total": 4
+  }
+}

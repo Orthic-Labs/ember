@@ -1,0 +1,42 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.schema",
+ "packetDigest": "sha256:501b5e75e64753807187135a3ff7dfdb1436422409e37096f3e25751eed3605d",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "p0006-schema-catalog-download-url-filename-contract",
+   "lens": "schema",
+   "severity": "medium",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/faces/src/catalog.rs:75-79",
+    "crates/faces/src/catalog.rs:100",
+    "crates/faces/src/known.rs:151-155",
+    "crates/faces/src/known.rs:199",
+    "crates/engine/src/face_download.rs:99",
+    "crates/engine/src/face_download.rs:206-208"
+   ],
+   "anchor": {
+    "path": "crates/faces/src/known.rs",
+    "line": 154,
+    "text": "        self.url.strip_suffix(self.file_name.as_str()).map_or(self.url.as_str(), |b| b.trim_end_matches('/'))"
+   },
+   "failureScenario": "Download.base() assumes the url ends in `/<file_name>`, an invariant enforced only by the built-in table's test (known.rs:199). User catalog entries break it: catalog::entry accepts any https url and derives file_name by stripping the query and filtering characters, and face_download passes spec.base() to lightcraft_fetch::download, which requests `<base>/<file_name>`. For the module's own documented shape `https://example.org/w/recogniser-r50.onnx?download=1` (catalog.rs test), strip_suffix fails, base() returns the whole url and the request becomes `.../recogniser-r50.onnx?download=1/recogniser-r50.onnx`. A url without an .onnx name (`https://host/files/123`) gets file_name `model.onnx` and fetches `https://host/files/123/model.onnx`. Signed or query-bearing catalog urls therefore cannot be downloaded, though the catalog accepts them.",
+   "action": "Download catalog entries from their exact url with lightcraft_fetch::download_url (which keeps the query and takes the local name from FileSpec), or reject at catalog parse time any url whose path does not end in `/<file_name>` with no query.",
+   "verifyStatus": "verified",
+   "reviewAxis": "spec",
+   "sourceQuote": "each entry is a model manifest (the same fields as a `face-model.json`) plus the address to fetch it from",
+   "sourceLocation": "crates/faces/src/catalog.rs:4-5",
+   "disposition": "wrong",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "Full-repo audit at a frozen HEAD; no baseline diff supplied.",
+    "baselineEvidence": []
+   }
+  }
+ ],
+ "withdrawn": []
+}

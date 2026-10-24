@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-result",
+  "provider": "reasoning.dead-file",
+  "packetDigest": "sha256:5dddab7e8932b5d607183ca2ddd13db8bc358355255098eca286f57be7131174",
+  "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+  "complete": true,
+  "findings": [],
+  "withdrawn": []
+}

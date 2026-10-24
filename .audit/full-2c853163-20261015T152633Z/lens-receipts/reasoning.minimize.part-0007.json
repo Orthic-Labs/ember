@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-receipt",
+  "provider": "reasoning.minimize",
+  "result": {
+    "schema_version": 1,
+    "provider": "reasoning.minimize",
+    "applicable": true,
+    "required": true,
+    "status": "partial",
+    "complete": false,
+    "coverage": {
+      "denominator_digest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+      "expected": 730,
+      "examined": 1,
+      "gaps": [
+        "reasoning-part-scope:reasoning.minimize:part 7/7"
+      ]
+    },
+    "findings": [
+      {
+        "id": "p0007-total-ram-fallback",
+        "severity": "low"
+      }
+    ],
+    "coverage_gaps": [
+      "reasoning-part-scope:reasoning.minimize:part 7/7"
+    ],
+    "degradation": [],
+    "details": {
+      "executionReceipt": {
+        "schemaVersion": 1,
+        "kind": "legion-reasoning-receipt",
+        "receiptId": "ingest-6a1f83a882f73d9f388f9f3338707a22",
+        "requestId": "sha256:01336e82d3253c4339d9a50759a26675f3dfbfecc0e1bfb850c256a1fcf69af3",
+        "providerId": "reasoning.minimize",
+        "contract": "audit-lens-minimize-v1",
+        "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+        "planSignature": "hmac-sha256:805a23e8a5d736c2a96307bc58b919aa92b271336dbe2dbca01d2a81fe17b6f3",
+        "repositoryId": "/Volumes/D/claude/ember",
+        "inventoryGeneration": "filesystem:sha256:6a2aaea46465c4542b1f39f825efd84edc8f63121b837f8bc64a97418d82ef9a",
+        "inventoryDigest": "sha256:da3157e68029988c594537621af44004cf97f0020364e0c23299c7b13bcc221a",
+        "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+        "denominatorCount": 730,
+        "resultDigest": "sha256:4630f35afaf21f4910fe60bb3112455d71a94d7738668cdc140e69742ca25d7b",
+        "status": "partial",
+        "complete": false,
+        "gaps": [
+          "reasoning-part-scope:reasoning.minimize:part 7/7"
+        ],
+        "authentication": {
+          "alg": "HMAC-SHA256",
+          "macDomain": "legion-reasoning-receipt:v1",
+          "boundFieldsDigest": "sha256:879de90044d6c1908fca28fc34814e176364267cdd644bb6319c20c234db2e65",
+          "mac": "5e6ed7afd233d6343e77e4352b610a2faf5e5e38e56ed40efc0a4a1390cbc5fe",
+          "host": "legion-cli-ingest",
+          "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb"
+        }
+      },
+      "findingEvidence": {
+        "p0007-total-ram-fallback": {
+          "lens": "minimize",
+          "confidence": "speculative",
+          "verifyStatus": "unverified",
+          "ponytailTag": "yagni",
+          "action": "Delete total_ram_gb and its or_else at line 90; let ci_jobs(None, cpus) use its existing default of 4 when available RAM is unknown (about 35 lines removed)."
+        }
+      },
+      "findingLocations": {
+        "p0007-total-ram-fallback": [
+          "xtask/src/main.rs:90",
+          "xtask/src/main.rs:142-160"
+        ]
+      },
+      "findingMessages": {
+        "p0007-total-ram-fallback": "total_ram_gb is a second per-OS probe (/proc/meminfo, powershell, sysctl) that only runs when available_ram_mb already failed, and halves installed RAM as a guess. On Linux and Windows the same file/PowerShell source that failed for available RAM is very likely to fail here too, so the fallback is largely dead flexibility; only a macOS vm_stat parse failure reaches it usefully."
+      },
+      "findingTitles": {
+        "p0007-total-ram-fallback": "Delete total_ram_gb and its or_else at line 90; let ci_jobs(None, cpus) use its existing default of 4 when available RAM is unknown (about 35 lines removed)."
+      },
+      "ingest": {
+        "host": "legion-cli-ingest",
+        "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb",
+        "packetDigest": "sha256:7b8fe1ece63a1cca676e560fc7bf2265bdc8497bed6a8de4b926c0ec13c439c3",
+        "anchorsVerified": 1
+      },
+      "lensFindings": [
+        {
+          "id": "p0007-total-ram-fallback",
+          "lens": "minimize",
+          "severity": "low",
+          "confidence": "speculative",
+          "evidence": [
+            "xtask/src/main.rs:90",
+            "xtask/src/main.rs:142-160"
+          ],
+          "failureScenario": "total_ram_gb is a second per-OS probe (/proc/meminfo, powershell, sysctl) that only runs when available_ram_mb already failed, and halves installed RAM as a guess. On Linux and Windows the same file/PowerShell source that failed for available RAM is very likely to fail here too, so the fallback is largely dead flexibility; only a macOS vm_stat parse failure reaches it usefully.",
+          "action": "Delete total_ram_gb and its or_else at line 90; let ci_jobs(None, cpus) use its existing default of 4 when available RAM is unknown (about 35 lines removed).",
+          "verifyStatus": "unverified",
+          "ponytailTag": "yagni",
+          "anchor": {
+            "path": "xtask/src/main.rs",
+            "line": 144,
+            "text": "fn total_ram_gb() -> Option<u64> {"
+          }
+        }
+      ],
+      "lensIds": [
+        "minimize"
+      ],
+      "packetCoverage": {
+        "basis": "bounded-excerpts",
+        "examined": 1,
+        "expected": 730,
+        "part": {
+          "number": 7,
+          "total": 7
+        },
+        "requiredParts": 7,
+        "overCeiling": null,
+        "partPaths": [
+          "xtask/src/main.rs"
+        ],
+        "examinedPaths": [
+          "xtask/src/main.rs"
+        ],
+        "chunkedPaths": [],
+        "omittedPaths": [],
+        "truncatedPaths": [],
+        "coverageMode": "risk-sampled",
+        "bundle": "S3",
+        "reviewSetDigest": "sha256:8f2cc28a504302c4c406f30f58b706095a331b961f4d23ca3008e780353788c2",
+        "reviewSetCount": 64,
+        "reviewExpected": 40,
+        "promotedPaths": [
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx"
+        ],
+        "displacedPaths": [
+          "crates/codecs/examples/jpeg_bench.rs",
+          "crates/raw/examples/rawdump.rs",
+          "crates/merge/src/features.rs",
+          "crates/merge/tests/pano.rs",
+          "crates/pipeline/src/dust.rs",
+          "crates/pipeline/src/colorops.rs",
+          "crates/gpu/tests/memory.rs",
+          "crates/raw/src/demosaic/xtrans.rs",
+          "crates/merge/src/pano/finish.rs",
+          "crates/codecs/src/jpeg_par.rs",
+          "crates/meta/src/iptc.rs",
+          "apps/lightcraft-web/src/files.rs",
+          "crates/codecs/src/other.rs",
+          "apps/lightcraft/examples/gen_photos.rs",
+          "crates/merge/src/ransac.rs",
+          "crates/scenes/src/noise.rs",
+          "crates/tiff/src/makernote.rs",
+          "crates/merge/src/align.rs",
+          "crates/catalog/src/tests_local.rs",
+          "apps/lightcraft-cli/src/alloc_release.rs",
+          "crates/codecs/src/exif.rs",
+          "crates/engine/src/cmd/curves.rs",
+          "crates/ui-egui/src/tests_unsaved.rs",
+          "packaging/linux/postinst.sh",
+          "crates/raw/examples/rawinfo.rs",
+          "crates/pipeline/src/upright.rs",
+          "crates/pipeline/src/transform.rs",
+          "crates/ui-egui/src/panels/crop_overlay.rs",
+          "crates/engine/src/tests_forget_local.rs"
+        ],
+        "unpromotedCount": 94,
+        "declaredUnsampled": 690,
+        "excluded": 23,
+        "aliasedPaths": []
+      },
+      "reasoningHostState": "ingested",
+      "withdrawnFindings": []
+    }
+  },
+  "part": {
+    "number": 7,
+    "total": 7
+  }
+}

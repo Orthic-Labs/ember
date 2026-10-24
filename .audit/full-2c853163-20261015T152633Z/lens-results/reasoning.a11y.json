@@ -1,0 +1,29 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.a11y",
+ "packetDigest": "sha256:83a1f3ccb3014f6faccb7c87ae782e614ed5dcedd32030874a867e8f10017b05",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "a11y-progress-unnamed",
+   "lens": "a11y",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx:109",
+    "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx:965-966"
+   ],
+   "failureScenario": "Progress renders <progress max value /> with no accessible name (no aria-label/aria-labelledby/wrapping label); the visible text label is a sibling <span>, not associated. A screen reader user tabbing or browsing to the import/export/SAM download progress hears only an unnamed progress bar with a percentage and cannot tell which operation it reports.",
+   "action": "Give each <progress> an aria-label or aria-labelledby pointing at the adjacent label span (job label / 'Downloading SAM 3' / 'Verifying SAM 3 model folder').",
+   "verifyStatus": "unverified",
+   "anchor": {
+    "path": "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
+    "line": 109,
+    "text": "  return <div className=\"lc-progress\" aria-live=\"polite\"><div className=\"lc-prog"
+   }
+  }
+ ],
+ "withdrawn": []
+}

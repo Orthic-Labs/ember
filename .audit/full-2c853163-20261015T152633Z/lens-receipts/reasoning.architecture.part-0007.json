@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-receipt",
+  "provider": "reasoning.architecture",
+  "result": {
+    "schema_version": 1,
+    "provider": "reasoning.architecture",
+    "applicable": true,
+    "required": true,
+    "status": "partial",
+    "complete": false,
+    "coverage": {
+      "denominator_digest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+      "expected": 730,
+      "examined": 3,
+      "gaps": [
+        "reasoning-part-scope:reasoning.architecture:part 7/7"
+      ]
+    },
+    "findings": [],
+    "coverage_gaps": [
+      "reasoning-part-scope:reasoning.architecture:part 7/7"
+    ],
+    "degradation": [],
+    "details": {
+      "changeRisk": {
+        "reversibility": "unknown",
+        "blastRadius": "whole-repository audit part 7 (ui-egui headless test modules, macOS CI signing script, xtask workspace tooling); no change context supplied",
+        "reason": "Whole-repo run without diff context; change risk cannot be assessed from bounded excerpts.",
+        "beforeEvidence": [],
+        "afterEvidence": []
+      },
+      "executionReceipt": {
+        "schemaVersion": 1,
+        "kind": "legion-reasoning-receipt",
+        "receiptId": "ingest-7f65f5df7ce2de022fca24f2da76ef1e",
+        "requestId": "sha256:80c3f3d4a3d7aaeaff57891e45fa75e885947ad0793be9f109bcaba94a384a2c",
+        "providerId": "reasoning.architecture",
+        "contract": "audit-lens-architecture-v1",
+        "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+        "planSignature": "hmac-sha256:805a23e8a5d736c2a96307bc58b919aa92b271336dbe2dbca01d2a81fe17b6f3",
+        "repositoryId": "/Volumes/D/claude/ember",
+        "inventoryGeneration": "filesystem:sha256:6a2aaea46465c4542b1f39f825efd84edc8f63121b837f8bc64a97418d82ef9a",
+        "inventoryDigest": "sha256:da3157e68029988c594537621af44004cf97f0020364e0c23299c7b13bcc221a",
+        "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+        "denominatorCount": 730,
+        "resultDigest": "sha256:b6e4a30436a12c6f8226a129fb18a297115a8cb49ad96e742cc598c0c5ef5e72",
+        "status": "partial",
+        "complete": false,
+        "gaps": [
+          "reasoning-part-scope:reasoning.architecture:part 7/7"
+        ],
+        "authentication": {
+          "alg": "HMAC-SHA256",
+          "macDomain": "legion-reasoning-receipt:v1",
+          "boundFieldsDigest": "sha256:879de90044d6c1908fca28fc34814e176364267cdd644bb6319c20c234db2e65",
+          "mac": "076bc4219d343225521fcdba83fd5f1b253895d65a414617e277fd1861e2f33c",
+          "host": "legion-cli-ingest",
+          "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb"
+        }
+      },
+      "findingEvidence": {},
+      "findingLocations": {},
+      "findingMessages": {},
+      "findingTitles": {},
+      "ingest": {
+        "host": "legion-cli-ingest",
+        "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb",
+        "packetDigest": "sha256:eee0c6a333c283d65293a03988c74b68d8db05241b6bfbba376c31326fe415ab",
+        "anchorsVerified": 0
+      },
+      "lensFindings": [],
+      "lensIds": [
+        "architecture"
+      ],
+      "packetCoverage": {
+        "basis": "bounded-excerpts",
+        "examined": 3,
+        "expected": 730,
+        "part": {
+          "number": 7,
+          "total": 7
+        },
+        "requiredParts": 7,
+        "overCeiling": null,
+        "partPaths": [
+          "crates/ui-egui/src/tests_panels.rs",
+          "packaging/macos/import-cert.sh",
+          "xtask/src/main.rs"
+        ],
+        "examinedPaths": [
+          "crates/ui-egui/src/tests_panels.rs",
+          "packaging/macos/import-cert.sh",
+          "xtask/src/main.rs"
+        ],
+        "chunkedPaths": [
+          {
+            "path": "crates/ui-egui/src/tests_masking.rs",
+            "chunk": 2,
+            "chunks": 3,
+            "startLine": 655,
+            "endLine": 1269
+          },
+          {
+            "path": "crates/ui-egui/src/tests_masking.rs",
+            "chunk": 3,
+            "chunks": 3,
+            "startLine": 1270,
+            "endLine": 1468
+          }
+        ],
+        "omittedPaths": [],
+        "truncatedPaths": [],
+        "coverageMode": "risk-sampled",
+        "bundle": "J2",
+        "reviewSetDigest": "sha256:12c8bda95469b746dc24253d0430980aa5dd5237baf339b011d2c4bc7ecd6e6c",
+        "reviewSetCount": 76,
+        "reviewExpected": 55,
+        "promotedPaths": [
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs",
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/cmd/geocode.rs",
+          "crates/engine/src/crs.rs",
+          "crates/engine/src/crs_masks.rs"
+        ],
+        "displacedPaths": [
+          "crates/codecs/examples/jpeg_bench.rs",
+          "crates/raw/examples/rawdump.rs",
+          "crates/merge/src/features.rs",
+          "crates/merge/tests/pano.rs",
+          "crates/pipeline/src/dust.rs",
+          "crates/pipeline/src/colorops.rs",
+          "crates/gpu/tests/memory.rs",
+          "crates/raw/src/demosaic/xtrans.rs",
+          "crates/merge/src/pano/finish.rs",
+          "crates/codecs/src/jpeg_par.rs",
+          "crates/meta/src/iptc.rs",
+          "apps/lightcraft-web/src/files.rs",
+          "crates/codecs/src/other.rs",
+          "apps/lightcraft/examples/gen_photos.rs",
+          "crates/merge/src/ransac.rs",
+          "crates/scenes/src/noise.rs",
+          "crates/tiff/src/makernote.rs",
+          "crates/merge/src/align.rs",
+          "crates/catalog/src/tests_local.rs",
+          "apps/lightcraft-cli/src/alloc_release.rs",
+          "crates/codecs/src/exif.rs",
+          "crates/engine/src/cmd/curves.rs",
+          "crates/ui-egui/src/tests_unsaved.rs",
+          "packaging/linux/postinst.sh",
+          "crates/raw/examples/rawinfo.rs",
+          "crates/pipeline/src/upright.rs",
+          "crates/pipeline/src/transform.rs",
+          "crates/ui-egui/src/panels/crop_overlay.rs",
+          "crates/engine/src/tests_forget_local.rs",
+          "crates/pipeline/src/profiles.rs",
+          "crates/ui-egui/src/import.rs",
+          "crates/ui-egui/src/tests_preview_limit.rs",
+          "crates/ui-egui/src/render.rs",
+          "crates/desktop-host/src/tasks.rs",
+          "crates/catalog/src/keywords.rs",
+          "crates/ui-egui/src/panels/edit.rs",
+          "crates/ui-egui/src/panels/grid.rs"
+        ],
+        "unpromotedCount": 78,
+        "declaredUnsampled": 675,
+        "excluded": 23,
+        "aliasedPaths": []
+      },
+      "reasoningHostState": "ingested",
+      "withdrawnFindings": []
+    }
+  },
+  "part": {
+    "number": 7,
+    "total": 7
+  }
+}

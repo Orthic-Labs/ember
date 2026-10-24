@@ -1,0 +1,31 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.schema",
+ "packetDigest": "sha256:8cdd6559116c47acd70332a0c58bb5567b9dbb14a553957dc73d29417cc7e92d",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "schema-p9-lightroom-result-shape-drift",
+   "lens": "schema",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/lightroom_import.rs:433-447",
+    "crates/ui-egui/src/lightroom_import.rs:241-286",
+    "crates/ui-egui/src/lightroom_import.rs:331-334",
+    "crates/ui-egui/src/lightroom_import.rs:454-464"
+   ],
+   "failureScenario": "The final result of library.importLightroom (returned by wait:true and by status polling via lightroom_last) has two shapes for the same outcome: a clean import stores the engine report itself (top-level imported/failed/photos/... plus path), while an import whose archive index write failed or whose commit reported an error stores {report:{...}, indexWarning|error, path}. A control/MCP client reading result.imported gets the count on success but null when only the index write warned, although the photos were added; terminal() papers over this internally with value.get(\"report\").unwrap_or(&value), but external consumers see the drift.",
+   "action": "Always store the final result in one shape (e.g. {report, indexWarning?, error?, path}, or always flatten the report and add indexWarning/error alongside) and document it in docs/control-protocol.md; add a test asserting the shape for both clean and index-warning completions.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/ui-egui/src/lightroom_import.rs",
+    "line": 437,
+    "text": "Ok(()) if pending.get(\"error\").is_none() => terminal(app, ctx, &task, report),"
+   }
+  }
+ ],
+ "withdrawn": []
+}

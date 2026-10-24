@@ -1,0 +1,414 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-packet-index",
+  "provider": "reasoning.minimize",
+  "planDigest": "sha256:935da984e7949fc1ec4b49337d2eb922cb597e7791d2f7b2c41628b59ef00826",
+  "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+  "denominatorCount": 730,
+  "totalParts": 12,
+  "requiredParts": 12,
+  "overCeiling": null,
+  "parts": [
+    {
+      "part": 1,
+      "file": "reasoning.minimize.part-0001.json",
+      "packetDigest": "sha256:ee69d868fccdb70d925c2c8c6c7a5ed1ff16f950c21dd6c1ae67f9314e5d9518",
+      "requestId": "sha256:b737e3122fcb6b5033f90c92ce378c015e41adb61ca767b8a55b92a03847d255",
+      "pathCount": 9,
+      "pathsDigest": "sha256:44adcbbc39546a422c9e0b2783d41f172f04f113226273351d7704874bcdbca9",
+      "paths": [
+        "apps/lightcraft-cli/src/alloc_release.rs",
+        "apps/lightcraft-cli/src/main.rs",
+        "apps/lightcraft-cli/tests/cli.rs",
+        "apps/lightcraft-cli/tests/personal_auto.rs",
+        "apps/lightcraft-desktop/src/main.rs",
+        "apps/lightcraft-desktop/src/native.rs",
+        "apps/lightcraft-desktop/src/services.rs",
+        "apps/lightcraft-desktop/tests/native_qualification.rs",
+        "apps/lightcraft-desktop/web/src/desktop.tsx"
+      ],
+      "continuedPaths": [
+        "apps/lightcraft-cli/src/main.rs",
+        "apps/lightcraft-cli/tests/cli.rs",
+        "apps/lightcraft-desktop/src/native.rs",
+        "apps/lightcraft-desktop/tests/native_qualification.rs",
+        "apps/lightcraft-desktop/web/src/desktop.tsx"
+      ],
+      "chunkCount": 20,
+      "omitted": []
+    },
+    {
+      "part": 2,
+      "file": "reasoning.minimize.part-0002.json",
+      "packetDigest": "sha256:cf10412528776c398684a24e76b75872e49c808fa2cde8a0bb7c0464b5c9e4fd",
+      "requestId": "sha256:04a7993139f0b2e5f02b7fc62224a06f1f9b00c75a5e551b1d4662cbb7f10517",
+      "pathCount": 18,
+      "pathsDigest": "sha256:70c468279b6d13d46ea041de43747678ebd4ea7f80bb3ecf9756bab31ffe3f10",
+      "paths": [
+        "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
+        "apps/lightcraft-desktop/web/src/main.tsx",
+        "apps/lightcraft-web/src/files.rs",
+        "apps/lightcraft/examples/gen_photos.rs",
+        "apps/lightcraft/src/main.rs",
+        "crates/catalog/src/rules.rs",
+        "crates/catalog/src/tests_local.rs",
+        "crates/codecs/examples/jpeg_bench.rs",
+        "crates/codecs/src/encode.rs",
+        "crates/codecs/src/exif.rs",
+        "crates/codecs/src/gainmap.rs",
+        "crates/codecs/src/jpeg.rs",
+        "crates/codecs/src/jpeg_par.rs",
+        "crates/codecs/src/other.rs",
+        "crates/codecs/tests/roundtrip.rs",
+        "crates/denoise-core/src/known.rs",
+        "crates/denoise-core/src/manifest.rs",
+        "crates/denoise/src/onnx_proto.rs"
+      ],
+      "continuedPaths": [
+        "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
+        "apps/lightcraft/src/main.rs",
+        "crates/catalog/src/rules.rs",
+        "crates/codecs/src/gainmap.rs",
+        "crates/codecs/tests/roundtrip.rs"
+      ],
+      "chunkCount": 27,
+      "omitted": []
+    },
+    {
+      "part": 3,
+      "file": "reasoning.minimize.part-0003.json",
+      "packetDigest": "sha256:245e205390acca65841705d3d82df00fec8b505799289fab8c024153ed4e85be",
+      "requestId": "sha256:982cd6371f318ff34b5614077369c9a31c9f802d48c491894dbd41e1ea7c650e",
+      "pathCount": 9,
+      "pathsDigest": "sha256:669faa2c51c878ce057a396909b1c8e4a5949494f5e9ba958db7ca886561e0ff",
+      "paths": [
+        "crates/denoise/src/remote.rs",
+        "crates/engine/build.rs",
+        "crates/engine/src/camera_preview.rs",
+        "crates/engine/src/cmd/curves.rs",
+        "crates/engine/src/cmd/geocode.rs",
+        "crates/engine/src/cmd/library.rs",
+        "crates/engine/src/crs.rs",
+        "crates/engine/src/crs_masks.rs",
+        "crates/engine/src/denoise.rs"
+      ],
+      "continuedPaths": [
+        "crates/engine/src/camera_preview.rs",
+        "crates/engine/src/cmd/library.rs",
+        "crates/engine/src/crs.rs",
+        "crates/engine/src/crs_masks.rs",
+        "crates/engine/src/denoise.rs"
+      ],
+      "chunkCount": 19,
+      "omitted": []
+    },
+    {
+      "part": 4,
+      "file": "reasoning.minimize.part-0004.json",
+      "packetDigest": "sha256:90ba105b5e415f9fb6b637a65e92b5f0ba2bbed719b84b0515cb457c20ff94ac",
+      "requestId": "sha256:8d05cb1e3ffd49d17f6d7e7ba4091390c189638afa684d67220f0860606ea7f8",
+      "pathCount": 6,
+      "pathsDigest": "sha256:883fc26f4d33a8737f56d973fe243898f411a58f9cb1264313a078b3b1c5d2f9",
+      "paths": [
+        "crates/engine/src/export.rs",
+        "crates/engine/src/face_download.rs",
+        "crates/engine/src/files.rs",
+        "crates/engine/src/guard.rs",
+        "crates/engine/src/import.rs",
+        "crates/engine/src/lib.rs"
+      ],
+      "continuedPaths": [
+        "crates/engine/src/denoise.rs",
+        "crates/engine/src/export.rs",
+        "crates/engine/src/files.rs",
+        "crates/engine/src/import.rs"
+      ],
+      "chunkCount": 18,
+      "omitted": []
+    },
+    {
+      "part": 5,
+      "file": "reasoning.minimize.part-0005.json",
+      "packetDigest": "sha256:d9cf01257028ab78113e2d742c26a5fcad3c2249c86b63d24d0e9cb36a644c90",
+      "requestId": "sha256:7b4c635419407ce7ffae92f751b4cd1ee249ad362b9e88efff1e1df81d64d040",
+      "pathCount": 11,
+      "pathsDigest": "sha256:9cbc54e9362017b7f13a80565bad51b800f1fa6f5a9bb8c1c5245fa6432bd294",
+      "paths": [
+        "crates/engine/src/lightroom_catalog.rs",
+        "crates/engine/src/lightroom_sqlite.rs",
+        "crates/engine/src/media.rs",
+        "crates/engine/src/model_download.rs",
+        "crates/engine/src/preset_import.rs",
+        "crates/engine/src/preset_luminar.rs",
+        "crates/engine/src/presets.rs",
+        "crates/engine/src/segment/mod.rs",
+        "crates/engine/src/sidecar.rs",
+        "crates/engine/src/sidecar/tests_repair_companions.rs",
+        "crates/engine/src/sidecar/tests_repair_provenance.rs"
+      ],
+      "continuedPaths": [
+        "crates/engine/src/lib.rs",
+        "crates/engine/src/lightroom_catalog.rs",
+        "crates/engine/src/lightroom_sqlite.rs",
+        "crates/engine/src/media.rs",
+        "crates/engine/src/preset_import.rs",
+        "crates/engine/src/segment/mod.rs",
+        "crates/engine/src/sidecar.rs"
+      ],
+      "chunkCount": 21,
+      "omitted": []
+    },
+    {
+      "part": 6,
+      "file": "reasoning.minimize.part-0006.json",
+      "packetDigest": "sha256:9aae3a96c6961c2598d6e9ebeac4ac80f9a9b0759fdefeacead8d90ba453352f",
+      "requestId": "sha256:dd7cc9bd6668a65cc66db980e9368c59b5df1d933b88e0bb16ba0e4ae7d602ba",
+      "pathCount": 14,
+      "pathsDigest": "sha256:0f2e406cbdb4bf759e5d373dd7f888360bdd1d6dd6618604485caddcdb95225d",
+      "paths": [
+        "crates/engine/src/sidecar/tests_repair_saves.rs",
+        "crates/engine/src/tests.rs",
+        "crates/engine/src/tests_face_models.rs",
+        "crates/engine/src/tests_forget_local.rs",
+        "crates/engine/src/tests_import.rs",
+        "crates/engine/src/tests_import_move.rs",
+        "crates/engine/src/tests_libops.rs",
+        "crates/engine/src/tests_process.rs",
+        "crates/engine/src/tests_segment.rs",
+        "crates/engine/src/tests_sync.rs",
+        "crates/engine/src/tests_xmp.rs",
+        "crates/faces/src/catalog.rs",
+        "crates/faces/src/known.rs",
+        "crates/faces/src/manifest.rs"
+      ],
+      "continuedPaths": [
+        "crates/engine/src/tests.rs",
+        "crates/engine/src/tests_face_models.rs",
+        "crates/engine/src/tests_import.rs",
+        "crates/engine/src/tests_libops.rs",
+        "crates/engine/src/tests_sync.rs",
+        "crates/engine/src/tests_xmp.rs"
+      ],
+      "chunkCount": 23,
+      "omitted": []
+    },
+    {
+      "part": 7,
+      "file": "reasoning.minimize.part-0007.json",
+      "packetDigest": "sha256:85e66dd1b1030f04a252b63cb48f71689d73c6d78fa6701848e125dc7b880834",
+      "requestId": "sha256:79291f6784a3b6ca64b0a6a289afa4e4a961bec9bc509c59736f3c9e62eb75f1",
+      "pathCount": 29,
+      "pathsDigest": "sha256:811ade972f0ccc9966e9382be0b769277440221cd85154884adb964c173b9a04",
+      "paths": [
+        "crates/fetch/src/http.rs",
+        "crates/fetch/src/tests.rs",
+        "crates/geocode/src/lib.rs",
+        "crates/gpu/tests/memory.rs",
+        "crates/mcp/src/lib.rs",
+        "crates/mcp/src/server.rs",
+        "crates/merge/src/align.rs",
+        "crates/merge/src/features.rs",
+        "crates/merge/src/pano/finish.rs",
+        "crates/merge/src/ransac.rs",
+        "crates/merge/tests/pano.rs",
+        "crates/meta/src/container.rs",
+        "crates/meta/src/gpx.rs",
+        "crates/meta/src/iptc.rs",
+        "crates/meta/src/xmp.rs",
+        "crates/meta/src/xmp_merge.rs",
+        "crates/photo-ai/src/network.rs",
+        "crates/pipeline/src/colorops.rs",
+        "crates/pipeline/src/dust.rs",
+        "crates/pipeline/src/profiles.rs",
+        "crates/pipeline/src/transform.rs",
+        "crates/pipeline/src/upright.rs",
+        "crates/raw/examples/rawdump.rs",
+        "crates/raw/examples/rawinfo.rs",
+        "crates/raw/src/demosaic/xtrans.rs",
+        "crates/raw/src/gaintable.rs",
+        "crates/raw/src/lib.rs",
+        "crates/raw/src/spectral_table.rs",
+        "crates/raw/src/vendor/arw.rs"
+      ],
+      "continuedPaths": [
+        "crates/meta/src/xmp.rs",
+        "crates/raw/src/lib.rs"
+      ],
+      "chunkCount": 31,
+      "omitted": []
+    },
+    {
+      "part": 8,
+      "file": "reasoning.minimize.part-0008.json",
+      "packetDigest": "sha256:458152f3e72f348b3bfb71fad35b1236c4bc6a32bf281920a16aca02f09473ea",
+      "requestId": "sha256:e5866826a3f64320b674aabb18d59e9eb578ad8a7bd081158da008b405e4168a",
+      "pathCount": 20,
+      "pathsDigest": "sha256:f2141d23f8acd894dc804282f1b5a5528c4ac0165acaac421834435bad9e4bc3",
+      "paths": [
+        "crates/raw/src/vendor/arw6.rs",
+        "crates/raw/src/vendor/arw6_curve.rs",
+        "crates/raw/src/vendor/arw6_testenc.rs",
+        "crates/raw/src/vendor/arw_lens.rs",
+        "crates/raw/src/vendor/cr2.rs",
+        "crates/raw/src/vendor/cr2/sraw.rs",
+        "crates/raw/src/vendor/cr3.rs",
+        "crates/raw/src/vendor/crx.rs",
+        "crates/raw/src/vendor/crx_wavelet.rs",
+        "crates/raw/src/vendor/kodak.rs",
+        "crates/raw/src/vendor/mod.rs",
+        "crates/raw/src/vendor/nef.rs",
+        "crates/raw/src/vendor/nef_lens.rs",
+        "crates/raw/src/vendor/nefc.rs",
+        "crates/raw/src/vendor/orf.rs",
+        "crates/raw/src/vendor/pef.rs",
+        "crates/raw/src/vendor/raf.rs",
+        "crates/raw/src/vendor/raf_lens.rs",
+        "crates/raw/src/vendor/rafc.rs",
+        "crates/raw/src/vendor/rw2.rs"
+      ],
+      "continuedPaths": [
+        "crates/raw/src/vendor/arw.rs",
+        "crates/raw/src/vendor/arw6.rs",
+        "crates/raw/src/vendor/crx.rs",
+        "crates/raw/src/vendor/nefc.rs",
+        "crates/raw/src/vendor/orf.rs",
+        "crates/raw/src/vendor/rw2.rs"
+      ],
+      "chunkCount": 24,
+      "omitted": [
+        {
+          "path": "crates/raw/src/vendor/cr3.rs",
+          "reason": "binary"
+        },
+        {
+          "path": "crates/raw/src/vendor/nef.rs",
+          "reason": "binary"
+        },
+        {
+          "path": "crates/raw/src/vendor/pef.rs",
+          "reason": "binary"
+        }
+      ]
+    },
+    {
+      "part": 9,
+      "file": "reasoning.minimize.part-0009.json",
+      "packetDigest": "sha256:5cbdf254714e80e29cf779c0410802ab39d2eb131e43ec53eb68c19e05c3401a",
+      "requestId": "sha256:92d0bed69e8896b89f35c2f28d5a49b659a2f757efc053e0245d8ca04d6f10d6",
+      "pathCount": 13,
+      "pathsDigest": "sha256:683c1b131e32281b44420831f98798c258cdbec0344b4e6813203a4b8d424052",
+      "paths": [
+        "crates/raw/src/vendor/sr2.rs",
+        "crates/raw/src/vendor/srw.rs",
+        "crates/raw/tests/corpus.rs",
+        "crates/scenes/src/noise.rs",
+        "crates/segment/src/bin/lightcraft-sam3-worker.rs",
+        "crates/segment/src/dinov2.rs",
+        "crates/segment/src/dinov2_input.rs",
+        "crates/segment/src/dinov2_positions.rs",
+        "crates/segment/src/fetch/mod.rs",
+        "crates/tiff/src/makernote.rs",
+        "crates/ui-egui/src/credits.rs",
+        "crates/ui-egui/src/headless.rs",
+        "crates/ui-egui/src/i18n.rs"
+      ],
+      "continuedPaths": [
+        "crates/raw/tests/corpus.rs",
+        "crates/ui-egui/src/headless.rs",
+        "crates/ui-egui/src/i18n.rs"
+      ],
+      "chunkCount": 22,
+      "omitted": []
+    },
+    {
+      "part": 10,
+      "file": "reasoning.minimize.part-0010.json",
+      "packetDigest": "sha256:4e71ea1ccfcbf46e81c12096977b786fb16a2c5d789cb93c4c0666d435a46e53",
+      "requestId": "sha256:8429e3ee2c9e1512aea8d16d57988e9b49b93f4c6da03a0dc19998e6a03b4766",
+      "pathCount": 7,
+      "pathsDigest": "sha256:cbce3591eeffa7967cb3f3650e83875823fc797858a3114371c3104c84ca2805",
+      "paths": [
+        "crates/ui-egui/src/lib.rs",
+        "crates/ui-egui/src/links.rs",
+        "crates/ui-egui/src/menubar.rs",
+        "crates/ui-egui/src/menus.rs",
+        "crates/ui-egui/src/panels/crop_overlay.rs",
+        "crates/ui-egui/src/panels/detail.rs",
+        "crates/ui-egui/src/panels/dialogs.rs"
+      ],
+      "continuedPaths": [
+        "crates/ui-egui/src/i18n.rs",
+        "crates/ui-egui/src/lib.rs",
+        "crates/ui-egui/src/menubar.rs",
+        "crates/ui-egui/src/menus.rs",
+        "crates/ui-egui/src/panels/detail.rs",
+        "crates/ui-egui/src/panels/dialogs.rs"
+      ],
+      "chunkCount": 20,
+      "omitted": []
+    },
+    {
+      "part": 11,
+      "file": "reasoning.minimize.part-0011.json",
+      "packetDigest": "sha256:b6b668483c4a7fecfbc01c2ad2c7f534ac95f747b37c3e6e3c9a252c9af445cf",
+      "requestId": "sha256:6a872e4f8e605b4e220ba49b683168476ea8a0b7dd8d5dc161c727b3924364b8",
+      "pathCount": 16,
+      "pathsDigest": "sha256:d1d38efdf538151a4a62d09859cd215124af0b26c52da0fcc9e6c5824994659c",
+      "paths": [
+        "crates/ui-egui/src/panels/left.rs",
+        "crates/ui-egui/src/panels/right.rs",
+        "crates/ui-egui/src/state.rs",
+        "crates/ui-egui/src/tests_masking.rs",
+        "crates/ui-egui/src/tests_panels.rs",
+        "crates/ui-egui/src/tests_unsaved.rs",
+        "docs/showcase/run.py",
+        "ios/Ember/EditView.swift",
+        "ios/Ember/EmberApp.swift",
+        "ios/Ember/LibraryView.swift",
+        "ios/Ember/RootView.swift",
+        "ios/Ember/SettingsView.swift",
+        "packaging/linux/flatpak-bundle.sh",
+        "packaging/linux/package.sh",
+        "packaging/linux/postinst.sh",
+        "packaging/macos/import-cert.sh"
+      ],
+      "continuedPaths": [
+        "crates/ui-egui/src/panels/dialogs.rs",
+        "crates/ui-egui/src/panels/left.rs",
+        "crates/ui-egui/src/panels/right.rs",
+        "crates/ui-egui/src/state.rs",
+        "crates/ui-egui/src/tests_masking.rs",
+        "crates/ui-egui/src/tests_panels.rs"
+      ],
+      "chunkCount": 28,
+      "omitted": []
+    },
+    {
+      "part": 12,
+      "file": "reasoning.minimize.part-0012.json",
+      "packetDigest": "sha256:8e9be59e1cd716bac6ddce2dffcbacda55e47759330148280a3cc9c08bcbcc1c",
+      "requestId": "sha256:9ba898e800b6db04ace06a82e4551867e2e8b4110d559ed8cb75ff1938299bed",
+      "pathCount": 11,
+      "pathsDigest": "sha256:5f0c1c0a0f2fdd277bf298f63b8bdbf5d82cfd156c6f51f32c2af0de4ca188ba",
+      "paths": [
+        "packaging/render-icons.py",
+        "packaging/windows/sign.ps1",
+        "packaging/windows/test-install-folder.ps1",
+        "scripts/desktop/build-native.mjs",
+        "tools/inspect-mediapipe-image-metadata.py",
+        "tools/inspect-mediapipe-v1.py",
+        "tools/install-sam3.ps1",
+        "tools/install-sam3.sh",
+        "tools/spectral_camera_table.py",
+        "xtask/src/main.rs",
+        "xtask/src/web.rs"
+      ],
+      "continuedPaths": [
+        "tools/inspect-mediapipe-v1.py",
+        "xtask/src/main.rs"
+      ],
+      "chunkCount": 13,
+      "omitted": []
+    }
+  ]
+}

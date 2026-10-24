@@ -1,0 +1,82 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.correctness",
+ "packetDigest": "sha256:38ae264ab4ce09483867bf7124fd4d8c1b1f4ab6415cfec4d45c6d6b6cd7ce2e",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "p0012-correctness-corpus-pngsuite-never-downloaded",
+   "lens": "correctness",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "xtask/src/main.rs:38",
+    "xtask/src/main.rs:895-938",
+    "crates/codecs/tests/corpus.rs:1-2",
+    "crates/codecs/tests/corpus.rs:57-62"
+   ],
+   "failureScenario": "`cargo xtask corpus` documents that --download fetches PngSuite and CC0 raw samples, and crates/codecs/tests/corpus.rs says corpus/pngsuite is fetched by that command, but cmd_corpus only iterates RAW_SAMPLES into corpus/raw. corpus/pngsuite is never created, so corpus_pngsuite (including the never-panic check on deliberately corrupt x* PNGs) silently skips on every machine and CI run that relies on the documented download, leaving PNG decoder corpus coverage permanently unexercised while appearing to pass.",
+   "action": "Add PngSuite (pinned URL + sha256) to cmd_corpus --download, or correct the usage text and corpus.rs header and make the PNG corpus test fail rather than skip where coverage is expected.",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "reviewAxis": "spec",
+   "sourceQuote": "--download fetches PngSuite and CC0 raw samples (raw.pixls.us) into corpus/ and checks their sha256",
+   "sourceLocation": "xtask/src/main.rs:38",
+   "disposition": "partial",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo review with no baseline; introduction point not determined",
+    "baselineEvidence": []
+   },
+   "anchor": {
+    "path": "xtask/src/main.rs",
+    "line": 909,
+    "text": "    let dest = corpus.join(\"raw\");"
+   }
+  },
+  {
+   "id": "p0012-correctness-static-check-substring-contracts",
+   "lens": "correctness",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "scripts/desktop/static-check.mjs:81-106",
+    "scripts/desktop/gate.mjs:55"
+   ],
+   "failureScenario": "The desktop CI gate's 'static contracts' step reports bounded IPC/cache/stale-preview contracts as enforced by checking only that source files contain identifier substrings (sync_channel, MAX_JS_SAFE_ID, MAX_PENDING, DEFAULT_TTL, descriptor.sequence, MAX_SLICE = 512). A change that removes the bound enforcement while keeping the constant name or a comment mentioning it still prints 'desktop static contract: PASS (... IPC/cache contracts)', so the gate claims behavioural guarantees it never exercises (false coverage).",
+   "action": "Replace the substring checks with behavioural tests that exercise the bounds (queue capacity, id range, cache eviction, stale-sequence rejection), or relabel the step as a presence lint so it is not counted as contract coverage.",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo review with no baseline; introduction point not determined",
+    "baselineEvidence": []
+   },
+   "anchor": {
+    "path": "scripts/desktop/static-check.mjs",
+    "line": 101,
+    "text": "  for (const token of [\"sync_channel\", \"MAX_JS_SAFE_ID\"]) if (!host.includes(token)) fail(`desktop host missing bounded IPC contract ${token}`);"
+   }
+  }
+ ],
+ "withdrawn": [],
+ "details": {
+  "semanticReview": {
+   "axis": "spec",
+   "status": "findings",
+   "reason": "Public developer-tool behavior compared to its own usage text and consumer docs: `cargo xtask corpus --download` promises PngSuite but fetches only raw samples, so the PngSuite corpus test can never run. Other reviewed excerpts (xtask ci/web/parity/layers, packaging and desktop scripts, ui-egui text_field/theme/widgets and tests) showed no spec defect with observable impact.",
+   "sources": [
+    {
+     "location": "xtask/src/main.rs:38",
+     "quote": "--download fetches PngSuite and CC0 raw samples (raw.pixls.us) into corpus/ and checks their sha256"
+    },
+    {
+     "location": "xtask/src/main.rs:909",
+     "quote": "let dest = corpus.join(\"raw\");"
+    }
+   ]
+  }
+ }
+}

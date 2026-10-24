@@ -1,0 +1,58 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.ai-slop",
+ "packetDigest": "sha256:6eb5f6bfddc4e1f6b62aa170eeedc065ce94d13b678a3abe8b8bedcec0c477b3",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "p0002-ai-slop-misplaced-doc",
+   "lens": "ai-slop",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/engine/src/lib.rs:595-601"
+   ],
+   "failureScenario": "The doc comment that describes merge_undo (\"Fold the last `n` undo steps into one...\") is stacked on top of the doc for commits(), so rustdoc renders one run-on doc on Session::commits() and Session::merge_undo, the function it describes, has no doc at all. A reader of the generated docs or an agent reading the signature is told commits() folds undo steps.",
+   "action": "Move the \"Fold the last `n` undo steps into one\" paragraph down onto merge_undo and leave commits() with only its own \"How many undo steps were committed\" doc.",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/engine/src/lib.rs",
+    "line": 595,
+    "text": "    /// Fold the last `n` undo steps into one (commands that commit step by step because each op"
+   }
+  },
+  {
+   "id": "p0002-ai-slop-dead-param-pos",
+   "lens": "ai-slop",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/engine/src/cmd/library.rs:1624-1636"
+   ],
+   "failureScenario": "The closure `one` in parse_gps takes a `pos: char` hemisphere letter (callers pass 'N' and 'E') that is never read; `let _ = pos;` only silences the unused warning. The positive hemisphere letter is therefore not validated: a latitude typed as \"51.5 E\" or a longitude as \"0.1 N\" is accepted silently as positive instead of rejected.",
+   "action": "Either drop the `pos` parameter and the `let _ = pos;` suppression, or use it (reject a coordinate whose letter belongs to the other axis).",
+   "verifyStatus": "verified",
+   "anchor": {
+    "path": "crates/engine/src/cmd/library.rs",
+    "line": 1635,
+    "text": "        let _ = pos;"
+   }
+  }
+ ],
+ "withdrawn": [],
+ "details": {
+  "semanticReview": {
+   "axis": "standards",
+   "status": "pass",
+   "reason": "Production code in the 15 non-test excerpted files was checked against the repo's never-crash standard (no unwrap/expect/panic/unreachable/unsafe; offsets used for slicing are guarded by get/find/len checks, e.g. lightroom_catalog.rs committed_wal_len validates the 32-byte header before wal[32..]). No documented-standard violation found; the two defects above are plain lens findings.",
+   "sources": [
+    {
+     "location": "AGENTS.md:37",
+     "quote": "**Non-test code never panics:** no `unwrap()`, `expect()`, `panic!`, `unreachable!`, `todo!`, `unimplemented!`, and"
+    }
+   ]
+  }
+ }
+}

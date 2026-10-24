@@ -1,0 +1,388 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-receipt",
+  "provider": "reasoning.naming",
+  "result": {
+    "schema_version": 1,
+    "provider": "reasoning.naming",
+    "applicable": true,
+    "required": true,
+    "status": "partial",
+    "complete": false,
+    "coverage": {
+      "denominator_digest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+      "expected": 730,
+      "examined": 16,
+      "gaps": [
+        "reasoning-part-scope:reasoning.naming:part 3/4"
+      ]
+    },
+    "findings": [
+      {
+        "id": "naming.pick-lightroom-catalog-typed-pick-folder",
+        "severity": "low"
+      },
+      {
+        "id": "naming.crop-and-mask-overlay-name-collision",
+        "severity": "low"
+      },
+      {
+        "id": "naming.ui-commands-fn-vs-const",
+        "severity": "low"
+      },
+      {
+        "id": "naming.left-panel-folder-polysemy",
+        "severity": "low"
+      }
+    ],
+    "coverage_gaps": [
+      "reasoning-part-scope:reasoning.naming:part 3/4"
+    ],
+    "degradation": [],
+    "details": {
+      "executionReceipt": {
+        "schemaVersion": 1,
+        "kind": "legion-reasoning-receipt",
+        "receiptId": "ingest-e46e2f74bcf8f7f1ecfa1607c9be7a3d",
+        "requestId": "sha256:a1a12d0f738ce90c2103eeb4265d7e0c45cce4aa248ec0676e38fa5591db69c4",
+        "providerId": "reasoning.naming",
+        "contract": "audit-lens-naming-v1",
+        "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+        "planSignature": "hmac-sha256:805a23e8a5d736c2a96307bc58b919aa92b271336dbe2dbca01d2a81fe17b6f3",
+        "repositoryId": "/Volumes/D/claude/ember",
+        "inventoryGeneration": "filesystem:sha256:6a2aaea46465c4542b1f39f825efd84edc8f63121b837f8bc64a97418d82ef9a",
+        "inventoryDigest": "sha256:da3157e68029988c594537621af44004cf97f0020364e0c23299c7b13bcc221a",
+        "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+        "denominatorCount": 730,
+        "resultDigest": "sha256:647d59da38f69de2821003738accb553ca6004893816df2c22575cc95ca2e5b8",
+        "status": "partial",
+        "complete": false,
+        "gaps": [
+          "reasoning-part-scope:reasoning.naming:part 3/4"
+        ],
+        "authentication": {
+          "alg": "HMAC-SHA256",
+          "macDomain": "legion-reasoning-receipt:v1",
+          "boundFieldsDigest": "sha256:879de90044d6c1908fca28fc34814e176364267cdd644bb6319c20c234db2e65",
+          "mac": "ea36c8c4a522321de06e07dfa822f7e1a999bb690d3ad862864361c98ae52cf1",
+          "host": "legion-cli-ingest",
+          "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb"
+        }
+      },
+      "findingEvidence": {
+        "naming.pick-lightroom-catalog-typed-pick-folder": {
+          "lens": "naming",
+          "confidence": "confirmed",
+          "verifyStatus": "verified",
+          "action": "Type it with a name that means a single-path picker (e.g. a `PickFile` alias for `FnMut() -> Option<String>`) and reserve `PickFolder` for folder choosers."
+        },
+        "naming.crop-and-mask-overlay-name-collision": {
+          "lens": "naming",
+          "confidence": "confirmed",
+          "verifyStatus": "verified",
+          "action": "Rename the drawing functions for what they draw (e.g. `crop_box_tool`, `mask_handles`) and keep `*_overlay` for the guide/overlay setting."
+        },
+        "naming.ui-commands-fn-vs-const": {
+          "lens": "naming",
+          "confidence": "likely",
+          "verifyStatus": "verified",
+          "action": "Rename the function to `all_ui_commands` (or name the constant `NON_LANGUAGE_UI_COMMANDS`) and update parity doc text."
+        },
+        "naming.left-panel-folder-polysemy": {
+          "lens": "naming",
+          "confidence": "likely",
+          "verifyStatus": "verified",
+          "action": "Prefix by section (`album_folder_menu`, `library_folder_menu`, `local_folder_row`, `folder_display_name`) so each name identifies the sidebar section it serves."
+        }
+      },
+      "findingLocations": {
+        "naming.pick-lightroom-catalog-typed-pick-folder": [
+          "crates/ui-egui/src/lib.rs:155",
+          "crates/ui-egui/src/lib.rs:224-225",
+          "apps/lightcraft/src/main.rs:484-490",
+          "crates/ui-egui/src/menus.rs:1350"
+        ],
+        "naming.crop-and-mask-overlay-name-collision": [
+          "crates/ui-egui/src/panels/detail.rs:1364",
+          "crates/ui-egui/src/panels/detail.rs:1398",
+          "crates/ui-egui/src/panels/detail.rs:1820",
+          "crates/ui-egui/src/state.rs:550",
+          "crates/ui-egui/src/state.rs:560"
+        ],
+        "naming.ui-commands-fn-vs-const": [
+          "crates/ui-egui/src/menus.rs:29-33",
+          "crates/ui-egui/src/menus.rs:16",
+          "crates/ui-egui/src/menus.rs:53",
+          "xtask/src/parity.rs:4"
+        ],
+        "naming.left-panel-folder-polysemy": [
+          "crates/ui-egui/src/panels/left.rs:1548",
+          "crates/ui-egui/src/panels/left.rs:1895",
+          "crates/ui-egui/src/panels/left.rs:1037",
+          "crates/ui-egui/src/panels/left.rs:1741",
+          "crates/ui-egui/src/panels/left.rs:1797",
+          "crates/ui-egui/src/panels/left.rs:888",
+          "crates/ui-egui/src/panels/left.rs:1881",
+          "crates/ui-egui/src/lib.rs:1587"
+        ]
+      },
+      "findingMessages": {
+        "naming.pick-lightroom-catalog-typed-pick-folder": "`pick_lightroom_catalog` is typed `Option<PickFolder>` (alias doc: 'A folder chooser') but the only implementation calls `.pick_file()` with a `.lrcat` filter and returns a file path. The alias is used for a file picker, so a new host (web/Linux/test) reading the type will implement a folder dialog and hand back a directory that the importer then rejects, and `PickFolder` no longer means 'folder'.",
+        "naming.crop-and-mask-overlay-name-collision": "In panels/detail.rs `fn crop_overlay` draws the crop box and its handles, while `app.ui.crop_overlay` (state.rs:560) is the guide style (thirds/grid/spiral) and `super::crop_overlay::paths` (line 1398, inside that very function) is a third `crop_overlay` module; `fn mask_overlay` draws outlines/pins/brush while `ui.mask_overlay` (state.rs:550) toggles the rendered overlay of the mask (its own doc says the mask itself shows as `view_overlay`). The same word names four different things in one file, so a reader or grep for 'crop_overlay'/'mask_overlay' lands on the wrong concept and an edit to the toggle gets applied to the drawing function.",
+        "naming.ui-commands-fn-vs-const": "`menus::ui_commands()` iterates LANGUAGE_COMMANDS then UI_COMMANDS, so the function named `ui_commands` returns a superset of the constant `UI_COMMANDS`. Callers that need every UI command must use the function while anyone grepping or reading `UI_COMMANDS` (xtask/src/parity.rs:4 cites 'a UI command from `UI_COMMANDS`') silently misses the language commands.",
+        "naming.left-panel-folder-polysemy": "'folder' means three things in left.rs: `folder_menu(.., a: &Album)` is the context menu of an album folder, `folder_menu_for_library(.., n: &FolderNode)` (with sibling `row_menu`) is the library Folders row menu, and `folder_tree` is a Local on-disk folder row while `folder_rows`/`folder_row` draw the library Folders section (and `Caches::folder_tree` in lib.rs:1587 is the library tree, not the Local one). Separately `folder_label(path)` returns a display name while `folder_label_menu` is the colour-label submenu. A change to 'folder_tree' or 'folder_menu' is easy to apply to the wrong sidebar section."
+      },
+      "findingTitles": {
+        "naming.pick-lightroom-catalog-typed-pick-folder": "Type it with a name that means a single-path picker (e.g. a `PickFile` alias for `FnMut() -> Option<String>`) and reserve `PickFolder` for folder choosers.",
+        "naming.crop-and-mask-overlay-name-collision": "Rename the drawing functions for what they draw (e.g. `crop_box_tool`, `mask_handles`) and keep `*_overlay` for the guide/overlay setting.",
+        "naming.ui-commands-fn-vs-const": "Rename the function to `all_ui_commands` (or name the constant `NON_LANGUAGE_UI_COMMANDS`) and update parity doc text.",
+        "naming.left-panel-folder-polysemy": "Prefix by section (`album_folder_menu`, `library_folder_menu`, `local_folder_row`, `folder_display_name`) so each name identifies the sidebar section it serves."
+      },
+      "ingest": {
+        "host": "legion-cli-ingest",
+        "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb",
+        "packetDigest": "sha256:536e7208ec461da54b015673c25646ad037feb1089e7fdcf6be40ccfd2ed3f4b",
+        "anchorsVerified": 4
+      },
+      "lensFindings": [
+        {
+          "id": "naming.pick-lightroom-catalog-typed-pick-folder",
+          "lens": "naming",
+          "severity": "low",
+          "confidence": "confirmed",
+          "evidence": [
+            "crates/ui-egui/src/lib.rs:155",
+            "crates/ui-egui/src/lib.rs:224-225",
+            "apps/lightcraft/src/main.rs:484-490",
+            "crates/ui-egui/src/menus.rs:1350"
+          ],
+          "failureScenario": "`pick_lightroom_catalog` is typed `Option<PickFolder>` (alias doc: 'A folder chooser') but the only implementation calls `.pick_file()` with a `.lrcat` filter and returns a file path. The alias is used for a file picker, so a new host (web/Linux/test) reading the type will implement a folder dialog and hand back a directory that the importer then rejects, and `PickFolder` no longer means 'folder'.",
+          "action": "Type it with a name that means a single-path picker (e.g. a `PickFile` alias for `FnMut() -> Option<String>`) and reserve `PickFolder` for folder choosers.",
+          "verifyStatus": "verified",
+          "anchor": {
+            "path": "crates/ui-egui/src/lib.rs",
+            "line": 225,
+            "text": "    pub pick_lightroom_catalog: Option<PickFolder>,"
+          }
+        },
+        {
+          "id": "naming.crop-and-mask-overlay-name-collision",
+          "lens": "naming",
+          "severity": "low",
+          "confidence": "confirmed",
+          "evidence": [
+            "crates/ui-egui/src/panels/detail.rs:1364",
+            "crates/ui-egui/src/panels/detail.rs:1398",
+            "crates/ui-egui/src/panels/detail.rs:1820",
+            "crates/ui-egui/src/state.rs:550",
+            "crates/ui-egui/src/state.rs:560"
+          ],
+          "failureScenario": "In panels/detail.rs `fn crop_overlay` draws the crop box and its handles, while `app.ui.crop_overlay` (state.rs:560) is the guide style (thirds/grid/spiral) and `super::crop_overlay::paths` (line 1398, inside that very function) is a third `crop_overlay` module; `fn mask_overlay` draws outlines/pins/brush while `ui.mask_overlay` (state.rs:550) toggles the rendered overlay of the mask (its own doc says the mask itself shows as `view_overlay`). The same word names four different things in one file, so a reader or grep for 'crop_overlay'/'mask_overlay' lands on the wrong concept and an edit to the toggle gets applied to the drawing function.",
+          "action": "Rename the drawing functions for what they draw (e.g. `crop_box_tool`, `mask_handles`) and keep `*_overlay` for the guide/overlay setting.",
+          "verifyStatus": "verified",
+          "anchor": {
+            "path": "crates/ui-egui/src/panels/detail.rs",
+            "line": 1364,
+            "text": "fn crop_overlay(app: &mut LightcraftApp, ui: &mut egui::Ui, resp: &egui::Response, map: &CanvasMap, frame: &Frame, d: &DevelopSettings, id: PhotoId) {"
+          }
+        },
+        {
+          "id": "naming.ui-commands-fn-vs-const",
+          "lens": "naming",
+          "severity": "low",
+          "confidence": "likely",
+          "evidence": [
+            "crates/ui-egui/src/menus.rs:29-33",
+            "crates/ui-egui/src/menus.rs:16",
+            "crates/ui-egui/src/menus.rs:53",
+            "xtask/src/parity.rs:4"
+          ],
+          "failureScenario": "`menus::ui_commands()` iterates LANGUAGE_COMMANDS then UI_COMMANDS, so the function named `ui_commands` returns a superset of the constant `UI_COMMANDS`. Callers that need every UI command must use the function while anyone grepping or reading `UI_COMMANDS` (xtask/src/parity.rs:4 cites 'a UI command from `UI_COMMANDS`') silently misses the language commands.",
+          "action": "Rename the function to `all_ui_commands` (or name the constant `NON_LANGUAGE_UI_COMMANDS`) and update parity doc text.",
+          "verifyStatus": "verified",
+          "anchor": {
+            "path": "crates/ui-egui/src/menus.rs",
+            "line": 31,
+            "text": "pub fn ui_commands() -> impl Iterator<Item = &'static UiCommand> {"
+          }
+        },
+        {
+          "id": "naming.left-panel-folder-polysemy",
+          "lens": "naming",
+          "severity": "low",
+          "confidence": "likely",
+          "evidence": [
+            "crates/ui-egui/src/panels/left.rs:1548",
+            "crates/ui-egui/src/panels/left.rs:1895",
+            "crates/ui-egui/src/panels/left.rs:1037",
+            "crates/ui-egui/src/panels/left.rs:1741",
+            "crates/ui-egui/src/panels/left.rs:1797",
+            "crates/ui-egui/src/panels/left.rs:888",
+            "crates/ui-egui/src/panels/left.rs:1881",
+            "crates/ui-egui/src/lib.rs:1587"
+          ],
+          "failureScenario": "'folder' means three things in left.rs: `folder_menu(.., a: &Album)` is the context menu of an album folder, `folder_menu_for_library(.., n: &FolderNode)` (with sibling `row_menu`) is the library Folders row menu, and `folder_tree` is a Local on-disk folder row while `folder_rows`/`folder_row` draw the library Folders section (and `Caches::folder_tree` in lib.rs:1587 is the library tree, not the Local one). Separately `folder_label(path)` returns a display name while `folder_label_menu` is the colour-label submenu. A change to 'folder_tree' or 'folder_menu' is easy to apply to the wrong sidebar section.",
+          "action": "Prefix by section (`album_folder_menu`, `library_folder_menu`, `local_folder_row`, `folder_display_name`) so each name identifies the sidebar section it serves.",
+          "verifyStatus": "verified",
+          "anchor": {
+            "path": "crates/ui-egui/src/panels/left.rs",
+            "line": 1548,
+            "text": "fn folder_menu(app: &mut LightcraftApp, resp: &egui::Response, a: &Album) {"
+          }
+        }
+      ],
+      "lensIds": [
+        "naming"
+      ],
+      "packetCoverage": {
+        "basis": "bounded-excerpts",
+        "examined": 16,
+        "expected": 730,
+        "part": {
+          "number": 3,
+          "total": 4
+        },
+        "requiredParts": 4,
+        "overCeiling": null,
+        "partPaths": [
+          "crates/raw/src/lib.rs",
+          "crates/raw/tests/corpus.rs",
+          "crates/segment/src/bin/lightcraft-sam3-worker.rs",
+          "crates/ui-egui/src/headless.rs",
+          "crates/ui-egui/src/i18n.rs",
+          "crates/ui-egui/src/lib.rs",
+          "crates/ui-egui/src/menubar.rs",
+          "crates/ui-egui/src/menus.rs",
+          "crates/ui-egui/src/panels/detail.rs",
+          "crates/ui-egui/src/panels/dialogs.rs",
+          "crates/ui-egui/src/panels/left.rs",
+          "crates/ui-egui/src/panels/right.rs",
+          "crates/ui-egui/src/state.rs",
+          "crates/ui-egui/src/tests_masking.rs",
+          "crates/ui-egui/src/tests_panels.rs",
+          "packaging/macos/import-cert.sh",
+          "xtask/src/main.rs"
+        ],
+        "examinedPaths": [
+          "crates/raw/src/lib.rs",
+          "crates/raw/tests/corpus.rs",
+          "crates/segment/src/bin/lightcraft-sam3-worker.rs",
+          "crates/ui-egui/src/headless.rs",
+          "crates/ui-egui/src/i18n.rs",
+          "crates/ui-egui/src/lib.rs",
+          "crates/ui-egui/src/menubar.rs",
+          "crates/ui-egui/src/menus.rs",
+          "crates/ui-egui/src/panels/detail.rs",
+          "crates/ui-egui/src/panels/dialogs.rs",
+          "crates/ui-egui/src/panels/left.rs",
+          "crates/ui-egui/src/panels/right.rs",
+          "crates/ui-egui/src/state.rs",
+          "crates/ui-egui/src/tests_masking.rs",
+          "crates/ui-egui/src/tests_panels.rs",
+          "packaging/macos/import-cert.sh"
+        ],
+        "chunkedPaths": [
+          {
+            "path": "xtask/src/main.rs",
+            "chunk": 1,
+            "chunks": 2,
+            "startLine": 1,
+            "endLine": 701
+          }
+        ],
+        "omittedPaths": [],
+        "truncatedPaths": [],
+        "coverageMode": "risk-sampled",
+        "bundle": "S2",
+        "reviewSetDigest": "sha256:5c038c5d944be566f6c34eaf2138ba708a813739b48b44a2851b8c8b645fe843",
+        "reviewSetCount": 94,
+        "reviewExpected": 57,
+        "promotedPaths": [
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs",
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/cmd/geocode.rs",
+          "crates/engine/src/crs.rs",
+          "crates/engine/src/crs_masks.rs",
+          "crates/engine/src/denoise.rs"
+        ],
+        "displacedPaths": [
+          "crates/engine/src/cmd/edit.rs",
+          "crates/engine/src/cmd/filters.rs",
+          "crates/codecs/tests/corpus.rs",
+          "crates/pipeline/src/lut.rs",
+          "crates/segment/tests/reference.rs",
+          "crates/catalog/src/tests_torn_append.rs",
+          "crates/scenes/examples/contact_sheet.rs",
+          "crates/preview/src/hash.rs",
+          "crates/codecs/examples/jpeg_bench.rs",
+          "crates/raw/examples/rawdump.rs",
+          "crates/merge/src/features.rs",
+          "crates/merge/tests/pano.rs",
+          "crates/pipeline/src/dust.rs",
+          "crates/pipeline/src/colorops.rs",
+          "crates/gpu/tests/memory.rs",
+          "crates/raw/src/demosaic/xtrans.rs",
+          "crates/merge/src/pano/finish.rs",
+          "crates/codecs/src/jpeg_par.rs",
+          "crates/meta/src/iptc.rs",
+          "apps/lightcraft-web/src/files.rs",
+          "crates/codecs/src/other.rs",
+          "apps/lightcraft/examples/gen_photos.rs",
+          "crates/merge/src/ransac.rs",
+          "crates/scenes/src/noise.rs",
+          "crates/tiff/src/makernote.rs",
+          "crates/merge/src/align.rs",
+          "crates/catalog/src/tests_local.rs",
+          "apps/lightcraft-cli/src/alloc_release.rs",
+          "crates/codecs/src/exif.rs",
+          "crates/engine/src/cmd/curves.rs",
+          "crates/ui-egui/src/tests_unsaved.rs",
+          "packaging/linux/postinst.sh",
+          "crates/raw/examples/rawinfo.rs",
+          "crates/pipeline/src/upright.rs",
+          "crates/pipeline/src/transform.rs",
+          "crates/ui-egui/src/panels/crop_overlay.rs",
+          "crates/engine/src/tests_forget_local.rs",
+          "crates/pipeline/src/profiles.rs",
+          "crates/catalog/src/lib.rs",
+          "crates/pipeline/src/lib.rs",
+          "apps/lightcraft-desktop/web/src/inspector/Inspector.tsx",
+          "crates/ui-egui/src/control.rs",
+          "crates/ui-egui/src/shortcuts.rs",
+          "crates/desktop-host/src/controller.rs",
+          "crates/engine/src/cmd/develop.rs",
+          "crates/ui-egui/src/widgets.rs",
+          "crates/ui-egui/src/panels/settings.rs",
+          "crates/ui-egui/src/import.rs",
+          "crates/ui-egui/src/tests_preview_limit.rs",
+          "crates/ui-egui/src/render.rs",
+          "crates/desktop-host/src/tasks.rs",
+          "crates/catalog/src/keywords.rs",
+          "crates/ui-egui/src/panels/edit.rs",
+          "crates/ui-egui/src/panels/grid.rs"
+        ],
+        "unpromotedCount": 76,
+        "declaredUnsampled": 673,
+        "excluded": 23,
+        "aliasedPaths": []
+      },
+      "reasoningHostState": "ingested",
+      "withdrawnFindings": []
+    }
+  },
+  "part": {
+    "number": 3,
+    "total": 4
+  }
+}

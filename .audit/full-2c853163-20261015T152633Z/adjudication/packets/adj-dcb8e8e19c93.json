@@ -1,0 +1,620 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-audit-adjudication-seat",
+  "stage": "batch",
+  "round": 1,
+  "batchId": "batch-0009",
+  "itemId": "sha256:9b5fdf2a9f176d8156d4a8f5c5feeb713164309da0dae35f38bc4e14309b3015",
+  "contextId": "adjudicator:sha256:9b5fdf2a9f176d8156d4a8f5c5feeb713164309da0dae35f38bc4e14309b3015",
+  "parentPacketDigest": "sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5",
+  "packet": {
+    "schemaVersion": 1,
+    "kind": "security-batch-adjudication-packet",
+    "parentPacketDigest": "sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5",
+    "batchId": "batch-0009",
+    "family": "security",
+    "adjudicator": {
+      "provider": "legacy.security.adjudication",
+      "contextId": "adjudicator:sha256:9b5fdf2a9f176d8156d4a8f5c5feeb713164309da0dae35f38bc4e14309b3015"
+    },
+    "requiredEvidence": [
+      "threat model and attacker capability",
+      "attacker-controlled source",
+      "trust-boundary trace",
+      "validation and authorization between source and sink",
+      "reachability",
+      "primary controls and environmental mitigations",
+      "real security impact",
+      "reproduction, trace, PoC sketch, or mathematical proof",
+      "devils-advocate false-positive challenge"
+    ],
+    "note": "one verdict per cluster representative; it is expanded to every member, which is then confirmed or spot-checked alone",
+    "clusters": [
+      {
+        "clusterId": "cluster-7c9a3d73806521fb",
+        "rule": "security.binary-unpinned",
+        "memberCount": 6,
+        "representative": {
+          "findingId": "sha256:47c8ae10c62a74019d6057f40577819f672f7521fa0d1d6165360169716c4477",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/tests_xmp.rs",
+          "line": 376,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "xmlns:mwg-rs=\"http://www.metadataworkinggroup.com/schemas/regions/\""
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:1105423d8bca698f7b9e7a4eb53f19bacbbd40f869179e674e7a5b14dada8813",
+            "path": "crates/meta/src/xmp.rs",
+            "line": 903
+          },
+          {
+            "findingId": "sha256:47c8ae10c62a74019d6057f40577819f672f7521fa0d1d6165360169716c4477",
+            "path": "crates/engine/src/tests_xmp.rs",
+            "line": 376
+          },
+          {
+            "findingId": "sha256:644c6872873d183826b2671f8870b8e7e248b6a9982d80d7ced4e7e73ae717db",
+            "path": "crates/meta/src/xmp.rs",
+            "line": 944
+          },
+          {
+            "findingId": "sha256:6c9c3c2e0eb885be640eeee409e8d0f041e825e4dcae70d54cad11398c377abd",
+            "path": "crates/meta/src/xmp.rs",
+            "line": 976
+          },
+          {
+            "findingId": "sha256:8e482c3eaf20a5e820aa7a8025ae0b51db2f1ceee349fa8f755a2b4245b39178",
+            "path": "crates/meta/src/xmp.rs",
+            "line": 1004
+          },
+          {
+            "findingId": "sha256:aeb2ff65f3356bf709a640d05ebe8eb3374d2ee6a9a99725badda48dcf0a0bb1",
+            "path": "crates/meta/src/xmp.rs",
+            "line": 852
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-7f9b75938a536dfa",
+        "rule": "security.binary-unpinned",
+        "memberCount": 2,
+        "representative": {
+          "findingId": "sha256:747681a4f759de78d2b333cb9f0a99f1818f3c8ee66385dc4ca03ed7767be98d",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/tests_xmp.rs",
+          "line": 378,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "xmlns:stDim=\"http://ns.adobe.com/xap/1.0/sType/Dimensions#\">"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:747681a4f759de78d2b333cb9f0a99f1818f3c8ee66385dc4ca03ed7767be98d",
+            "path": "crates/engine/src/tests_xmp.rs",
+            "line": 378
+          },
+          {
+            "findingId": "sha256:b1c0d15399146ea30382a7229bf409c2668d4ca49e4e1364d9db7b3647ba255a",
+            "path": "crates/meta/src/xmp.rs",
+            "line": 854
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-835e00ef3dc5ea53",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:526e6e322663e2c8b35054fd8e71b443225b5db4d9c56bc6b58cd55cfec44fc1",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/tests_xmp.rs",
+          "line": 1190,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "xmlns:xmpMM=\"http://ns.adobe.com/xap/1.0/mm/\""
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:526e6e322663e2c8b35054fd8e71b443225b5db4d9c56bc6b58cd55cfec44fc1",
+            "path": "crates/engine/src/tests_xmp.rs",
+            "line": 1190
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-a1e7bce9f3662dab",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:5af932fd482f911c4382aacc1f1ef35177f37d8ec66081d51be3a130d38b0102",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/tests_xmp.rs",
+          "line": 1150,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "assert_eq!((mb.copyright_status, mb.copyright_url.as_str()), (CopyrightStatus::Copyrighted, \"https://example.com/rights\"));"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:5af932fd482f911c4382aacc1f1ef35177f37d8ec66081d51be3a130d38b0102",
+            "path": "crates/engine/src/tests_xmp.rs",
+            "line": 1150
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-a679d280de93a6e1",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:6371c9fc821c91170a8078862828d6d46e13ab8cb3f7a275d96493ab26604cc2",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/tests_xmp.rs",
+          "line": 1146,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "assert_eq!(presets[0][\"fields\"][\"copyrightUrl\"], \"https://example.com/rights\");"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:6371c9fc821c91170a8078862828d6d46e13ab8cb3f7a275d96493ab26604cc2",
+            "path": "crates/engine/src/tests_xmp.rs",
+            "line": 1146
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-a776bce3c634a135",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:3b2026063f6344577c85bfbd1bc2703c132091dee417c226662ab2ef763702dd",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/tests_xmp.rs",
+          "line": 1067,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "xmlns:exif=\"http://ns.adobe.com/exif/1.0/\""
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:3b2026063f6344577c85bfbd1bc2703c132091dee417c226662ab2ef763702dd",
+            "path": "crates/engine/src/tests_xmp.rs",
+            "line": 1067
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-b02c39ca2930028e",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:819fea6a71430d1780767a3755856bf41760c704838d72cee380911786599837",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/tests_xmp.rs",
+          "line": 1165,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "assert!(xmp.contains(\"<xmpRights:WebStatement>https://example.com/rights</xmpRights:WebStatement>\"), \"{xmp}\");"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:819fea6a71430d1780767a3755856bf41760c704838d72cee380911786599837",
+            "path": "crates/engine/src/tests_xmp.rs",
+            "line": 1165
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-e1725dde27415070",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:7b02e4dce8ae89324fbed20deeaa08d27b5ea62f1637cb435be2b8ef264e8096",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/tests_xmp.rs",
+          "line": 1130,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "(CopyrightStatus::Copyrighted, \"Editorial use only\", \"https://example.com/rights\")"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:7b02e4dce8ae89324fbed20deeaa08d27b5ea62f1637cb435be2b8ef264e8096",
+            "path": "crates/engine/src/tests_xmp.rs",
+            "line": 1130
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-f2fcfcd1cf783850",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:af974b07262abeb11e04f716f205ac5ca4e33c16a8ec2dbae7457e3f305e312f",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/tests_xmp.rs",
+          "line": 501,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "<rdf:Description rdf:about=\"\" xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\" xmp:Rating=\"3\"/>"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:af974b07262abeb11e04f716f205ac5ca4e33c16a8ec2dbae7457e3f305e312f",
+            "path": "crates/engine/src/tests_xmp.rs",
+            "line": 501
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-f8418081b7bdd7c4",
+        "rule": "security.binary-unpinned",
+        "memberCount": 2,
+        "representative": {
+          "findingId": "sha256:c79bfee9eefb60772bc7976a0d1d492f5044bf5fc45fb763c46f63330e7ec100",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/tests_xmp.rs",
+          "line": 126,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\""
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:58151f7063e43e2b9d17138caf208e0efa4cae4403b5f06deb1c6e027718e1ac",
+            "path": "crates/engine/src/tests_xmp.rs",
+            "line": 1189
+          },
+          {
+            "findingId": "sha256:c79bfee9eefb60772bc7976a0d1d492f5044bf5fc45fb763c46f63330e7ec100",
+            "path": "crates/engine/src/tests_xmp.rs",
+            "line": 126
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-fee588d809a8bf77",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:cf038f0f57727ec5f78aca7573d69d56fd8a987cbb52f24562ddd482bd9e37ba",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/engine/src/tests_xmp.rs",
+          "line": 1193,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "xmlns:other=\"http://example.com/other/1.0/\""
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:cf038f0f57727ec5f78aca7573d69d56fd8a987cbb52f24562ddd482bd9e37ba",
+            "path": "crates/engine/src/tests_xmp.rs",
+            "line": 1193
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-9834d676ed5ce78d",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:f3c6cf89b0d4cbaa882e4c2292ebd06bbb1cc4cf808f7e589b28b63b3015071b",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/catalog.rs",
+          "line": 91,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "if !(raw.url.len() <= 500 && raw.url.starts_with(\"https://\") && !raw.url.chars().any(|c| c.is_control() || c.is_whitespace())) {"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:f3c6cf89b0d4cbaa882e4c2292ebd06bbb1cc4cf808f7e589b28b63b3015071b",
+            "path": "crates/faces/src/catalog.rs",
+            "line": 91
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-a3e7b9302ff9b0d2",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:725faf8c5f01352dded54bd0465e0dcc7556469ccd408302fcd66be4d05140ae",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/catalog.rs",
+          "line": 150,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"url\": \"https://example.org/w/recogniser-r50.onnx?download=1\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:725faf8c5f01352dded54bd0465e0dcc7556469ccd408302fcd66be4d05140ae",
+            "path": "crates/faces/src/catalog.rs",
+            "line": 150
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-a82e087b946e5fd0",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:375a57a78b928865c8c0e4b64b3049876f9615d87b7113e651e74d9eece6d77d",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/catalog.rs",
+          "line": 223,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "for url in [\"https://x.org/a/b/c.onnx\", \"https://x.org/\", \"https://x.org/..%2f..%2fevil.onnx\", \"https://x.org/q.bin\", \"https://x.org/.onnx\"] {"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:375a57a78b928865c8c0e4b64b3049876f9615d87b7113e651e74d9eece6d77d",
+            "path": "crates/faces/src/catalog.rs",
+            "line": 223
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-aacf52c7b7e8fad3",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:0664d40326011990fc465b140eb3d2bba30d7dc67eca9152bd4a6ca2172a5c0e",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/catalog.rs",
+          "line": 193,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "spaces[\"url\"] = json!(\"https://example.org/a b.onnx\");"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:0664d40326011990fc465b140eb3d2bba30d7dc67eca9152bd4a6ca2172a5c0e",
+            "path": "crates/faces/src/catalog.rs",
+            "line": 193
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-beacc5d01550bf96",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:deddde4b24f3a9435d3d03ebdb9612a01b46aa80425bb709733d75e0bab89c9e",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/catalog.rs",
+          "line": 191,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "http[\"url\"] = json!(\"http://example.org/m.onnx\");"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:deddde4b24f3a9435d3d03ebdb9612a01b46aa80425bb709733d75e0bab89c9e",
+            "path": "crates/faces/src/catalog.rs",
+            "line": 191
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-d9a58743c401b130",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:1a5e82233e375026f08d9ffb95b7079f1e445a2838cedf67f981cccba151be3f",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/catalog.rs",
+          "line": 12,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "//!     \"url\": \"https://example.org/weights/recogniser.onnx\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:1a5e82233e375026f08d9ffb95b7079f1e445a2838cedf67f981cccba151be3f",
+            "path": "crates/faces/src/catalog.rs",
+            "line": 12
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-f44820fad651af15",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:cbed649d52e7f43646e2975d56250de7f8826a1893167a86e7f4bcc094bad98c",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/catalog.rs",
+          "line": 92,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "return Err(\"`url` must be an https:// address of at most 500 characters, without spaces\".into());"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:cbed649d52e7f43646e2975d56250de7f8826a1893167a86e7f4bcc094bad98c",
+            "path": "crates/faces/src/catalog.rs",
+            "line": 92
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-293976b45bb18e7e",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:7a062f1a6e9d2049e9a3fcdecab480ebff63b39064ca3ce08e57bfb8c3fd150d",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/known.rs",
+          "line": 59,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:7a062f1a6e9d2049e9a3fcdecab480ebff63b39064ca3ce08e57bfb8c3fd150d",
+            "path": "crates/faces/src/known.rs",
+            "line": 59
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-4ae3ca1052220529",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:b9ec9c60f66bcadc687f16af2dc3618857df6d891cf28bbec300c94163572ae6",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/known.rs",
+          "line": 87,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "source: Some(\"https://huggingface.co/fal/AuraFace-v1\".into()),"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:b9ec9c60f66bcadc687f16af2dc3618857df6d891cf28bbec300c94163572ae6",
+            "path": "crates/faces/src/known.rs",
+            "line": 87
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-564c1f3dc0c99ac7",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:6e92130b8f1401f8d383dd5750ccb077bd0dda8d2da3c8c1f8e42c37658b430e",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/known.rs",
+          "line": 133,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "(\"auraface-v1\", \"https://huggingface.co/fal/AuraFace-v1/resolve/af6d057c9b0ec4071d4c49c80e3539258798b609/glintr100.onnx\", \"glintr100.onnx\"),"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:6e92130b8f1401f8d383dd5750ccb077bd0dda8d2da3c8c1f8e42c37658b430e",
+            "path": "crates/faces/src/known.rs",
+            "line": 133
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-5abca9791938e7e2",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:171e749248178857b1e3ec92a0629f96494c6bfa3b1f3eb4197a2ead7c53d557",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/known.rs",
+          "line": 62,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "source: Some(\"https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface\".into()),"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:171e749248178857b1e3ec92a0629f96494c6bfa3b1f3eb4197a2ead7c53d557",
+            "path": "crates/faces/src/known.rs",
+            "line": 62
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-7042172ccc1e1a65",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:e2c7a0ec9d875e2dd59eda0ea8687fc12e1e2a17ec549b2f65e3710c523ab8ce",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/known.rs",
+          "line": 196,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "assert!(d.url.starts_with(\"https://\"), \"{}: https only\", d.id);"
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:e2c7a0ec9d875e2dd59eda0ea8687fc12e1e2a17ec549b2f65e3710c523ab8ce",
+            "path": "crates/faces/src/known.rs",
+            "line": 196
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-7268af3d76531202",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:9dba8f6b0f025ea2c1c974cfc8bf16aa08b3e9df9fdc9b82f45f94e1225cc732",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/known.rs",
+          "line": 125,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://github.com/opencv/opencv_zoo/raw/25f423d0e04c31a17254620e58febd7386da523b/models/face_detection_yunet/face_detection_yunet_2023mar.onnx\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:9dba8f6b0f025ea2c1c974cfc8bf16aa08b3e9df9fdc9b82f45f94e1225cc732",
+            "path": "crates/faces/src/known.rs",
+            "line": 125
+          }
+        ]
+      },
+      {
+        "clusterId": "cluster-729403037b4a6b5e",
+        "rule": "security.binary-unpinned",
+        "memberCount": 1,
+        "representative": {
+          "findingId": "sha256:9cbafc758f5b2bd61e68438fa0487d39b34eb2371f4ce18081d88bfc1d642c70",
+          "provider": "legacy.security.binary-pins",
+          "rule": "security.binary-unpinned",
+          "severity": "high",
+          "path": "crates/faces/src/known.rs",
+          "line": 84,
+          "message": "downloaded binary URL has no visible immutable digest",
+          "excerpt": "\"https://huggingface.co/fal/AuraFace-v1\","
+        },
+        "memberLocations": [
+          {
+            "findingId": "sha256:9cbafc758f5b2bd61e68438fa0487d39b34eb2371f4ce18081d88bfc1d642c70",
+            "path": "crates/faces/src/known.rs",
+            "line": 84
+          }
+        ]
+      }
+    ]
+  }
+}

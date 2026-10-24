@@ -1,0 +1,588 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "legacy.security.adjudication",
+ "packetDigest": "sha256:9731d9ec20900bf2c4446f4a78356ba29a0746d1fcc94691bfdf7b55bf9f0345",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [],
+ "withdrawn": [],
+ "verdicts": [
+  {
+   "candidateId": "sha256:86e96077e53dd2f092e331e4c001f0b483383a21a3ead19def39c92e926e8e8a",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-82387900a2bd4e5b",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "Hypothetical attacker substituting model bytes at the download host; the flagged line is an assert! inside test downloads_are_pinned_checked_and_only_for_models_we_may_point_at that checks Download::base() shape.",
+   "reachability": "known.rs:200 sits in the test-only code inside `#[cfg(test)] mod tests` (from known.rs:174); compiled only under `cargo test`, never in the shipped binary, and performs no download of executable content; it only asserts the mirror base is https and not ending in .onnx.",
+   "impact": "None. The assertion is itself a pinning guard; every Download it iterates carries sha256 from the manifest (known.rs:201 asserts equality with YUNET/SFACE/AURAFACE_SHA256).",
+   "rationale": "Scanner matched the literal \"https://\" in a test assertion. No URL is fetched here and the real download URLs are commit-pinned with digests (known.rs:121-135, 143). Production downloads go through crates/engine/src/face_download.rs:207, which passes the expected sha256 into lightcraft_fetch::FileSpec, and crates/fetch/src/lib.rs:512-513 hashes the staged file and rejects a mismatch.",
+   "evidence": [
+    {
+     "file": "crates/faces/src/known.rs",
+     "line": 200
+    },
+    {
+     "file": "crates/faces/src/known.rs",
+     "line": 201
+    },
+    {
+     "file": "crates/faces/src/known.rs",
+     "line": 174
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:590f0e2d113533d57ad5f4d4fea9d44b108af93d9c182daa84749d4dfe11de8c",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-9db0b0cc8aaad8f6",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "A tampered model reachable via the YuNet `source` field; but `source` is an informational project page, not a download location.",
+   "reachability": "known.rs:34 sets ModelManifest.source to a GitHub tree/ HTML page; manifest.rs:116 documents source as 'for the user's information'. The download path uses SOURCES (known.rs:121-123), never `source`.",
+   "impact": "None. No bytes are fetched from this tree URL; the YuNet file actually downloaded is pinned to commit 25f423d0 and to YUNET_SHA256 (known.rs:13, 140-143).",
+   "rationale": "Informational provenance link, not a binary fetch. download() at known.rs:138-143 builds Download from SOURCES and m.sha256, so the unpinned-branch link never reaches the fetcher. Production downloads go through crates/engine/src/face_download.rs:207, which passes the expected sha256 into lightcraft_fetch::FileSpec, and crates/fetch/src/lib.rs:512-513 hashes the staged file and rejects a mismatch.",
+   "evidence": [
+    {
+     "file": "crates/faces/src/known.rs",
+     "line": 34
+    },
+    {
+     "file": "crates/faces/src/manifest.rs",
+     "line": 116
+    },
+    {
+     "file": "crates/faces/src/known.rs",
+     "line": 143
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:cd584cdc710767a4a23d500f14422cb8f5beaca869bdd75d59ec83b91de8e349",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-a870f0c37bd7bbdb",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "Upstream or CDN compromise replacing face_recognition_sface_2021dec.onnx served from github.com/opencv/opencv_zoo.",
+   "reachability": "Reachable: known.rs:130 is the SFace entry in SOURCES used by the user's Download button via known::download (crates/engine/src/cmd/face_models.rs:110).",
+   "impact": "None demonstrated. The URL is pinned to immutable commit 25f423d0e04c31a17254620e58febd7386da523b, and download() attaches SFACE_SHA256 (known.rs:14) and size 38_696_353 that the fetcher enforces before use.",
+   "rationale": "The scanner did not see the digest because it lives in a separate const (known.rs:14) joined at known.rs:143. Production downloads go through crates/engine/src/face_download.rs:207, which passes the expected sha256 into lightcraft_fetch::FileSpec, and crates/fetch/src/lib.rs:512-513 hashes the staged file and rejects a mismatch, so substituted bytes are rejected; this is a pinned, digest-verified download.",
+   "evidence": [
+    {
+     "file": "crates/faces/src/known.rs",
+     "line": 130
+    },
+    {
+     "file": "crates/faces/src/known.rs",
+     "line": 14
+    },
+    {
+     "file": "crates/faces/src/known.rs",
+     "line": 143
+    },
+    {
+     "file": "crates/engine/src/face_download.rs",
+     "line": 207
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:cafacc22bfb42df1daf85eb18272704ab1410d82219309911d6b559841e90cd6",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-b4cec51b949fcb47",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "Tampering with the YuNet licence page; the flagged string is a licence URL shown as text.",
+   "reachability": "known.rs:31 is the `url` argument to licence() for YuNet, stored in Licence.url and rendered for the user before opt-in; no code path downloads it.",
+   "impact": "None. A licence page link carries no executable or model payload, so there is nothing to pin with a digest.",
+   "rationale": "Not a binary download: Licence.url is display-only metadata (known.rs:17-19). The actual YuNet weights fetch is digest-checked against YUNET_SHA256.",
+   "evidence": [
+    {
+     "file": "crates/faces/src/known.rs",
+     "line": 31
+    },
+    {
+     "file": "crates/faces/src/known.rs",
+     "line": 18
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:23517e1a273165126a1533caa797240b0b04ff17632843647fe575aaa53e9396",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-1e17658f3c8d800c",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "An untrusted third-party manifest supplying a malformed source URL; the line is a negative test case for validate().",
+   "reachability": "manifest.rs:337 is a test vector \"https://a b\" in every_field_is_bounded, under #[cfg(test)] (manifest.rs:273); never compiled into release.",
+   "impact": "None. The case asserts validate() rejects whitespace in URLs (manifest.rs:195), i.e. it proves a defence rather than a fetch.",
+   "rationale": "Test fixture string for the rejection path; no network access occurs, and source is informational anyway.",
+   "evidence": [
+    {
+     "file": "crates/faces/src/manifest.rs",
+     "line": 337
+    },
+    {
+     "file": "crates/faces/src/manifest.rs",
+     "line": 195
+    },
+    {
+     "file": "crates/faces/src/manifest.rs",
+     "line": 273
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:8e1b7501cff296f4a0a70235a4304ccf8b606488f7f64d9afedc749b2adf78d9",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-2b18fbbad550106c",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "None realistic: the line builds a synthetic licence URL in the good() test fixture.",
+   "reachability": "manifest.rs:286 is inside fn good() within #[cfg(test)] mod tests (manifest.rs:273), used only to construct a valid ModelManifest for tests.",
+   "impact": "None. example.org licence URL is never fetched and is not a binary.",
+   "rationale": "Test fixture; Licence.url is display metadata; the fixture also carries sha256 (manifest.rs:290), so even conceptually it is digest-bound.",
+   "evidence": [
+    {
+     "file": "crates/faces/src/manifest.rs",
+     "line": 286
+    },
+    {
+     "file": "crates/faces/src/manifest.rs",
+     "line": 290
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:109986c4189f7a72508800c722c8573b2bd62b9064dd740c5a0cb13d7c610a52",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-a895c8fe87d5d2b3",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "A hostile manifest pointing source at plain http; the line is the test asserting such manifests are refused.",
+   "reachability": "manifest.rs:335 is the \"http source\" vector in every_field_is_bounded under #[cfg(test)]; validate() rejects non-https at manifest.rs:195-196.",
+   "impact": "None. It exercises a control (https-only) and fetches nothing.",
+   "rationale": "Negative test case proving the https-only rule, not a download site.",
+   "evidence": [
+    {
+     "file": "crates/faces/src/manifest.rs",
+     "line": 335
+    },
+    {
+     "file": "crates/faces/src/manifest.rs",
+     "line": 196
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:651588c588d287899697f2503c2f40b997258c69f4d0d0e3b57db5cc852f5aec",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-0250cd8bd10fed60",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "Local test server on 127.0.0.1 receiving a POST; no remote party.",
+   "reachability": "http.rs:632 is in test post_sends_exact_bounded_body_once under #[cfg(test)] (http.rs:553), posting {} to an ephemeral loopback TcpListener created in the same test.",
+   "impact": "None. It POSTs JSON to loopback and downloads no binary.",
+   "rationale": "Loopback HTTP POST in a unit test; nothing is installed or executed from the response.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 632
+    },
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 553
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:38a0dd9e3d01b76e3c32cef83ee0f65f08928ddaf4d36ec0f2b4c7f6b4f0518f",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-0aa401094969ffc4",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "Network attacker against a URL given to the fetcher; the line is the scheme parser, not a download URL.",
+   "reachability": "http.rs:71 is the `strip_prefix(\"https://\")` branch of Url::parse; it is reached for every fetch but contains no URL of its own.",
+   "impact": "None at this line. Integrity of downloaded content is enforced by callers' FileSpec.sha256 (crates/fetch/src/lib.rs:512-513), outside the parser.",
+   "rationale": "Scanner matched the scheme literal in parsing code; there is no artifact URL here to pin.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 71
+    },
+    {
+     "file": "crates/fetch/src/lib.rs",
+     "line": 512
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:a14bf72a438ed63b879a4ec793e256dcd1c1d836af194d2aea45e7e5025eb834",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-12678f53b6efb584",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "None: the URL is a parse fixture on cdn.example.com.",
+   "reachability": "http.rs:565 is in test parses_urls (#[cfg(test)], http.rs:553); it only checks parsed host/port/path fields.",
+   "impact": "None. The model.safetensors URL is never requested.",
+   "rationale": "Parser unit test using a reserved example.com domain; no fetch, so no digest is relevant.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 565
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:07e440c1392ccfcefe0023830aeaa379c295c3476e9a5812874aa4faf5eac6e3",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-2ad6e40f279f6702",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "Header injection via CRLF in a URL; the line asserts the parser rejects it.",
+   "reachability": "http.rs:560 is in rejects_oversized_and_control_character_urls under #[cfg(test)]; Url::parse refuses control characters at http.rs:68.",
+   "impact": "None. It is a passing negative test demonstrating a defence.",
+   "rationale": "Test of CRLF rejection, not a binary download.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 560
+    },
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 68
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:ef87b6578ec7e661a558d207b3c3d0c3704faf642cfb44ec9130ce82aa2f55b5",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-414e3f7a21e96232",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "Downgrade of an https download to http via redirect; the line asserts the downgrade is refused.",
+   "reachability": "http.rs:587 is in resolves_redirects (#[cfg(test)]); Url::join returns Err for https->http at http.rs:114-115.",
+   "impact": "None. It verifies the no-downgrade control.",
+   "rationale": "Negative redirect test proving https-to-http refusal; no URL is fetched.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 587
+    },
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 115
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:26dd0e16d4b2a72bc4d7b49c1865b6fdf715c72e10ef3abfd64493ada7080e74",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-48879879183a7442",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "None: 127.0.0.1:1 is an unroutable loopback port used to test cancel/oversize paths.",
+   "reachability": "http.rs:643 is in post_rejects_missing_deadline_oversize_and_cancel_before_connect under #[cfg(test)]; cancel is set true, so no connection is even attempted.",
+   "impact": "None. No binary is downloaded; the test asserts errors.",
+   "rationale": "Test fixture for error handling; no network content consumed.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 643
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:0d7526b758392f67af53b90e21c2ca27db866ef185b2226a428a74c6ec702229",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-61910e01e9bc378c",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "None: loopback http://127.0.0.1:8080 parse fixture.",
+   "reachability": "http.rs:568 is in parses_urls (#[cfg(test)]), asserting tls=false and port 8080 after parsing.",
+   "impact": "None. Pure string parsing assertion with no request.",
+   "rationale": "Unit test of default-path handling for a bare loopback authority.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 568
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:203a332c0d6d4076623b8fb744674fce928ee1ddf522d339439690f38f24f197",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-74ed9195ba7e8330",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "Resource exhaustion through an over-long URL; the line asserts it is rejected.",
+   "reachability": "http.rs:559 is in rejects_oversized_and_control_character_urls (#[cfg(test)]); the 16 KiB cap is enforced at http.rs:63-64.",
+   "impact": "None. The test proves a bound and fetches nothing.",
+   "rationale": "Negative test of the URL length cap, not a download.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 559
+    },
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 64
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:0fb60707a02ca0ee453684d7f37c6e80b55e06d76ef2ee9e032f0fdcd9626330",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-753cd9d60fdd12af",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "Use of a non-http scheme (file:, ftp:) to read local or unintended resources; the line is the refusal message.",
+   "reachability": "http.rs:76 is the else-branch error in Url::parse returning BadUrl for any other scheme; reached in production but only to refuse.",
+   "impact": "None. It is a control that narrows the attack surface; there is no binary URL here.",
+   "rationale": "Error string literal containing scheme names; scanner false match.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 76
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:3f4a57c796f8dba9651d13fe48187988d08d3737ee6a175f28e660996a87a996",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-890451cf343996d1",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "None: module documentation comment.",
+   "reachability": "http.rs:2 is a `//!` doc comment describing TLS support; doc comments are not executable.",
+   "impact": "None. No URL, download or code.",
+   "rationale": "Doc comment mentioning the https:// scheme; trivially not a download site.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 2
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:d7d0c5f2f51e73543b56597c9d0faf24a49dba9b5eafcd5dce3a86bd9b62f026",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-8b82f9efd3c2a684",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "None: IPv6 loopback parse fixture.",
+   "reachability": "http.rs:570 is in parses_urls (#[cfg(test)]) checking that [::1]:9 yields host ::1 and port 9.",
+   "impact": "None. No request is issued.",
+   "rationale": "Unit test for bracketed IPv6 authority parsing.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 570
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:f5b4ddbe1f74385f5879e3dae911114a2aa8eb82662b27803f4a4dec49b7c867",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-9192affa40d9157d",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "None: type documentation for Url.",
+   "reachability": "http.rs:51 is a `///` doc comment on struct Url; no runtime behaviour.",
+   "impact": "None. Documentation text only.",
+   "rationale": "Doc comment naming supported schemes; not a downloaded artifact URL.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 51
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:22e1d3be3858b23443066c440d74fd214eafcd49cc3ed1812230709675b37e1b",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-961bdfe5743f1c70",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "Malicious redirect target; the line only builds the base URL for redirect tests.",
+   "reachability": "http.rs:580 is in resolves_redirects (#[cfg(test)]), constructing https://a.example/x/y/file?q for join() assertions.",
+   "impact": "None. No network access; a.example is a reserved test domain.",
+   "rationale": "Fixture for relative/absolute redirect resolution tests.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 580
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:49089de95fb2c72a626b537f2e84b8029f464a86ea1d8cf0041b89b91edd9026",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-bba0da122d97b8c1",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "None: plain-http loopback base used to test http->http and http->https redirect joins.",
+   "reachability": "http.rs:588 is in resolves_redirects (#[cfg(test)]), parsing http://127.0.0.1:8080/a.",
+   "impact": "None. No request; just Url struct assertions on the next lines.",
+   "rationale": "Test fixture; scanner matched an http:// literal.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 588
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:079e0cde2db8a1fd81543d3bcb81870941125454a9d7c6fe1cc8abed21813c06",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-bde0cec4b4c40f5d",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "None: asserts an http base joining an http Location stays non-TLS.",
+   "reachability": "http.rs:589 is in resolves_redirects (#[cfg(test)]); it checks the tls flag of the joined URL to loopback port 9.",
+   "impact": "None. Assertion only, nothing downloaded.",
+   "rationale": "Unit test asserting join semantics; no artifact.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 589
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:163211e884c55add4b426294258fbabfc0d58f2301277ce48ac360db1c3d3a21",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-c1341c162f055f90",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "Plain-http fetch of a model allowing on-path substitution; the line is the parser's http branch.",
+   "reachability": "http.rs:73 is reachable in Url::parse for any http URL, but https-origin downloads cannot be redirected to http (http.rs:114-115) and every face-model SOURCES URL is https.",
+   "impact": "None at this line. Even an http fetch would be rejected by the sha256 check in crates/fetch/src/lib.rs:512-513 when a digest is supplied, which known::download always does.",
+   "rationale": "Scheme-parsing branch, not a download URL; integrity is enforced by digest at the consumer.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 73
+    },
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 115
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:90a2317686e2411997b6ffd3eba440b7550c6d2f8ad1015640cd92ac563ace63",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-cc894024b50029e3",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "Redirect Location pointing to attacker host or downgrading scheme; the line detects absolute redirects.",
+   "reachability": "http.rs:112 in Url::join classifies absolute Locations, then refuses https->http at http.rs:114-115; reached when following redirects in production.",
+   "impact": "None. It enforces a security control; redirected content still faces the caller's sha256 verification.",
+   "rationale": "Redirect-classification code with scheme literals; no artifact URL to pin.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 112
+    },
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 114
+    }
+   ]
+  },
+  {
+   "candidateId": "sha256:e8158e948bc8fd31388b7ea9dd0abc666280ce5f102cd403e15e9181eefd4fe1",
+   "verdict": "FALSE_POSITIVE",
+   "stage": "batch",
+   "batchId": "batch-0010",
+   "clusterId": "cluster-e8e2f5b7e289d960",
+   "workItemId": "sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "workPacketDigest": "sha256:cb784d720763c86a55659f0e73b1dab221b8293a1f854ed9a295145982f3f816",
+   "contextId": "adjudicator:sha256:de51e116a45ba85e778a9ab4d6efaff18afe648ca7bd579429c9a7c497d819aa",
+   "threatModel": "Cross-host redirect; the line asserts join resolves an absolute https Location to b.example.",
+   "reachability": "http.rs:581 is in resolves_redirects (#[cfg(test)]); assertion against reserved example domains only.",
+   "impact": "None. No traffic; cross-host redirect in production is still bounded by digest verification of the final file.",
+   "rationale": "Test assertion on redirect host resolution, not a binary download.",
+   "evidence": [
+    {
+     "file": "crates/fetch/src/http.rs",
+     "line": 581
+    }
+   ]
+  }
+ ]
+}

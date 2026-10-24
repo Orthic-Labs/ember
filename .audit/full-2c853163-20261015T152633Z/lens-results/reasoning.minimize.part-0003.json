@@ -1,0 +1,204 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.minimize",
+ "packetDigest": "sha256:cf475feb506a08db9ec36e930ad58d4081a84e7bc91b4ac41d19515b0656459c",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "min-interaction-original-dead",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/engine/src/lib.rs:171-179",
+    "crates/engine/src/lib.rs:845"
+   ],
+   "failureScenario": "Interaction.original is set from begin_interaction (lib.rs:845) but never read: no `.original` access on an Interaction exists in crates/ or apps/. end_interaction/cancel_interaction and cmd/develop.rs use only `originals`, whose first entry is the same Arc. The doc comment ('Active-photo edits keep photo/original for existing callers') names callers that do not exist.",
+   "action": "Delete the `original` field and its initialiser; keep `photo` and `originals`.",
+   "verifyStatus": "verified",
+   "ponytailTag": "delete",
+   "anchor": {
+    "path": "crates/engine/src/lib.rs",
+    "line": 174,
+    "text": "    pub original: Arc<DevelopSettings>,"
+   }
+  },
+  {
+   "id": "min-import-defaults-free-fn-unused",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/engine/src/import.rs:326-328"
+   ],
+   "failureScenario": "pub fn import_defaults(p) only returns p.import_defaults(). No caller of the free function exists in crates/, apps/ or xtask (every other hit is the Photo method or the Session field), so it is a dead public delegate.",
+   "action": "Delete the free function; callers already use Photo::import_defaults().",
+   "verifyStatus": "verified",
+   "ponytailTag": "delete",
+   "anchor": {
+    "path": "crates/engine/src/import.rs",
+    "line": 326,
+    "text": "pub fn import_defaults(p: &Photo) -> lightcraft_develop::DevelopSettings {"
+   }
+  },
+  {
+   "id": "min-read-sidecars-reimplements-workers",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/engine/src/import.rs:675-678",
+    "crates/engine/src/import.rs:1522-1525"
+   ],
+   "failureScenario": "read_sidecars recomputes available_parallelism().clamp(1, MAX_IMPORT_PROBE_WORKERS).min(n) inline, which is exactly workers(jobs) defined at import.rs:1523 under the same cfg(not(wasm32)). A change to the worker policy (cap, fallback 4) has to be made in two places.",
+   "action": "Replace the native branch with `let workers = workers(paths.len());` keeping the wasm `let workers = 1;` branch.",
+   "verifyStatus": "verified",
+   "ponytailTag": "shrink",
+   "anchor": {
+    "path": "crates/engine/src/import.rs",
+    "line": 676,
+    "text": "    let workers = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(1, MAX_IMPORT_PROBE_WORKERS).min(paths.len().max(1));"
+   }
+  },
+  {
+   "id": "min-expand-within-duplicates-expand-with-options",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "likely",
+   "evidence": [
+    "crates/engine/src/import.rs:426-428",
+    "crates/engine/src/import.rs:432-462",
+    "crates/engine/src/import.rs:465-494"
+   ],
+   "failureScenario": "expand_with_options (432-462) and expand_within (465-494) are the same loop: skip check, is_dir -> walk::files_in, push explicit files, dedupe with a HashSet. They differ only in the file filter and the log message. expand_within's only callers are expand() and one test, so the production import path runs one copy while expand() (used by browse, missing, ui import) runs the other.",
+   "action": "Make one walker parameterised by (limits, filter) returning (files, truncated); express expand and expand_with_options through it.",
+   "verifyStatus": "verified",
+   "ponytailTag": "shrink",
+   "anchor": {
+    "path": "crates/engine/src/import.rs",
+    "line": 465,
+    "text": "pub fn expand_within(paths: &[String], skip: Option<&Path>, limits: crate::walk::Limits) -> (Vec<String>, bool) {"
+   }
+  },
+  {
+   "id": "min-civil-delegate",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/engine/src/import.rs:1828-1830",
+    "crates/engine/src/files.rs:1059"
+   ],
+   "failureScenario": "import::civil only forwards to lightcraft_catalog::dates::civil. view.rs:47 and cmd/manage.rs:139 already call the catalog function directly, so the engine carries a second public name for one function (callers: system_clock, files.rs:1059, tests).",
+   "action": "Delete import::civil and call lightcraft_catalog::dates::civil at the three sites.",
+   "verifyStatus": "verified",
+   "ponytailTag": "yagni",
+   "anchor": {
+    "path": "crates/engine/src/import.rs",
+    "line": 1828,
+    "text": "pub fn civil(secs: i64) -> String {"
+   }
+  },
+  {
+   "id": "min-quick-image-srgb-duplicates-embedded-preview-srgb",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/engine/src/files.rs:724-732",
+    "crates/engine/src/files.rs:989-997"
+   ],
+   "failureScenario": "embedded_preview_srgb (724-732) and quick_image_srgb (989-997) end with the same five steps: fit to max_edge with Filter::Box when larger, drop alpha, preview_orientation(...), to_srgb8().oriented(...). They differ only in where the decoded image comes from and which bytes give the orientation fallback.",
+   "action": "Extract `finish_preview_srgb(d, orientation_bytes, max_edge)` and call it from both.",
+   "verifyStatus": "verified",
+   "ponytailTag": "shrink",
+   "anchor": {
+    "path": "crates/engine/src/files.rs",
+    "line": 989,
+    "text": "fn quick_image_srgb(header: &[u8], window: &[u8], max_edge: usize) -> Option<lightcraft_raster::Rgba8> {"
+   }
+  },
+  {
+   "id": "min-render-result-literal-repeated",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/engine/src/media.rs:867-880",
+    "crates/engine/src/media.rs:888-899",
+    "crates/engine/src/media.rs:919-930",
+    "crates/engine/src/media.rs:936-947"
+   ],
+   "failureScenario": "run_unguarded spells the same 11-field RenderResult literal three times (cache hit, closing-before-render, closing-after-render) although RenderJob::failed (867) already builds it. Adding a RenderResult field means editing every copy plus failed() and QuickJob's two copies (1079, 1096).",
+   "action": "Build the result from self.failed(..) (or one RenderResult::new) and override only `rendered`/`loaded`/`gpu_fallback`/`display`; bind the failed-result base before self.info is moved.",
+   "verifyStatus": "verified",
+   "ponytailTag": "shrink",
+   "anchor": {
+    "path": "crates/engine/src/media.rs",
+    "line": 888,
+    "text": "            return RenderResult {"
+   }
+  },
+  {
+   "id": "min-render-job-literal-repeated",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/engine/src/media.rs:1221-1237",
+    "crates/engine/src/media.rs:1272-1288",
+    "crates/engine/src/media.rs:1318-1334",
+    "crates/engine/src/import.rs:1852-1868"
+   ],
+   "failureScenario": "Four builders (build_job, variant_job, face_job, Session::candidate_thumb_job) each write a 16-field RenderJob literal where request_id 0, stages/view_cache/display None, cache_generation and origin/info derivation are identical; variant_job and face_job also share the same cache+key tail (cache: Some((rendered, ck)), key: low^high of ck). Every new RenderJob field needs four edits.",
+   "action": "Add a RenderJob constructor taking (photo, level, source, settings, request, key, cache, source_key) that fills the constant fields, and a helper for the variant cache/key pair.",
+   "verifyStatus": "verified",
+   "ponytailTag": "shrink",
+   "anchor": {
+    "path": "crates/engine/src/media.rs",
+    "line": 1272,
+    "text": "        Some(RenderJob {"
+   }
+  },
+  {
+   "id": "min-source-total-duplicates-visible-filter",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/engine/src/lib.rs:903-912",
+    "crates/engine/src/lib.rs:976-988"
+   ],
+   "failureScenario": "source_total re-implements the Folder and LibraryFolder branches of visible() (browse path/subfolders, library_folder default '.') verbatim. A change to how a source maps to a filter (e.g. the '.' default) must be made twice or the grid count and total diverge.",
+   "action": "Extract `fn source_filter(&self, base: &Filter) -> Filter` doing to_filter plus the two source-specific fixups and call it from both.",
+   "verifyStatus": "verified",
+   "ponytailTag": "shrink",
+   "anchor": {
+    "path": "crates/engine/src/lib.rs",
+    "line": 976,
+    "text": "        let key = (self.catalog.revision, format!(\"{:?}|{:?}|{:?}\", self.source, self.browse, self.library_folder));"
+   }
+  },
+  {
+   "id": "min-parse-gps-unused-param",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/engine/src/cmd/library.rs:1624-1638"
+   ],
+   "failureScenario": "The `one` closure in parse_gps takes `pos: char` that is never used (`let _ = pos;` at line 1635 silences the warning); both calls pass a hemisphere letter that does nothing.",
+   "action": "Drop the `pos` parameter and the `let _ = pos;` line; call `one(&a, 'S')` and `one(&b, 'W')` with only the negative-hemisphere letter.",
+   "verifyStatus": "verified",
+   "ponytailTag": "delete",
+   "anchor": {
+    "path": "crates/engine/src/cmd/library.rs",
+    "line": 1624,
+    "text": "    let one = |s: &str, pos: char, neg: char| -> Option<f64> {"
+   }
+  }
+ ],
+ "withdrawn": []
+}

@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-result",
+  "provider": "legacy.security.adjudication",
+  "packetDigest": "sha256:9731d9ec20900bf2c4446f4a78356ba29a0746d1fcc94691bfdf7b55bf9f0345",
+  "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+  "complete": true,
+  "findings": [],
+  "withdrawn": [],
+  "verdicts": [
+    {
+      "candidateId": "sha256:003430ee2e5eb87537b6bca20024bb580fe7c069d317ddc17c22c04b2a4ceecf",
+      "verdict": "FALSE_POSITIVE",
+      "clusterId": "cluster-a0688a5dcb45561d",
+      "stage": "batch",
+      "batchId": "batch-0002",
+      "workItemId": "sha256:65ef14812eb5880e33076a354a12ad9a3b2e741beff10c613ecacfe534784ada",
+      "workPacketDigest": "sha256:25f1614dcbd2b460fc0ce88702e69ac9cd2338c3cdd3bbd7582c3c59a2524594",
+      "contextId": "adjudicator:sha256:65ef14812eb5880e33076a354a12ad9a3b2e741beff10c613ecacfe534784ada",
+      "threatModel": "The rule models an attacker or workload growing an unbounded Redis keyspace. Ember has no Redis client or server: Cargo.lock and pnpm-lock.yaml contain zero 'redis' entries, so no network cache exists for any attacker to fill.",
+      "reachability": "All 826 member locations (scanner raw file/line in execution.json legacy.data.internal-suite candidates; 526 in crates/raw, 111 crates/engine, 32 crates/tiff, rest in tests/UI) are generic `.set(` calls: TIFF IFD builder tag writes such as `ifd.set(t::COMPRESSION, Value::Short(..))`, JS Map/queue sets in test scripts, and in-memory test fixtures. None reach a Redis sink.",
+      "impact": "None. crates/tiff/src/writer.rs:34-36 shows IfdBuilder::set is `self.entries.insert(tag, value)` into an in-memory map used to build a DNG/TIFF file; there is no retention or expiration semantic to violate and no confidentiality, integrity or availability effect.",
+      "rationale": "Lexical match on `.set(` misclassified as a Redis write; the project has no Redis dependency and sampled sites (crates/engine/src/files.rs:2302, crates/raw/src/dngwrite.rs:140, crates/raw/src/vendor/pef.rs:560, crates/tiff/tests/roundtrip.rs:137, scripts/desktop/slider-command-queue.test.mjs:69) are TIFF tag builders or in-process maps. Devil's advocate: a hidden Redis use via a transitive crate would still appear in Cargo.lock, which has none.",
+      "evidence": [
+        {
+          "file": "crates/tiff/src/writer.rs",
+          "line": 34
+        },
+        {
+          "file": "crates/raw/src/dngwrite.rs",
+          "line": 140
+        },
+        {
+          "file": "crates/engine/src/files.rs",
+          "line": 2302
+        }
+      ]
+    },
+    {
+      "candidateId": "sha256:1f62b9ce548477b8ebbfabb062b898cb5ac55b7508a135338416b96334f94974",
+      "verdict": "FALSE_POSITIVE",
+      "clusterId": "cluster-937dabe708a92ee5",
+      "stage": "batch",
+      "batchId": "batch-0002",
+      "workItemId": "sha256:65ef14812eb5880e33076a354a12ad9a3b2e741beff10c613ecacfe534784ada",
+      "workPacketDigest": "sha256:25f1614dcbd2b460fc0ce88702e69ac9cd2338c3cdd3bbd7582c3c59a2524594",
+      "contextId": "adjudicator:sha256:65ef14812eb5880e33076a354a12ad9a3b2e741beff10c613ecacfe534784ada",
+      "threatModel": "SQL injection requires attacker-influenced text concatenated into a SQL statement executed by a database engine. Ember links no SQL client (no rusqlite/sqlx/diesel/libsqlite3 in Cargo.lock); its Lightroom import uses an in-repo read-only SQLite file parser (crates/engine/src/lightroom_catalog.rs:11 `lightroom_sqlite::{Database, LiveTable}`) that walks tables, not SQL text.",
+      "reachability": "All 23 members were inspected at their exact lines: 15 are React JSX/template literals building className or label strings (e.g. apps/lightcraft-desktop/web/src/library/Filmstrip.tsx:229, App.tsx:158 `${window.innerWidth}x${window.innerHeight}`), 4 are egui font registration and test asserts containing the words 'select'/'update'/'delete' (crates/ui-egui/src/theme.rs:280, crates/pipeline/src/masks.rs:695), 1 a command-registry doc string (crates/engine/src/cmd/denoise.rs:654), and 1 a regex error message (scripts/desktop/gate.mjs:33). No grep hit exists for a SELECT/INSERT INTO/UPDATE/DELETE FROM string literal in crates or apps sources.",
+      "impact": "None. No SQL statement is constructed or executed at any member location, so no query integrity or data confidentiality is at risk.",
+      "rationale": "Scanner keyed on SQL keywords ('select', 'update', 'delete', 'insert') appearing near string interpolation; every site is UI markup, font maps, or test assertion text. Devil's advocate: the Lightroom catalog path does read SQLite, but through a structural parser with no query text and none of the 23 members sit in it.",
+      "evidence": [
+        {
+          "file": "apps/lightcraft-desktop/web/src/App.tsx",
+          "line": 158
+        },
+        {
+          "file": "crates/ui-egui/src/theme.rs",
+          "line": 280
+        },
+        {
+          "file": "crates/engine/src/lightroom_catalog.rs",
+          "line": 11
+        }
+      ]
+    },
+    {
+      "candidateId": "sha256:0530b73ee0eaba5a5184502d5a57a5a38568058fc22f6d720b522e116787b371",
+      "verdict": "FALSE_POSITIVE",
+      "clusterId": "cluster-d7029defbbd65079",
+      "stage": "batch",
+      "batchId": "batch-0002",
+      "workItemId": "sha256:65ef14812eb5880e33076a354a12ad9a3b2e741beff10c613ecacfe534784ada",
+      "workPacketDigest": "sha256:25f1614dcbd2b460fc0ce88702e69ac9cd2338c3cdd3bbd7582c3c59a2524594",
+      "contextId": "adjudicator:sha256:65ef14812eb5880e33076a354a12ad9a3b2e741beff10c613ecacfe534784ada",
+      "threatModel": "The rule models partial database writes across a crash or concurrent writer leaving persisted state inconsistent. No attacker capability is involved; the question is whether adjacent writes target a transactional store.",
+      "reachability": "The 71 members are adjacent `.insert(` calls on in-process HashMap/BTreeMap/serde_json::Map/HashSet values (e.g. crates/desktop-host/src/merge.rs:167 `self.current.insert(..)`, crates/engine/src/lightroom_catalog.rs:662 `geometry.insert(\"rect\"..)`, crates/engine/src/cmd/library.rs:650 `params.insert(k, v)`, apps/lightcraft-cli/src/main.rs:464). The catalog sites (crates/catalog/src/lib.rs:759, keywords.rs:552) mutate in-memory indexes whose persistence goes through the catalog's own append log, not these inserts.",
+      "impact": "None. In-memory map mutations within one function are not durable writes; a crash discards them wholesale, so no torn persisted state or data loss arises from the lack of a transaction boundary at these lines.",
+      "rationale": "Lexical match on multiple `.insert(` calls; none is a database write. Devil's advocate: catalog durability is real, but it is enforced at the log append layer (crates/catalog has dedicated torn-append tests, crates/catalog/src/tests_torn_append.rs), not at these map inserts, so this rule cannot find a defect here.",
+      "evidence": [
+        {
+          "file": "crates/desktop-host/src/merge.rs",
+          "line": 167
+        },
+        {
+          "file": "crates/catalog/src/lib.rs",
+          "line": 759
+        },
+        {
+          "file": "crates/engine/src/cmd/library.rs",
+          "line": 650
+        }
+      ]
+    }
+  ]
+}

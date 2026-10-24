@@ -1,0 +1,265 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-receipt",
+  "provider": "reasoning.architecture",
+  "result": {
+    "schema_version": 1,
+    "provider": "reasoning.architecture",
+    "applicable": true,
+    "required": true,
+    "status": "partial",
+    "complete": false,
+    "coverage": {
+      "denominator_digest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+      "expected": 730,
+      "examined": 13,
+      "gaps": [
+        "reasoning-part-scope:reasoning.architecture:part 2/7"
+      ]
+    },
+    "findings": [
+      {
+        "id": "p0002-arch-desktop-host-startup-policy-duplicated",
+        "severity": "medium"
+      }
+    ],
+    "coverage_gaps": [
+      "reasoning-part-scope:reasoning.architecture:part 2/7"
+    ],
+    "degradation": [],
+    "details": {
+      "changeRisk": {
+        "reversibility": "unknown",
+        "blastRadius": "whole-repo audit without change context",
+        "reason": "Whole-repo run with no diff/base context; change risk cannot be assessed from supplied evidence.",
+        "beforeEvidence": [],
+        "afterEvidence": []
+      },
+      "executionReceipt": {
+        "schemaVersion": 1,
+        "kind": "legion-reasoning-receipt",
+        "receiptId": "ingest-36f69bb38780670b3bb3cc11d822369a",
+        "requestId": "sha256:e7a00d9ebafa5b7c5ae384a0bc6e046f15f7e00f78bbc9de8689cb858e371cc8",
+        "providerId": "reasoning.architecture",
+        "contract": "audit-lens-architecture-v1",
+        "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+        "planSignature": "hmac-sha256:805a23e8a5d736c2a96307bc58b919aa92b271336dbe2dbca01d2a81fe17b6f3",
+        "repositoryId": "/Volumes/D/claude/ember",
+        "inventoryGeneration": "filesystem:sha256:6a2aaea46465c4542b1f39f825efd84edc8f63121b837f8bc64a97418d82ef9a",
+        "inventoryDigest": "sha256:da3157e68029988c594537621af44004cf97f0020364e0c23299c7b13bcc221a",
+        "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+        "denominatorCount": 730,
+        "resultDigest": "sha256:e5910aaaffe30047f11adda0446b0bef93a13e5672525df9785e7d3354a39deb",
+        "status": "partial",
+        "complete": false,
+        "gaps": [
+          "reasoning-part-scope:reasoning.architecture:part 2/7"
+        ],
+        "authentication": {
+          "alg": "HMAC-SHA256",
+          "macDomain": "legion-reasoning-receipt:v1",
+          "boundFieldsDigest": "sha256:879de90044d6c1908fca28fc34814e176364267cdd644bb6319c20c234db2e65",
+          "mac": "6ad89a8d25671f01989e622231dbe540f4616695ee8c392cdb5ae0ec301c6176",
+          "host": "legion-cli-ingest",
+          "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb"
+        }
+      },
+      "findingEvidence": {
+        "p0002-arch-desktop-host-startup-policy-duplicated": {
+          "lens": "architecture",
+          "confidence": "confirmed",
+          "verifyStatus": "verified",
+          "action": "Move the launch-option parsing and startup policy (library resolution, demo or in-memory semantics, GPU crash sentinel and notice) into one shared owner, such as lightcraft-engine or desktop-host, that both hosts call. At minimum, give `--demo` the same meaning in both hosts."
+        }
+      },
+      "findingLocations": {
+        "p0002-arch-desktop-host-startup-policy-duplicated": [
+          "apps/lightcraft/src/main.rs:783",
+          "apps/lightcraft/src/main.rs:696",
+          "apps/lightcraft/src/main.rs:175-181",
+          "apps/lightcraft-desktop/src/native.rs:950-954",
+          "apps/lightcraft-desktop/src/native.rs:985-1001",
+          "crates/desktop-host/src/controller.rs:58-61"
+        ]
+      },
+      "findingMessages": {
+        "p0002-arch-desktop-host-startup-policy-duplicated": "The two desktop hosts (egui `apps/lightcraft` and Tauri `apps/lightcraft-desktop`) each re-implement startup policy (CLI flags, library resolution order, GPU crash sentinel, crash notice text) instead of sharing one owner, and the copies have already diverged. In the egui host `--demo` is an alias of `--memory`, which its help text describes as a throwaway in-memory session where nothing is saved. In the Tauri host, `--demo` still resolves the user's real library (from the env var, the saved path or the default) and opens it on disk with seed_demo=true (controller.rs:58-61). A user or script that relies on the documented `--demo` throwaway mode ends up opening and writing their real library when they run the Tauri build. The GPU crash notice is also duplicated word for word (main.rs:175 and native.rs:950), so a wording or guidance fix has to be made in both places."
+      },
+      "findingTitles": {
+        "p0002-arch-desktop-host-startup-policy-duplicated": "Move the launch-option parsing and startup policy (library resolution, demo or in-memory semantics, GPU crash sentinel and notice) into one shared owner, such as lightcraft-engine or desktop-host, that both hosts call. At minimum, give `--demo` the same meaning in both hosts."
+      },
+      "ingest": {
+        "host": "legion-cli-ingest",
+        "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb",
+        "packetDigest": "sha256:63ee48dc16d2a14b6923e36f9843a30d0b311f7d26454f135ed5aee3251af028",
+        "anchorsVerified": 1
+      },
+      "lensFindings": [
+        {
+          "id": "p0002-arch-desktop-host-startup-policy-duplicated",
+          "lens": "architecture",
+          "severity": "medium",
+          "confidence": "confirmed",
+          "evidence": [
+            "apps/lightcraft/src/main.rs:783",
+            "apps/lightcraft/src/main.rs:696",
+            "apps/lightcraft/src/main.rs:175-181",
+            "apps/lightcraft-desktop/src/native.rs:950-954",
+            "apps/lightcraft-desktop/src/native.rs:985-1001",
+            "crates/desktop-host/src/controller.rs:58-61"
+          ],
+          "failureScenario": "The two desktop hosts (egui `apps/lightcraft` and Tauri `apps/lightcraft-desktop`) each re-implement startup policy (CLI flags, library resolution order, GPU crash sentinel, crash notice text) instead of sharing one owner, and the copies have already diverged. In the egui host `--demo` is an alias of `--memory`, which its help text describes as a throwaway in-memory session where nothing is saved. In the Tauri host, `--demo` still resolves the user's real library (from the env var, the saved path or the default) and opens it on disk with seed_demo=true (controller.rs:58-61). A user or script that relies on the documented `--demo` throwaway mode ends up opening and writing their real library when they run the Tauri build. The GPU crash notice is also duplicated word for word (main.rs:175 and native.rs:950), so a wording or guidance fix has to be made in both places.",
+          "action": "Move the launch-option parsing and startup policy (library resolution, demo or in-memory semantics, GPU crash sentinel and notice) into one shared owner, such as lightcraft-engine or desktop-host, that both hosts call. At minimum, give `--demo` the same meaning in both hosts.",
+          "verifyStatus": "verified",
+          "reviewAxis": "standards",
+          "disposition": "design-heuristic",
+          "anchor": {
+            "path": "apps/lightcraft/src/main.rs",
+            "line": 783,
+            "text": "            \"--memory\" | \"--demo\" => in_memory = true,"
+          },
+          "changeAttribution": {
+            "status": "unknown",
+            "reason": "whole-repo run without baseline",
+            "baselineEvidence": []
+          }
+        }
+      ],
+      "lensIds": [
+        "architecture"
+      ],
+      "packetCoverage": {
+        "basis": "bounded-excerpts",
+        "examined": 13,
+        "expected": 730,
+        "part": {
+          "number": 2,
+          "total": 7
+        },
+        "requiredParts": 7,
+        "overCeiling": null,
+        "partPaths": [
+          "apps/lightcraft/src/main.rs",
+          "crates/catalog/src/rules.rs",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs",
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/camera_preview.rs",
+          "crates/engine/src/cmd/geocode.rs",
+          "crates/engine/src/cmd/library.rs"
+        ],
+        "examinedPaths": [
+          "apps/lightcraft/src/main.rs",
+          "crates/catalog/src/rules.rs",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs",
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/camera_preview.rs",
+          "crates/engine/src/cmd/geocode.rs"
+        ],
+        "chunkedPaths": [
+          {
+            "path": "crates/engine/src/cmd/library.rs",
+            "chunk": 1,
+            "chunks": 3,
+            "startLine": 1,
+            "endLine": 648
+          },
+          {
+            "path": "crates/engine/src/cmd/library.rs",
+            "chunk": 2,
+            "chunks": 3,
+            "startLine": 649,
+            "endLine": 1244
+          }
+        ],
+        "omittedPaths": [],
+        "truncatedPaths": [],
+        "coverageMode": "risk-sampled",
+        "bundle": "J2",
+        "reviewSetDigest": "sha256:12c8bda95469b746dc24253d0430980aa5dd5237baf339b011d2c4bc7ecd6e6c",
+        "reviewSetCount": 76,
+        "reviewExpected": 55,
+        "promotedPaths": [
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs",
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/cmd/geocode.rs",
+          "crates/engine/src/crs.rs",
+          "crates/engine/src/crs_masks.rs"
+        ],
+        "displacedPaths": [
+          "crates/codecs/examples/jpeg_bench.rs",
+          "crates/raw/examples/rawdump.rs",
+          "crates/merge/src/features.rs",
+          "crates/merge/tests/pano.rs",
+          "crates/pipeline/src/dust.rs",
+          "crates/pipeline/src/colorops.rs",
+          "crates/gpu/tests/memory.rs",
+          "crates/raw/src/demosaic/xtrans.rs",
+          "crates/merge/src/pano/finish.rs",
+          "crates/codecs/src/jpeg_par.rs",
+          "crates/meta/src/iptc.rs",
+          "apps/lightcraft-web/src/files.rs",
+          "crates/codecs/src/other.rs",
+          "apps/lightcraft/examples/gen_photos.rs",
+          "crates/merge/src/ransac.rs",
+          "crates/scenes/src/noise.rs",
+          "crates/tiff/src/makernote.rs",
+          "crates/merge/src/align.rs",
+          "crates/catalog/src/tests_local.rs",
+          "apps/lightcraft-cli/src/alloc_release.rs",
+          "crates/codecs/src/exif.rs",
+          "crates/engine/src/cmd/curves.rs",
+          "crates/ui-egui/src/tests_unsaved.rs",
+          "packaging/linux/postinst.sh",
+          "crates/raw/examples/rawinfo.rs",
+          "crates/pipeline/src/upright.rs",
+          "crates/pipeline/src/transform.rs",
+          "crates/ui-egui/src/panels/crop_overlay.rs",
+          "crates/engine/src/tests_forget_local.rs",
+          "crates/pipeline/src/profiles.rs",
+          "crates/ui-egui/src/import.rs",
+          "crates/ui-egui/src/tests_preview_limit.rs",
+          "crates/ui-egui/src/render.rs",
+          "crates/desktop-host/src/tasks.rs",
+          "crates/catalog/src/keywords.rs",
+          "crates/ui-egui/src/panels/edit.rs",
+          "crates/ui-egui/src/panels/grid.rs"
+        ],
+        "unpromotedCount": 78,
+        "declaredUnsampled": 675,
+        "excluded": 23,
+        "aliasedPaths": []
+      },
+      "reasoningHostState": "ingested",
+      "withdrawnFindings": []
+    }
+  },
+  "part": {
+    "number": 2,
+    "total": 7
+  }
+}

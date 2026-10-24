@@ -1,0 +1,98 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.correctness",
+ "packetDigest": "sha256:5a90101e176fae2282e31d2481ff6c6406037d687844e9f12da556d92bc463ce",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "correctness-p9-rescan-drops-import-choices",
+   "lens": "correctness",
+   "severity": "medium",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/import.rs:1008-1015",
+    "crates/ui-egui/src/import.rs:459-478",
+    "crates/ui-egui/src/import.rs:590-605",
+    "crates/ui-egui/src/menus.rs:1553-1559"
+   ],
+   "failureScenario": "Import from Device opens the review with Copy checked (menus.rs sets ScanTask.copy=true after import::open). If the user edits the scan filters and clicks Rescan, body() calls open_with_options, which always creates ScanTask{copy:false, album:None}; when that scan finishes, poll_scan replaces the whole dialog with ImportDialog::new(...) and sets d.copy=task.copy (false) and d.album=None. Move/destination/organize/rename/DNG/preset/keywords/new-album choices are also reset to defaults. A user who does not re-check the Transfer row then imports a memory card 'Add in place', so the library references files on removable media that go missing when the card is ejected; an album or keywords chosen before the rescan are silently not applied.",
+   "action": "Carry the current dialog's non-scan choices (copy, move_files, destination, organize, folder_template, rename, dng, album/new_album, preset, metadata_preset, keywords, on_deleted) through the rescan (e.g. store them on ScanTask, or merge them into the new ImportDialog in poll_scan), and add a headless test that rescans a device import and asserts Copy and the album remain selected.",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "anchor": {
+    "path": "crates/ui-egui/src/import.rs",
+    "line": 1011,
+    "text": "if let Err(error) = open_with_options(app, sources, options) {"
+   }
+  },
+  {
+   "id": "correctness-p9-auto-import-ignores-sync-and-catalog",
+   "lens": "correctness",
+   "severity": "medium",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/lib.rs:1051-1081",
+    "crates/ui-egui/src/import.rs:448-452",
+    "crates/ui-egui/src/import.rs:681-705",
+    "crates/ui-egui/src/sync.rs:186-192",
+    "crates/ui-egui/src/lightroom_import.rs:149-157"
+   ],
+   "failureScenario": "Auto Import checks import/sync_run/lightroom only when it spawns the folder listing (lib.rs:1054-1058). The listing runs on a worker (it may take seconds on a network share); its done callback re-checks only app.import.is_none() before installing an ImportTask, and import::tick starts the worker without checking sync_run or lightroom. If the user confirms Synchronize Folder (sync.rs only refuses when app.import is Some) or starts an LRCAT import (lightroom busy() only refuses when app.import is Some) while the listing is in flight, the auto import then starts alongside it. That violates the module's stated invariant that an import and a Synchronize Folder never run at once because each readies files against the library as it was when it started, so both can add the same file (duplicate catalog records); likewise an auto import can run during a catalog import's commit window.",
+   "action": "In the done callback (and/or at ImportRun start in import::tick) refuse or defer when app.sync_run, app.lightroom or a non-browse scan is present, reusing busy_synchronizing; add a test that completes an auto-import listing while a sync run is active and asserts no ImportTask is created.",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "reviewAxis": "spec",
+   "sourceQuote": "/// An import and a Synchronize Folder never run at once: each readies its files against the",
+   "sourceLocation": "crates/ui-egui/src/import.rs:448",
+   "disposition": "wrong",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "whole-repo audit without a baseline revision",
+    "baselineEvidence": []
+   },
+   "anchor": {
+    "path": "crates/ui-egui/src/lib.rs",
+    "line": 1069,
+    "text": "let Some(mut params) = r.get(\"import\").cloned().filter(|_| app.import.is_none()) else { return };"
+   }
+  },
+  {
+   "id": "correctness-p9-review-start-replaces-running-import",
+   "lens": "correctness",
+   "severity": "medium",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/import.rs:616-665",
+    "crates/ui-egui/src/import.rs:325-330",
+    "crates/ui-egui/src/import.rs:366-370",
+    "crates/ui-egui/src/panels/dialogs.rs:1741",
+    "crates/ui-egui/src/import.rs:668-672"
+   ],
+   "failureScenario": "import::start (the review dialog's OK / ui.dialog.confirm) checks only busy_synchronizing, unlike start_paths which refuses while app.import is Some or a review scan runs, and unlike lightroom busy(). With an Auto Import folder configured, an auto import (or a Local-view browse import) can start while the review dialog is open; confirming the dialog then assigns app.import = Some(new task), dropping the running ImportTask: its ImportRun Drop sets cancel, so remaining files are silently abandoned, any batches already sent but not yet committed are dropped without the Move rollback the worker performs on send failure, its committed batches are never merged into one undo step, and no completion/cancel toast is shown. Confirming during an LRCAT import likewise runs both at once although lightroom busy() treats an import as a conflict.",
+   "action": "Make import::start refuse (or queue) when app.import is Some (non-browse), when a non-browse scan runs, or when lightroom_import::is_running(app), matching start_paths; add a test that confirms the review while an auto import is running and asserts the running task is preserved.",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "anchor": {
+    "path": "crates/ui-egui/src/import.rs",
+    "line": 662,
+    "text": "app.import = Some(ImportTask::new(queue, params, undo0, false));"
+   }
+  }
+ ],
+ "withdrawn": [],
+ "details": {
+  "semanticReview": {
+   "axis": "spec",
+   "status": "findings",
+   "reason": "The excerpts state behavioral invariants in their own docs; the auto-import path violates the stated import/synchronize exclusion (finding correctness-p9-auto-import-ignores-sync-and-catalog). No external spec applies to the remaining excerpts.",
+   "sources": [
+    {
+     "location": "crates/ui-egui/src/import.rs:448",
+     "quote": "/// An import and a Synchronize Folder never run at once: each readies its files against the"
+    }
+   ]
+  }
+ }
+}

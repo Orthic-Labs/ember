@@ -1,0 +1,65 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.minimize",
+ "packetDigest": "sha256:46a1e8e3579ab423215e9c86a4bcf0046b9d75aeb3847f9e8faf5273e57210ab",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "minimize:right-label-row-dead",
+   "lens": "minimize",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/panels/right.rs:60-65"
+   ],
+   "failureScenario": "pub fn label_row has no caller anywhere in crates/ or apps/ (repo-wide grep finds only its definition); it is dead code kept alive only by being pub in a pub(crate)-reachable module, so it carries a duplicate of the label/value painting logic for nothing.",
+   "action": "Delete label_row (6 lines).",
+   "verifyStatus": "verified",
+   "ponytailTag": "delete",
+   "anchor": {
+    "path": "crates/ui-egui/src/panels/right.rs",
+    "line": 60,
+    "text": "pub fn label_row(ui: &mut egui::Ui, label: &str, value: &str) {"
+   }
+  },
+  {
+   "id": "minimize:state-sidebar-section-collapsed-test-only",
+   "lens": "minimize",
+   "severity": "info",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/state.rs:1195-1197"
+   ],
+   "failureScenario": "UiState::sidebar_section_collapsed is pub in production code but its only callers are tests_panels.rs and other tests; no non-test code calls it (the sidebar uses self.sidebar.is_collapsed directly), so it is a test-only accessor shipped in release builds.",
+   "action": "Move it under #[cfg(test)] or have the tests call app.ui.sidebar.is_collapsed(SidebarSection::from_id(..)) directly.",
+   "verifyStatus": "verified",
+   "ponytailTag": "delete",
+   "anchor": {
+    "path": "crates/ui-egui/src/state.rs",
+    "line": 1195,
+    "text": "pub fn sidebar_section_collapsed(&self, id: &str) -> bool {"
+   }
+  },
+  {
+   "id": "minimize:tests-has-helper-copied",
+   "lens": "minimize",
+   "severity": "info",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/ui-egui/src/tests_panels.rs:1513-1515"
+   ],
+   "failureScenario": "The same 3-line `has(h, id)` widget-presence helper (and near-identical click/exec/T/SETTLE helpers) is redefined verbatim in 11 tests_*.rs modules (tests_panels, tests_album_picker, tests_activity, tests_date_picker, ...), so a change to how widgets are looked up must be repeated in every copy.",
+   "action": "Hoist has/click/exec and the T/SETTLE constants into one shared #[cfg(test)] helper module (e.g. tests_support.rs) and import it.",
+   "verifyStatus": "verified",
+   "ponytailTag": "shrink",
+   "anchor": {
+    "path": "crates/ui-egui/src/tests_panels.rs",
+    "line": 1513,
+    "text": "fn has(h: &Headless, id: &str) -> bool {"
+   }
+  }
+ ],
+ "withdrawn": []
+}

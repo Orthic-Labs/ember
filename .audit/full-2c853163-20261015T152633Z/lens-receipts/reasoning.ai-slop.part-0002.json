@@ -1,0 +1,296 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-receipt",
+  "provider": "reasoning.ai-slop",
+  "result": {
+    "schema_version": 1,
+    "provider": "reasoning.ai-slop",
+    "applicable": true,
+    "required": true,
+    "status": "partial",
+    "complete": false,
+    "coverage": {
+      "denominator_digest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+      "expected": 730,
+      "examined": 18,
+      "gaps": [
+        "reasoning-part-scope:reasoning.ai-slop:part 2/4"
+      ]
+    },
+    "findings": [
+      {
+        "id": "p0002-ai-slop-misplaced-doc",
+        "severity": "low"
+      },
+      {
+        "id": "p0002-ai-slop-dead-param-pos",
+        "severity": "low"
+      }
+    ],
+    "coverage_gaps": [
+      "reasoning-part-scope:reasoning.ai-slop:part 2/4"
+    ],
+    "degradation": [],
+    "details": {
+      "executionReceipt": {
+        "schemaVersion": 1,
+        "kind": "legion-reasoning-receipt",
+        "receiptId": "ingest-b1d641851505a8784e16ef5d1b4258c5",
+        "requestId": "sha256:9c93486421b0843fb98c331e24549af1ec668e4a7f2e0e24a5223ea519b3ddbc",
+        "providerId": "reasoning.ai-slop",
+        "contract": "audit-lens-ai-slop-v1",
+        "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+        "planSignature": "hmac-sha256:805a23e8a5d736c2a96307bc58b919aa92b271336dbe2dbca01d2a81fe17b6f3",
+        "repositoryId": "/Volumes/D/claude/ember",
+        "inventoryGeneration": "filesystem:sha256:6a2aaea46465c4542b1f39f825efd84edc8f63121b837f8bc64a97418d82ef9a",
+        "inventoryDigest": "sha256:da3157e68029988c594537621af44004cf97f0020364e0c23299c7b13bcc221a",
+        "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+        "denominatorCount": 730,
+        "resultDigest": "sha256:e125af4aa5ca3f36e67a830fb8c49f81c875f8bec975df1270ec4d3acf633d92",
+        "status": "partial",
+        "complete": false,
+        "gaps": [
+          "reasoning-part-scope:reasoning.ai-slop:part 2/4"
+        ],
+        "authentication": {
+          "alg": "HMAC-SHA256",
+          "macDomain": "legion-reasoning-receipt:v1",
+          "boundFieldsDigest": "sha256:879de90044d6c1908fca28fc34814e176364267cdd644bb6319c20c234db2e65",
+          "mac": "7149617f67936fa090420714f91919a4593a814510b5819dc979bb0be47262fd",
+          "host": "legion-cli-ingest",
+          "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb"
+        }
+      },
+      "findingEvidence": {
+        "p0002-ai-slop-misplaced-doc": {
+          "lens": "ai-slop",
+          "confidence": "confirmed",
+          "verifyStatus": "verified",
+          "action": "Move the \"Fold the last `n` undo steps into one\" paragraph down onto merge_undo and leave commits() with only its own \"How many undo steps were committed\" doc."
+        },
+        "p0002-ai-slop-dead-param-pos": {
+          "lens": "ai-slop",
+          "confidence": "confirmed",
+          "verifyStatus": "verified",
+          "action": "Either drop the `pos` parameter and the `let _ = pos;` suppression, or use it (reject a coordinate whose letter belongs to the other axis)."
+        }
+      },
+      "findingLocations": {
+        "p0002-ai-slop-misplaced-doc": [
+          "crates/engine/src/lib.rs:595-601"
+        ],
+        "p0002-ai-slop-dead-param-pos": [
+          "crates/engine/src/cmd/library.rs:1624-1636"
+        ]
+      },
+      "findingMessages": {
+        "p0002-ai-slop-misplaced-doc": "The doc comment that describes merge_undo (\"Fold the last `n` undo steps into one...\") is stacked on top of the doc for commits(), so rustdoc renders one run-on doc on Session::commits() and Session::merge_undo, the function it describes, has no doc at all. A reader of the generated docs or an agent reading the signature is told commits() folds undo steps.",
+        "p0002-ai-slop-dead-param-pos": "The closure `one` in parse_gps takes a `pos: char` hemisphere letter (callers pass 'N' and 'E') that is never read; `let _ = pos;` only silences the unused warning. The positive hemisphere letter is therefore not validated: a latitude typed as \"51.5 E\" or a longitude as \"0.1 N\" is accepted silently as positive instead of rejected."
+      },
+      "findingTitles": {
+        "p0002-ai-slop-misplaced-doc": "Move the \"Fold the last `n` undo steps into one\" paragraph down onto merge_undo and leave commits() with only its own \"How many undo steps were committed\" doc.",
+        "p0002-ai-slop-dead-param-pos": "Either drop the `pos` parameter and the `let _ = pos;` suppression, or use it (reject a coordinate whose letter belongs to the other axis)."
+      },
+      "ingest": {
+        "host": "legion-cli-ingest",
+        "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb",
+        "packetDigest": "sha256:6eb5f6bfddc4e1f6b62aa170eeedc065ce94d13b678a3abe8b8bedcec0c477b3",
+        "anchorsVerified": 2
+      },
+      "lensFindings": [
+        {
+          "id": "p0002-ai-slop-misplaced-doc",
+          "lens": "ai-slop",
+          "severity": "low",
+          "confidence": "confirmed",
+          "evidence": [
+            "crates/engine/src/lib.rs:595-601"
+          ],
+          "failureScenario": "The doc comment that describes merge_undo (\"Fold the last `n` undo steps into one...\") is stacked on top of the doc for commits(), so rustdoc renders one run-on doc on Session::commits() and Session::merge_undo, the function it describes, has no doc at all. A reader of the generated docs or an agent reading the signature is told commits() folds undo steps.",
+          "action": "Move the \"Fold the last `n` undo steps into one\" paragraph down onto merge_undo and leave commits() with only its own \"How many undo steps were committed\" doc.",
+          "verifyStatus": "verified",
+          "anchor": {
+            "path": "crates/engine/src/lib.rs",
+            "line": 595,
+            "text": "    /// Fold the last `n` undo steps into one (commands that commit step by step because each op"
+          }
+        },
+        {
+          "id": "p0002-ai-slop-dead-param-pos",
+          "lens": "ai-slop",
+          "severity": "low",
+          "confidence": "confirmed",
+          "evidence": [
+            "crates/engine/src/cmd/library.rs:1624-1636"
+          ],
+          "failureScenario": "The closure `one` in parse_gps takes a `pos: char` hemisphere letter (callers pass 'N' and 'E') that is never read; `let _ = pos;` only silences the unused warning. The positive hemisphere letter is therefore not validated: a latitude typed as \"51.5 E\" or a longitude as \"0.1 N\" is accepted silently as positive instead of rejected.",
+          "action": "Either drop the `pos` parameter and the `let _ = pos;` suppression, or use it (reject a coordinate whose letter belongs to the other axis).",
+          "verifyStatus": "verified",
+          "anchor": {
+            "path": "crates/engine/src/cmd/library.rs",
+            "line": 1635,
+            "text": "        let _ = pos;"
+          }
+        }
+      ],
+      "lensIds": [
+        "ai-slop"
+      ],
+      "packetCoverage": {
+        "basis": "bounded-excerpts",
+        "examined": 18,
+        "expected": 730,
+        "part": {
+          "number": 2,
+          "total": 4
+        },
+        "requiredParts": 4,
+        "overCeiling": null,
+        "partPaths": [
+          "crates/engine/src/cmd/geocode.rs",
+          "crates/engine/src/cmd/library.rs",
+          "crates/engine/src/crs.rs",
+          "crates/engine/src/crs_masks.rs",
+          "crates/engine/src/denoise.rs",
+          "crates/engine/src/export.rs",
+          "crates/engine/src/files.rs",
+          "crates/engine/src/guard.rs",
+          "crates/engine/src/import.rs",
+          "crates/engine/src/lib.rs",
+          "crates/engine/src/lightroom_catalog.rs",
+          "crates/engine/src/media.rs",
+          "crates/engine/src/tests.rs",
+          "crates/engine/src/tests_import.rs",
+          "crates/engine/src/tests_xmp.rs",
+          "crates/fetch/src/http.rs",
+          "crates/mcp/src/server.rs",
+          "crates/photo-ai/src/network.rs"
+        ],
+        "examinedPaths": [
+          "crates/engine/src/cmd/geocode.rs",
+          "crates/engine/src/cmd/library.rs",
+          "crates/engine/src/crs.rs",
+          "crates/engine/src/crs_masks.rs",
+          "crates/engine/src/denoise.rs",
+          "crates/engine/src/export.rs",
+          "crates/engine/src/files.rs",
+          "crates/engine/src/guard.rs",
+          "crates/engine/src/import.rs",
+          "crates/engine/src/lib.rs",
+          "crates/engine/src/lightroom_catalog.rs",
+          "crates/engine/src/media.rs",
+          "crates/engine/src/tests.rs",
+          "crates/engine/src/tests_import.rs",
+          "crates/engine/src/tests_xmp.rs",
+          "crates/fetch/src/http.rs",
+          "crates/mcp/src/server.rs",
+          "crates/photo-ai/src/network.rs"
+        ],
+        "chunkedPaths": [],
+        "omittedPaths": [],
+        "truncatedPaths": [],
+        "coverageMode": "risk-sampled",
+        "bundle": "S2",
+        "reviewSetDigest": "sha256:5c038c5d944be566f6c34eaf2138ba708a813739b48b44a2851b8c8b645fe843",
+        "reviewSetCount": 94,
+        "reviewExpected": 57,
+        "promotedPaths": [
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs",
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/cmd/geocode.rs",
+          "crates/engine/src/crs.rs",
+          "crates/engine/src/crs_masks.rs",
+          "crates/engine/src/denoise.rs"
+        ],
+        "displacedPaths": [
+          "crates/engine/src/cmd/edit.rs",
+          "crates/engine/src/cmd/filters.rs",
+          "crates/codecs/tests/corpus.rs",
+          "crates/pipeline/src/lut.rs",
+          "crates/segment/tests/reference.rs",
+          "crates/catalog/src/tests_torn_append.rs",
+          "crates/scenes/examples/contact_sheet.rs",
+          "crates/preview/src/hash.rs",
+          "crates/codecs/examples/jpeg_bench.rs",
+          "crates/raw/examples/rawdump.rs",
+          "crates/merge/src/features.rs",
+          "crates/merge/tests/pano.rs",
+          "crates/pipeline/src/dust.rs",
+          "crates/pipeline/src/colorops.rs",
+          "crates/gpu/tests/memory.rs",
+          "crates/raw/src/demosaic/xtrans.rs",
+          "crates/merge/src/pano/finish.rs",
+          "crates/codecs/src/jpeg_par.rs",
+          "crates/meta/src/iptc.rs",
+          "apps/lightcraft-web/src/files.rs",
+          "crates/codecs/src/other.rs",
+          "apps/lightcraft/examples/gen_photos.rs",
+          "crates/merge/src/ransac.rs",
+          "crates/scenes/src/noise.rs",
+          "crates/tiff/src/makernote.rs",
+          "crates/merge/src/align.rs",
+          "crates/catalog/src/tests_local.rs",
+          "apps/lightcraft-cli/src/alloc_release.rs",
+          "crates/codecs/src/exif.rs",
+          "crates/engine/src/cmd/curves.rs",
+          "crates/ui-egui/src/tests_unsaved.rs",
+          "packaging/linux/postinst.sh",
+          "crates/raw/examples/rawinfo.rs",
+          "crates/pipeline/src/upright.rs",
+          "crates/pipeline/src/transform.rs",
+          "crates/ui-egui/src/panels/crop_overlay.rs",
+          "crates/engine/src/tests_forget_local.rs",
+          "crates/pipeline/src/profiles.rs",
+          "crates/catalog/src/lib.rs",
+          "crates/pipeline/src/lib.rs",
+          "apps/lightcraft-desktop/web/src/inspector/Inspector.tsx",
+          "crates/ui-egui/src/control.rs",
+          "crates/ui-egui/src/shortcuts.rs",
+          "crates/desktop-host/src/controller.rs",
+          "crates/engine/src/cmd/develop.rs",
+          "crates/ui-egui/src/widgets.rs",
+          "crates/ui-egui/src/panels/settings.rs",
+          "crates/ui-egui/src/import.rs",
+          "crates/ui-egui/src/tests_preview_limit.rs",
+          "crates/ui-egui/src/render.rs",
+          "crates/desktop-host/src/tasks.rs",
+          "crates/catalog/src/keywords.rs",
+          "crates/ui-egui/src/panels/edit.rs",
+          "crates/ui-egui/src/panels/grid.rs"
+        ],
+        "unpromotedCount": 76,
+        "declaredUnsampled": 673,
+        "excluded": 23,
+        "aliasedPaths": []
+      },
+      "reasoningHostState": "ingested",
+      "semanticReview": {
+        "axis": "standards",
+        "status": "pass",
+        "reason": "Production code in the 15 non-test excerpted files was checked against the repo's never-crash standard (no unwrap/expect/panic/unreachable/unsafe; offsets used for slicing are guarded by get/find/len checks, e.g. lightroom_catalog.rs committed_wal_len validates the 32-byte header before wal[32..]). No documented-standard violation found; the two defects above are plain lens findings.",
+        "sources": [
+          {
+            "location": "AGENTS.md:37",
+            "quote": "**Non-test code never panics:** no `unwrap()`, `expect()`, `panic!`, `unreachable!`, `todo!`, `unimplemented!`, and"
+          }
+        ]
+      },
+      "withdrawnFindings": []
+    }
+  },
+  "part": {
+    "number": 2,
+    "total": 4
+  }
+}

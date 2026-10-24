@@ -1,0 +1,408 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-audit-next",
+  "run": "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z",
+  "status": "wave",
+  "wave": 2,
+  "leaseMs": 1200000,
+  "seats": [
+    {
+      "seatId": "seat-017",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "J2",
+      "providers": [
+        "reasoning.architecture",
+        "reasoning.doc-drift"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.architecture.part-0004.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.doc-drift.part-0004.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.architecture.part-0004.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.doc-drift.part-0004.json"
+      ],
+      "estimatedTokens": 125533,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-018",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "J2",
+      "providers": [
+        "reasoning.architecture",
+        "reasoning.doc-drift"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.architecture.part-0005.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.doc-drift.part-0005.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.architecture.part-0005.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.doc-drift.part-0005.json"
+      ],
+      "estimatedTokens": 127318,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-019",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "J2",
+      "providers": [
+        "reasoning.architecture",
+        "reasoning.doc-drift"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.architecture.part-0006.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.doc-drift.part-0006.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.architecture.part-0006.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.doc-drift.part-0006.json"
+      ],
+      "estimatedTokens": 125087,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-020",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "judgment",
+      "modelTier": "judgment",
+      "bundle": "J2",
+      "providers": [
+        "reasoning.architecture",
+        "reasoning.doc-drift"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.architecture.part-0007.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.doc-drift.part-0007.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.architecture.part-0007.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.doc-drift.part-0007.json"
+      ],
+      "estimatedTokens": 59806,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-021",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S1",
+      "providers": [
+        "reasoning.data-safety",
+        "reasoning.platform-parity",
+        "reasoning.release-readiness"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.data-safety.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.platform-parity.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.release-readiness.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.data-safety.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.platform-parity.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.release-readiness.json"
+      ],
+      "estimatedTokens": 3125,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-022",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S1",
+      "providers": [
+        "reasoning.performance",
+        "reasoning.resilience"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.performance.part-0001.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.resilience.part-0001.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.performance.part-0001.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.resilience.part-0001.json"
+      ],
+      "estimatedTokens": 95407,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-023",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S1",
+      "providers": [
+        "reasoning.performance",
+        "reasoning.resilience"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.performance.part-0002.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.resilience.part-0002.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.performance.part-0002.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.resilience.part-0002.json"
+      ],
+      "estimatedTokens": 95828,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-024",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S1",
+      "providers": [
+        "reasoning.performance",
+        "reasoning.resilience"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.performance.part-0003.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.resilience.part-0003.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.performance.part-0003.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.resilience.part-0003.json"
+      ],
+      "estimatedTokens": 93059,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-025",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S1",
+      "providers": [
+        "reasoning.performance",
+        "reasoning.resilience"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.performance.part-0004.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.resilience.part-0004.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.performance.part-0004.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.resilience.part-0004.json"
+      ],
+      "estimatedTokens": 34158,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-026",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S2",
+      "providers": [
+        "reasoning.a11y"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.a11y.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.a11y.json"
+      ],
+      "estimatedTokens": 20383,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-027",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S2",
+      "providers": [
+        "reasoning.ai-slop",
+        "reasoning.naming"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.ai-slop.part-0001.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.naming.part-0001.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.ai-slop.part-0001.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.naming.part-0001.json"
+      ],
+      "estimatedTokens": 112490,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-028",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S2",
+      "providers": [
+        "reasoning.ai-slop",
+        "reasoning.naming"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.ai-slop.part-0002.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.naming.part-0002.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.ai-slop.part-0002.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.naming.part-0002.json"
+      ],
+      "estimatedTokens": 114428,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-029",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S2",
+      "providers": [
+        "reasoning.ai-slop",
+        "reasoning.naming"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.ai-slop.part-0003.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.naming.part-0003.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.ai-slop.part-0003.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.naming.part-0003.json"
+      ],
+      "estimatedTokens": 114235,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-030",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S2",
+      "providers": [
+        "reasoning.ai-slop",
+        "reasoning.naming"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.ai-slop.part-0004.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.naming.part-0004.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.ai-slop.part-0004.json",
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.naming.part-0004.json"
+      ],
+      "estimatedTokens": 5731,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-031",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S3",
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.minimize.part-0001.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.minimize.part-0001.json"
+      ],
+      "estimatedTokens": 124912,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    },
+    {
+      "seatId": "seat-032",
+      "kind": "lens",
+      "wave": 2,
+      "tier": "specialist",
+      "modelTier": "balanced-executor",
+      "bundle": "S3",
+      "providers": [
+        "reasoning.minimize"
+      ],
+      "packetPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-packets/reasoning.minimize.part-0002.json"
+      ],
+      "resultPaths": [
+        "/Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z/lens-results/reasoning.minimize.part-0002.json"
+      ],
+      "estimatedTokens": 123992,
+      "attempt": 1,
+      "issuedAtMs": 1792078968275,
+      "leaseExpiresAtMs": 1792080168275
+    }
+  ],
+  "progress": {
+    "lensSeats": {
+      "total": 41,
+      "done": 15
+    },
+    "adjudication": {
+      "round": 1,
+      "maxRounds": 4,
+      "required": 19,
+      "complete": false
+    },
+    "issuances": 32,
+    "issuanceCap": 4164,
+    "attemptLimit": 2,
+    "waveWidth": 16
+  },
+  "exhausted": [],
+  "budgetBlocked": [],
+  "blockers": [],
+  "next": "dispatch every seat (at most 16 in parallel, each at its modelTier), write each result to its resultPaths, ingest the wave's results in one batch ingest, then run `legion audit next --run /Volumes/D/claude/ember/.audit/full-2c853163-20261015T152633Z` again"
+}

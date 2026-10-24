@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-packet-index",
+  "provider": "reasoning.minimize",
+  "planDigest": "sha256:935da984e7949fc1ec4b49337d2eb922cb597e7791d2f7b2c41628b59ef00826",
+  "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+  "denominatorCount": 730,
+  "totalParts": 7,
+  "requiredParts": 7,
+  "overCeiling": null,
+  "parts": [
+    {
+      "part": 1,
+      "file": "reasoning.minimize.part-0001.json",
+      "packetDigest": "sha256:0eac810dc8325b14adf65f44eabaf8d7a4409c9b93f5cf8d1c2e267767b50063",
+      "requestId": "sha256:a8b5859825b0281f18bd505a10c6c48f259731b7ad0de99598235623873a5705",
+      "pathCount": 10,
+      "pathsDigest": "sha256:f0e379b2eb9856697ea08a8335e88908ccd9ed79b8be91c2848de20f654da2cf",
+      "paths": [
+        "apps/lightcraft-cli/src/alloc_release.rs",
+        "apps/lightcraft-cli/src/main.rs",
+        "apps/lightcraft-desktop/src/main.rs",
+        "apps/lightcraft-desktop/src/native.rs",
+        "apps/lightcraft-desktop/tests/native_qualification.rs",
+        "apps/lightcraft-desktop/web/src/main.tsx",
+        "apps/lightcraft-web/src/files.rs",
+        "apps/lightcraft/examples/gen_photos.rs",
+        "apps/lightcraft/src/main.rs",
+        "crates/catalog/src/rules.rs"
+      ],
+      "continuedPaths": [
+        "apps/lightcraft-cli/src/main.rs",
+        "apps/lightcraft-desktop/src/native.rs",
+        "apps/lightcraft-desktop/tests/native_qualification.rs",
+        "apps/lightcraft/src/main.rs"
+      ],
+      "chunkCount": 21,
+      "omitted": []
+    },
+    {
+      "part": 2,
+      "file": "reasoning.minimize.part-0002.json",
+      "packetDigest": "sha256:4c2402231dbd83331ed8192df61cd8c986abcc0698236a74690f14465371f2da",
+      "requestId": "sha256:d008ea4e626f361d4e113051b6bcaa8bf54b4fe185920290cad9671a55f90473",
+      "pathCount": 9,
+      "pathsDigest": "sha256:50db86471b639939881a570ffc8a9a8c8baac145ef868332010d8745d02f51b8",
+      "paths": [
+        "crates/catalog/src/tests_local.rs",
+        "crates/codecs/examples/jpeg_bench.rs",
+        "crates/codecs/src/exif.rs",
+        "crates/codecs/src/jpeg_par.rs",
+        "crates/codecs/src/other.rs",
+        "crates/engine/src/camera_preview.rs",
+        "crates/engine/src/cmd/curves.rs",
+        "crates/engine/src/cmd/library.rs",
+        "crates/engine/src/files.rs"
+      ],
+      "continuedPaths": [
+        "crates/catalog/src/rules.rs",
+        "crates/engine/src/camera_preview.rs",
+        "crates/engine/src/cmd/library.rs",
+        "crates/engine/src/files.rs"
+      ],
+      "chunkCount": 20,
+      "omitted": []
+    },
+    {
+      "part": 3,
+      "file": "reasoning.minimize.part-0003.json",
+      "packetDigest": "sha256:9fcdb978befaa2b45e1d891f76058eb0586abce3379685366c7ef88461102ccd",
+      "requestId": "sha256:750a7f1c6b75b254a0d64515f6ab6dc26e7aaf01ffc477c8dd5fa7ccbf5162dd",
+      "pathCount": 14,
+      "pathsDigest": "sha256:ca177a18abb3572e2e78a2dbd5c56a3e48a6bfd559b6931d3080f5df1d051f0c",
+      "paths": [
+        "crates/engine/src/guard.rs",
+        "crates/engine/src/import.rs",
+        "crates/engine/src/lib.rs",
+        "crates/engine/src/media.rs",
+        "crates/engine/src/tests.rs",
+        "crates/engine/src/tests_forget_local.rs",
+        "crates/fetch/src/http.rs",
+        "crates/gpu/tests/memory.rs",
+        "crates/mcp/src/server.rs",
+        "crates/merge/src/align.rs",
+        "crates/merge/src/features.rs",
+        "crates/merge/src/pano/finish.rs",
+        "crates/merge/src/ransac.rs",
+        "crates/merge/tests/pano.rs"
+      ],
+      "continuedPaths": [
+        "crates/engine/src/files.rs",
+        "crates/engine/src/import.rs",
+        "crates/engine/src/lib.rs",
+        "crates/engine/src/media.rs",
+        "crates/engine/src/tests.rs"
+      ],
+      "chunkCount": 24,
+      "omitted": []
+    },
+    {
+      "part": 4,
+      "file": "reasoning.minimize.part-0004.json",
+      "packetDigest": "sha256:26154614e4a913c8b7b8d790e75123993feedd4cf805e10769b0fade0aceda6d",
+      "requestId": "sha256:eec6ae6b1fadfa4dee5ad8ce3bc32a158401bfa62cf3355b2113ddb15b4ae156",
+      "pathCount": 16,
+      "pathsDigest": "sha256:29dbbba92ab75f8a53b5bfff17b2f0662d6d6d9fca0e42be40d48f0528b30a26",
+      "paths": [
+        "crates/meta/src/iptc.rs",
+        "crates/photo-ai/src/network.rs",
+        "crates/pipeline/src/colorops.rs",
+        "crates/pipeline/src/dust.rs",
+        "crates/pipeline/src/profiles.rs",
+        "crates/pipeline/src/transform.rs",
+        "crates/pipeline/src/upright.rs",
+        "crates/raw/examples/rawdump.rs",
+        "crates/raw/examples/rawinfo.rs",
+        "crates/raw/src/demosaic/xtrans.rs",
+        "crates/raw/src/lib.rs",
+        "crates/raw/tests/corpus.rs",
+        "crates/scenes/src/noise.rs",
+        "crates/segment/src/bin/lightcraft-sam3-worker.rs",
+        "crates/tiff/src/makernote.rs",
+        "crates/ui-egui/src/headless.rs"
+      ],
+      "continuedPaths": [
+        "crates/raw/src/lib.rs",
+        "crates/raw/tests/corpus.rs",
+        "crates/ui-egui/src/headless.rs"
+      ],
+      "chunkCount": 25,
+      "omitted": []
+    },
+    {
+      "part": 5,
+      "file": "reasoning.minimize.part-0005.json",
+      "packetDigest": "sha256:81a5f89120eadcf3ddbb26a8431e0e16eb0021c90441c654ff0cdba2efa7a4c4",
+      "requestId": "sha256:b86d462b7f0590fa8f9c7527a313a075d166aefe466c48b6f4f223d5c038eb51",
+      "pathCount": 6,
+      "pathsDigest": "sha256:4139d31608884ecec3e23f56e158ad1eeb424c717e550e218ec7fdec880dc8bc",
+      "paths": [
+        "crates/ui-egui/src/i18n.rs",
+        "crates/ui-egui/src/lib.rs",
+        "crates/ui-egui/src/menus.rs",
+        "crates/ui-egui/src/panels/crop_overlay.rs",
+        "crates/ui-egui/src/panels/detail.rs",
+        "crates/ui-egui/src/panels/dialogs.rs"
+      ],
+      "continuedPaths": [
+        "crates/ui-egui/src/i18n.rs",
+        "crates/ui-egui/src/lib.rs",
+        "crates/ui-egui/src/menus.rs",
+        "crates/ui-egui/src/panels/detail.rs",
+        "crates/ui-egui/src/panels/dialogs.rs"
+      ],
+      "chunkCount": 18,
+      "omitted": []
+    },
+    {
+      "part": 6,
+      "file": "reasoning.minimize.part-0006.json",
+      "packetDigest": "sha256:ee888d6344b8717b8cb28d4f6f130a1dae5dcb85740d9310d7d91a339d82d9a2",
+      "requestId": "sha256:a2d22006e3c18dc1c90e404335d0cce1da6b7b67c6562ae151be355eb798722d",
+      "pathCount": 8,
+      "pathsDigest": "sha256:e9de87f7f92081558fb5b88148b08e1ffcd0a906dfa83fe37a7bdbd80306cb99",
+      "paths": [
+        "crates/ui-egui/src/panels/left.rs",
+        "crates/ui-egui/src/panels/right.rs",
+        "crates/ui-egui/src/state.rs",
+        "crates/ui-egui/src/tests_masking.rs",
+        "crates/ui-egui/src/tests_panels.rs",
+        "crates/ui-egui/src/tests_unsaved.rs",
+        "packaging/linux/postinst.sh",
+        "packaging/macos/import-cert.sh"
+      ],
+      "continuedPaths": [
+        "crates/ui-egui/src/panels/dialogs.rs",
+        "crates/ui-egui/src/panels/left.rs",
+        "crates/ui-egui/src/panels/right.rs",
+        "crates/ui-egui/src/state.rs",
+        "crates/ui-egui/src/tests_masking.rs",
+        "crates/ui-egui/src/tests_panels.rs"
+      ],
+      "chunkCount": 20,
+      "omitted": []
+    },
+    {
+      "part": 7,
+      "file": "reasoning.minimize.part-0007.json",
+      "packetDigest": "sha256:99206c9ee4bf43efe5303b17ce94452956116dd862e735edfa269f6fc39248b4",
+      "requestId": "sha256:58f3c3b5eb84b0f45b55e36d5736f1ca75268cd7e7548d9117532ddd50939f6d",
+      "pathCount": 1,
+      "pathsDigest": "sha256:87bf305ccfa91524bc4a5575d5d1e2dcf7e10f752c4204530eed468a2abdddb1",
+      "paths": [
+        "xtask/src/main.rs"
+      ],
+      "continuedPaths": [
+        "xtask/src/main.rs"
+      ],
+      "chunkCount": 2,
+      "omitted": []
+    }
+  ]
+}

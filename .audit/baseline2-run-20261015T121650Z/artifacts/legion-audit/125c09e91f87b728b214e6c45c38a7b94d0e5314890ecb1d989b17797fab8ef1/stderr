@@ -1,0 +1,2 @@
+error: `cargo metadata` exited with an error: rightkit managed-agent: RK_BROKER_UNAVAILABLE: RightKit broker unavailable: Operation not permitted (os error 1)
+

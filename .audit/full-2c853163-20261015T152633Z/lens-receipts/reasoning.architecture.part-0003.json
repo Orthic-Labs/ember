@@ -1,0 +1,298 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-receipt",
+  "provider": "reasoning.architecture",
+  "result": {
+    "schema_version": 1,
+    "provider": "reasoning.architecture",
+    "applicable": true,
+    "required": true,
+    "status": "partial",
+    "complete": false,
+    "coverage": {
+      "denominator_digest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+      "expected": 730,
+      "examined": 8,
+      "gaps": [
+        "reasoning-part-scope:reasoning.architecture:part 3/7"
+      ]
+    },
+    "findings": [
+      {
+        "id": "arch-session-catalog-public-bypasses-ops",
+        "severity": "low"
+      },
+      {
+        "id": "arch-export-location-policy-two-authorities",
+        "severity": "low"
+      }
+    ],
+    "coverage_gaps": [
+      "reasoning-part-scope:reasoning.architecture:part 3/7"
+    ],
+    "degradation": [],
+    "details": {
+      "changeRisk": {
+        "reversibility": "unknown",
+        "blastRadius": "whole-repository review without change context; no diff supplied",
+        "reason": "Whole-repo run without change context: change risk cannot be assessed from evidence.",
+        "beforeEvidence": [],
+        "afterEvidence": []
+      },
+      "executionReceipt": {
+        "schemaVersion": 1,
+        "kind": "legion-reasoning-receipt",
+        "receiptId": "ingest-48cff83531e86abe64a12d4f466bf2bf",
+        "requestId": "sha256:fc39df8c21c698c799eb04892f362352336b7d9b25efa982e1569d99ecfac362",
+        "providerId": "reasoning.architecture",
+        "contract": "audit-lens-architecture-v1",
+        "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+        "planSignature": "hmac-sha256:805a23e8a5d736c2a96307bc58b919aa92b271336dbe2dbca01d2a81fe17b6f3",
+        "repositoryId": "/Volumes/D/claude/ember",
+        "inventoryGeneration": "filesystem:sha256:6a2aaea46465c4542b1f39f825efd84edc8f63121b837f8bc64a97418d82ef9a",
+        "inventoryDigest": "sha256:da3157e68029988c594537621af44004cf97f0020364e0c23299c7b13bcc221a",
+        "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+        "denominatorCount": 730,
+        "resultDigest": "sha256:bdbed4972d6e3e12991556098ba93a6f587f85fa5054aaf69dd651d8bb7bf418",
+        "status": "partial",
+        "complete": false,
+        "gaps": [
+          "reasoning-part-scope:reasoning.architecture:part 3/7"
+        ],
+        "authentication": {
+          "alg": "HMAC-SHA256",
+          "macDomain": "legion-reasoning-receipt:v1",
+          "boundFieldsDigest": "sha256:879de90044d6c1908fca28fc34814e176364267cdd644bb6319c20c234db2e65",
+          "mac": "7c0202666a68c36f5b1119e9d40242b21d5e8e4e3c03e0ad6e96b610028f2f6a",
+          "host": "legion-cli-ingest",
+          "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb"
+        }
+      },
+      "findingEvidence": {
+        "arch-session-catalog-public-bypasses-ops": {
+          "lens": "architecture",
+          "confidence": "likely",
+          "verifyStatus": "verified",
+          "action": "Make Session::catalog read-only to frontends (pub(crate) field plus a &Catalog accessor) and route non-user bookkeeping through an engine API such as apply_system/commit so the documented ops-only invariant is enforced by visibility, not convention."
+        },
+        "arch-export-location-policy-two-authorities": {
+          "lens": "architecture",
+          "confidence": "likely",
+          "verifyStatus": "verified",
+          "action": "Have export_metadata take the resolved removes_location(photo, catalog, o) result (or call it) instead of reading o.remove_location, so one function owns the location decision for all export formats."
+        }
+      },
+      "findingLocations": {
+        "arch-session-catalog-public-bypasses-ops": [
+          "crates/engine/src/lib.rs:7-8",
+          "crates/engine/src/lib.rs:190",
+          "crates/engine/src/lib.rs:526-538",
+          "crates/desktop-host/src/controller.rs:68-75"
+        ],
+        "arch-export-location-policy-two-authorities": [
+          "crates/engine/src/export.rs:1567-1571",
+          "crates/engine/src/export.rs:1573-1612",
+          "crates/engine/src/export.rs:1753-1755"
+        ]
+      },
+      "findingMessages": {
+        "arch-session-catalog-public-bypasses-ops": "lib.rs:7 documents the Catalog as 'mutated only by ops, so every change is undoable and journaled', but Session exposes it as a public mutable field. A frontend already bypasses it: desktop-host controller.rs:73 calls session.catalog.apply(Op::RemovePhoto) directly when --demo-count trims an opened library. That removal is not pushed to pending_log, not on the undo stack and skips apply_catalog's media.forget, so the in-memory catalog and the library's op log diverge (the photos come back on reopen, or a later snapshot/compaction persists the removal with no undo step).",
+        "arch-export-location-policy-two-authorities": "removes_location() is the declared seam for location policy ('photo and catalog let library-level privacy rules add to the export option') and the Original/DNG path (prepare_guarded, export.rs:1753-1755) goes through it, but export_metadata() for every rendered format reads o.remove_location directly (export.rs:1597, 1610). The moment a library-level rule is added to removes_location as its doc invites, Original/DNG exports drop GPS while JPEG/TIFF/PSD/WebP/AVIF/JXL exports still embed GPS and place names, leaking the location the rule was meant to strip."
+      },
+      "findingTitles": {
+        "arch-session-catalog-public-bypasses-ops": "Make Session::catalog read-only to frontends (pub(crate) field plus a &Catalog accessor) and route non-user bookkeeping through an engine API such as apply_system/commit so the documented ops-only invariant is enforced by visibility, not convention.",
+        "arch-export-location-policy-two-authorities": "Have export_metadata take the resolved removes_location(photo, catalog, o) result (or call it) instead of reading o.remove_location, so one function owns the location decision for all export formats."
+      },
+      "ingest": {
+        "host": "legion-cli-ingest",
+        "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb",
+        "packetDigest": "sha256:ec171dcc07356f9657d4b61bc329bfd9dcfc9d808ca8a53264e6e3c2e2090303",
+        "anchorsVerified": 2
+      },
+      "lensFindings": [
+        {
+          "id": "arch-session-catalog-public-bypasses-ops",
+          "lens": "architecture",
+          "severity": "low",
+          "confidence": "likely",
+          "evidence": [
+            "crates/engine/src/lib.rs:7-8",
+            "crates/engine/src/lib.rs:190",
+            "crates/engine/src/lib.rs:526-538",
+            "crates/desktop-host/src/controller.rs:68-75"
+          ],
+          "anchor": {
+            "path": "crates/engine/src/lib.rs",
+            "line": 190,
+            "text": "    pub catalog: Catalog,"
+          },
+          "failureScenario": "lib.rs:7 documents the Catalog as 'mutated only by ops, so every change is undoable and journaled', but Session exposes it as a public mutable field. A frontend already bypasses it: desktop-host controller.rs:73 calls session.catalog.apply(Op::RemovePhoto) directly when --demo-count trims an opened library. That removal is not pushed to pending_log, not on the undo stack and skips apply_catalog's media.forget, so the in-memory catalog and the library's op log diverge (the photos come back on reopen, or a later snapshot/compaction persists the removal with no undo step).",
+          "action": "Make Session::catalog read-only to frontends (pub(crate) field plus a &Catalog accessor) and route non-user bookkeeping through an engine API such as apply_system/commit so the documented ops-only invariant is enforced by visibility, not convention.",
+          "verifyStatus": "verified",
+          "reviewAxis": "standards",
+          "disposition": "documented-violation",
+          "changeAttribution": {
+            "status": "unknown",
+            "reason": "Whole-repository run at a frozen HEAD with no change context or baseline revision supplied; when the drift was introduced was not established.",
+            "baselineEvidence": []
+          },
+          "sourceQuote": "State: a [`Catalog`] (mutated only by ops, so every change is undoable and journaled), the",
+          "sourceLocation": "crates/engine/src/lib.rs:7"
+        },
+        {
+          "id": "arch-export-location-policy-two-authorities",
+          "lens": "architecture",
+          "severity": "low",
+          "confidence": "likely",
+          "evidence": [
+            "crates/engine/src/export.rs:1567-1571",
+            "crates/engine/src/export.rs:1573-1612",
+            "crates/engine/src/export.rs:1753-1755"
+          ],
+          "anchor": {
+            "path": "crates/engine/src/export.rs",
+            "line": 1569,
+            "text": "pub fn removes_location(_photo: &lightcraft_catalog::Photo, _catalog: &lightcraft_catalog::Catalog, o: &ExportOptions) -> bool {"
+          },
+          "failureScenario": "removes_location() is the declared seam for location policy ('photo and catalog let library-level privacy rules add to the export option') and the Original/DNG path (prepare_guarded, export.rs:1753-1755) goes through it, but export_metadata() for every rendered format reads o.remove_location directly (export.rs:1597, 1610). The moment a library-level rule is added to removes_location as its doc invites, Original/DNG exports drop GPS while JPEG/TIFF/PSD/WebP/AVIF/JXL exports still embed GPS and place names, leaking the location the rule was meant to strip.",
+          "action": "Have export_metadata take the resolved removes_location(photo, catalog, o) result (or call it) instead of reading o.remove_location, so one function owns the location decision for all export formats.",
+          "verifyStatus": "verified",
+          "reviewAxis": "standards",
+          "disposition": "design-heuristic",
+          "changeAttribution": {
+            "status": "unknown",
+            "reason": "Whole-repository run at a frozen HEAD with no change context or baseline revision supplied; when the drift was introduced was not established.",
+            "baselineEvidence": []
+          },
+          "sourceQuote": "(`photo` and `catalog` let library-level privacy rules add to the export option.)",
+          "sourceLocation": "crates/engine/src/export.rs:1568"
+        }
+      ],
+      "lensIds": [
+        "architecture"
+      ],
+      "packetCoverage": {
+        "basis": "bounded-excerpts",
+        "examined": 8,
+        "expected": 730,
+        "part": {
+          "number": 3,
+          "total": 7
+        },
+        "requiredParts": 7,
+        "overCeiling": null,
+        "partPaths": [
+          "crates/engine/src/crs.rs",
+          "crates/engine/src/crs_masks.rs",
+          "crates/engine/src/export.rs",
+          "crates/engine/src/files.rs",
+          "crates/engine/src/guard.rs",
+          "crates/engine/src/import.rs",
+          "crates/engine/src/lib.rs",
+          "crates/engine/src/lightroom_catalog.rs",
+          "crates/engine/src/media.rs"
+        ],
+        "examinedPaths": [
+          "crates/engine/src/crs.rs",
+          "crates/engine/src/crs_masks.rs",
+          "crates/engine/src/export.rs",
+          "crates/engine/src/files.rs",
+          "crates/engine/src/guard.rs",
+          "crates/engine/src/import.rs",
+          "crates/engine/src/lib.rs",
+          "crates/engine/src/lightroom_catalog.rs"
+        ],
+        "chunkedPaths": [
+          {
+            "path": "crates/engine/src/cmd/library.rs",
+            "chunk": 3,
+            "chunks": 3,
+            "startLine": 1245,
+            "endLine": 1659
+          },
+          {
+            "path": "crates/engine/src/media.rs",
+            "chunk": 1,
+            "chunks": 4,
+            "startLine": 1,
+            "endLine": 715
+          }
+        ],
+        "omittedPaths": [],
+        "truncatedPaths": [],
+        "coverageMode": "risk-sampled",
+        "bundle": "J2",
+        "reviewSetDigest": "sha256:12c8bda95469b746dc24253d0430980aa5dd5237baf339b011d2c4bc7ecd6e6c",
+        "reviewSetCount": 76,
+        "reviewExpected": 55,
+        "promotedPaths": [
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs",
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/cmd/geocode.rs",
+          "crates/engine/src/crs.rs",
+          "crates/engine/src/crs_masks.rs"
+        ],
+        "displacedPaths": [
+          "crates/codecs/examples/jpeg_bench.rs",
+          "crates/raw/examples/rawdump.rs",
+          "crates/merge/src/features.rs",
+          "crates/merge/tests/pano.rs",
+          "crates/pipeline/src/dust.rs",
+          "crates/pipeline/src/colorops.rs",
+          "crates/gpu/tests/memory.rs",
+          "crates/raw/src/demosaic/xtrans.rs",
+          "crates/merge/src/pano/finish.rs",
+          "crates/codecs/src/jpeg_par.rs",
+          "crates/meta/src/iptc.rs",
+          "apps/lightcraft-web/src/files.rs",
+          "crates/codecs/src/other.rs",
+          "apps/lightcraft/examples/gen_photos.rs",
+          "crates/merge/src/ransac.rs",
+          "crates/scenes/src/noise.rs",
+          "crates/tiff/src/makernote.rs",
+          "crates/merge/src/align.rs",
+          "crates/catalog/src/tests_local.rs",
+          "apps/lightcraft-cli/src/alloc_release.rs",
+          "crates/codecs/src/exif.rs",
+          "crates/engine/src/cmd/curves.rs",
+          "crates/ui-egui/src/tests_unsaved.rs",
+          "packaging/linux/postinst.sh",
+          "crates/raw/examples/rawinfo.rs",
+          "crates/pipeline/src/upright.rs",
+          "crates/pipeline/src/transform.rs",
+          "crates/ui-egui/src/panels/crop_overlay.rs",
+          "crates/engine/src/tests_forget_local.rs",
+          "crates/pipeline/src/profiles.rs",
+          "crates/ui-egui/src/import.rs",
+          "crates/ui-egui/src/tests_preview_limit.rs",
+          "crates/ui-egui/src/render.rs",
+          "crates/desktop-host/src/tasks.rs",
+          "crates/catalog/src/keywords.rs",
+          "crates/ui-egui/src/panels/edit.rs",
+          "crates/ui-egui/src/panels/grid.rs"
+        ],
+        "unpromotedCount": 78,
+        "declaredUnsampled": 675,
+        "excluded": 23,
+        "aliasedPaths": []
+      },
+      "reasoningHostState": "ingested",
+      "withdrawnFindings": []
+    }
+  },
+  "part": {
+    "number": 3,
+    "total": 7
+  }
+}

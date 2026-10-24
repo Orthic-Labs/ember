@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-result",
+  "provider": "reasoning.security",
+  "packetDigest": "sha256:71615819bf700c710e11f5e8c9fccc8fc750b30deb06dc8f5ecb4aac7ff4b6cd",
+  "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+  "complete": true,
+  "findings": [
+    {
+      "id": "security-open-external-windows-cmd-start-injection",
+      "lens": "security",
+      "severity": "medium",
+      "confidence": "likely",
+      "evidence": [
+        "apps/lightcraft-desktop/src/services.rs:377-398",
+        "apps/lightcraft-desktop/web/src/desktop.tsx:466-472",
+        "apps/lightcraft-desktop/src/native.rs:292"
+      ],
+      "failureScenario": "On Windows, with no external editor configured, open_external runs `cmd /C start \"\" <path>` and passes the photo path as an ordinary argument. Rust's Windows argument quoting only wraps arguments that contain a space or tab, and cmd.exe does not follow the MSVC escaping rules, so its metacharacters (&, |, ^, %VAR%) stay live. The path comes from the library: Edit in External Editor (photo.editInExternal -> photo.editExternal result path) sends it through lc_native openExternalEditor. Importing and then editing a photo named like `IMG&calc&.jpg` (no spaces) makes cmd run `calc` as a separate command. Any legitimate filename with an unspaced `&` also fails to open the right file.",
+      "action": "Do not route file opening through cmd.exe. Use ShellExecuteW through a maintained opener crate (e.g. the opener/open crate or tauri-plugin-opener), or call `explorer.exe <path>` / `rundll32 url.dll,FileProtocolHandler`, so no shell parsing happens. If cmd must stay, validate the path and pass it with raw_arg using cmd-safe quoting and caret-escaping. Add a regression test with a path that contains `&` and `%`.",
+      "verifyStatus": "unverified",
+      "anchor": {
+        "path": "apps/lightcraft-desktop/src/services.rs",
+        "line": 387,
+        "text": "        let mut command = Command::new(\"cmd\");"
+      }
+    }
+  ],
+  "withdrawn": []
+}

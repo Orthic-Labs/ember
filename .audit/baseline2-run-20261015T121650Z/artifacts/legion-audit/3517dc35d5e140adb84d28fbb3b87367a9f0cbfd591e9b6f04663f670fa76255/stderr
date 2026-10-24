@@ -1,0 +1,5 @@
+error: unexpected argument '--json' found
+
+Usage: cargo [OPTIONS] <COMMAND>
+
+For more information, try '--help'.

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-result",
+  "provider": "legacy.security.adjudication",
+  "packetDigest": "sha256:9731d9ec20900bf2c4446f4a78356ba29a0746d1fcc94691bfdf7b55bf9f0345",
+  "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+  "complete": true,
+  "findings": [],
+  "withdrawn": [],
+  "verdicts": [
+    {
+      "candidateId": "sha256:5dd6d2012d0fdb78b3f0151477cfbd7647251b330a65bb610c39d18c60545574",
+      "verdict": "FALSE_POSITIVE",
+      "stage": "batch",
+      "batchId": "batch-0001",
+      "clusterId": "cluster-8bfec7733d7660d5",
+      "workItemId": "sha256:033b8a418241dcbc0be77077a3d97a37e42ea64669b1728070d7a032cb756f20",
+      "workPacketDigest": "sha256:fe61d8520994b107a71e6954da18566f36f1158cf1f4258d67e1dcfcb7814c17",
+      "contextId": "adjudicator:sha256:033b8a418241dcbc0be77077a3d97a37e42ea64669b1728070d7a032cb756f20",
+      "threatModel": "No attacker is modelled by this rule: an `import SwiftUI` statement is a compile-time module reference in a first-party iOS app scaffold, not a data flow from any untrusted source to a sink.",
+      "reachability": "The import has no runtime input. ios/project.yml declares deploymentTarget iOS 17.0 and the Ember target `platform: iOS`; Info.plist sets LSRequiresIPhoneOS true, so the SwiftUI APIs used (NavigationStack, ContentUnavailableView, @Observable environment, fileImporter) are confirmed available on the declared platform target.",
+      "impact": "None. The rule asks only for platform-target confirmation, which project.yml supplies; the five member files (EditView, SettingsView, RootView, LibraryView, EmberApp) contain only static SwiftUI view composition with no trust boundary, so no confidentiality, integrity or availability impact exists.",
+      "rationale": "Platform target is confirmed by ios/project.yml lines 11-12 (`deploymentTarget: iOS: \"17.0\"`) and line 29 (`platform: iOS`); every SwiftUI API in the cluster is available at iOS 17, so the candidate is a provable non-issue.",
+      "evidence": [
+        {
+          "file": "ios/project.yml",
+          "line": 12
+        },
+        {
+          "file": "ios/project.yml",
+          "line": 29
+        },
+        {
+          "file": "ios/Ember/EditView.swift",
+          "line": 1
+        }
+      ]
+    }
+  ]
+}

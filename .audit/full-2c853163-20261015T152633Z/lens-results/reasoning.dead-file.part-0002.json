@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-result",
+  "provider": "reasoning.dead-file",
+  "packetDigest": "sha256:733d38c07dd9009338716684e32d8a150b01c9da2d8920f2c2c19273c845d2df",
+  "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+  "complete": true,
+  "findings": [
+    {
+      "id": "p0002-001",
+      "lens": "dead-file",
+      "severity": "low",
+      "confidence": "likely",
+      "evidence": [
+        "crates/engine/src/library.rs:207"
+      ],
+      "failureScenario": "Dead public accessor if no external host consumes the engine crate; removing it or confirming the external consumer closes the finding.",
+      "action": "Delete the unused method or document the external consumer that calls it.",
+      "verifyStatus": "verified",
+      "anchor": {
+        "path": "crates/engine/src/library.rs",
+        "line": 207,
+        "text": "    pub fn originals_dir(&self) -> PathBuf {"
+      },
+      "description": "Library::originals_dir is a public method with no caller in the repository (tracked .rs/.ts/.tsx/.js files); the only occurrence is its definition."
+    },
+    {
+      "id": "p0002-002",
+      "lens": "dead-file",
+      "severity": "low",
+      "confidence": "likely",
+      "evidence": [
+        "crates/engine/src/lightroom_job.rs:136"
+      ],
+      "failureScenario": "Unused exported alias in a pub module; it adds API surface with no consumer.",
+      "action": "Remove the alias or name the host that depends on it.",
+      "verifyStatus": "verified",
+      "anchor": {
+        "path": "crates/engine/src/lightroom_job.rs",
+        "line": 136,
+        "text": "pub type LightroomCommit = LightroomCompletion;"
+      },
+      "description": "Public type alias LightroomCommit is referenced nowhere in the repository; its doc comment describes hosts that would use it, but no such host exists in the tracked sources."
+    },
+    {
+      "id": "p0002-003",
+      "lens": "dead-file",
+      "severity": "low",
+      "confidence": "likely",
+      "evidence": [
+        "crates/engine/src/lightroom_job.rs:234"
+      ],
+      "failureScenario": "Unreached associated function; if the deferred archive finalization was meant to run on a worker, that path is missing and the work never executes.",
+      "action": "Wire the caller that runs the deferred archive finalization, or delete the function.",
+      "verifyStatus": "verified",
+      "anchor": {
+        "path": "crates/engine/src/lightroom_job.rs",
+        "line": 234,
+        "text": "    pub fn finish_archive(finalization: LightroomArchiveFinalization) -> crate::Result<()> {"
+      },
+      "description": "LightroomJob::finish_archive has no caller anywhere in the repository; the only occurrence is its definition, so its deferred archive-index write is unreachable."
+    },
+    {
+      "id": "p0002-004",
+      "lens": "dead-file",
+      "severity": "low",
+      "confidence": "likely",
+      "evidence": [
+        "crates/engine/src/rename.rs:141"
+      ],
+      "failureScenario": "Unused exported helper in a pub module.",
+      "action": "Delete it or add the caller that renders the compact token hint.",
+      "verifyStatus": "verified",
+      "anchor": {
+        "path": "crates/engine/src/rename.rs",
+        "line": 141,
+        "text": "pub fn token_summary() -> String {"
+      },
+      "description": "Public function token_summary has no caller in the repository; its only occurrence is the definition."
+    }
+  ],
+  "withdrawn": []
+}

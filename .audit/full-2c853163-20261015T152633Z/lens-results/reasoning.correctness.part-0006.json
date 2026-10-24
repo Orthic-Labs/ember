@@ -1,0 +1,118 @@
+{
+ "schemaVersion": 1,
+ "kind": "legion-lens-result",
+ "provider": "reasoning.correctness",
+ "packetDigest": "sha256:b53828184fdc3af615ffca619148e3cfdad398bacf299daee8c8f31a1bc33fce",
+ "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+ "complete": true,
+ "findings": [
+  {
+   "id": "p0006-correctness-sync-undo-interleave-at-cap",
+   "lens": "correctness",
+   "severity": "medium",
+   "confidence": "likely",
+   "evidence": [
+    "crates/engine/src/sync.rs:629-642",
+    "crates/engine/src/sync.rs:699-707",
+    "crates/engine/src/sync.rs:485-487",
+    "crates/engine/src/lib.rs:509-519"
+   ],
+   "anchor": {
+    "path": "crates/engine/src/sync.rs",
+    "line": 634,
+    "text": "        if self.after_last.is_some_and(|n| n != s.undo.len()) {"
+   },
+   "failureScenario": "SyncCommit detects an Undo or edit made between its own steps only by comparing undo.len() with the length after its last step. Session::commit caps the undo stack at 1000 (lib.rs:516 removes the oldest entry), so once the history is full every commit leaves undo.len() unchanged; likewise an Undo followed by one edit restores the same length. In the app the SyncWork runs on a worker while the UI thread keeps accepting edits: with a full history, import batch committed -> user edits a photo -> Relink step committed, after_last == undo.len() so interleaved stays false, and finish() merges the last `own` (2) entries = [user edit, relink] into one 'Synchronize Folder' step. Undoing Synchronize Folder then also reverts the user's unrelated edit, contrary to the documented contract that an edit made meanwhile stays its own step.",
+   "action": "Track interleaving with the monotonic s.commits() counter (record commits after each own step and flag interleaved when it differs on entry) plus an undo-pop counter, instead of undo.len().",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "reviewAxis": "spec",
+   "sourceQuote": "they are merged only while nothing else came in between (an Undo or an edit made meanwhile stays its own step, and the run's parts stay theirs).",
+   "sourceLocation": "crates/engine/src/sync.rs:485-487",
+   "disposition": "wrong",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "Full-repo audit at a frozen HEAD; no baseline diff supplied.",
+    "baselineEvidence": []
+   }
+  },
+  {
+   "id": "p0006-correctness-smart-migrate-same-folder-deletes",
+   "lens": "correctness",
+   "severity": "medium",
+   "confidence": "likely",
+   "evidence": [
+    "crates/engine/src/smart.rs:238-256",
+    "crates/engine/src/cmd/previews.rs:440-465"
+   ],
+   "anchor": {
+    "path": "crates/engine/src/smart.rs",
+    "line": 245,
+    "text": "                    if is_valid(&dst) {"
+   },
+   "failureScenario": "migrate(Move) deletes the source when a valid proxy already exists at the destination. The only same-folder guard is the lexical `new_dir == current` PathBuf comparison in smart_location (previews.rs). On macOS/Windows case-insensitive volumes, or via a symlink or a `..` spelling, the user can pick the same folder under another spelling (e.g. `/Users/a/Pictures/smart previews` for `/Users/a/Pictures/Smart Previews`). Then for every proxy dst resolves to the same file as src, is_valid(&dst) is true and std::fs::remove_file(&src) deletes it: every smart preview is lost and counted as 'moved'. Smart previews are the only editable copy while originals are offline, so photos on an unplugged drive become uneditable.",
+   "action": "Before removing src, skip when src and dst are the same file (compare canonicalized paths or (dev, inode)/file id), and have smart_location compare canonicalized directories rather than PathBuf equality.",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "reviewAxis": "spec",
+   "sourceQuote": "Move them to the new folder (copy and delete across drives).",
+   "sourceLocation": "crates/engine/src/smart.rs:206",
+   "disposition": "wrong",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "Full-repo audit at a frozen HEAD; no baseline diff supplied.",
+    "baselineEvidence": []
+   }
+  },
+  {
+   "id": "p0006-correctness-geocode-high-latitude-misses",
+   "lens": "correctness",
+   "severity": "low",
+   "confidence": "confirmed",
+   "evidence": [
+    "crates/geocode/src/lib.rs:176-197",
+    "crates/geocode/src/lib.rs:15-16"
+   ],
+   "anchor": {
+    "path": "crates/geocode/src/lib.rs",
+    "line": 178,
+    "text": "        // \u00b11\u00b0 covers 50 km everywhere except very near the poles (where there are no cities)"
+   },
+   "failureScenario": "reverse() searches only the 3x3 block of 1-degree cells. One degree of longitude is 111 km x cos(lat), under MAX_KM (50 km) above about 63.3 degrees latitude, where cities15000 does list places (Tromso 69.6N, Murmansk 68.9N, Reykjavik 64.1N, Fairbanks 64.8N). A photo at 69.65N, 18.02E sits in cell 18; a place at 69.65N, 16.95E is about 41 km west, within MAX_KM, but lies in cell 16 (dx = -2) and is never examined, so the lookup returns a farther place in the 3x3 block or nothing.",
+   "action": "Widen the longitude search to ceil(MAX_KM / (111.32 km x cos(lat))) cells (clamped, with wrap) instead of a fixed +-1.",
+   "verifyStatus": "verified",
+   "verificationMethod": "adversarial-skeptic-pass",
+   "reviewAxis": "spec",
+   "sourceQuote": "Lookups farther than this from any place find nothing.",
+   "sourceLocation": "crates/geocode/src/lib.rs:15",
+   "disposition": "partial",
+   "changeAttribution": {
+    "status": "unknown",
+    "reason": "Full-repo audit at a frozen HEAD; no baseline diff supplied.",
+    "baselineEvidence": []
+   }
+  }
+ ],
+ "withdrawn": [],
+ "details": {
+  "semanticReview": {
+   "axis": "spec",
+   "status": "findings",
+   "reason": "Production modules in this part (sync, smart, geocode, fetch, faces, geom, gpu) were checked against their own documented contracts; three diverge: interleaving detection at the 1000-entry undo cap, same-folder Move in smart preview migration, and the 50 km geocode radius at high latitudes. Test-only files were read as behaviour specifications and raised nothing material.",
+   "sources": [
+    {
+     "location": "crates/engine/src/sync.rs:485",
+     "quote": "are merged only while nothing else came in between (an Undo or an edit made meanwhile"
+    },
+    {
+     "location": "crates/engine/src/smart.rs:206",
+     "quote": "Move them to the new folder (copy and delete across drives)."
+    },
+    {
+     "location": "crates/geocode/src/lib.rs:15",
+     "quote": "Lookups farther than this from any place find nothing."
+    }
+   ]
+  }
+ }
+}

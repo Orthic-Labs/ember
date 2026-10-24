@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-audit-adjudication-seat",
+  "stage": "individual",
+  "round": 2,
+  "candidateId": "sha256:0439f1f76d42b64ead3522b96a35b035f2b6bc3a5bc48e5681d4b06a539394f5",
+  "reason": "high-risk-dismissal",
+  "itemId": "sha256:867f491e32f4c96f2d6d1a803ce37dec7bf7dda5de6a6b56934370b7cf3752e9",
+  "contextId": "adjudicator:sha256:867f491e32f4c96f2d6d1a803ce37dec7bf7dda5de6a6b56934370b7cf3752e9",
+  "parentPacketDigest": "sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5",
+  "packet": {
+    "schemaVersion": 1,
+    "kind": "security-adjudication-packet",
+    "candidate": {
+      "schemaVersion": 1,
+      "kind": "security-candidate",
+      "id": "sha256:0439f1f76d42b64ead3522b96a35b035f2b6bc3a5bc48e5681d4b06a539394f5",
+      "provider": "legacy.security.binary-pins",
+      "contextId": "scanner:legacy.security.binary-pins",
+      "claim": "security.binary-unpinned: downloaded binary URL has no visible immutable digest",
+      "allegedRootCause": null,
+      "allegedTrigger": null,
+      "allegedImpact": null,
+      "evidence": [
+        {
+          "findingId": "sha256:0439f1f76d42b64ead3522b96a35b035f2b6bc3a5bc48e5681d4b06a539394f5",
+          "path": "xtask/src/main.rs",
+          "line": 581,
+          "excerpt": "\"https://raw.pixls.us/getfile.php/2649/nice/Canon%20-%20EOS%205D%20Mark%20III%20-%2016bit%20%2816:9%29.dng\","
+        }
+      ],
+      "generatedAt": "frozen:sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5"
+    },
+    "adjudicator": {
+      "provider": "legacy.security.adjudication",
+      "contextId": "adjudicator:sha256:867f491e32f4c96f2d6d1a803ce37dec7bf7dda5de6a6b56934370b7cf3752e9",
+      "contextStartedAt": "frozen:sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5"
+    },
+    "requiredEvidence": [
+      "threat model and attacker capability",
+      "attacker-controlled source",
+      "trust-boundary trace",
+      "validation and authorization between source and sink",
+      "reachability",
+      "primary controls and environmental mitigations",
+      "real security impact",
+      "reproduction, trace, PoC sketch, or mathematical proof",
+      "devils-advocate false-positive challenge"
+    ],
+    "packetDigest": "sha256:620f258d021613f8c686b4bbc90d5000dce0e62c0ade1f0ca3d94db0f97ff6ca"
+  }
+}

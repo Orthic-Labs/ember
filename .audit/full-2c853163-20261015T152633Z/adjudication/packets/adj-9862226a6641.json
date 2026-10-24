@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-audit-adjudication-seat",
+  "stage": "individual",
+  "round": 2,
+  "candidateId": "sha256:024f7b16d13e5613abea73e994b12afd8ebcd1477d51fad7734463c26cd66cb5",
+  "reason": "high-risk-dismissal",
+  "itemId": "sha256:cc78e6b407722c9890d9fc9841bff09cc4f8a252a2de24db79f29999a5a34b91",
+  "contextId": "adjudicator:sha256:cc78e6b407722c9890d9fc9841bff09cc4f8a252a2de24db79f29999a5a34b91",
+  "parentPacketDigest": "sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5",
+  "packet": {
+    "schemaVersion": 1,
+    "kind": "security-adjudication-packet",
+    "candidate": {
+      "schemaVersion": 1,
+      "kind": "security-candidate",
+      "id": "sha256:024f7b16d13e5613abea73e994b12afd8ebcd1477d51fad7734463c26cd66cb5",
+      "provider": "legacy.security.binary-pins",
+      "contextId": "scanner:legacy.security.binary-pins",
+      "claim": "security.binary-unpinned: downloaded binary URL has no visible immutable digest",
+      "allegedRootCause": null,
+      "allegedTrigger": null,
+      "allegedImpact": null,
+      "evidence": [
+        {
+          "findingId": "sha256:024f7b16d13e5613abea73e994b12afd8ebcd1477d51fad7734463c26cd66cb5",
+          "path": "crates/codecs/src/gainmap.rs",
+          "line": 796,
+          "excerpt": "let user_xmp = r#\"<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\"/></rdf:RDF></x:xmpmeta>\"#;"
+        }
+      ],
+      "generatedAt": "frozen:sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5"
+    },
+    "adjudicator": {
+      "provider": "legacy.security.adjudication",
+      "contextId": "adjudicator:sha256:cc78e6b407722c9890d9fc9841bff09cc4f8a252a2de24db79f29999a5a34b91",
+      "contextStartedAt": "frozen:sha256:734ecbd252630713f3c50dda866983f5e88077d69215e5293b5a7cb9492ee2c5"
+    },
+    "requiredEvidence": [
+      "threat model and attacker capability",
+      "attacker-controlled source",
+      "trust-boundary trace",
+      "validation and authorization between source and sink",
+      "reachability",
+      "primary controls and environmental mitigations",
+      "real security impact",
+      "reproduction, trace, PoC sketch, or mathematical proof",
+      "devils-advocate false-positive challenge"
+    ],
+    "packetDigest": "sha256:ca708ff7b8abb6a26fe7dad5e9baed242eb7c54a3634031b9a8da85747df0584"
+  }
+}

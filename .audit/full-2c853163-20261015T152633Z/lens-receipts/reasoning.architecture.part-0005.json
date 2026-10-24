@@ -1,0 +1,340 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-receipt",
+  "provider": "reasoning.architecture",
+  "result": {
+    "schema_version": 1,
+    "provider": "reasoning.architecture",
+    "applicable": true,
+    "required": true,
+    "status": "partial",
+    "complete": false,
+    "coverage": {
+      "denominator_digest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+      "expected": 730,
+      "examined": 4,
+      "gaps": [
+        "reasoning-part-scope:reasoning.architecture:part 5/7"
+      ]
+    },
+    "findings": [
+      {
+        "id": "p0005-arch-language-table-triplicated",
+        "severity": "low"
+      },
+      {
+        "id": "p0005-arch-ui-command-dispatch-sprawl",
+        "severity": "low"
+      },
+      {
+        "id": "p0005-arch-faces-pump-twice-per-frame",
+        "severity": "low"
+      }
+    ],
+    "coverage_gaps": [
+      "reasoning-part-scope:reasoning.architecture:part 5/7"
+    ],
+    "degradation": [],
+    "details": {
+      "changeRisk": {
+        "reversibility": "unknown",
+        "blastRadius": "crates/ui-egui (whole-repo audit, no change context)",
+        "reason": "Whole-repo run without change context; change risk is not assessed.",
+        "beforeEvidence": [],
+        "afterEvidence": []
+      },
+      "executionReceipt": {
+        "schemaVersion": 1,
+        "kind": "legion-reasoning-receipt",
+        "receiptId": "ingest-1cf3990f27026a961093aa01119568d4",
+        "requestId": "sha256:7badc56c227dbfbad974c15ba3d7286e809875b77555c0364893dc276c2dc339",
+        "providerId": "reasoning.architecture",
+        "contract": "audit-lens-architecture-v1",
+        "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+        "planSignature": "hmac-sha256:805a23e8a5d736c2a96307bc58b919aa92b271336dbe2dbca01d2a81fe17b6f3",
+        "repositoryId": "/Volumes/D/claude/ember",
+        "inventoryGeneration": "filesystem:sha256:6a2aaea46465c4542b1f39f825efd84edc8f63121b837f8bc64a97418d82ef9a",
+        "inventoryDigest": "sha256:da3157e68029988c594537621af44004cf97f0020364e0c23299c7b13bcc221a",
+        "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+        "denominatorCount": 730,
+        "resultDigest": "sha256:359ba1036ee1de5832ec6c52e368ef1c18f3d8e7a8c38781aec1bc9de41954f1",
+        "status": "partial",
+        "complete": false,
+        "gaps": [
+          "reasoning-part-scope:reasoning.architecture:part 5/7"
+        ],
+        "authentication": {
+          "alg": "HMAC-SHA256",
+          "macDomain": "legion-reasoning-receipt:v1",
+          "boundFieldsDigest": "sha256:879de90044d6c1908fca28fc34814e176364267cdd644bb6319c20c234db2e65",
+          "mac": "7a730f89e7bb78db0829b02fcce3ac1228d5fe3db86aa824e5367b2500a1d228",
+          "host": "legion-cli-ingest",
+          "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb"
+        }
+      },
+      "findingEvidence": {
+        "p0005-arch-language-table-triplicated": {
+          "lens": "architecture",
+          "confidence": "likely",
+          "verifyStatus": "verified",
+          "action": "Generate LANGUAGE_COMMANDS and language_from_command from Locale::ALL (e.g. a command-id column in language_table!), so the menu, Settings and control channel share one ordered source."
+        },
+        "p0005-arch-ui-command-dispatch-sprawl": {
+          "lens": "architecture",
+          "confidence": "confirmed",
+          "verifyStatus": "verified",
+          "action": "Split run_ui_command by command family (view/panel/dialog/file/app) and add a test that every UI_COMMANDS id resolves to Some(..) in run_ui_command, or move to a typed command enum that carries label, shortcut, handler and enablement together."
+        },
+        "p0005-arch-faces-pump-twice-per-frame": {
+          "lens": "architecture",
+          "confidence": "confirmed",
+          "verifyStatus": "verified",
+          "action": "Remove one of the two calls (keep a single per-frame faces pump in logic_inner)."
+        }
+      },
+      "findingLocations": {
+        "p0005-arch-language-table-triplicated": [
+          "crates/ui-egui/src/i18n.rs:119-128",
+          "crates/ui-egui/src/menus.rs:16-27",
+          "crates/ui-egui/src/menus.rs:37-50",
+          "crates/ui-egui/src/panels/settings.rs:105"
+        ],
+        "p0005-arch-ui-command-dispatch-sprawl": [
+          "crates/ui-egui/src/menus.rs:53-222",
+          "crates/ui-egui/src/menus.rs:355-1881",
+          "crates/ui-egui/src/menus.rs:1883-1920",
+          "crates/ui-egui/src/menubar.rs:300-310"
+        ],
+        "p0005-arch-faces-pump-twice-per-frame": [
+          "crates/ui-egui/src/lib.rs:1036",
+          "crates/ui-egui/src/lib.rs:1088",
+          "crates/ui-egui/src/panels/faces.rs:659-680",
+          "crates/ui-egui/src/panels/faces.rs:724-734"
+        ]
+      },
+      "findingMessages": {
+        "p0005-arch-language-table-triplicated": "A UI language is declared three times by hand: the language_table! entries (Locale::ALL order: ... Pt-BR, Es, De, Ru, Fr, Uk), LANGUAGE_COMMANDS (order: ... Pt-BR, Fr, Es, De, Ru, Uk) and language_from_command. The copies have already diverged in order: Settings > Language lists French after Russian (Locale::ALL), while Edit > Language lists it right after Portuguese (LANGUAGE_COMMANDS registry order). Adding a language means editing all three sites in step, and the coverage test only checks membership, not order.",
+        "p0005-arch-ui-command-dispatch-sprawl": "UI commands are a string table (UI_COMMANDS, 158 ids) whose behaviour lives in a single ~1,525-line match in run_ui_command, with enabled state in a separate string match (ui_enabled) and checked/live-label state in menubar.rs. Nothing ties the table to the handlers at compile time: an id added to UI_COMMANDS but missed or misspelled in run_ui_command falls through `_ => return None` to the engine and fails as an unknown command at runtime, and menu enablement defaults to `true` for any id ui_enabled does not name. All 158 current ids are handled today (checked), so this is a change-risk/shotgun-surgery finding, not a live break.",
+        "p0005-arch-faces-pump-twice-per-frame": "logic_inner calls panels::faces::pump twice in the same frame (after slideshow_tick and again after model_setup::pump). The second call's faces.pump engine step is mostly suppressed by faces_next_pump, but watch_downloads is not gated: while a face-model download is watched, the engine command faces.models.downloads is executed twice per frame, and input-time bookkeeping runs twice. Duplicate orchestration of one subsystem in the per-frame loop."
+      },
+      "findingTitles": {
+        "p0005-arch-language-table-triplicated": "Generate LANGUAGE_COMMANDS and language_from_command from Locale::ALL (e.g. a command-id column in language_table!), so the menu, Settings and control channel share one ordered source.",
+        "p0005-arch-ui-command-dispatch-sprawl": "Split run_ui_command by command family (view/panel/dialog/file/app) and add a test that every UI_COMMANDS id resolves to Some(..) in run_ui_command, or move to a typed command enum that carries label, shortcut, handler and enablement together.",
+        "p0005-arch-faces-pump-twice-per-frame": "Remove one of the two calls (keep a single per-frame faces pump in logic_inner)."
+      },
+      "ingest": {
+        "host": "legion-cli-ingest",
+        "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb",
+        "packetDigest": "sha256:b02d10a426cc5707b8bec12e9411fe11642199a5908df3dd9efa3c50a91e86d3",
+        "anchorsVerified": 3
+      },
+      "lensFindings": [
+        {
+          "id": "p0005-arch-language-table-triplicated",
+          "lens": "architecture",
+          "severity": "low",
+          "confidence": "likely",
+          "evidence": [
+            "crates/ui-egui/src/i18n.rs:119-128",
+            "crates/ui-egui/src/menus.rs:16-27",
+            "crates/ui-egui/src/menus.rs:37-50",
+            "crates/ui-egui/src/panels/settings.rs:105"
+          ],
+          "failureScenario": "A UI language is declared three times by hand: the language_table! entries (Locale::ALL order: ... Pt-BR, Es, De, Ru, Fr, Uk), LANGUAGE_COMMANDS (order: ... Pt-BR, Fr, Es, De, Ru, Uk) and language_from_command. The copies have already diverged in order: Settings > Language lists French after Russian (Locale::ALL), while Edit > Language lists it right after Portuguese (LANGUAGE_COMMANDS registry order). Adding a language means editing all three sites in step, and the coverage test only checks membership, not order.",
+          "action": "Generate LANGUAGE_COMMANDS and language_from_command from Locale::ALL (e.g. a command-id column in language_table!), so the menu, Settings and control channel share one ordered source.",
+          "verifyStatus": "verified",
+          "anchor": {
+            "path": "crates/ui-egui/src/menus.rs",
+            "line": 22,
+            "text": "    (\"app.language.french\", crate::i18n::Locale::Fr.name(), None, \"Edit>Language\"),"
+          }
+        },
+        {
+          "id": "p0005-arch-ui-command-dispatch-sprawl",
+          "lens": "architecture",
+          "severity": "low",
+          "confidence": "confirmed",
+          "evidence": [
+            "crates/ui-egui/src/menus.rs:53-222",
+            "crates/ui-egui/src/menus.rs:355-1881",
+            "crates/ui-egui/src/menus.rs:1883-1920",
+            "crates/ui-egui/src/menubar.rs:300-310"
+          ],
+          "failureScenario": "UI commands are a string table (UI_COMMANDS, 158 ids) whose behaviour lives in a single ~1,525-line match in run_ui_command, with enabled state in a separate string match (ui_enabled) and checked/live-label state in menubar.rs. Nothing ties the table to the handlers at compile time: an id added to UI_COMMANDS but missed or misspelled in run_ui_command falls through `_ => return None` to the engine and fails as an unknown command at runtime, and menu enablement defaults to `true` for any id ui_enabled does not name. All 158 current ids are handled today (checked), so this is a change-risk/shotgun-surgery finding, not a live break.",
+          "action": "Split run_ui_command by command family (view/panel/dialog/file/app) and add a test that every UI_COMMANDS id resolves to Some(..) in run_ui_command, or move to a typed command enum that carries label, shortcut, handler and enablement together.",
+          "verifyStatus": "verified",
+          "anchor": {
+            "path": "crates/ui-egui/src/menus.rs",
+            "line": 355,
+            "text": "pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {"
+          }
+        },
+        {
+          "id": "p0005-arch-faces-pump-twice-per-frame",
+          "lens": "architecture",
+          "severity": "low",
+          "confidence": "confirmed",
+          "evidence": [
+            "crates/ui-egui/src/lib.rs:1036",
+            "crates/ui-egui/src/lib.rs:1088",
+            "crates/ui-egui/src/panels/faces.rs:659-680",
+            "crates/ui-egui/src/panels/faces.rs:724-734"
+          ],
+          "failureScenario": "logic_inner calls panels::faces::pump twice in the same frame (after slideshow_tick and again after model_setup::pump). The second call's faces.pump engine step is mostly suppressed by faces_next_pump, but watch_downloads is not gated: while a face-model download is watched, the engine command faces.models.downloads is executed twice per frame, and input-time bookkeeping runs twice. Duplicate orchestration of one subsystem in the per-frame loop.",
+          "action": "Remove one of the two calls (keep a single per-frame faces pump in logic_inner).",
+          "verifyStatus": "verified",
+          "anchor": {
+            "path": "crates/ui-egui/src/lib.rs",
+            "line": 1088,
+            "text": "        panels::faces::pump(self, ctx);"
+          }
+        }
+      ],
+      "lensIds": [
+        "architecture"
+      ],
+      "packetCoverage": {
+        "basis": "bounded-excerpts",
+        "examined": 4,
+        "expected": 730,
+        "part": {
+          "number": 5,
+          "total": 7
+        },
+        "requiredParts": 7,
+        "overCeiling": null,
+        "partPaths": [
+          "crates/ui-egui/src/i18n.rs",
+          "crates/ui-egui/src/lib.rs",
+          "crates/ui-egui/src/menubar.rs",
+          "crates/ui-egui/src/menus.rs",
+          "crates/ui-egui/src/panels/detail.rs"
+        ],
+        "examinedPaths": [
+          "crates/ui-egui/src/i18n.rs",
+          "crates/ui-egui/src/lib.rs",
+          "crates/ui-egui/src/menubar.rs",
+          "crates/ui-egui/src/menus.rs"
+        ],
+        "chunkedPaths": [
+          {
+            "path": "crates/ui-egui/src/headless.rs",
+            "chunk": 4,
+            "chunks": 8,
+            "startLine": 1905,
+            "endLine": 2480
+          },
+          {
+            "path": "crates/ui-egui/src/headless.rs",
+            "chunk": 5,
+            "chunks": 8,
+            "startLine": 2481,
+            "endLine": 3018
+          },
+          {
+            "path": "crates/ui-egui/src/headless.rs",
+            "chunk": 6,
+            "chunks": 8,
+            "startLine": 3019,
+            "endLine": 3539
+          },
+          {
+            "path": "crates/ui-egui/src/headless.rs",
+            "chunk": 7,
+            "chunks": 8,
+            "startLine": 3540,
+            "endLine": 4094
+          },
+          {
+            "path": "crates/ui-egui/src/headless.rs",
+            "chunk": 8,
+            "chunks": 8,
+            "startLine": 4095,
+            "endLine": 4382
+          },
+          {
+            "path": "crates/ui-egui/src/panels/detail.rs",
+            "chunk": 1,
+            "chunks": 5,
+            "startLine": 1,
+            "endLine": 663
+          }
+        ],
+        "omittedPaths": [],
+        "truncatedPaths": [],
+        "coverageMode": "risk-sampled",
+        "bundle": "J2",
+        "reviewSetDigest": "sha256:12c8bda95469b746dc24253d0430980aa5dd5237baf339b011d2c4bc7ecd6e6c",
+        "reviewSetCount": 76,
+        "reviewExpected": 55,
+        "promotedPaths": [
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs",
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/cmd/geocode.rs",
+          "crates/engine/src/crs.rs",
+          "crates/engine/src/crs_masks.rs"
+        ],
+        "displacedPaths": [
+          "crates/codecs/examples/jpeg_bench.rs",
+          "crates/raw/examples/rawdump.rs",
+          "crates/merge/src/features.rs",
+          "crates/merge/tests/pano.rs",
+          "crates/pipeline/src/dust.rs",
+          "crates/pipeline/src/colorops.rs",
+          "crates/gpu/tests/memory.rs",
+          "crates/raw/src/demosaic/xtrans.rs",
+          "crates/merge/src/pano/finish.rs",
+          "crates/codecs/src/jpeg_par.rs",
+          "crates/meta/src/iptc.rs",
+          "apps/lightcraft-web/src/files.rs",
+          "crates/codecs/src/other.rs",
+          "apps/lightcraft/examples/gen_photos.rs",
+          "crates/merge/src/ransac.rs",
+          "crates/scenes/src/noise.rs",
+          "crates/tiff/src/makernote.rs",
+          "crates/merge/src/align.rs",
+          "crates/catalog/src/tests_local.rs",
+          "apps/lightcraft-cli/src/alloc_release.rs",
+          "crates/codecs/src/exif.rs",
+          "crates/engine/src/cmd/curves.rs",
+          "crates/ui-egui/src/tests_unsaved.rs",
+          "packaging/linux/postinst.sh",
+          "crates/raw/examples/rawinfo.rs",
+          "crates/pipeline/src/upright.rs",
+          "crates/pipeline/src/transform.rs",
+          "crates/ui-egui/src/panels/crop_overlay.rs",
+          "crates/engine/src/tests_forget_local.rs",
+          "crates/pipeline/src/profiles.rs",
+          "crates/ui-egui/src/import.rs",
+          "crates/ui-egui/src/tests_preview_limit.rs",
+          "crates/ui-egui/src/render.rs",
+          "crates/desktop-host/src/tasks.rs",
+          "crates/catalog/src/keywords.rs",
+          "crates/ui-egui/src/panels/edit.rs",
+          "crates/ui-egui/src/panels/grid.rs"
+        ],
+        "unpromotedCount": 78,
+        "declaredUnsampled": 675,
+        "excluded": 23,
+        "aliasedPaths": []
+      },
+      "reasoningHostState": "ingested",
+      "withdrawnFindings": []
+    }
+  },
+  "part": {
+    "number": 5,
+    "total": 7
+  }
+}

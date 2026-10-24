@@ -1,0 +1,433 @@
+{
+  "schemaVersion": 1,
+  "kind": "legion-lens-receipt",
+  "provider": "reasoning.architecture",
+  "result": {
+    "schema_version": 1,
+    "provider": "reasoning.architecture",
+    "applicable": true,
+    "required": true,
+    "status": "partial",
+    "complete": false,
+    "coverage": {
+      "denominator_digest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+      "expected": 730,
+      "examined": 10,
+      "gaps": [
+        "reasoning-part-scope:reasoning.architecture:part 1/7"
+      ]
+    },
+    "findings": [
+      {
+        "id": "arch-qa-control-dispatch-parallel-command-surface",
+        "severity": "medium"
+      },
+      {
+        "id": "arch-qa-mode-detection-ungated-in-release",
+        "severity": "medium"
+      },
+      {
+        "id": "arch-duplicate-preferences-patch-paths-diverge",
+        "severity": "low"
+      },
+      {
+        "id": "arch-sync-pickers-bypass-parented-async-path",
+        "severity": "low"
+      },
+      {
+        "id": "arch-dialoghost-shadowed-form-variants",
+        "severity": "low"
+      }
+    ],
+    "coverage_gaps": [
+      "reasoning-part-scope:reasoning.architecture:part 1/7"
+    ],
+    "degradation": [],
+    "details": {
+      "changeRisk": {
+        "reversibility": "unknown",
+        "blastRadius": "whole-repository audit; no diff context supplied",
+        "reason": "Whole-repo run without change context; change risk cannot be assessed",
+        "beforeEvidence": [],
+        "afterEvidence": []
+      },
+      "executionReceipt": {
+        "schemaVersion": 1,
+        "kind": "legion-reasoning-receipt",
+        "receiptId": "ingest-60d14014ff7a1570893ca62f751193c4",
+        "requestId": "sha256:b8f8aa17b31f73b8ae28fbbc7ee98a374893bb62623e07d711c1c53672a1b2d8",
+        "providerId": "reasoning.architecture",
+        "contract": "audit-lens-architecture-v1",
+        "planDigest": "sha256:ac09f43cd5413bc2bf474908edcc12cac7d2dd67580e9da5196d89c20f19d98d",
+        "planSignature": "hmac-sha256:805a23e8a5d736c2a96307bc58b919aa92b271336dbe2dbca01d2a81fe17b6f3",
+        "repositoryId": "/Volumes/D/claude/ember",
+        "inventoryGeneration": "filesystem:sha256:6a2aaea46465c4542b1f39f825efd84edc8f63121b837f8bc64a97418d82ef9a",
+        "inventoryDigest": "sha256:da3157e68029988c594537621af44004cf97f0020364e0c23299c7b13bcc221a",
+        "denominatorDigest": "sha256:55cbc7aeb35d6d75d106212f5e9ac7218a0205e45cf10f28c7178df3a61444c3",
+        "denominatorCount": 730,
+        "resultDigest": "sha256:d74b30e336893e699260eccf8930e377e9eac3842f4611ffc526fbe8eea22cba",
+        "status": "partial",
+        "complete": false,
+        "gaps": [
+          "reasoning-part-scope:reasoning.architecture:part 1/7"
+        ],
+        "authentication": {
+          "alg": "HMAC-SHA256",
+          "macDomain": "legion-reasoning-receipt:v1",
+          "boundFieldsDigest": "sha256:879de90044d6c1908fca28fc34814e176364267cdd644bb6319c20c234db2e65",
+          "mac": "f31b5588b525d5a71b304835c6a41f6bc38c857b7aa39dc1cd89124c0c6fa317",
+          "host": "legion-cli-ingest",
+          "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb"
+        }
+      },
+      "findingEvidence": {
+        "arch-qa-control-dispatch-parallel-command-surface": {
+          "lens": "architecture",
+          "confidence": "confirmed",
+          "verifyStatus": "unverified",
+          "action": "Extract each command body into one plain function taking (&AppState, AppHandle, caller label, args) and have both the #[tauri::command] wrappers and control_dispatch call it; keep only argument decoding in the QA adapter."
+        },
+        "arch-qa-mode-detection-ungated-in-release": {
+          "lens": "architecture",
+          "confidence": "confirmed",
+          "verifyStatus": "unverified",
+          "action": "Compute one RuntimeMode once at startup (behind cfg(feature = \"qa-native\") for every env-derived input) and pass it to build_shell, run(), lc_native and the macOS builder branch; release builds should compile the QA branches out."
+        },
+        "arch-duplicate-preferences-patch-paths-diverge": {
+          "lens": "architecture",
+          "confidence": "confirmed",
+          "verifyStatus": "unverified",
+          "action": "Route lc_native preferences.patch through the same helper as lc_preferences and decide once whether a missing host is an error after the preference file has been written."
+        },
+        "arch-sync-pickers-bypass-parented-async-path": {
+          "lens": "architecture",
+          "confidence": "likely",
+          "verifyStatus": "unverified",
+          "action": "Make the async, parented path the only dialog path: drive every is_picker_action through one async picker function that takes the caller WebviewWindow, and derive is_import_picker/has_explicit_picker_input from one action table."
+        },
+        "arch-dialoghost-shadowed-form-variants": {
+          "lens": "architecture",
+          "confidence": "confirmed",
+          "verifyStatus": "unverified",
+          "action": "Delete the copysettings, pastesettings and cull entries from FormDialog's config and EXPLICIT_FORM_KINDS, leaving GroupsDialog and CullReviewDialog as the single owners."
+        }
+      },
+      "findingLocations": {
+        "arch-qa-control-dispatch-parallel-command-surface": [
+          "apps/lightcraft-desktop/src/native.rs:603-721",
+          "apps/lightcraft-desktop/src/native.rs:58-293",
+          "apps/lightcraft-desktop/src/native.rs:74-88",
+          "apps/lightcraft-desktop/src/native.rs:164-187",
+          "apps/lightcraft-desktop/tests/native_qualification.rs:137-143"
+        ],
+        "arch-qa-mode-detection-ungated-in-release": [
+          "apps/lightcraft-desktop/src/native.rs:776-781",
+          "apps/lightcraft-desktop/src/native.rs:791-804",
+          "apps/lightcraft-desktop/src/native.rs:1004-1018",
+          "apps/lightcraft-desktop/src/native.rs:1022-1036",
+          "apps/lightcraft-desktop/src/native.rs:280-286",
+          "apps/lightcraft-desktop/src/native.rs:1184-1193"
+        ],
+        "arch-duplicate-preferences-patch-paths-diverge": [
+          "apps/lightcraft-desktop/src/native.rs:164-187",
+          "apps/lightcraft-desktop/src/native.rs:235-250"
+        ],
+        "arch-sync-pickers-bypass-parented-async-path": [
+          "apps/lightcraft-desktop/src/services.rs:143-161",
+          "apps/lightcraft-desktop/src/services.rs:163-190",
+          "apps/lightcraft-desktop/src/services.rs:92-141",
+          "apps/lightcraft-desktop/src/native.rs:211-233",
+          "apps/lightcraft-desktop/src/native.rs:292"
+        ],
+        "arch-dialoghost-shadowed-form-variants": [
+          "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx:878",
+          "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx:880",
+          "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx:1009",
+          "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx:1023-1024"
+        ]
+      },
+      "findingMessages": {
+        "arch-qa-control-dispatch-parallel-command-surface": "control_dispatch re-implements every tauri_commands handler (lc_run, lc_snapshot, lc_preferences, lc_native and its action chain) instead of sharing them, and the copies already diverge: QA lc_snapshot never applies mask_snapshot_gpu when gpu_recovery is set, QA lc_preferences/preferences.patch never clear gpu_recovery, never apply preference_patch_for_window and silently succeed with no host where lc_preferences returns the startup error, and QA saveBeforeClose ignores the caller-window ownership rule. native_qualification.rs drives only this copy (control.command(\"lc_snapshot\"/\"lc_preferences\"/\"lc_native\")), so a GPU-crash-recovery or startup-failure regression in the production IPC handlers ships with a green native qualification run, and every new native action must be added in two dispatchers.",
+        "arch-qa-mode-detection-ungated-in-release": "QA mode is derived in five independent places with different gating. runtime_modes deliberately ignores LIGHTCRAFT_DESKTOP_QA/RIGHTKIT_QA_HIDDEN/RIGHTKIT_QA_BACKGROUND unless the qa-native feature is built (default = [] in Cargo.toml), but unattended_qa_enabled, build_shell, the lc_native import-picker guard and the macOS activation branch read the same variables unconditionally. A release build launched with any of those variables set (e.g. inherited from a developer or CI shell) therefore uses the production library and preferences while build_shell sets show_on_ready(false) and run() sets focus=false, so the main window never appears, and native pickers are rejected as 'unavailable in hidden QA'. This also leaves QA control behaviour compiled into release builds rather than stripped.",
+        "arch-duplicate-preferences-patch-paths-diverge": "Preferences are patched through two IPC entry points with copy-pasted bodies that disagree when the desktop host failed to start: lc_preferences writes ui.json via preferences.patch and then returns Err(startup_error), while lc_native action preferences.patch performs the same write and returns Ok(value). The frontend therefore reports a failed save for a write that actually persisted (or a success, depending on which entry point the caller used), and fixes to one path do not reach the other.",
+        "arch-sync-pickers-bypass-parented-async-path": "services.rs documents that dialogs must be awaited from the caller's window on macOS instead of being dispatched synchronously from a worker, but the split is keyed on 'import' rather than on 'opens a dialog': pickPresetFiles, pickCurvePresetFiles, openFile, saveFile/saveExport/exportFile, savePresetFile, saveCurvePresetFile, pickTracklog, openLibrary, backupLibrary/restoreLibrary and selectFolder still run blocking rfd::FileDialog calls inside spawn_blocking with no parent window. These dialogs keep the unparented worker-thread behaviour the comment says to avoid (dialog not attached to the Ember window and able to open behind it), and the picker action list is maintained in four separate match tables.",
+        "arch-dialoghost-shadowed-form-variants": "EXPLICIT_FORM_KINDS and the FormDialog config define copysettings, pastesettings and cull forms, but DialogHost routes those kinds to GroupsDialog and CullReviewDialog before reaching FormDialog, so the FormDialog variants (including their payload shaping and the 'Choose groups in Inspector' note) can never render. Two implementations of the same dialogs exist, and a maintainer changing the FormDialog version sees no effect."
+      },
+      "findingTitles": {
+        "arch-qa-control-dispatch-parallel-command-surface": "Extract each command body into one plain function taking (&AppState, AppHandle, caller label, args) and have both the #[tauri::command] wrappers and control_dispatch call it; keep only argument decoding in the QA adapter.",
+        "arch-qa-mode-detection-ungated-in-release": "Compute one RuntimeMode once at startup (behind cfg(feature = \"qa-native\") for every env-derived input) and pass it to build_shell, run(), lc_native and the macOS builder branch; release builds should compile the QA branches out.",
+        "arch-duplicate-preferences-patch-paths-diverge": "Route lc_native preferences.patch through the same helper as lc_preferences and decide once whether a missing host is an error after the preference file has been written.",
+        "arch-sync-pickers-bypass-parented-async-path": "Make the async, parented path the only dialog path: drive every is_picker_action through one async picker function that takes the caller WebviewWindow, and derive is_import_picker/has_explicit_picker_input from one action table.",
+        "arch-dialoghost-shadowed-form-variants": "Delete the copysettings, pastesettings and cull entries from FormDialog's config and EXPLICIT_FORM_KINDS, leaving GroupsDialog and CullReviewDialog as the single owners."
+      },
+      "ingest": {
+        "host": "legion-cli-ingest",
+        "epochDigest": "sha256:2d751bdcd9f141d6ff8c1fc29c000232ef8b046918b5ba593ab0c652329346bb",
+        "packetDigest": "sha256:8d5882bf25b9597b8f27c696c11c3266a0e8cf42a392bd8c7dfd16aab5b805df",
+        "anchorsVerified": 5
+      },
+      "lensFindings": [
+        {
+          "id": "arch-qa-control-dispatch-parallel-command-surface",
+          "lens": "architecture",
+          "severity": "medium",
+          "confidence": "confirmed",
+          "evidence": [
+            "apps/lightcraft-desktop/src/native.rs:603-721",
+            "apps/lightcraft-desktop/src/native.rs:58-293",
+            "apps/lightcraft-desktop/src/native.rs:74-88",
+            "apps/lightcraft-desktop/src/native.rs:164-187",
+            "apps/lightcraft-desktop/tests/native_qualification.rs:137-143"
+          ],
+          "failureScenario": "control_dispatch re-implements every tauri_commands handler (lc_run, lc_snapshot, lc_preferences, lc_native and its action chain) instead of sharing them, and the copies already diverge: QA lc_snapshot never applies mask_snapshot_gpu when gpu_recovery is set, QA lc_preferences/preferences.patch never clear gpu_recovery, never apply preference_patch_for_window and silently succeed with no host where lc_preferences returns the startup error, and QA saveBeforeClose ignores the caller-window ownership rule. native_qualification.rs drives only this copy (control.command(\"lc_snapshot\"/\"lc_preferences\"/\"lc_native\")), so a GPU-crash-recovery or startup-failure regression in the production IPC handlers ships with a green native qualification run, and every new native action must be added in two dispatchers.",
+          "action": "Extract each command body into one plain function taking (&AppState, AppHandle, caller label, args) and have both the #[tauri::command] wrappers and control_dispatch call it; keep only argument decoding in the QA adapter.",
+          "verifyStatus": "unverified",
+          "reviewAxis": "standards",
+          "disposition": "design-heuristic",
+          "sourceQuote": "fn control_dispatch(app: &AppHandle<Wry>, name: &str, raw: &str) -> Result<String, String> {",
+          "sourceLocation": "apps/lightcraft-desktop/src/native.rs:603",
+          "changeAttribution": {
+            "status": "unknown",
+            "reason": "whole-repo audit without change context; no baseline to attribute against",
+            "baselineEvidence": []
+          },
+          "anchor": {
+            "path": "apps/lightcraft-desktop/src/native.rs",
+            "line": 603,
+            "text": "fn control_dispatch(app: &AppHandle<Wry>, name: &str, raw: &str) -> Result<String, String> {"
+          }
+        },
+        {
+          "id": "arch-qa-mode-detection-ungated-in-release",
+          "lens": "architecture",
+          "severity": "medium",
+          "confidence": "confirmed",
+          "evidence": [
+            "apps/lightcraft-desktop/src/native.rs:776-781",
+            "apps/lightcraft-desktop/src/native.rs:791-804",
+            "apps/lightcraft-desktop/src/native.rs:1004-1018",
+            "apps/lightcraft-desktop/src/native.rs:1022-1036",
+            "apps/lightcraft-desktop/src/native.rs:280-286",
+            "apps/lightcraft-desktop/src/native.rs:1184-1193"
+          ],
+          "failureScenario": "QA mode is derived in five independent places with different gating. runtime_modes deliberately ignores LIGHTCRAFT_DESKTOP_QA/RIGHTKIT_QA_HIDDEN/RIGHTKIT_QA_BACKGROUND unless the qa-native feature is built (default = [] in Cargo.toml), but unattended_qa_enabled, build_shell, the lc_native import-picker guard and the macOS activation branch read the same variables unconditionally. A release build launched with any of those variables set (e.g. inherited from a developer or CI shell) therefore uses the production library and preferences while build_shell sets show_on_ready(false) and run() sets focus=false, so the main window never appears, and native pickers are rejected as 'unavailable in hidden QA'. This also leaves QA control behaviour compiled into release builds rather than stripped.",
+          "action": "Compute one RuntimeMode once at startup (behind cfg(feature = \"qa-native\") for every env-derived input) and pass it to build_shell, run(), lc_native and the macOS builder branch; release builds should compile the QA branches out.",
+          "verifyStatus": "unverified",
+          "reviewAxis": "standards",
+          "disposition": "documented-violation",
+          "sourceQuote": "fn unattended_qa_enabled() -> bool {",
+          "sourceLocation": "apps/lightcraft-desktop/src/native.rs:776",
+          "changeAttribution": {
+            "status": "unknown",
+            "reason": "whole-repo audit without change context; no baseline to attribute against",
+            "baselineEvidence": []
+          },
+          "anchor": {
+            "path": "apps/lightcraft-desktop/src/native.rs",
+            "line": 776,
+            "text": "fn unattended_qa_enabled() -> bool {"
+          }
+        },
+        {
+          "id": "arch-duplicate-preferences-patch-paths-diverge",
+          "lens": "architecture",
+          "severity": "low",
+          "confidence": "confirmed",
+          "evidence": [
+            "apps/lightcraft-desktop/src/native.rs:164-187",
+            "apps/lightcraft-desktop/src/native.rs:235-250"
+          ],
+          "failureScenario": "Preferences are patched through two IPC entry points with copy-pasted bodies that disagree when the desktop host failed to start: lc_preferences writes ui.json via preferences.patch and then returns Err(startup_error), while lc_native action preferences.patch performs the same write and returns Ok(value). The frontend therefore reports a failed save for a write that actually persisted (or a success, depending on which entry point the caller used), and fixes to one path do not reach the other.",
+          "action": "Route lc_native preferences.patch through the same helper as lc_preferences and decide once whether a missing host is an error after the preference file has been written.",
+          "verifyStatus": "unverified",
+          "reviewAxis": "standards",
+          "disposition": "design-heuristic",
+          "sourceQuote": "if action == \"preferences.patch\" {",
+          "sourceLocation": "apps/lightcraft-desktop/src/native.rs:235",
+          "changeAttribution": {
+            "status": "unknown",
+            "reason": "whole-repo audit without change context; no baseline to attribute against",
+            "baselineEvidence": []
+          },
+          "anchor": {
+            "path": "apps/lightcraft-desktop/src/native.rs",
+            "line": 235,
+            "text": "        if action == \"preferences.patch\" {"
+          }
+        },
+        {
+          "id": "arch-sync-pickers-bypass-parented-async-path",
+          "lens": "architecture",
+          "severity": "low",
+          "confidence": "likely",
+          "evidence": [
+            "apps/lightcraft-desktop/src/services.rs:143-161",
+            "apps/lightcraft-desktop/src/services.rs:163-190",
+            "apps/lightcraft-desktop/src/services.rs:92-141",
+            "apps/lightcraft-desktop/src/native.rs:211-233",
+            "apps/lightcraft-desktop/src/native.rs:292"
+          ],
+          "failureScenario": "services.rs documents that dialogs must be awaited from the caller's window on macOS instead of being dispatched synchronously from a worker, but the split is keyed on 'import' rather than on 'opens a dialog': pickPresetFiles, pickCurvePresetFiles, openFile, saveFile/saveExport/exportFile, savePresetFile, saveCurvePresetFile, pickTracklog, openLibrary, backupLibrary/restoreLibrary and selectFolder still run blocking rfd::FileDialog calls inside spawn_blocking with no parent window. These dialogs keep the unparented worker-thread behaviour the comment says to avoid (dialog not attached to the Ember window and able to open behind it), and the picker action list is maintained in four separate match tables.",
+          "action": "Make the async, parented path the only dialog path: drive every is_picker_action through one async picker function that takes the caller WebviewWindow, and derive is_import_picker/has_explicit_picker_input from one action table.",
+          "verifyStatus": "unverified",
+          "reviewAxis": "spec",
+          "disposition": "partial",
+          "sourceQuote": "/// Import-related pickers must be awaited by the Tauri command so macOS presents them from the",
+          "sourceLocation": "apps/lightcraft-desktop/src/services.rs:143",
+          "changeAttribution": {
+            "status": "unknown",
+            "reason": "whole-repo audit without change context; no baseline to attribute against",
+            "baselineEvidence": []
+          },
+          "anchor": {
+            "path": "apps/lightcraft-desktop/src/services.rs",
+            "line": 143,
+            "text": "/// Import-related pickers must be awaited by the Tauri command so macOS presents them from the"
+          }
+        },
+        {
+          "id": "arch-dialoghost-shadowed-form-variants",
+          "lens": "architecture",
+          "severity": "low",
+          "confidence": "confirmed",
+          "evidence": [
+            "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx:878",
+            "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx:880",
+            "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx:1009",
+            "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx:1023-1024"
+          ],
+          "failureScenario": "EXPLICIT_FORM_KINDS and the FormDialog config define copysettings, pastesettings and cull forms, but DialogHost routes those kinds to GroupsDialog and CullReviewDialog before reaching FormDialog, so the FormDialog variants (including their payload shaping and the 'Choose groups in Inspector' note) can never render. Two implementations of the same dialogs exist, and a maintainer changing the FormDialog version sees no effect.",
+          "action": "Delete the copysettings, pastesettings and cull entries from FormDialog's config and EXPLICIT_FORM_KINDS, leaving GroupsDialog and CullReviewDialog as the single owners.",
+          "verifyStatus": "unverified",
+          "reviewAxis": "standards",
+          "disposition": "design-heuristic",
+          "sourceQuote": "const EXPLICIT_FORM_KINDS = new Set(['rename', 'renamealbum', 'capturetime', 'autostack', 'createpreset', 'copysettings', 'pastesettings', 'labelnames', 'savemetadatapreset', 'cull', 'textprompt', 'metadatapreset', 'renamekeyword', 'mergekeywords']);",
+          "sourceLocation": "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx:880",
+          "changeAttribution": {
+            "status": "unknown",
+            "reason": "whole-repo audit without change context; no baseline to attribute against",
+            "baselineEvidence": []
+          },
+          "anchor": {
+            "path": "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
+            "line": 880,
+            "text": "const EXPLICIT_FORM_KINDS = new Set(['rename', 'renamealbum', 'capturetime', 'autostack', 'createpreset', 'copysettings', 'pastesettings', 'labelnames', 'savemetadatapreset', 'cull', 'textprompt', 'metadatapreset', 'renamekeyword', 'mergekeywords']);"
+          }
+        }
+      ],
+      "lensIds": [
+        "architecture"
+      ],
+      "packetCoverage": {
+        "basis": "bounded-excerpts",
+        "examined": 10,
+        "expected": 730,
+        "part": {
+          "number": 1,
+          "total": 7
+        },
+        "requiredParts": 7,
+        "overCeiling": null,
+        "partPaths": [
+          "apps/lightcraft-cli/src/main.rs",
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/main.rs",
+          "apps/lightcraft-desktop/src/native.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/tests/native_qualification.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
+          "apps/lightcraft-desktop/web/src/main.tsx"
+        ],
+        "examinedPaths": [
+          "apps/lightcraft-cli/src/main.rs",
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/main.rs",
+          "apps/lightcraft-desktop/src/native.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/tests/native_qualification.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
+          "apps/lightcraft-desktop/web/src/main.tsx"
+        ],
+        "chunkedPaths": [],
+        "omittedPaths": [],
+        "truncatedPaths": [],
+        "coverageMode": "risk-sampled",
+        "bundle": "J2",
+        "reviewSetDigest": "sha256:12c8bda95469b746dc24253d0430980aa5dd5237baf339b011d2c4bc7ecd6e6c",
+        "reviewSetCount": 76,
+        "reviewExpected": 55,
+        "promotedPaths": [
+          "apps/lightcraft-cli/tests/cli.rs",
+          "apps/lightcraft-cli/tests/personal_auto.rs",
+          "apps/lightcraft-desktop/src/services.rs",
+          "apps/lightcraft-desktop/web/src/desktop.tsx",
+          "crates/codecs/src/encode.rs",
+          "crates/codecs/src/gainmap.rs",
+          "crates/codecs/src/jpeg.rs",
+          "crates/codecs/tests/roundtrip.rs",
+          "crates/denoise-core/src/known.rs",
+          "crates/denoise-core/src/manifest.rs",
+          "crates/denoise/src/onnx_proto.rs",
+          "crates/denoise/src/remote.rs",
+          "crates/engine/build.rs",
+          "crates/engine/src/cmd/geocode.rs",
+          "crates/engine/src/crs.rs",
+          "crates/engine/src/crs_masks.rs"
+        ],
+        "displacedPaths": [
+          "crates/codecs/examples/jpeg_bench.rs",
+          "crates/raw/examples/rawdump.rs",
+          "crates/merge/src/features.rs",
+          "crates/merge/tests/pano.rs",
+          "crates/pipeline/src/dust.rs",
+          "crates/pipeline/src/colorops.rs",
+          "crates/gpu/tests/memory.rs",
+          "crates/raw/src/demosaic/xtrans.rs",
+          "crates/merge/src/pano/finish.rs",
+          "crates/codecs/src/jpeg_par.rs",
+          "crates/meta/src/iptc.rs",
+          "apps/lightcraft-web/src/files.rs",
+          "crates/codecs/src/other.rs",
+          "apps/lightcraft/examples/gen_photos.rs",
+          "crates/merge/src/ransac.rs",
+          "crates/scenes/src/noise.rs",
+          "crates/tiff/src/makernote.rs",
+          "crates/merge/src/align.rs",
+          "crates/catalog/src/tests_local.rs",
+          "apps/lightcraft-cli/src/alloc_release.rs",
+          "crates/codecs/src/exif.rs",
+          "crates/engine/src/cmd/curves.rs",
+          "crates/ui-egui/src/tests_unsaved.rs",
+          "packaging/linux/postinst.sh",
+          "crates/raw/examples/rawinfo.rs",
+          "crates/pipeline/src/upright.rs",
+          "crates/pipeline/src/transform.rs",
+          "crates/ui-egui/src/panels/crop_overlay.rs",
+          "crates/engine/src/tests_forget_local.rs",
+          "crates/pipeline/src/profiles.rs",
+          "crates/ui-egui/src/import.rs",
+          "crates/ui-egui/src/tests_preview_limit.rs",
+          "crates/ui-egui/src/render.rs",
+          "crates/desktop-host/src/tasks.rs",
+          "crates/catalog/src/keywords.rs",
+          "crates/ui-egui/src/panels/edit.rs",
+          "crates/ui-egui/src/panels/grid.rs"
+        ],
+        "unpromotedCount": 78,
+        "declaredUnsampled": 675,
+        "excluded": 23,
+        "aliasedPaths": []
+      },
+      "reasoningHostState": "ingested",
+      "withdrawnFindings": []
+    }
+  },
+  "part": {
+    "number": 1,
+    "total": 7
+  }
+}
