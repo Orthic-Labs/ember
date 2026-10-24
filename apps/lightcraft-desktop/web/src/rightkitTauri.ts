@@ -4,9 +4,10 @@ import { createRightKitTauriClient, standardRightKitDeviceGetOrCreate } from '@r
 /**
  * Typed renderer side of the shared RightKit Tauri command surface (`@rightkit/tauri`, paired with the native
  * `rightkit-device` host in `src/rk_device.rs`). Ember is a free app: it exposes the device identity only, so the
- * licence, logs and diagnostics commands of the client are not wired to native commands and must not be called.
+ * logs and diagnostics commands of the client are not wired to native commands and must not be called. `@rightkit/tauri`
+ * 0.3 dropped the licence commands and the `TLicense` type parameter, so the first parameter is the device id type.
  */
-export const rightkitNative = createRightKitTauriClient<never, string>({
+export const rightkitNative = createRightKitTauriClient<string>({
   invoke: <T>(command: string, args?: Record<string, unknown>) => invoke<T>(command, args),
   deviceGetOrCreate: standardRightKitDeviceGetOrCreate,
 });
