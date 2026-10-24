@@ -549,80 +549,6 @@ fn qa_window_state(app: &AppHandle<Wry>) -> Result<Value, String> {
 }
 
 #[cfg(feature = "qa-native")]
-fn qa_viewport(app: &AppHandle<Wry>, args: &Value) -> Result<Value, String> {
-    let object = args.as_object().ok_or_else(|| "lc_qa_viewport expects an object".to_string())?;
-    let width = object.get("width").and_then(Value::as_u64).ok_or_else(|| "lc_qa_viewport requires width".to_string())?;
-    let height = object.get("height").and_then(Value::as_u64).ok_or_else(|| "lc_qa_viewport requires height".to_string())?;
-    if !matches!((width, height), (1280, 800) | (1600, 1000)) {
-        return Err("lc_qa_viewport allows only 1280x800 or 1600x1000".into());
-    }
-    let window = app.get_webview_window("main").ok_or_else(|| "main window is unavailable".to_string())?;
-    let geometry = |window: &WebviewWindow<Wry>| {
-        let size = |result: Result<tauri::PhysicalSize<u32>, _>| result.ok().map(|size| json!({"width": size.width, "height": size.height}));
-        let position = |result: Result<tauri::PhysicalPosition<i32>, _>| result.ok().map(|position| json!({"x": position.x, "y": position.y}));
-        json!({
-            "innerSize": size(window.inner_size()),
-            "outerSize": size(window.outer_size()),
-            "innerPosition": position(window.inner_position()),
-            "outerPosition": position(window.outer_position()),
-            "isVisible": window.is_visible().ok(),
-            "isDecorated": window.is_decorated().ok(),
-            "isResizable": window.is_resizable().ok(),
-            "isMaximized": window.is_maximized().ok(),
-            "isFullscreen": window.is_fullscreen().ok(),
-        })
-    };
-    let before = geometry(&window);
-    let config = app.config().app.windows.iter().find(|candidate| candidate.label == "main").map(|candidate| {
-        json!({
-            "label": candidate.label,
-            "width": candidate.width,
-            "height": candidate.height,
-            "minWidth": candidate.min_width,
-            "minHeight": candidate.min_height,
-            "decorations": candidate.decorations,
-            "shadow": candidate.shadow,
-            "resizable": candidate.resizable,
-        })
-    });
-    // Tao adds native menu height when sizing borderless Windows windows.
-    // Hide it only during resize, then restore prior visibility even on errors.
-    #[cfg(target_os = "windows")]
-    let menu_visible = window.is_menu_visible().map_err(|error| format!("reading QA menu visibility: {error}"))?;
-    #[cfg(target_os = "windows")]
-    if menu_visible {
-        window.hide_menu().map_err(|error| format!("hiding QA menu: {error}"))?;
-    }
-    let resize_result = window
-        .set_size(tauri::Size::Logical(tauri::LogicalSize::new(width as f64, height as f64)))
-        .map_err(|error| format!("setting QA viewport: {error}"));
-    let restore_result: Result<Option<()>, String> = {
-        #[cfg(target_os = "windows")]
-        {
-            menu_visible.then(|| window.show_menu().map_err(|error| format!("restoring QA menu: {error}"))).transpose()
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            Ok(None)
-        }
-    };
-    match (resize_result, restore_result) {
-        (Err(error), Err(restore)) => return Err(format!("{error}; {restore}")),
-        (Err(error), Ok(_)) | (Ok(_), Err(error)) => return Err(error),
-        (Ok(_), Ok(_)) => {}
-    }
-    let observed = window.inner_size().map_err(|error| format!("reading QA viewport: {error}"))?;
-    let after = geometry(&window);
-    Ok(json!({
-        "requested": {"width": width, "height": height},
-        "observedInnerSize": {"width": observed.width, "height": observed.height},
-        "config": config,
-        "before": before,
-        "after": after,
-    }))
-}
-
-#[cfg(feature = "qa-native")]
 fn control_dispatch(app: &AppHandle<Wry>, name: &str, raw: &str) -> Result<String, String> {
     let args = control_args(raw)?;
     let result = match name {
@@ -684,7 +610,6 @@ fn control_dispatch(app: &AppHandle<Wry>, name: &str, raw: &str) -> Result<Strin
             value
         }
         "lc_qa_window_state" => qa_window_state(app)?,
-        "lc_qa_viewport" => qa_viewport(app, &args)?,
         "lc_native" => {
             let object = args.as_object().ok_or_else(|| "lc_native expects an object".to_string())?;
             let action = object.get("action").and_then(Value::as_str).ok_or_else(|| "lc_native requires action".to_string())?;
@@ -756,7 +681,6 @@ fn qa_control_plugin() -> Option<TauriPlugin<Wry>> {
         .command("lc_merge_preview_cancel", |app, args| control_dispatch(app, "lc_merge_preview_cancel", args))
         .command("lc_preview_ack", |app, args| control_dispatch(app, "lc_preview_ack", args))
         .command("lc_qa_window_state", |app, args| control_dispatch(app, "lc_qa_window_state", args))
-        .command("lc_qa_viewport", |app, args| control_dispatch(app, "lc_qa_viewport", args))
         .command("lc_native", |app, args| control_dispatch(app, "lc_native", args))
         .command("lc_preferences", |app, args| control_dispatch(app, "lc_preferences", args));
     control.build_if_enabled()

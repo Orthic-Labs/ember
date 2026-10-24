@@ -6,15 +6,9 @@
       "path": "apps/lightcraft-desktop/src/native.rs",
       "reason": "Main-window CloseRequested guard (active work, unsaved catalog, ordered shutdown); the shell has no close veto hook. See section 1 of docs/rightkit-exceptions/M1.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
-    },
-    {
-      "capability": "desktop-shell",
-      "package": "rightkit-tauri-shell",
-      "path": "apps/lightcraft-desktop/src/native.rs",
-      "reason": "QA-only window set_size and outer_position (qa-native feature); the shell has readback only. See section 2 of docs/rightkit-exceptions/M1.md (need, published-API gap with file:line, other apps, proof).",
-      "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#1150",
+      "expires": "2026-11-30"
     },
     {
       "capability": "app-shell-ui",
@@ -22,7 +16,9 @@
       "path": "apps/lightcraft-desktop/web/src/App.tsx",
       "reason": "Right-hand inspector resizer; sidebarResizable covers the left sidebar only. See section 1 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#1107",
+      "expires": "2026-11-30"
     },
     {
       "capability": "app-shell-ui",
@@ -30,7 +26,9 @@
       "path": "apps/lightcraft-desktop/web/src/app.css",
       "reason": "Collapsed sidebar kept as a 48px icon rail; sidebarCollapsed hides the sidebar. See section 2 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#1087",
+      "expires": "2026-11-30"
     },
     {
       "capability": "app-shell-ui",
@@ -38,7 +36,9 @@
       "path": "apps/lightcraft-desktop/web/src/layout/RetainedLayout.tsx",
       "reason": "Retained portal host keeping grid and inspector state across layout changes; no equivalent. See section 3 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#1151",
+      "expires": "2026-11-30"
     },
     {
       "capability": "app-shell-ui",
@@ -46,7 +46,9 @@
       "path": "apps/lightcraft-desktop/web/src/dialogs/inertSiblings.ts",
       "reason": "Inert background while a dialog is open; ModalShell sets no inert or aria-hidden. See section 4 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#1152",
+      "expires": "2026-11-30"
     },
     {
       "capability": "app-shell-ui",
@@ -54,7 +56,9 @@
       "path": "apps/lightcraft-desktop/web/src/dialogs/DialogHost.tsx",
       "reason": "Multi-line TextArea; ui.d.ts has Input only. See section 5 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#729",
+      "expires": "2026-11-30"
     },
     {
       "capability": "app-shell-ui",
@@ -62,7 +66,9 @@
       "path": "apps/lightcraft-desktop/web/src/inspector/Inspector.tsx",
       "reason": "ControlRow slider gestures (one undo step, Escape cancel, stable id); Slider has only onChange. See section 6 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#1153",
+      "expires": "2026-11-30"
     },
     {
       "capability": "app-shell-ui",
@@ -70,7 +76,9 @@
       "path": "apps/lightcraft-desktop/web/src/inspector/Inspector.tsx",
       "reason": "Multi-line textarea in the inspector; ui.d.ts has Input only. See section 5 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#729",
+      "expires": "2026-11-30"
     },
     {
       "capability": "safe-filesystem",
@@ -78,7 +86,9 @@
       "path": "crates/catalog/src/store.rs",
       "reason": "Journal torn-tail truncate before the next append; append.rs leaves torn-tail repair to the app. See section 1 of docs/rightkit-exceptions/M8.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#1155",
+      "expires": "2026-11-30"
     },
     {
       "capability": "safe-filesystem",
@@ -86,7 +96,9 @@
       "path": "crates/engine/src/lightroom_archive.rs",
       "reason": "Lightroom archive retention (8 archives / 128 MiB) and quarantine; no retention API, trash is macOS-only. See section 2 of docs/rightkit-exceptions/M8.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#1156",
+      "expires": "2026-11-30"
     },
     {
       "capability": "safe-filesystem",
@@ -94,7 +106,9 @@
       "path": "crates/engine/src/cmd/browse.rs",
       "reason": "Case-only folder rename through a temporary name; rename_exclusive sees the destination as existing. See section 3 of docs/rightkit-exceptions/M8.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#1157",
+      "expires": "2026-11-30"
     },
     {
       "capability": "safe-filesystem",
@@ -102,7 +116,9 @@
       "path": "crates/desktop-host/src/controller.rs",
       "reason": "Backup/restore refuses every symlink (security guard); copy_tree has no refuse mode. See section 4 of docs/rightkit-exceptions/M8.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#1092",
+      "expires": "2026-11-30"
     },
     {
       "capability": "app-shell-ui",
@@ -110,7 +126,9 @@
       "path": "apps/lightcraft-desktop/web/src/dialogs/focusReturn.ts",
       "reason": "Focus return when the opener is gone (palette unmounts, WebKit click does not focus); ModalShell/Popover capture the opener once with no fallback. See section 7 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#1154",
+      "expires": "2026-11-30"
     },
     {
       "capability": "app-shell-ui",
@@ -118,7 +136,9 @@
       "path": "apps/lightcraft-desktop/web/src/BackgroundActivity.tsx",
       "reason": "Focus return when the opener is gone (palette unmounts, WebKit click does not focus); ModalShell/Popover capture the opener once with no fallback. See section 7 of docs/rightkit-exceptions/M2.md (need, published-API gap with file:line, other apps, proof).",
       "owner": "ember",
-      "date": "2026-10-19"
+      "date": "2026-10-19",
+      "issue": "bogusyogi/rightkit#1154",
+      "expires": "2026-11-30"
     }
   ]
 }
