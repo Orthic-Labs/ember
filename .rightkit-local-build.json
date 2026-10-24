@@ -1,0 +1,7 @@
+{
+  "repository": "Orthic-Labs/ember",
+  "allow": "build-test-publish",
+  "grantedBy": "Adrian D'Souza",
+  "grantedOn": "2026-10-24",
+  "reason": "Local development builds and tests through RustRight before push; public CI remains qualification of record. See #251."
+}
