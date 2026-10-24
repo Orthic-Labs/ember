@@ -7327,9 +7327,9 @@ dependencies = [
 
 [[package]]
 name = "rightkit-credentials"
-version = "0.3.0"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40c46f3544cb19ae5724b6bbdb1cc32b57c01307008c5c14f690e805848699f1"
+checksum = "4d6eae05bf2b22bde1bf2b6c0ddbdeb072f12a07bfe3a3037c754f4ef95c22e7"
 dependencies = [
  "getrandom 0.4.3",
  "secret-service",
@@ -7372,9 +7372,9 @@ dependencies = [
 
 [[package]]
 name = "rightkit-device"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b18b1a50b9d8aabc4d93a6b773ae099e8efb82a0231e5481f800571d72484a3"
+checksum = "312a6ec60b64f4335cb3cf2eb863513a9f495f6ebb9afabc3eb1b66b5a7d220f"
 dependencies = [
  "getrandom 0.4.3",
  "rightkit-credentials",

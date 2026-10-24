@@ -70,8 +70,8 @@ function checkPins() {
     "@rightkit/theme": "0.3.1",
     "@rightkit/qa-chrome": "0.1.8",
     "@rightkit/ci": "0.2.45",
-    "@rightkit/release": "0.4.0",
-    "@rightkit/app-update": "0.4.0",
+    "@rightkit/release": "0.6.4",
+    "@rightkit/app-update": "0.4.2",
   };
   for (const [name, version] of Object.entries(pins)) {
     if (all[name] !== version) fail(`${name} must stay pinned to ${version}`);
