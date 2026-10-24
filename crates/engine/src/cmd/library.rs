@@ -802,11 +802,12 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         // ---- rating / flags / labels
         cmd!("photo.rate", "Set Rating", ["Photo", "Set Rating"], None, "{rating: 0..5, ids?, advance?: bool}", has_selection, |s, p| {
-            let r = super::f64_req(p, "rating", "photo.rate")? as i64;
-            if !(0..=5).contains(&r) {
-                return Err(bad("photo.rate", "rating must be 0..5"));
+            let rating = super::f64_req(p, "rating", "photo.rate")?;
+            if !(rating.is_finite() && rating.fract() == 0.0 && (0.0..=5.0).contains(&rating)) {
+                return Err(bad("photo.rate", "rating must be a whole number 0..5"));
             }
-            let v = for_targets(s, p, "Set Rating", |id| Some(Op::SetRating { id, rating: r as u8 }))?;
+            let r = rating as u8;
+            let v = for_targets(s, p, "Set Rating", |id| Some(Op::SetRating { id, rating: r }))?;
             advance_if(s, p);
             Ok(v)
         }),
