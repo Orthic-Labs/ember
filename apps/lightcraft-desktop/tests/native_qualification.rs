@@ -156,6 +156,18 @@ fn wait_for_snapshot(control: &rightkit_qa::control::Control, ready: impl Fn(&Va
     panic!("{message}");
 }
 
+fn wait_for_photo_flag(control: &rightkit_qa::control::Control, photo_id: u64, expected: &str) -> Value {
+    let mut last = Value::Null;
+    for _ in 0..100 {
+        last = run(control, "photo.inspect", json!({"id": photo_id}));
+        if last["flag"].as_str() == Some(expected) {
+            return last;
+        }
+        sleep(Duration::from_millis(50));
+    }
+    panic!("photo {photo_id} flag did not become {expected:?}; last photo.inspect={last}");
+}
+
 fn source_hash(path: &Path) -> String {
     sha256_hex(&fs::read(path).unwrap_or_else(|error| panic!("fixture {} must be readable: {error}", path.display())))
 }
@@ -2182,7 +2194,20 @@ fn native_hidden_control_journeys() {
                     set_setting_field(control, "Info overlay", "2");
                     click_dom(control, ".lc-dialog-actions .lc-button-primary", "settings Done must close the dialog");
                     wait_for_dom(control, "return document.querySelector('.lc-dialog') === null;");
-                    let parity = control.command("lc_preferences", &Value::Null).expect("new settings must persist");
+                    let mut parity = Value::Null;
+                    let mut settings_saved = false;
+                    for _ in 0..100 {
+                        parity = control.command("lc_preferences", &Value::Null).expect("new settings must persist");
+                        if parity["ui"]["startupView"].as_str() == Some("detail")
+                            && parity["ui"]["externalEditor"].as_str() == Some("QA External Editor")
+                            && parity["ui"]["infoOverlay"].as_u64() == Some(2)
+                        {
+                            settings_saved = true;
+                            break;
+                        }
+                        sleep(Duration::from_millis(50));
+                    }
+                    assert!(settings_saved, "edited Settings values did not persist; last lc_preferences={parity}");
                     assert_eq!(parity["ui"]["startupView"].as_str(), Some("detail"));
                     assert_eq!(parity["ui"]["externalEditor"].as_str(), Some("QA External Editor"));
                     assert_eq!(parity["ui"]["infoOverlay"].as_u64(), Some(2));
@@ -2476,15 +2501,15 @@ fn native_hidden_control_journeys() {
                     click_dom(control, &format!("{photo_menu} > div:nth-child({five}) > [role=menuitemcheckbox]"), "native pointer must choose five stars");
                     wait_for_dom(control, &format!("return document.querySelector('.lc-photo-cell.is-active .lc-photo-stars')?.textContent === '★★★★★' && document.querySelector({photo_menu:?}) === null;"));
                     control.key("X").expect("supported reject shortcut must execute");
-                    let rated = run(control, "photo.inspect", json!({"id": photo_id}));
+                    let rated = wait_for_photo_flag(control, photo_id, "reject");
                     assert_eq!(rated["rating"], 5);
                     assert_eq!(rated["flag"], "reject");
                     control.key(if cfg!(target_os = "macos") { "Cmd+Z" } else { "Ctrl+Z" }).expect("rating journey undo must execute");
-                    let undone = run(control, "photo.inspect", json!({"id": photo_id}));
+                    let undone = wait_for_photo_flag(control, photo_id, "none");
                     assert_eq!(undone["rating"], 5);
                     assert_eq!(undone["flag"], "none", "undo must remove reject while preserving five stars");
                     control.key(if cfg!(target_os = "macos") { "Cmd+Shift+Z" } else { "Ctrl+Shift+Z" }).expect("rating journey redo must execute");
-                    let redone = run(control, "photo.inspect", json!({"id": photo_id}));
+                    let redone = wait_for_photo_flag(control, photo_id, "reject");
                     assert_eq!(redone["rating"], 5);
                     assert_eq!(redone["flag"], "reject");
                     assert!(control.command("lc_run", &json!({"id": "photo.rate", "params": {"rating": 7, "ids": [photo_id]}})).is_err(), "rating seven must fail");
