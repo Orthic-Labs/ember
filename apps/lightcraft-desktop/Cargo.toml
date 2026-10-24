@@ -29,22 +29,22 @@ rfd = { workspace = true }
 tauri = { version = "=2.12.4" }
 # Updater plugin: same Tauri minor and suite signing key as GenRight (tauri-plugin-updater 2.14.0 on tauri 2.12.4).
 tauri-plugin-updater = { version = "=2.14.0" }
-rightkit-tauri-shell = { version = "=0.4.0", default-features = false, features = ["wv2-0_39"] }
-rightkit-qa = { version = "=0.7.0", default-features = false, features = ["control", "wv2-0_39"], optional = true }
+rightkit-tauri-shell = { version = "=0.6.0", default-features = false, features = ["wv2-0_39"] }
+rightkit-qa = { version = "=0.9.0", default-features = false, features = ["control", "wv2-0_39"], optional = true }
 # RightKit owners (#240): device identity over the OS credential store (M1/M12), settings (M10),
 # opener/reveal spawns (M5) and the local event log (M15, no tracing or network features).
 rightkit-device = { version = "=0.4.0", features = ["credentials"] }
 rightkit-credentials = "=0.4.2"
-rightkit-app-settings = "=0.2.4"
-rightkit-child-process = { version = "=0.5.2" }
-rightkit-logs = { version = "=0.3.3", default-features = false }
+rightkit-app-settings = "=0.3.0"
+rightkit-child-process = { version = "=0.5.6" }
+rightkit-logs = { version = "=0.3.5", default-features = false }
 # Exclusive preference migration (M8, owner `rightkit-fs`)
-rightkit-fs = { version = "=0.4.4", default-features = false, features = ["fs"] }
+rightkit-fs = { version = "=0.4.7", default-features = false, features = ["fs"] }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.build-dependencies]
 tauri-build = "=2.7.3"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dev-dependencies]
-rightkit-qa = "=0.7.0"
+rightkit-qa = "=0.9.0"
 lightcraft-tiff = { workspace = true }
 png = { workspace = true }

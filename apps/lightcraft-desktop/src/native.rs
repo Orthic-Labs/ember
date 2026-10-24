@@ -23,7 +23,7 @@ use tauri::WebviewWindow;
 use tauri::http::{Request, Response};
 #[cfg(feature = "qa-native")]
 use tauri::plugin::TauriPlugin;
-use tauri::{AppHandle, Manager, State, Wry};
+use tauri::{AppHandle, Manager, State, Webview, Wry};
 
 use self::preferences::Preferences;
 
@@ -435,6 +435,9 @@ fn native_window_action(app: &AppHandle<Wry>, action: &str, params: &Value, call
         _ => params.get("label").and_then(Value::as_str).or(caller_label).unwrap_or("main"),
     };
     let window = app.get_webview_window(label).ok_or_else(|| format!("window {label} is unavailable"))?;
+    // rightkit-tauri-shell 0.6 `rk_shell_*` commands take the invoking webview first (their caller guard, inert here:
+    // Ember does not enable the shell's `host-services` feature). The window's own webview is the caller.
+    let webview: Webview<Wry> = AsRef::<Webview<Wry>>::as_ref(&window).clone();
     match action {
         "secondWindow" => {
             if app.get_webview_window("second-main").is_none() {
@@ -471,7 +474,7 @@ fn native_window_action(app: &AppHandle<Wry>, action: &str, params: &Value, call
             // button) toggles only when the window is not already in it.
             let current = window.is_fullscreen().map_err(|error| error.to_string())?;
             if params.get("enabled").and_then(Value::as_bool) != Some(current) {
-                rightkit_tauri_shell::commands::rk_shell_window("fullscreen".into(), window.clone())?;
+                rightkit_tauri_shell::commands::rk_shell_window(webview, "fullscreen".into(), window.clone())?;
             }
             Ok(json!({"fullscreen": window.is_fullscreen().map_err(|error| error.to_string())?}))
         }
@@ -485,7 +488,7 @@ fn native_window_action(app: &AppHandle<Wry>, action: &str, params: &Value, call
             }
             if !force {
                 // An ordinary close goes through RightKit Shell; CloseRequested still applies Ember's guard.
-                rightkit_tauri_shell::commands::rk_shell_window("close".into(), window.clone())
+                rightkit_tauri_shell::commands::rk_shell_window(webview, "close".into(), window.clone())
                     .map_err(|error| format!("closing window: {error}"))?;
                 return Ok(Value::Null);
             }

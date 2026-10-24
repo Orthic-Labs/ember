@@ -17,4 +17,4 @@ thiserror = { workspace = true }
 # only: Linux ships without video for now (docs/video.md) and wasm32 has no processes. The crate's own default `native` feature
 # (a native-library catalog) is not used.
 [target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
-rightkit-ffmpeg = { version = "=0.2.9", default-features = false }
+rightkit-ffmpeg = { version = "=0.2.10", default-features = false }

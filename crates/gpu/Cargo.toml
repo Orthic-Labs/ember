@@ -24,7 +24,7 @@ wgpu = { workspace = true }
 pollster = { workspace = true }
 bytemuck = { workspace = true }
 # Atomic crash-sentinel marker (M8, owner `rightkit-fs`)
-rightkit-fs = { version = "=0.4.4", default-features = false, features = ["fs"] }
+rightkit-fs = { version = "=0.4.7", default-features = false, features = ["fs"] }
 
 [features]
 default = []

@@ -140,6 +140,8 @@ pub fn spec() -> MenuSpec {
             MenuEntry::item("app.help", "Ember Help"),
             MenuEntry::item("app.github", "Ember on GitHub"),
         ],
+        // rightkit-tauri-shell 0.6 adds `overrides` (native Undo/Redo/Quit/Close Window routed to the app); Ember routes none.
+        ..Default::default()
     }
 }
 

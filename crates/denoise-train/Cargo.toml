@@ -34,4 +34,4 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 # Atomic output files (M8, owner `rightkit-fs`); a native-only dev tool
-rightkit-fs = { version = "=0.4.4", default-features = false, features = ["fs"] }
+rightkit-fs = { version = "=0.4.7", default-features = false, features = ["fs"] }
