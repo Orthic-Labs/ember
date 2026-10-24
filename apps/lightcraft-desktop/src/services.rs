@@ -6,7 +6,6 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::time::Duration;
 
 use serde_json::{Value, json};
 use tauri::{WebviewWindow, Wry};
@@ -363,27 +362,11 @@ fn required_string(params: &Value, key: &str) -> Result<String, String> {
     Ok(value.to_string())
 }
 
-/// How long an opener may run before it is left to hand off to the desktop.
-const OPENER_WAIT: Duration = Duration::from_secs(5);
-/// Desktop-session variables a Linux launcher needs beside the default allowlist.
-const OPENER_ENV: &[&str] = &["DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE", "XDG_DATA_DIRS"];
-
 /// Scope covering the volume that holds `canonical`: the user chooses photo and editor paths anywhere on disk, so the
 /// check that matters here is that the path exists and canonicalises, as `rightkit-child-process` enforces.
 fn volume_scope(canonical: &Path) -> Result<PathScope, String> {
     let root = canonical.ancestors().last().ok_or_else(|| "path has no root".to_string())?;
     PathScope::new([root]).map_err(|error| error.to_string())
-}
-
-/// Starts an opener through `rightkit-child-process` (hidden window, detached from the app's job) and gives it a short
-/// bounded wait so an immediate failure is reported. `explorer` reports exit code 1 even on success on Windows.
-fn run_opener(mut command: OwnedCommand) -> Result<(), String> {
-    command.command_mut().stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
-    let mut child = command.spawn_uncontained_detached().map_err(|error| error.to_string())?;
-    match child.wait_timeout(OPENER_WAIT).map_err(|error| error.to_string())? {
-        Some(status) if !status.success() && !cfg!(windows) => Err(format!("the opener exited with {status}")),
-        _ => Ok(()),
-    }
 }
 
 fn open_external(params: &Value) -> Result<(), String> {
@@ -409,20 +392,12 @@ fn open_external(params: &Value) -> Result<(), String> {
 }
 
 fn open_url(url: &str) -> Result<(), String> {
+    // The https-only rule is Ember's policy; the launch is the owner's (`open`, `rundll32`, `xdg-open`: no shell, hidden
+    // window, detached from the app's job, bounded wait for an immediate failure).
     if !url.starts_with("https://") {
         return Err("only https URLs may be opened".into());
     }
-    let program = if cfg!(target_os = "macos") {
-        "open"
-    } else if cfg!(target_os = "windows") {
-        "explorer"
-    } else {
-        "xdg-open"
-    };
-    let mut command = OwnedCommand::new(program);
-    command.command_mut().arg(url);
-    command.env_allowlist_with_defaults(OPENER_ENV);
-    run_opener(command).map_err(|error| format!("opening URL: {error}"))
+    rightkit_child_process::open_url(url).map_err(|error| format!("opening URL: {error}"))
 }
 
 fn reveal(path: &str) -> Result<(), String> {

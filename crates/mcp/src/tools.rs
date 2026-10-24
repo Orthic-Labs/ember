@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde_json::{Map, Value, json};
 
 use crate::backend::Backend;
-use crate::base64::base64_encode;
+use rightkit_crypto::base64_encode;
 use crate::headless::{encode_image, expand_paths};
 
 /// Prefix of the tools generated from the command registry.

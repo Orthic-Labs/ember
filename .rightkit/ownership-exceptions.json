@@ -139,6 +139,166 @@
       "date": "2026-10-19",
       "issue": "bogusyogi/rightkit#1154",
       "expires": "2026-11-30"
+    },
+    {
+      "capability": "persistent-jobs",
+      "package": "rightkit-job-queue",
+      "path": "crates/engine/src/activity.rs",
+      "reason": "Activity registry with done/total counts, a unit, a kind, set_cancellable and numeric ids; InlineCancelRegistry rows carry label, message and a 0..1 fraction under string ids. See the activity row of docs/rightkit-port/cut-list.md.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "bogusyogi/rightkit#1162",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "mcp",
+      "package": "rightkit-mcp",
+      "path": "crates/mcp/src/server.rs",
+      "reason": "Synchronous JSON-RPC server loop (handle_line, batches, three protocol revisions) that crates/mcp tests and tests/e2e.rs drive; the rightkit-mcp ServerHost swap needs the e2e run on a host. See the mcp row of docs/rightkit-port/cut-list.md.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "bogusyogi/rightkit#283",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "mcp",
+      "package": "rightkit-mcp",
+      "path": "crates/mcp/src/progress.rs",
+      "reason": "Progress and cancel wire of the same server loop; goes with server.rs when ServerHost is adopted.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "bogusyogi/rightkit#283",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "model-installation",
+      "package": "rightkit-models",
+      "path": "crates/fetch/src/lib.rs",
+      "reason": "Mirror fallback with a bearer token scoped to one host and progress across a model's files over the owner download_resumable; the owner has neither the host scope nor the aggregate progress.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "bogusyogi/rightkit#1164",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "http-client",
+      "package": "rightkit-http",
+      "path": "crates/fetch/src/http.rs",
+      "reason": "Ember's Url/Limits/get/post_json surface over rightkit-http with Ember policy (no redirects, no retries, cancel flag and stall limit); shrinks when map tiles and photo-ai move to the owner client.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "Orthic-Labs/ember#256",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "framed-sidecar",
+      "package": "rightkit-sidecar",
+      "path": "crates/segment/src/remote.rs",
+      "reason": "Length-prefixed frames of the remote SAM protocol; a click-only request sends a zero-length RGB frame, which rightkit-sidecar length_prefixed refuses.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "bogusyogi/rightkit#1163",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "desktop-shell",
+      "package": "rightkit-tauri-shell",
+      "path": "apps/lightcraft-desktop/src/rk_logs.rs",
+      "reason": "Copies of the shell's rightkit_logs_write/collect/clear commands because Ember's own RotatingTextWriter queue cannot be handed to the shell LogsRuntime.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "bogusyogi/rightkit#1027",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "media-pipelines",
+      "package": "rightkit-ffmpeg",
+      "path": "crates/video/src/sidecar.rs",
+      "reason": "Bundled ffmpeg search before the owner verification; ResolveOptions::bundle_dir is on RightKit main and not in the published 0.2.10. Only if the video crate is kept.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "bogusyogi/rightkit#1015",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "onnx-runtime",
+      "package": "rightkit-onnx",
+      "path": "crates/denoise-onnx/src/runner.rs",
+      "reason": "ensure_runtime: find, verify and bind the ONNX Runtime library once per process; waits for the installed-runtime bind in rightkit-onnx. Optional feature onnx-accel.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "bogusyogi/rightkit#1165",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "llm-providers",
+      "package": "rightkit-llm",
+      "path": "crates/photo-ai/src/network.rs",
+      "reason": "OpenRouter chat-completions transport with a capability preflight; rightkit-llm 0.3.1 covers it. Own-model crate, scheduled with the cloud comparison.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "Orthic-Labs/ember#258",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "llm-providers",
+      "package": "rightkit-llm",
+      "path": "crates/photo-ai/src/scaledown.rs",
+      "reason": "Image scale-down request for the same transport.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "Orthic-Labs/ember#258",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "release-tooling",
+      "package": "@rightkit/release",
+      "path": "scripts/desktop/static-check.mjs",
+      "reason": "Hand-written Tauri CSP, capability and pin assertions; the shared CSP and capability drift check is requested in the doctor.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "bogusyogi/rightkit#1136",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "localization",
+      "package": "@rightkit/i18n",
+      "path": "crates/ui-egui/src/i18n.rs",
+      "reason": "egui locale table (1,432 lines) with macro; the Rust localisation owner is not published. Moot if ui-egui is dropped (Orthic-Labs/ember#269).",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "bogusyogi/rightkit#960",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "localization",
+      "package": "@rightkit/i18n",
+      "path": "crates/ui-egui/build.rs",
+      "reason": "Build-time codegen for the egui locale table and its 24 JSON locale files.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "bogusyogi/rightkit#960",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "theme-ui",
+      "package": "@rightkit/theme",
+      "path": "crates/ui-egui/src/theme.rs",
+      "reason": "Hand-coded egui token palette with no link to @rightkit/theme; consumer of resolved tokens once the owner publishes them.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "bogusyogi/rightkit#960",
+      "expires": "2026-11-30"
+    },
+    {
+      "capability": "crypto-primitives",
+      "package": "rightkit-crypto",
+      "path": "crates/develop/src/segmask.rs",
+      "reason": "Padded base64 encoder and lenient decoder for the persisted mask payload; the owner decoder is strict, so the swap waits for a stored-form check.",
+      "owner": "ember",
+      "date": "2026-10-24",
+      "issue": "Orthic-Labs/ember#257",
+      "expires": "2026-11-30"
     }
   ]
 }
