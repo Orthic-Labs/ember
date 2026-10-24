@@ -1,0 +1,25 @@
+#!/bin/sh
+# Mandatory local gate before every push (rightkit-gate install-hook). Never bypass with --no-verify.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+stdin=$(mktemp "${TMPDIR:-/tmp}/rightkit-gate.XXXXXX") || exit 1
+trap 'rm -f "$stdin"' EXIT
+cat > "$stdin"
+# core.hooksPath hides .git/hooks: run the repository's own pre-push hook first.
+own="$(git rev-parse --git-dir)/hooks/pre-push"
+if [ -x "$own" ]; then
+  echo "rightkit-gate: running $own" >&2
+  "$own" "$@" < "$stdin" || exit $?
+fi
+# The gate binary: the root install, any workspace package's install, then pnpm exec.
+for bin in node_modules/.bin/rightkit-gate */node_modules/.bin/rightkit-gate */*/node_modules/.bin/rightkit-gate */*/*/node_modules/.bin/rightkit-gate; do
+  if [ -x "$bin" ]; then
+    echo "rightkit-gate: using $bin" >&2
+    ("$bin" --base origin/main) < "$stdin"; exit $?
+  fi
+done
+if command -v pnpm >/dev/null 2>&1; then
+  echo "rightkit-gate: using pnpm exec rightkit-gate" >&2
+  (exec pnpm exec rightkit-gate --base origin/main) < "$stdin"; exit $?
+fi
+echo "rightkit-gate: using node node_modules/@rightkit/release/bin/rightkit-gate.mjs" >&2
+(exec node "node_modules/@rightkit/release/bin/rightkit-gate.mjs" --base origin/main) < "$stdin"; exit $?
