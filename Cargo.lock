@@ -5035,6 +5035,7 @@ name = "lightcraft-mobile"
 version = "0.7.0"
 dependencies = [
  "lightcraft-desktop-host",
+ "lightcraft-engine",
  "log",
  "png 0.18.1",
  "serde_json",

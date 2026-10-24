@@ -33,6 +33,7 @@ todo = "warn"
 # Path, not `workspace = true`: the workspace entry keeps default features (SAM masking), which the
 # mobile V1 scope leaves out (docs/ios-architecture.md: only qualified mobile mask tools).
 lightcraft-desktop-host = { path = "../desktop-host", default-features = false }
+lightcraft-engine = { path = "../engine", default-features = false }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true }

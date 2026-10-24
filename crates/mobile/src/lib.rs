@@ -100,6 +100,14 @@ impl EmberSession {
             Some(path) => Some(PathBuf::from(path)),
             None => None,
         };
+        // The mobile host has no Rust main: install the shared, idempotent panic reporter before
+        // its owner can run. Keep the desktop report location policy, including isolated profiles.
+        let crash_dir = std::env::var_os("LIGHTCRAFT_CONFIG_DIR")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+            .join("lightcraft-crash-reports");
+        lightcraft_engine::guard::install_hook(crash_dir);
         let host = DesktopHandle::spawn(HostOptions {
             library_path,
             demo: options.demo,
