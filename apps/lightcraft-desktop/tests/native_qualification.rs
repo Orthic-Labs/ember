@@ -360,6 +360,110 @@ fn assert_filmstrip_context_contrast(control: &rightkit_qa::control::Control, mo
     }
 }
 
+/// Page script for `assert_toast_footprint_clear` (#254). RightKit's toast rows take pointer events, so wherever the stack puts one it must
+/// not sit on a control. This appends a probe row shaped like a real notice (glyph, message, dismiss button) to the always-mounted
+/// `[data-rk-toasts]` stack, in the slot a lone toast takes (first for a top placement, last for a bottom one), measures it, hit-tests every
+/// 2px across it for the interactive elements underneath and removes it again, all in one synchronous task: React never sees the row and no
+/// live toast is needed. The probe sets `animation: none` (the entry animation starts 8px off its slot) so the settled geometry is measured,
+/// and `pointer-events: none` so the hit test sees what lies under the row. The message is the longest of the task notices ("Build Previews
+/// finished", "Import Photos finished", "Review Import finished").
+const TOAST_FOOTPRINT_PROBE: &str = r#"return (() => {
+    const stack = document.querySelector('[data-rk-toasts]');
+    if (!stack) return { error: 'toast stack [data-rk-toasts] is not mounted' };
+    const interactive = "a[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=slider],[role=menuitem],[role=tab],[role=option],[role=checkbox],[role=switch],[role=link],[role=combobox],[role=textbox],[tabindex]:not([tabindex^='-'])";
+    const placement = stack.dataset.placement || 'bottom-center';
+    const probe = document.createElement('div');
+    probe.className = 'rk-toast rk-toast--info';
+    probe.setAttribute('aria-hidden', 'true');
+    probe.style.animation = 'none';
+    probe.style.pointerEvents = 'none';
+    const glyph = document.createElement('span');
+    glyph.className = 'rk-toast__glyph';
+    glyph.textContent = 'i';
+    const message = document.createElement('span');
+    message.className = 'rk-toast__msg';
+    message.textContent = 'Build Previews finished';
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'rk-toast__x';
+    dismiss.textContent = '✕';
+    probe.append(glyph, message, dismiss);
+    const describe = (node) => {
+        const r = node.getBoundingClientRect();
+        return { tag: node.tagName, id: node.id || null, className: typeof node.className === 'string' ? node.className : null, label: node.getAttribute('aria-label') || node.getAttribute('title') || (node.textContent || '').trim().slice(0, 40), rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } };
+    };
+    try {
+        if (placement.startsWith('top')) stack.prepend(probe); else stack.append(probe);
+        const rect = probe.getBoundingClientRect();
+        if (!(rect.width >= 40 && rect.height >= 24)) return { error: 'toast probe row has no real geometry', placement, width: rect.width, height: rect.height };
+        const xs = [], ys = [];
+        for (let x = rect.left + 0.5; x < rect.right; x += 2) xs.push(x);
+        xs.push(rect.right - 0.5);
+        for (let y = rect.top + 0.5; y < rect.bottom; y += 2) ys.push(y);
+        ys.push(rect.bottom - 0.5);
+        const covered = new Set();
+        for (const y of ys) for (const x of xs) {
+            const hit = document.elementFromPoint(x, y);
+            const node = hit ? hit.closest(interactive) : null;
+            if (node && !stack.contains(node)) covered.add(node);
+        }
+        return { placement, viewport: { width: window.innerWidth, height: window.innerHeight }, probe: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }, hits: [...covered].map(describe) };
+    } finally {
+        probe.remove();
+    }
+})();"#;
+
+/// Verdict on the output of `TOAST_FOOTPRINT_PROBE`. Fails closed: a probe that errored, or returned no hit list, never passes as clean.
+fn toast_footprint_verdict(context: &str, probe: &Value) -> Result<(), String> {
+    if !probe["error"].is_null() {
+        return Err(format!("{context}: toast footprint probe could not measure: {}", probe["error"]));
+    }
+    let Some(hits) = probe["hits"].as_array() else {
+        return Err(format!("{context}: toast footprint probe returned no hit list: {probe}"));
+    };
+    if hits.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "{context}: a toast row would cover {} control(s) and take their clicks; placement={}, row={}, viewport={}, covered={}",
+        hits.len(),
+        probe["placement"],
+        probe["probe"],
+        probe["viewport"],
+        probe["hits"],
+    ))
+}
+
+/// A notice toast must never cover a control, at any viewport or view (#254). Deterministic: measures the toast footprint with a probe row,
+/// so it needs no live toast and no sleep, and never dismisses one. See `TOAST_FOOTPRINT_PROBE`.
+fn assert_toast_footprint_clear(control: &rightkit_qa::control::Control, context: &str) {
+    let probe = control.eval(TOAST_FOOTPRINT_PROBE).expect("toast footprint probe must execute");
+    eprintln!("[qa] toast footprint ({context}): {probe}");
+    toast_footprint_verdict(context, &probe).unwrap_or_else(|refusal| panic!("{refusal}"));
+}
+
+#[test]
+fn toast_footprint_verdict_names_covered_controls_and_fails_closed() {
+    // Hosted Windows runner at 1024x788 before #254 was fixed: the default bottom-centre row sat on the stage footer's Info button.
+    let covered = json!({
+        "placement": "bottom-center",
+        "viewport": {"width": 1024, "height": 788},
+        "probe": {"left": 404.0, "top": 734.0, "right": 620.0, "bottom": 772.0},
+        "hits": [{"tag": "BUTTON", "id": null, "className": "rk-btn rk-btn--ghost rk-btn--sm", "label": "Info", "rect": {"left": 465.3, "top": 754.4, "right": 497.7, "bottom": 778.6}}],
+    });
+    let refusal = toast_footprint_verdict("preferences stage view", &covered).expect_err("a toast row over the Info button must fail");
+    for expected in ["preferences stage view", "1 control(s)", "bottom-center", "\"label\":\"Info\""] {
+        assert!(refusal.contains(expected), "the refusal must name {expected}: {refusal}");
+    }
+    // Top-centre, in the titlebar's empty middle: nothing underneath.
+    let clear = json!({"placement": "top-center", "viewport": {"width": 1024, "height": 788}, "probe": {"left": 404.0, "top": 16.0, "right": 620.0, "bottom": 54.0}, "hits": []});
+    assert_eq!(toast_footprint_verdict("preferences stage view", &clear), Ok(()));
+    // A probe that could not measure must never read as clean.
+    for broken in [json!({"error": "toast stack [data-rk-toasts] is not mounted"}), json!({}), json!({"hits": "none"}), Value::Null] {
+        assert!(toast_footprint_verdict("broken probe", &broken).is_err(), "{broken} must not pass");
+    }
+}
+
 fn click_dom(control: &rightkit_qa::control::Control, selector: &str, message: &str) {
     wait_for_dom(
         control,
@@ -2014,6 +2118,7 @@ fn native_hidden_control_journeys() {
                     control.screenshot_to(&dark).expect("dark theme screenshot must be captured");
                     assert!(dark.is_file());
                     assert_library_header_contrast(control, "dark");
+                    assert_toast_footprint_clear(control, "preferences library view");
                     click_dom(control, ".rk-top button.rk-seg__item[title='Develop']", "Develop segment must select actual detail view");
                     wait_for_dom(control, "return document.querySelector('.stage-detail') !== null && document.querySelector('.lc-library-workspace') === null && document.querySelector('.lc-filmstrip') !== null;");
                     assert_filmstrip_context_contrast(control, "dark");
@@ -2219,6 +2324,8 @@ fn native_hidden_control_journeys() {
                         task_result(control, "library.import", json!({"paths": [inputs.png], "mode": "add"}));
                     }
                     wait_for_dom(control, "return document.querySelector('.lc-stage-layout') !== null && document.querySelector('.info-overlay') !== null;");
+                    // #254: a finished-task notice raised by the import above must not sit on the footer controls clicked next.
+                    assert_toast_footprint_clear(control, "preferences stage view before the footer clicks");
                     let exposure_overlay = control.eval("return document.querySelector('.info-overlay')?.textContent || '';").expect("Exposure overlay must render");
                     click_dom(control, ".footer-right button:first-child", "Info control must cycle Exposure to Off");
                     wait_for_dom(control, "return document.querySelector('.info-overlay') === null;");
@@ -2546,6 +2653,7 @@ fn native_hidden_control_journeys() {
                             wait_for_dom(control, "return document.querySelector('.lc-library-workspace') !== null;");
                             assert_layout_settled(control, ".lc-library-workspace");
                             assert_workspace_design(control);
+                            assert_toast_footprint_clear(control, &format!("library view at {width}x{height}"));
                             let viewport = control
                                 .eval("return {width: window.innerWidth, height: window.innerHeight};")
                                 .expect("viewport query must execute");
@@ -2567,6 +2675,7 @@ fn native_hidden_control_journeys() {
                             wait_for_dom(control, "return document.querySelector('input[id=\"ctl-light.exposure\"]') !== null;");
                             assert_primary_editing_usable(control);
                             assert_workspace_design(control);
+                            assert_toast_footprint_clear(control, &format!("develop view at {width}x{height}"));
                             let route = control
                                 .eval("return document.querySelector('.stage-view-mode select')?.value || '';")
                                 .expect("develop route readback must execute");
