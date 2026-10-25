@@ -113,7 +113,7 @@ at `143ecbd6be6ddde253affb2e5f341bed7fed3e1b` passed frontend checks/build,
 Rust formatting & workspace/all-target clippy. Two CLI scorer tests failed
 because their fixtures omitted mandatory explicit split metadata. Follow-up
 corrects those fixtures while preserving split validation & malformed-winner
-rejection. CI now uses `cargo test --workspace --no-fail-fast` to collect
+rejection. CI now runs the workspace tests with `--no-fail-fast` to collect
 failures across test binaries; any failed binary still fails the gate.
 
 [Native run 38062743357](https://github.com/Orthic-Labs/lightcraft/actions/runs/38062743357)

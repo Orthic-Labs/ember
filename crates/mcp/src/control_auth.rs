@@ -18,16 +18,9 @@ pub const MIN_TOKEN_LEN: usize = 32;
 /// Longest secret accepted from the environment or a token file.
 pub const MAX_TOKEN_LEN: usize = 256;
 
-/// Compare `given` with the `expected` secret without stopping at the first difference: the time
-/// depends only on the length of `expected`. Different lengths are unequal.
-pub fn ct_eq(expected: &[u8], given: &[u8]) -> bool {
-    let mut diff = expected.len() ^ given.len();
-    for (i, e) in expected.iter().enumerate() {
-        // A byte `given` lacks counts as 0, so a short `given` still walks every byte (the length term fails it).
-        diff |= usize::from(*e ^ given.get(i).copied().unwrap_or(0));
-    }
-    std::hint::black_box(diff) == 0
-}
+/// Constant-time comparison of a presented secret with the expected one (owner: `rightkit-crypto`; different
+/// lengths are unequal, and the length of a secret is not itself secret).
+pub use rightkit_crypto::ct_eq;
 
 /// The opening line a client sends (without the newline).
 pub fn hello_line(token: &str) -> String {

@@ -1,8 +1,30 @@
 {
-  "$comment": "Ratified Ember not-applicable rulings, Orthic-Labs/rightkit#280 (packages/release/ownership-mandatory-set.json appAmendments.ember). M14 is adopted (@rightkit/legal 0.6.1 OSS profile), so its ruling is not claimed.",
+  "$comment": "Every desktop-profile row of @rightkit/release ownership-mandatory-set.json, declared (Orthic-Labs/ember#240). `adopted` names the owner pins and where they are wired; `pending` covers the owner-pending rows (never enforced); `notApplicable` holds only the rulings ratified for Ember in rightkit#280 (appAmendments.ember in @rightkit/release 0.6.4), copied verbatim. M14 is adopted, so its ruling is not claimed. The checker reads `profile` and `notApplicable`; `adopted` and `pending` are the record for people and agents.",
+  "profile": "desktop",
+  "adopted": {
+    "M1": "rightkit-tauri-shell =0.6.0 and rightkit-device =0.4.0 (apps/lightcraft-desktop/Cargo.toml; window host in src/native.rs, device id in src/rk_device.rs), @rightkit/tauri 0.3.0 and @rightkit/tauri-shell 0.1.3 (package.json; apps/lightcraft-desktop/web/src/rightkitTauri.ts). Kept window behaviour: docs/rightkit-exceptions/M1.md.",
+    "M2": "@rightkit/react-shell 0.7.2, @rightkit/platform-ui 0.4.0, @rightkit/theme 0.3.1 (package.json; apps/lightcraft-desktop/web/src/App.tsx, apps/lightcraft-desktop/web/src/bootTheme.ts). Kept frame pieces: docs/rightkit-exceptions/M2.md.",
+    "M5": "rightkit-child-process =0.5.6: every owned child process (crates/engine, crates/av1dec/src/host.rs, apps/lightcraft-desktop/src/services.rs, apps/lightcraft).",
+    "M8": "rightkit-fs =0.4.7: catalog journal and locks (crates/catalog), engine sidecars and exports (crates/engine), caches (crates/preview, crates/denoise-core), desktop preferences and backups (apps/lightcraft-desktop, crates/desktop-host), CLI outputs. Kept file behaviour: docs/rightkit-exceptions/M8.md.",
+    "M10": "rightkit-app-settings =0.3.0 (apps/lightcraft-desktop/src/preferences.rs), @rightkit/settings-ui 0.7.0 (apps/lightcraft-desktop/web/src/settings/emberSettingsBackend.ts, the SettingsBackend port).",
+    "M11": "rightkit-credentials =0.4.2: the per-install device id lives in the OS credential store through rightkit-device's CredentialStore (apps/lightcraft-desktop/src/rk_device.rs). Ember stores no other secret.",
+    "M14": "@rightkit/legal 0.6.3 (OSS profile) and @rightkit/legal-ui 0.4.1: the licence and notice viewer is mounted (apps/lightcraft-desktop/web/src/legal/viewer.tsx, LegalDocumentViewerHost in main.tsx). @rightkit/onboarding 0.6.3: apps/lightcraft-desktop/web/src/onboarding/StartupGate.tsx and steps.tsx are written but not mounted by main.tsx, because Ember holds its first-run notice until its text is approved. Mounting it (legalMode \"notice\", a legal-snapshot.config.json with profile \"oss\") is a product decision tracked in Orthic-Labs/ember#240; the ratified M14 not-applicable text in appAmendments.ember is not claimed.",
+    "M15": "rightkit-logs =0.3.5 (apps/lightcraft/src/logging.rs, apps/lightcraft-desktop/src/rk_logs.rs), @rightkit/logs 0.1.6 (apps/lightcraft-desktop/web/src/logs.ts).",
+    "M16": "rightkit-crash =0.3.6: panic hook and catch_unwind guard around command dispatch and import/export (crates/engine/src/guard.rs).",
+    "M17": "rightkit-http =0.3.8: model and mirror downloads (crates/fetch/src/http.rs).",
+    "M18": "@rightkit/app-update 0.4.2 (apps/lightcraft-desktop/web/src/updates.ts) over tauri-plugin-updater =2.14.0; GitHub Releases lane with the suite updater key (right-release.config.mjs distribution).",
+    "M19": "@rightkit/release 0.6.4 (devDependency): right-release.config.mjs, .rightkit-local-build.json, switches.json, and the committed .githooks/pre-push written by `rightkit-gate install-hook`.",
+    "M20": "rightkit-qa =0.9.0: the qa-native control host (apps/lightcraft-desktop/src/native.rs, rightkit_qa::embedded::Control) and the native qualification tests; @rightkit/qa 0.6.1 and @rightkit/qa-chrome 0.1.11 are declared devDependencies, pinned by scripts/desktop/static-check.mjs (no JS lane imports them yet)."
+  },
+  "pending": {
+    "M21": "Owner not selected (D4 unratified). Test mode today: the qa-native feature and RIGHTKIT_QA_* reads in apps/lightcraft-desktop/src/native.rs; switches.json inventories them. rightkit-daemon arrives only transitively (rightkit-tauri-shell, rightkit-qa); Ember runs no daemon (M6/M7 n/a).",
+    "M23": "Owner not selected (D4 unratified). @rightkit/release 0.6.4 is adopted; switches.json is the release-switch inventory the release scan checks.",
+    "M24": "@rightkit/issues-tracker 0.1.0 (devDependency; `pnpm issues` writes issues.html).",
+    "M25": "Journeys capability not published in rightkit-qa / @rightkit/qa; Ember's native journeys run through rightkit-qa 0.9.0 today (Orthic-Labs/ember#249)."
+  },
   "notApplicable": {
-    "M3": "No supervised engine child and no restart-surviving jobs: exports and imports are in-process jobs on the activity stack; every owned child process goes through rightkit-child-process (M5). The ffmpeg sidecar already runs through rightkit-ffmpeg.",
-    "M4": "No supervised engine child and no restart-surviving jobs: the command registry is served in-process; exports and imports are in-process jobs on the activity stack.",
+    "M3": "No engine child process and no restart-surviving jobs: exports and imports are in-process jobs on the activity stack. The ffmpeg sidecar already runs through rightkit-ffmpeg.",
+    "M4": "No engine child process and no restart-surviving jobs: exports and imports are in-process jobs on the activity stack.",
     "M6": "No local service or daemon-discovered data location. The control channel and MCP are opt-in developer and agent ports.",
     "M7": "No local service or daemon-discovered data location. The control channel and MCP are opt-in developer and agent ports.",
     "M9": "No SQLite app state. Preferences are JSON through rightkit-app-settings; the photo catalog is a JSON-lines journal.",

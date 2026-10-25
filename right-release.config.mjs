@@ -18,14 +18,32 @@ const winArchive = `dist/releases/windows/${version}/x86_64/ember-${version}-win
 const winUpdater = `target/x86_64-pc-windows-msvc/debug/bundle/nsis/Ember_${version}_x64-setup.exe`;
 const macUpdater = 'target/aarch64-apple-darwin/debug/bundle/macos/Ember.app.tar.gz';
 const macArchive = `dist/releases/mac/${version}/arm64/ember-${version}-macos-arm64.zip`;
+// The updater public key is the one Tauri embeds (apps/lightcraft-desktop/tauri.conf.json plugins.updater.pubkey); release verifies each
+// updater signature against it before sealing, so the config reads it from that file instead of keeping a second copy.
+const updaterPublicKey = JSON.parse(readFileSync(new URL('./apps/lightcraft-desktop/tauri.conf.json', import.meta.url), 'utf8'))?.plugins?.updater?.pubkey;
+if (typeof updaterPublicKey !== 'string' || !updaterPublicKey.trim()) throw new Error('apps/lightcraft-desktop/tauri.conf.json plugins.updater.pubkey must be set');
 export default {
   schema: 1,
   app: 'lightcraft-desktop',
   version,
   hostedWorkflows: 'right-git-ci-only',
-  distribution: { provider: 'github-releases', repository: 'Orthic-Labs/ember', updaterKeyId: '29395F9FF466261D' },
-  packageManager: 'pnpm@11.24.0',
+  distribution: { provider: 'github-releases', repository: 'Orthic-Labs/ember', updaterKeyId: '29395F9FF466261D', updaterPublicKey },
+  // The tool name release runs; the version is package.json packageManager (pnpm@11.25.0).
+  packageManager: 'pnpm',
   nativeAssembly: { cargoManifest: 'apps/lightcraft-desktop/Cargo.toml' },
+  // M21/M23 release-switch scan (switches.json lists every environment read the shipped code does; directories below never ship).
+  releaseSwitches: {
+    nonShipped: [
+      { dir: 'xtask', reason: 'workspace CI tooling (cargo xtask: ci, layers, assets, parity, wasm); not a dependency of lightcraft-desktop or lightcraft-cli, never bundled' },
+      { dir: 'tools', reason: 'reference, installer and training scripts (Python, shell, PowerShell); not compiled, not bundled' },
+      { dir: 'packaging', reason: 'packaging scripts and icon renderers for the egui, Linux, FreeBSD and web hosts; the Tauri bundle is built by right-release; not bundled' },
+      { dir: 'ios', reason: 'SwiftUI app of the iOS target; no desktop release target builds or bundles it' },
+      { dir: 'crates/mobile', reason: 'UniFFI bridge of the iOS target; no crate of the desktop or CLI trees depends on it' },
+      { dir: 'crates/denoise-train', reason: 'denoise training tooling; nothing depends on it' },
+      { dir: 'apps/lightcraft', reason: 'egui desktop host; not part of the signed bundle (bin/lightcraft-desktop, bin/lightcraft-cli, bin/ember-av1-worker)' },
+      { dir: 'apps/lightcraft-web', reason: 'WASM build of the egui UI; packaged separately, not part of the desktop bundle' },
+    ],
+  },
   buildInputs: {
     include: ['Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'crates/**', 'apps/**', 'assets/**', 'scripts/desktop/**', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'right-release.config.mjs'],
     exclude: ['**/node_modules/**', 'apps/lightcraft-desktop/web/dist/**'],

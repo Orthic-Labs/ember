@@ -22,7 +22,7 @@ web-time = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # atomic file replacement, exclusive publish, folder sync, file identity (`json` carries FileKey) and
 # temp-file sweeping (RightKit safe-filesystem owner)
-rightkit-fs = { version = "=0.4.4", default-features = false, features = ["fs", "json", "digest"] }
+rightkit-fs = { version = "=0.4.7", default-features = false, features = ["fs", "json", "digest"] }
 
 [dev-dependencies]
 lightcraft-geom = { workspace = true }
@@ -30,4 +30,4 @@ proptest = { workspace = true }
 
 # fault injection (a write that fails part-way) and sync counts for the write-policy tests; never in a release dependency
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-rightkit-fs = { version = "=0.4.4", default-features = false, features = ["fs", "json", "digest", "test-seams"] }
+rightkit-fs = { version = "=0.4.7", default-features = false, features = ["fs", "json", "digest", "test-seams"] }

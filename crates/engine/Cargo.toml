@@ -49,14 +49,14 @@ lightcraft-segment = { workspace = true, optional = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 lightcraft-fetch = { workspace = true }
 # panic hook and reports for contained panics (RightKit owner of crash-reporting; native only, the web build aborts on panic)
-rightkit-crash = { version = "=0.3.3", default-features = false }
+rightkit-crash = { version = "=0.3.6", default-features = false }
 # durable single-record append, exclusive publish and rename, cloned/linked/verified copies, file identity and path containment
 # (RightKit safe-filesystem owner); `digest` for the SHA-256 verified copies
-rightkit-fs = { version = "=0.4.4", default-features = false, features = ["fs", "digest"] }
+rightkit-fs = { version = "=0.4.7", default-features = false, features = ["fs", "digest"] }
 
 # owned child processes: osascript (Apple Photos, macOS) and sysctl for the memory budget (macOS, FreeBSD). Not iOS.
 [target.'cfg(any(target_os = "macos", target_os = "freebsd"))'.dependencies]
-rightkit-child-process = { version = "=0.5.2" }
+rightkit-child-process = { version = "=0.5.6" }
 
 [features]
 # AI masks (Object / Describe) with MobileSAM, or SAM 3 when installed. Off for the web and CLI builds.
@@ -82,7 +82,7 @@ lightcraft-tiff = { workspace = true }
 lightcraft-fetch = { workspace = true, features = ["testing"] }
 # fault injection (a write that fails part-way, a folder sync that fails, a volume without hard links) and sync counts for the
 # write-policy and data-safety tests; never in a release dependency
-rightkit-fs = { version = "=0.4.4", default-features = false, features = ["fs", "digest", "test-seams", "testing"] }
+rightkit-fs = { version = "=0.4.7", default-features = false, features = ["fs", "digest", "test-seams", "testing"] }
 
 [[example]]
 name = "denoise_backends"

@@ -23,7 +23,7 @@ use tauri::WebviewWindow;
 use tauri::http::{Request, Response};
 #[cfg(feature = "qa-native")]
 use tauri::plugin::TauriPlugin;
-use tauri::{AppHandle, Manager, State, Wry};
+use tauri::{AppHandle, Manager, State, Webview, Wry};
 
 use self::preferences::Preferences;
 
@@ -283,8 +283,7 @@ mod tauri_commands {
         }
         if services::is_import_picker(&action) {
             let explicit = services::has_explicit_picker_input(&action, &params)?;
-            let unattended = qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_HIDDEN").as_deref())
-                || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref());
+            let unattended = qa_hidden_requested() || qa_background_requested();
             if unattended && !explicit {
                 return Err("interactive import picker unavailable in hidden QA; supply explicit path(s)".into());
             }
@@ -435,6 +434,9 @@ fn native_window_action(app: &AppHandle<Wry>, action: &str, params: &Value, call
         _ => params.get("label").and_then(Value::as_str).or(caller_label).unwrap_or("main"),
     };
     let window = app.get_webview_window(label).ok_or_else(|| format!("window {label} is unavailable"))?;
+    // rightkit-tauri-shell 0.6 `rk_shell_*` commands take the invoking webview first (their caller guard, inert here:
+    // Ember does not enable the shell's `host-services` feature). The window's own webview is the caller.
+    let webview: Webview<Wry> = AsRef::<Webview<Wry>>::as_ref(&window).clone();
     match action {
         "secondWindow" => {
             if app.get_webview_window("second-main").is_none() {
@@ -471,7 +473,7 @@ fn native_window_action(app: &AppHandle<Wry>, action: &str, params: &Value, call
             // button) toggles only when the window is not already in it.
             let current = window.is_fullscreen().map_err(|error| error.to_string())?;
             if params.get("enabled").and_then(Value::as_bool) != Some(current) {
-                rightkit_tauri_shell::commands::rk_shell_window("fullscreen".into(), window.clone())?;
+                rightkit_tauri_shell::commands::rk_shell_window(webview, "fullscreen".into(), window.clone())?;
             }
             Ok(json!({"fullscreen": window.is_fullscreen().map_err(|error| error.to_string())?}))
         }
@@ -485,7 +487,7 @@ fn native_window_action(app: &AppHandle<Wry>, action: &str, params: &Value, call
             }
             if !force {
                 // An ordinary close goes through RightKit Shell; CloseRequested still applies Ember's guard.
-                rightkit_tauri_shell::commands::rk_shell_window("close".into(), window.clone())
+                rightkit_tauri_shell::commands::rk_shell_window(webview, "close".into(), window.clone())
                     .map_err(|error| format!("closing window: {error}"))?;
                 return Ok(Value::Null);
             }
@@ -543,80 +545,6 @@ fn qa_window_state(app: &AppHandle<Wry>) -> Result<Value, String> {
     let window = app.get_webview_window("main").ok_or_else(|| "main window is unavailable".to_string())?;
     let native = rightkit_tauri_shell::windows::readback(&window)?;
     Ok(json!({"visible": native.visible, "focused": native.focused, "main": native.main, "level": native.level}))
-}
-
-#[cfg(feature = "qa-native")]
-fn qa_viewport(app: &AppHandle<Wry>, args: &Value) -> Result<Value, String> {
-    let object = args.as_object().ok_or_else(|| "lc_qa_viewport expects an object".to_string())?;
-    let width = object.get("width").and_then(Value::as_u64).ok_or_else(|| "lc_qa_viewport requires width".to_string())?;
-    let height = object.get("height").and_then(Value::as_u64).ok_or_else(|| "lc_qa_viewport requires height".to_string())?;
-    if !matches!((width, height), (960, 640) | (1024, 788) | (1280, 800) | (1600, 1000)) {
-        return Err("lc_qa_viewport allows only 960x640, 1024x788, 1280x800 or 1600x1000".into());
-    }
-    let window = app.get_webview_window("main").ok_or_else(|| "main window is unavailable".to_string())?;
-    let geometry = |window: &WebviewWindow<Wry>| {
-        let size = |result: Result<tauri::PhysicalSize<u32>, _>| result.ok().map(|size| json!({"width": size.width, "height": size.height}));
-        let position = |result: Result<tauri::PhysicalPosition<i32>, _>| result.ok().map(|position| json!({"x": position.x, "y": position.y}));
-        json!({
-            "innerSize": size(window.inner_size()),
-            "outerSize": size(window.outer_size()),
-            "innerPosition": position(window.inner_position()),
-            "outerPosition": position(window.outer_position()),
-            "isVisible": window.is_visible().ok(),
-            "isDecorated": window.is_decorated().ok(),
-            "isResizable": window.is_resizable().ok(),
-            "isMaximized": window.is_maximized().ok(),
-            "isFullscreen": window.is_fullscreen().ok(),
-        })
-    };
-    let before = geometry(&window);
-    let config = app.config().app.windows.iter().find(|candidate| candidate.label == "main").map(|candidate| {
-        json!({
-            "label": candidate.label,
-            "width": candidate.width,
-            "height": candidate.height,
-            "minWidth": candidate.min_width,
-            "minHeight": candidate.min_height,
-            "decorations": candidate.decorations,
-            "shadow": candidate.shadow,
-            "resizable": candidate.resizable,
-        })
-    });
-    // Tao adds native menu height when sizing borderless Windows windows.
-    // Hide it only during resize, then restore prior visibility even on errors.
-    #[cfg(target_os = "windows")]
-    let menu_visible = window.is_menu_visible().map_err(|error| format!("reading QA menu visibility: {error}"))?;
-    #[cfg(target_os = "windows")]
-    if menu_visible {
-        window.hide_menu().map_err(|error| format!("hiding QA menu: {error}"))?;
-    }
-    let resize_result = window
-        .set_size(tauri::Size::Logical(tauri::LogicalSize::new(width as f64, height as f64)))
-        .map_err(|error| format!("setting QA viewport: {error}"));
-    let restore_result: Result<Option<()>, String> = {
-        #[cfg(target_os = "windows")]
-        {
-            menu_visible.then(|| window.show_menu().map_err(|error| format!("restoring QA menu: {error}"))).transpose()
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            Ok(None)
-        }
-    };
-    match (resize_result, restore_result) {
-        (Err(error), Err(restore)) => return Err(format!("{error}; {restore}")),
-        (Err(error), Ok(_)) | (Ok(_), Err(error)) => return Err(error),
-        (Ok(_), Ok(_)) => {}
-    }
-    let observed = window.inner_size().map_err(|error| format!("reading QA viewport: {error}"))?;
-    let after = geometry(&window);
-    Ok(json!({
-        "requested": {"width": width, "height": height},
-        "observedInnerSize": {"width": observed.width, "height": observed.height},
-        "config": config,
-        "before": before,
-        "after": after,
-    }))
 }
 
 #[cfg(feature = "qa-native")]
@@ -681,7 +609,6 @@ fn control_dispatch(app: &AppHandle<Wry>, name: &str, raw: &str) -> Result<Strin
             value
         }
         "lc_qa_window_state" => qa_window_state(app)?,
-        "lc_qa_viewport" => qa_viewport(app, &args)?,
         "lc_native" => {
             let object = args.as_object().ok_or_else(|| "lc_native expects an object".to_string())?;
             let action = object.get("action").and_then(Value::as_str).ok_or_else(|| "lc_native requires action".to_string())?;
@@ -753,7 +680,6 @@ fn qa_control_plugin() -> Option<TauriPlugin<Wry>> {
         .command("lc_merge_preview_cancel", |app, args| control_dispatch(app, "lc_merge_preview_cancel", args))
         .command("lc_preview_ack", |app, args| control_dispatch(app, "lc_preview_ack", args))
         .command("lc_qa_window_state", |app, args| control_dispatch(app, "lc_qa_window_state", args))
-        .command("lc_qa_viewport", |app, args| control_dispatch(app, "lc_qa_viewport", args))
         .command("lc_native", |app, args| control_dispatch(app, "lc_native", args))
         .command("lc_preferences", |app, args| control_dispatch(app, "lc_preferences", args));
     control.build_if_enabled()
@@ -802,13 +728,28 @@ fn qa_hidden_enabled(_value: Option<&OsStr>) -> bool {
     false
 }
 
+/// `RIGHTKIT_QA_HIDDEN`: read only in a `qa-native` build; any other build reads no environment variable here.
+fn qa_hidden_requested() -> bool {
+    #[cfg(feature = "qa-native")]
+    let value = std::env::var_os("RIGHTKIT_QA_HIDDEN");
+    #[cfg(not(feature = "qa-native"))]
+    let value: Option<std::ffi::OsString> = None;
+    qa_hidden_enabled(value.as_deref())
+}
+
+/// `RIGHTKIT_QA_BACKGROUND`: read only in a `qa-native` build, like [`qa_hidden_requested`].
+fn qa_background_requested() -> bool {
+    #[cfg(feature = "qa-native")]
+    let value = std::env::var_os("RIGHTKIT_QA_BACKGROUND");
+    #[cfg(not(feature = "qa-native"))]
+    let value: Option<std::ffi::OsString> = None;
+    qa_hidden_enabled(value.as_deref())
+}
+
 /// Whether this launch asks for QA mode: the `--qa` argument or one of the QA environment switches.
 #[cfg(feature = "qa-native")]
 fn qa_requested(args: &[String]) -> bool {
-    args.iter().any(|arg| arg == "--qa")
-        || std::env::var_os("LIGHTCRAFT_DESKTOP_QA").is_some()
-        || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_HIDDEN").as_deref())
-        || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref())
+    args.iter().any(|arg| arg == "--qa") || std::env::var_os("LIGHTCRAFT_DESKTOP_QA").is_some() || qa_hidden_requested() || qa_background_requested()
 }
 
 #[cfg(not(feature = "qa-native"))]
@@ -1114,7 +1055,7 @@ pub fn run() {
             // QA hosts run as accessory apps (no Dock icon or menu bar, no activation on launch), so
             // a hidden run can't take the front from whoever is at the machine.
             #[cfg(target_os = "macos")]
-            if qa || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref()) {
+            if qa || qa_background_requested() {
                 app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             }
             let primary = app.config().identifier == PRIMARY_IDENTIFIER;
@@ -1227,11 +1168,7 @@ pub fn run() {
     let builder = {
         let args: Vec<String> = std::env::args().collect();
         // Every QA entry point stays in background, including direct --qa launches.
-        if runtime_modes(&args).0 || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref()) {
-            builder.activate_ignoring_other_apps(false)
-        } else {
-            builder
-        }
+        if runtime_modes(&args).0 || qa_background_requested() { builder.activate_ignoring_other_apps(false) } else { builder }
     };
     #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
     let mut app = match builder.build(context) {
@@ -1247,7 +1184,7 @@ pub fn run() {
     #[cfg(target_os = "macos")]
     {
         let args: Vec<String> = std::env::args().collect();
-        if runtime_modes(&args).0 || qa_hidden_enabled(std::env::var_os("RIGHTKIT_QA_BACKGROUND").as_deref()) {
+        if runtime_modes(&args).0 || qa_background_requested() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
         }
     }
@@ -1316,6 +1253,9 @@ mod tests {
         assert!(!qa_hidden_enabled(Some(OsStr::new("1"))));
         assert!(!qa_hidden_enabled(Some(OsStr::new("true"))));
         assert!(!qa_hidden_enabled(None));
+        // The environment is not consulted at all, so a stray RIGHTKIT_QA_* value cannot turn on unattended mode.
+        assert!(!qa_hidden_requested());
+        assert!(!qa_background_requested());
     }
 
     #[cfg(feature = "qa-native")]

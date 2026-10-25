@@ -30,9 +30,9 @@ serde_json = { workspace = true }
 pollster = { workspace = true }
 log = { workspace = true }
 # Log file sink, rotation and generation names (M15, owner `rightkit-logs`); no tracing or network features.
-rightkit-logs = { version = "=0.3.3", default-features = false }
+rightkit-logs = { version = "=0.3.5", default-features = false }
 # Owned child processes for openers, editors, registry/gsettings lookups and relaunch (M5)
-rightkit-child-process = { version = "=0.5.2" }
+rightkit-child-process = { version = "=0.5.6" }
 
 [build-dependencies]
 # Icon + VERSIONINFO for lightcraft.exe; build.rs only uses it when targeting Windows.
@@ -44,7 +44,7 @@ winit = { version = "0.30", default-features = false, features = ["x11"] }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rfd = { workspace = true }
 # Atomic writes of ui.json and the start markers (M8, owner `rightkit-fs`)
-rightkit-fs = { version = "=0.4.4", default-features = false, features = ["fs"] }
+rightkit-fs = { version = "=0.4.7", default-features = false, features = ["fs"] }
 # Per-launch random secret of the control channel (OS CSPRNG; already in the tree, pure Rust)
 getrandom = "0.3.4"
 # Control-channel authentication shared with the clients (`lightcraft_mcp::control_auth`)

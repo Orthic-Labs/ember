@@ -28,7 +28,7 @@ thiserror = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rav1d = { workspace = true }
 # Runs the worker (`host`): owned child, bounded output, no console window on Windows.
-rightkit-child-process = { version = "=0.5.2" }
+rightkit-child-process = { version = "=0.5.6" }
 
 [dev-dependencies]
 # Test streams: a tiny AVIF from the encoder Ember exports with; its `mdat` is the AV1 item.

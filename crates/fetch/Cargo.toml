@@ -12,9 +12,9 @@ workspace = true
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 log = { workspace = true }
 # The owner HTTP client (M17): blocking ureq + rustls with the OS trust store. No optional features.
-rightkit-http = { version = "=0.3.6", default-features = false }
+rightkit-http = { version = "=0.3.8", default-features = false }
 # The owner model download (resume, retries, SHA-256, atomic placement): the latest published release.
-rightkit-models = { version = "=0.3.2", default-features = false }
+rightkit-models = { version = "=0.5.1", default-features = false }
 sha2 = { version = "0.11", default-features = false }
 
 [features]
@@ -24,4 +24,4 @@ testing = ["rightkit-http/testing"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 # The loopback test server is allowed by the owner's `testing` helpers only.
-rightkit-http = { version = "=0.3.6", default-features = false, features = ["testing"] }
+rightkit-http = { version = "=0.3.8", default-features = false, features = ["testing"] }
