@@ -18,7 +18,7 @@ No code is deleted for a `drop` row. Each one is an issue for Adrian's call (lin
 ## Method
 
 - Sizes are `wc -l` of tracked files at this branch: **src** is `crates/<c>/src/**/*.rs`, **other** is the same crate's tests, examples, benches and `build.rs`. Rows that start "slice of" are parts of a parent row and are never added into the totals.
-- The verdict rows below partition the Rust tree exactly: 331,735 src and 20,679 other lines across `crates/`, `apps/` and `xtask/` (checked by summing the table).
+- The verdict rows below partition the Rust tree exactly: 331,748 src and 20,679 other lines across `crates/`, `apps/` and `xtask/` (checked by summing the table).
 - Sources: the unit's own `Cargo.toml` and README, `docs/gaps.md`, `ROADMAP.md`, `NOTICE`, the 2026-10-24 Ember audit (`ember-apple-audit.json`) and port order, and the published RightKit crates (read as the `.crate` files from crates.io, not from the RightKit working tree).
 - Nothing here was compiled or run (cloud lane); the hosts compile through the broker.
 
@@ -28,7 +28,7 @@ No code is deleted for a `drop` row. Each one is an issue for Adrian's call (lin
 
 | Unit | Lines (src / other) | Verdict | Reason | Evidence |
 |---|---|---|---|---|
-| `apps/lightcraft-desktop` | 2,496 / 3,808 rs; 7,229 ts/tsx/css | keep | The shipped host on macOS and Windows: Tauri 2 and React over the engine session. Window host, settings, device identity, logs and updates already sit on RightKit owners; what stays is listed in `.rightkit/ownership-exceptions.json`. | `docs/desktop-migration.md`; `apps/lightcraft-desktop/Cargo.toml:15-27` |
+| `apps/lightcraft-desktop` | 2,509 / 3,808 rs; 7,229 ts/tsx/css | keep | The shipped host on macOS and Windows: Tauri 2 and React over the engine session. Window host, settings, device identity, logs and updates already sit on RightKit owners; what stays is listed in `.rightkit/ownership-exceptions.json`. | `docs/desktop-migration.md`; `apps/lightcraft-desktop/Cargo.toml:15-27` |
 | `crates/desktop-host` | 6,172 / 0 | keep | Owner-thread session host: `tasks.rs` (2,080 lines) drives import, merge and cull jobs over engine activity rows, plus render, preview, snapshot and auto-import. Host orchestration, not a registry. | `crates/desktop-host/src/tasks.rs:1-40` |
 | `apps/lightcraft-cli` (render, commands, snapshot, MCP launch) | 1,252 / 2,008 | keep | Headless render, command listing and the MCP entry; signed and shipped in the bundle; it is the agent and QA tool. | `right-release.config.mjs:49,65`; `scripts/desktop/finalize-candidate.mjs:32` |
 | `xtask` | 2,873 / 0 | keep | CI gates: fmt, clippy, tests, parity, layers, assets, wasm. `web.rs` (352) goes with the web row. | `AGENTS.md` quality gates |
@@ -64,10 +64,10 @@ No code is deleted for a `drop` row. Each one is an issue for Adrian's call (lin
 | slice of `crates/engine`: `src/activity.rs` | 438 / 0 | replace | `rightkit-job-queue` `InlineCancelRegistry` 0.5.1 | The activity registry. Ember's rows add `done`/`total` counts, a unit, a kind, `set_cancellable` and numeric ids; the owner row has label, message, a 0..1 fraction and string ids. `desktop-host/src/tasks.rs` stays. | `crates/engine/src/activity.rs:21-60,234-252`; bogusyogi/rightkit#1162 |
 | slice of `apps/lightcraft-desktop`: `src/services.rs` `open_url` | 23 | replace | `rightkit-child-process` `open_url` 0.5.6 | **Done here:** the hand-rolled opener, its bounded-wait helper and constants are deleted; the https-only rule stays at the call site (it is Ember's policy). On Windows the owner uses `rundll32 url.dll,FileProtocolHandler` where Ember used `explorer`; the egui host already called the owner. | `apps/lightcraft/src/main.rs:475-481` |
 | slice of `apps/lightcraft-desktop`: QA viewport helper in `src/native.rs` | 74 | replace | `rightkit-qa` `embedded::set_viewport` 0.9.0 | **Done here:** `qa_viewport` and the `lc_qa_viewport` command (qa-native only) had no caller; the native journeys call `Control::set_viewport` and read geometry back through the shell's `windows::readback`. Retires the M1 section 2 exception. | `apps/lightcraft-desktop/tests/native_qualification.rs:643` |
-| slice of `apps/lightcraft-desktop`: `src/rk_logs.rs` | 131 | replace | `rightkit-tauri-shell` `logs` feature 0.6.0 | Ember copies the shell's three `rightkit_logs_*` commands because its own `RotatingTextWriter` queue cannot be handed to the shell's `LogsRuntime`. | bogusyogi/rightkit#1027, #1055 |
+| slice of `apps/lightcraft-desktop`: `src/rk_logs.rs` | 131 | replace | `rightkit-tauri-shell` `logs` feature 0.6.0 | Ember copies the shell's three `rightkit_logs_*` commands: it opens its own `JsonlStore`, which its `log` bridge also writes, while the shell's `LogsRuntime` builds a store of its own (no injection point). The move needs the bridge to append through `LogsRuntime::store()` and a record path before the runtime is installed (#1055); the egui host's `RotatingTextWriter` is a different file. | bogusyogi/rightkit#1027, #1055 |
 | slice of `crates/segment`: `src/remote.rs` frames | about 20 | replace (blocked) | `rightkit-sidecar` `length_prefixed` 0.3.0 | Same 4-byte big-endian frame, but the owner refuses a zero-length frame and Ember's click-only SAM request sends one (`width` 0). Read, not ported. | `crates/segment/src/remote.rs:58-72,161`; bogusyogi/rightkit#1163 |
 | slice of `crates/develop`: `src/segmask.rs` base64 | 36 | replace | `rightkit-crypto` 0.1.0 | The mask payload is persisted; the owner's decoder is strict (padded only) where Ember's accepts both forms, so the swap waits for a stored-form check. | `crates/develop/src/segmask.rs:86-121`; Orthic-Labs/ember#257 |
-| slice of `crates/video`: `src/sidecar.rs` | 254 | replace (blocked) | `rightkit-ffmpeg` `ResolveOptions::bundle_dir` | The owner's `bundle_dir` is on RightKit main and not in 0.2.10. Only matters if the video row is kept. | `crates/video/src/sidecar.rs:73-118`; bogusyogi/rightkit#1015 |
+| slice of `crates/video`: `src/sidecar.rs` | 254 | replace (deferred) | `rightkit-ffmpeg` 0.2.10 `resolve_ffmpeg` with `ResolutionRequest.bundled_paths` | Not an owner gap: the verification already runs on `verify_bundled_ffmpeg` and `verify_bundled_ffprobe`, and what stays is Ember's bundle-layout directory search. The owner closed the `bundle_dir` request (bogusyogi/rightkit#1015) as not planned because the published API takes caller-named paths. Only matters if the video row is kept. | `crates/video/src/sidecar.rs:73-118`; Orthic-Labs/ember#267 |
 | slice of `crates/denoise-onnx`: `src/runner.rs` `ensure_runtime` | about 70 of 178 | replace (blocked) | `rightkit-onnx` `bind_installed_runtime` (planned) | Find, verify and bind the ONNX Runtime library once per process. Optional feature `onnx-accel`, off by default. | `crates/denoise-onnx/src/runner.rs:36-58`; bogusyogi/rightkit#1165 |
 | slice of `crates/photo-ai`: `src/network.rs`, `src/scaledown.rs` | 155 + 79 | replace | `rightkit-llm` 0.3.1 | OpenRouter transport; an own-model ("later") crate, scheduled with the cloud-comparison work. | Orthic-Labs/ember#258 |
 | slice of `scripts/desktop`: `static-check.mjs` CSP and capability assertions | 156 | replace (blocked) | `@rightkit/release` doctor rule | Hand-written Tauri CSP and capability assertions; the shared drift check is requested. | bogusyogi/rightkit#1136 |
@@ -111,12 +111,12 @@ The editor settings screen (`emberSettingsBackend.ts` and `EmberSettings.tsx`, 6
 
 | Verdict | Units | src | other |
 |---|---|---|---|
-| keep (product) | 6 | 16,463 | 6,076 |
+| keep (product) | 6 | 16,476 | 6,076 |
 | keep (upstream-synced) | 15 | 184,128 | 8,767 |
 | replace (whole crates) | 2 | 4,260 | 318 |
 | later | 8 | 32,772 | 3,935 |
 | drop | 11 | 94,112 | 1,583 |
-| **Rust tree** | 42 | **331,735** | **20,679** |
+| **Rust tree** | 42 | **331,748** | **20,679** |
 
 Non-Rust: keep 7,229 ts/tsx/css (desktop web), 1,537 mjs and 4 sh (`scripts/desktop`), 3,151 py/sh/ps1/txt (`tools/`); drop candidates 1,192 Swift and 111 YAML (`ios/`), 47 sh (`scripts/ios`), about 2,700 (`packaging/`), 15 js (`apps/lightcraft-web`). Engine slices a set of drops would remove from `crates/engine`: faces 3,638, merge and desktop-host 908, map and places 2,686, Classic output modules 4,252, video 1,188, demo library 684 (not added into totals).
 

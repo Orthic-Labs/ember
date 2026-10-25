@@ -549,7 +549,7 @@
       "name": "LOCALAPPDATA",
       "class": "S6",
       "channel": "env",
-      "anchor": "right-release.config.mjs:49",
+      "anchor": "right-release.config.mjs:54",
       "valueType": "enum",
       "note": "OS-provided; used for default folders, the dev-install path in right-release.config.mjs and the release scripts. Selects no test mode, root or executable of its own."
     },

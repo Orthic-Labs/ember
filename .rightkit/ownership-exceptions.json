@@ -204,7 +204,7 @@
       "capability": "desktop-shell",
       "package": "rightkit-tauri-shell",
       "path": "apps/lightcraft-desktop/src/rk_logs.rs",
-      "reason": "Copies of the shell's rightkit_logs_write/collect/clear commands because Ember's own RotatingTextWriter queue cannot be handed to the shell LogsRuntime.",
+      "reason": "Copies of the shell's rightkit_logs_write/collect/clear commands: Ember opens its own JsonlStore, which its log-crate bridge also writes, while the shell's LogsRuntime builds a store of its own on its log path (LogsRuntime::new has no injection point). Moving needs the bridge to append through LogsRuntime::store() and a record path before the runtime is installed (bogusyogi/rightkit#1055); see also #1027.",
       "owner": "ember",
       "date": "2026-10-24",
       "issue": "bogusyogi/rightkit#1027",
@@ -214,10 +214,10 @@
       "capability": "media-pipelines",
       "package": "rightkit-ffmpeg",
       "path": "crates/video/src/sidecar.rs",
-      "reason": "Bundled ffmpeg search before the owner verification; ResolveOptions::bundle_dir is on RightKit main and not in the published 0.2.10. Only if the video crate is kept.",
+      "reason": "Bundle-layout directory search (search_dirs, resolve_in) in front of the owner's verify_bundled_ffmpeg and verify_bundled_ffprobe. The owner needs no change: the published rightkit-ffmpeg 0.2.10 takes caller-named paths (resolve_ffmpeg with ResolutionRequest.bundled_paths), and bogusyogi/rightkit#1015 (a bundle_dir option) was closed as not planned. If Orthic-Labs/ember#267 keeps the video crate, the search moves onto that API.",
       "owner": "ember",
       "date": "2026-10-24",
-      "issue": "bogusyogi/rightkit#1015",
+      "issue": "Orthic-Labs/ember#267",
       "expires": "2026-11-30"
     },
     {
