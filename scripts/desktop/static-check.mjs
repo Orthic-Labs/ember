@@ -145,12 +145,17 @@ function checkSourceContracts() {
   for (const token of ["DEFAULT_MAX_ITEMS", "DEFAULT_MAX_BYTES", "DEFAULT_TTL"]) if (!previewStore.includes(token)) fail(`preview store missing bounded contract ${token}`);
   const web = readFileSync(path.join(repoRoot, "apps/lightcraft-desktop/web/src/library/libraryData.ts"), "utf8");
   if (!/MAX_SLICE = 512/.test(web) || !/generation/.test(web)) fail("library slice cache must remain generation-bound & capped");
-  // #254: RightKit's default bottom-centre toast stack covers and takes clicks meant for the stage footer & filmstrip. Notices go top-centre,
-  // one row at a time (a second row lands on the Library header). Native QA measures the real footprint (assert_toast_footprint_clear).
+  // #254: Keep RightKit notices in an app-owned normal-flow band below the shell; native QA measures the real footprint (assert_toast_footprint_clear).
   const shell = readFileSync(path.join(repoRoot, "apps/lightcraft-desktop/web/src/App.tsx"), "utf8");
   const provider = /<ShellProvider\b[\s\S]*?<\/ShellProvider>/.exec(shell)?.[0] ?? "";
-  if (!/\btoastPlacement="top-center"/.test(provider)) fail("ShellProvider must place toasts top-centre so they never cover the stage footer or filmstrip (#254)");
-  if (!/\btoastOptions=\{\{[^}]*\bmaxVisible: 1\b[^}]*\}\}/.test(provider)) fail("ShellProvider must show one toast at a time so a second row never covers the Library header (#254)");
+  if (!/\btoastOptions=\{\{[^}]*\bdedupe: 'newest'[^}]*\bmaxVisible: 1\b[^}]*\}\}/.test(provider)) fail("ShellProvider must preserve newest dedupe and one visible toast (#254)");
+  if (/\btoastPlacement=/.test(provider)) fail("ShellProvider must leave toast placement to the app-owned normal-flow band (#254)");
+  const appCss = readFileSync(path.join(repoRoot, "apps/lightcraft-desktop/web/src/app.css"), "utf8");
+  if (!/#root\{[^}]*display:flex[^}]*flex-direction:column/.test(appCss)) fail("app root must stack shell and toast band vertically (#254)");
+  if (!/#root>\.rk-shell\{[^}]*flex:1 1 auto[^}]*min-height:0[^}]*height:auto/.test(appCss)) fail("shell must flex above the toast band without fixed height (#254)");
+  if (!/#root>\[data-rk-toasts\]\{[^}]*position:relative!important[^}]*inset:auto!important[^}]*top:auto!important[^}]*right:auto!important[^}]*bottom:auto!important[^}]*left:auto!important[^}]*transform:none!important[^}]*--rk-toast-translate:0 0[^}]*width:100%!important/.test(appCss)) fail("RightKit toast band must reset fixed placement through its shared translate variable and use full-width normal flow below the shell (#254)");
+  if (!/#root>\[data-rk-toasts\]:empty\{[^}]*padding:0/.test(appCss)) fail("empty toast band must take no space (#254)");
+  if (!/#root>\[data-rk-toasts\]>:only-child\{[^}]*width:min\(26rem,calc\(100% - 24px\)\)[^}]*max-width:26rem/.test(appCss)) fail("toast row must stay bounded within the app-owned band (#254)");
 }
 
 checkInstallIdentity();

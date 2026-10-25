@@ -550,8 +550,8 @@ fn qa_viewport(app: &AppHandle<Wry>, args: &Value) -> Result<Value, String> {
     let object = args.as_object().ok_or_else(|| "lc_qa_viewport expects an object".to_string())?;
     let width = object.get("width").and_then(Value::as_u64).ok_or_else(|| "lc_qa_viewport requires width".to_string())?;
     let height = object.get("height").and_then(Value::as_u64).ok_or_else(|| "lc_qa_viewport requires height".to_string())?;
-    if !matches!((width, height), (1280, 800) | (1600, 1000)) {
-        return Err("lc_qa_viewport allows only 1280x800 or 1600x1000".into());
+    if !matches!((width, height), (960, 640) | (1024, 788) | (1280, 800) | (1600, 1000)) {
+        return Err("lc_qa_viewport allows only 960x640, 1024x788, 1280x800 or 1600x1000".into());
     }
     let window = app.get_webview_window("main").ok_or_else(|| "main window is unavailable".to_string())?;
     let geometry = |window: &WebviewWindow<Wry>| {

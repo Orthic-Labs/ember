@@ -365,13 +365,14 @@ fn assert_filmstrip_context_contrast(control: &rightkit_qa::control::Control, mo
 /// `[data-rk-toasts]` stack, in the slot a lone toast takes (first for a top placement, last for a bottom one), measures it, hit-tests every
 /// 2px across it for the interactive elements underneath and removes it again, all in one synchronous task: React never sees the row and no
 /// live toast is needed. The probe sets `animation: none` (the entry animation starts 8px off its slot) so the settled geometry is measured,
-/// and `pointer-events: none` so the hit test sees what lies under the row. The message is a typical task notice ("Build Previews finished");
-/// longer ones exist (the LRCAT import and inspect notices, startup warnings), so this guards the common width, not every notice.
+/// and `pointer-events: none` so the hit test sees what lies under the row. It measures both a short task notice and the actual GPU recovery
+/// warning shape emitted by `native.rs::gpu_crash_notice`.
 const TOAST_FOOTPRINT_PROBE: &str = r#"return (() => {
     const stack = document.querySelector('[data-rk-toasts]');
     if (!stack) return { error: 'toast stack [data-rk-toasts] is not mounted' };
     const interactive = "a[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=slider],[role=menuitem],[role=tab],[role=option],[role=checkbox],[role=switch],[role=link],[role=combobox],[role=textbox],[tabindex]:not([tabindex^='-'])";
     const placement = stack.dataset.placement || 'bottom-center';
+    const emptyBandHeight = stack.childNodes.length === 0 ? stack.getBoundingClientRect().height : null;
     const probe = document.createElement('div');
     probe.className = 'rk-toast rk-toast--info';
     probe.setAttribute('aria-hidden', 'true');
@@ -382,7 +383,7 @@ const TOAST_FOOTPRINT_PROBE: &str = r#"return (() => {
     glyph.textContent = 'i';
     const message = document.createElement('span');
     message.className = 'rk-toast__msg';
-    message.textContent = 'Build Previews finished';
+    message.textContent = __NOTICE_MESSAGE_JSON__;
     const dismiss = document.createElement('button');
     dismiss.type = 'button';
     dismiss.className = 'rk-toast__x';
@@ -407,7 +408,7 @@ const TOAST_FOOTPRINT_PROBE: &str = r#"return (() => {
             const node = hit ? hit.closest(interactive) : null;
             if (node && !stack.contains(node)) covered.add(node);
         }
-        return { placement, viewport: { width: window.innerWidth, height: window.innerHeight }, probe: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }, hits: [...covered].map(describe) };
+        return { placement, viewport: { width: window.innerWidth, height: window.innerHeight }, emptyBandHeight, probe: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }, hits: [...covered].map(describe) };
     } finally {
         probe.remove();
     }
@@ -421,6 +422,14 @@ fn toast_footprint_verdict(context: &str, probe: &Value) -> Result<(), String> {
     let Some(hits) = probe["hits"].as_array() else {
         return Err(format!("{context}: toast footprint probe returned no hit list: {probe}"));
     };
+    if !probe["emptyBandHeight"].is_null() {
+        let Some(height) = probe["emptyBandHeight"].as_f64() else {
+            return Err(format!("{context}: empty toast band height is not numeric: {probe}"));
+        };
+        if height != 0.0 {
+            return Err(format!("{context}: empty toast band must have zero height, got {height}: {probe}"));
+        }
+    }
     if hits.is_empty() {
         return Ok(());
     }
@@ -437,9 +446,25 @@ fn toast_footprint_verdict(context: &str, probe: &Value) -> Result<(), String> {
 /// A notice toast must never cover a control, at any viewport or view (#254). Deterministic: measures the toast footprint with a probe row,
 /// so it needs no live toast and no sleep, and never dismisses one. See `TOAST_FOOTPRINT_PROBE`.
 fn assert_toast_footprint_clear(control: &rightkit_qa::control::Control, context: &str) {
-    let probe = control.eval(TOAST_FOOTPRINT_PROBE).expect("toast footprint probe must execute");
-    eprintln!("[qa] toast footprint ({context}): {probe}");
-    toast_footprint_verdict(context, &probe).unwrap_or_else(|refusal| panic!("{refusal}"));
+    let notices = [("short task notice", "Build Previews finished".to_string()), ("GPU recovery warning", gpu_recovery_notice_for_probe())];
+    for (notice_kind, notice) in notices {
+        let encoded = serde_json::to_string(&notice).expect("toast notice probe text must serialize");
+        let script = TOAST_FOOTPRINT_PROBE.replace("__NOTICE_MESSAGE_JSON__", &encoded);
+        let probe = control.eval(&script).expect("toast footprint probe must execute");
+        let notice_context = format!("{context}, {notice_kind}");
+        eprintln!("[qa] toast footprint ({notice_context}): {probe}");
+        toast_footprint_verdict(&notice_context, &probe).unwrap_or_else(|refusal| panic!("{refusal}"));
+    }
+}
+
+/// Recreates `native.rs::gpu_crash_notice` using a bounded, source-shaped startup marker reason.
+/// `backend.rs::marker_text` stores this form during native window startup before recovery reports it.
+fn gpu_recovery_notice_for_probe() -> String {
+    let backend = if cfg!(target_os = "windows") { "DX12" } else { "METAL" };
+    let what = format!("GPU startup (backends {backend}) started (unix time 1700000000)");
+    format!(
+        "Ember closed unexpectedly while starting the GPU last time ({what}), so GPU rendering is now off and photos render on the CPU. To try the GPU again, turn on Settings ▸ Performance ▸ Use the GPU for rendering; to try another graphics backend, start Ember with LIGHTCRAFT_GPU_BACKEND=dx12, vulkan or off."
+    )
 }
 
 #[test]
@@ -456,8 +481,10 @@ fn toast_footprint_verdict_names_covered_controls_and_fails_closed() {
         assert!(refusal.contains(expected), "the refusal must name {expected}: {refusal}");
     }
     // Top-centre, in the titlebar's empty middle: nothing underneath.
-    let clear = json!({"placement": "top-center", "viewport": {"width": 1024, "height": 788}, "probe": {"left": 404.0, "top": 16.0, "right": 620.0, "bottom": 54.0}, "hits": []});
+    let clear = json!({"placement": "top-center", "viewport": {"width": 1024, "height": 788}, "emptyBandHeight": 0.0, "probe": {"left": 404.0, "top": 16.0, "right": 620.0, "bottom": 54.0}, "hits": []});
     assert_eq!(toast_footprint_verdict("preferences stage view", &clear), Ok(()));
+    let nonempty_band = json!({"placement": "bottom-center", "viewport": {"width": 1024, "height": 788}, "emptyBandHeight": 24.0, "probe": {"left": 404.0, "top": 16.0, "right": 620.0, "bottom": 54.0}, "hits": []});
+    assert!(toast_footprint_verdict("preferences stage view", &nonempty_band).is_err(), "an empty toast band with height must fail");
     // A probe that could not measure must never read as clean.
     for broken in [json!({"error": "toast stack [data-rk-toasts] is not mounted"}), json!({}), json!({"hits": "none"}), Value::Null] {
         assert!(toast_footprint_verdict("broken probe", &broken).is_err(), "{broken} must not pass");
@@ -2745,7 +2772,7 @@ fn native_hidden_control_journeys() {
                         control.key("G").expect("populated library route must execute");
                         wait_for_rendered_preview(control, "img.lc-photo-preview", None);
                         wait_for_rendered_preview(control, "img.lc-filmstrip-preview", None);
-                        for (width, height) in [(1280_u64, 800_u64), (1600_u64, 1000_u64)] {
+                        for (width, height) in [(960_u64, 640_u64), (1024_u64, 788_u64), (1280_u64, 800_u64), (1600_u64, 1000_u64)] {
                             set_native_viewport(control, width, height);
                             wait_for_dom(control, "return document.querySelector('.lc-library-workspace') !== null;");
                             assert_layout_settled(control, ".lc-library-workspace");
