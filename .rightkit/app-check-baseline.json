@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "known": [
+    {
+      "id": "legal-receipt-native|apps/lightcraft-desktop/web/src/onboarding/StartupGate.tsx|settings-copy",
+      "issue": "https://github.com/Orthic-Labs/ember/issues/276",
+      "added": "2026-10-25",
+      "sunset": "2026-12-20"
+    }
+  ]
+}
