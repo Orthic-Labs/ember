@@ -1,6 +1,8 @@
 # Ember iOS & iPadOS architecture
 
-**Status:** design proposal · 2026-10-13; local-first V1 slice built 2026-10-19 (below). Sync, StoreKit, sharing and the remaining RightKit owner adoption still follow the sequence in this document. Rust remains authoritative; SwiftUI supplies native mobile presentation. Android is outside scope.
+**Status:** design proposal · 2026-10-13; local-first V1 slice built 2026-10-19 (below). Sync, StoreKit, shared collections and the remaining RightKit owner adoption still follow the sequence in this document. Rust remains authoritative; SwiftUI supplies native mobile presentation. Android is outside scope.
+
+**Last updated: 2026-10-25.**
 
 ## Built so far (2026-10-19)
 
@@ -15,15 +17,15 @@
 
 **TestFlight route (not run yet).** App Store Connect record exists: "Ember by Orthic Labs", app id 6824279883, bundle `com.orthiclabs.ember`, SKU `ember-ios`, internal TestFlight group. Releases go through right-release #349 (rightkit `docs/IOS-PACKAGE-RECIPE.md`, `targets.ios.iosPackage`; recipe fixes on rightkit main 44125396), run in the Mac desktop (Aqua) session, dry run first and reviewed by Rk3 Win before `--apply`. Still needed: an original 1024 px opaque AppIcon asset catalog (with its `assets/ATTRIBUTION.md` entry), `targets.ios.cargoManifest`/`ownershipScope` for the linked Rust library, a one-off RustRight `ios-static` exception for the release library, and a version bump before every sealed rebuild. Known gap: rightkit#780 (iOS build path assumes a Tauri layout).
 
-Not yet: personal sync, StoreKit, sharing, keywords/albums UI, crop/rotation UI, presets, named versions, masks, RAW-format reporting, background-task progress UI beyond the busy overlay, device/oldest-hardware performance measurements. The existing RightKit owners (licence, credentials, diagnostics, store) stay wired as before.
+Not yet: personal sync, StoreKit, shared collections, keywords/albums UI, crop/rotation UI, presets, named versions, masks, RAW-format reporting, background-task progress UI beyond the busy overlay, device/oldest-hardware performance measurements. The existing RightKit owners (licence, credentials, diagnostics, store) stay wired as before.
 
-## What users can do
+## Current local-first app
 
-V1 supports import from Photos or Files → browse & cull → adjust supported edits → export/share → continue selected collections on Mac through personal iCloud sync. iPhone has collection navigation, responsive grid, photo viewer & compact editing sheets. iPad adds persistent sidebar/inspector, filmstrip, keyboard commands & Pencil input.
+The current iOS app opens a user-selected library folder or procedural sample library, imports images from Photos or Files into `Originals/`, & browses photos in a grid with rating, flag & edited badges. The viewer supports star ratings, pick/reject, press-and-hold before/after, & an Edit panel. Light, Color, Effects & Vignette controls come from Rust control specs; edits support undo/redo & double-tap reset. Share exports a JPEG through `app.export`.
 
-V1 covers ratings, picks/rejects, keywords, albums, crop/rotation, Light/Color adjustments, supported presets, before/after, undo, named versions & JPEG export. UI dispatches existing Rust commands & derives control ranges/defaults from Rust specifications. RAW support follows qualified Rust decoders with explicit supported-format reporting. Existing masks survive synchronization; only qualified mobile mask tools become editable.
+The iPad sidebar, filmstrip, keyboard commands & Pencil support are not implemented. Other mobile features still to build are listed above.
 
-Later stages add advanced masking, large-library refinement, qualified AI, HDR & collaborative collections. Sharing follows personal-sync qualification. Simultaneous live brush editing is outside initial scope. No learned feature is promised merely because corpus preparation exists.
+Later stages add advanced masking, large-library refinement, qualified AI, HDR & collaborative collections. Shared collections follow personal-sync qualification. Simultaneous live brush editing is outside initial scope. No learned feature is promised merely because corpus preparation exists.
 
 ## Runtime & authority
 

@@ -360,6 +360,224 @@ fn assert_filmstrip_context_contrast(control: &rightkit_qa::control::Control, mo
     }
 }
 
+/// Page script for `assert_toast_footprint_clear` (#254). RightKit's toast rows take pointer events, so wherever the stack puts one it must
+/// not sit on a control. This appends a probe row shaped like a real notice (glyph, message, dismiss button) to the always-mounted
+/// `[data-rk-toasts]` stack, in the slot a lone toast takes (first for a top placement, last for a bottom one), measures it, hit-tests every
+/// 2px across it for the interactive elements underneath and removes it again, all in one synchronous task: React never sees the row and no
+/// live toast is needed. The probe sets `animation: none` (the entry animation starts 8px off its slot) so the settled geometry is measured,
+/// and `pointer-events: none` so the hit test sees what lies under the row. It measures both a short task notice and the actual GPU recovery
+/// warning shape emitted by `native.rs::gpu_crash_notice`.
+const TOAST_FOOTPRINT_PROBE: &str = r#"return (() => {
+    const stack = document.querySelector('[data-rk-toasts]');
+    if (!stack) return { error: 'toast stack [data-rk-toasts] is not mounted' };
+    const interactive = "a[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=slider],[role=menuitem],[role=tab],[role=option],[role=checkbox],[role=switch],[role=link],[role=combobox],[role=textbox],[tabindex]:not([tabindex^='-'])";
+    const placement = stack.dataset.placement || 'bottom-center';
+    const emptyBandHeight = stack.childNodes.length === 0 ? stack.getBoundingClientRect().height : null;
+    const probe = document.createElement('div');
+    probe.className = 'rk-toast rk-toast--info';
+    probe.setAttribute('aria-hidden', 'true');
+    probe.style.animation = 'none';
+    probe.style.pointerEvents = 'none';
+    const glyph = document.createElement('span');
+    glyph.className = 'rk-toast__glyph';
+    glyph.textContent = 'i';
+    const message = document.createElement('span');
+    message.className = 'rk-toast__msg';
+    message.textContent = __NOTICE_MESSAGE_JSON__;
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'rk-toast__x';
+    dismiss.textContent = '✕';
+    probe.append(glyph, message, dismiss);
+    const describe = (node) => {
+        const r = node.getBoundingClientRect();
+        return { tag: node.tagName, id: node.id || null, className: typeof node.className === 'string' ? node.className : null, label: node.getAttribute('aria-label') || node.getAttribute('title') || (node.textContent || '').trim().slice(0, 40), rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } };
+    };
+    try {
+        if (placement.startsWith('top')) stack.prepend(probe); else stack.append(probe);
+        const rect = probe.getBoundingClientRect();
+        if (!(rect.width >= 40 && rect.height >= 24)) return { error: 'toast probe row has no real geometry', placement, width: rect.width, height: rect.height };
+        const xs = [], ys = [];
+        for (let x = rect.left + 0.5; x < rect.right; x += 2) xs.push(x);
+        xs.push(rect.right - 0.5);
+        for (let y = rect.top + 0.5; y < rect.bottom; y += 2) ys.push(y);
+        ys.push(rect.bottom - 0.5);
+        const covered = new Set();
+        for (const y of ys) for (const x of xs) {
+            const hit = document.elementFromPoint(x, y);
+            const node = hit ? hit.closest(interactive) : null;
+            if (node && !stack.contains(node)) covered.add(node);
+        }
+        return { placement, viewport: { width: window.innerWidth, height: window.innerHeight }, emptyBandHeight, probe: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }, hits: [...covered].map(describe) };
+    } finally {
+        probe.remove();
+    }
+})();"#;
+
+/// Verdict on the output of `TOAST_FOOTPRINT_PROBE`. Fails closed: a probe that errored, or returned no hit list, never passes as clean.
+fn toast_footprint_verdict(context: &str, probe: &Value) -> Result<(), String> {
+    if !probe["error"].is_null() {
+        return Err(format!("{context}: toast footprint probe could not measure: {}", probe["error"]));
+    }
+    let Some(hits) = probe["hits"].as_array() else {
+        return Err(format!("{context}: toast footprint probe returned no hit list: {probe}"));
+    };
+    if !probe["emptyBandHeight"].is_null() {
+        let Some(height) = probe["emptyBandHeight"].as_f64() else {
+            return Err(format!("{context}: empty toast band height is not numeric: {probe}"));
+        };
+        if height != 0.0 {
+            return Err(format!("{context}: empty toast band must have zero height, got {height}: {probe}"));
+        }
+    }
+    if hits.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "{context}: a toast row would cover {} control(s) and take their clicks; placement={}, row={}, viewport={}, covered={}",
+        hits.len(),
+        probe["placement"],
+        probe["probe"],
+        probe["viewport"],
+        probe["hits"],
+    ))
+}
+
+/// A notice toast must never cover a control, at any viewport or view (#254). Deterministic: measures the toast footprint with a probe row,
+/// so it needs no live toast and no sleep, and never dismisses one. See `TOAST_FOOTPRINT_PROBE`.
+fn assert_toast_footprint_clear(control: &rightkit_qa::control::Control, context: &str) {
+    let notices = [("short task notice", "Build Previews finished".to_string()), ("GPU recovery warning", gpu_recovery_notice_for_probe())];
+    for (notice_kind, notice) in notices {
+        let encoded = serde_json::to_string(&notice).expect("toast notice probe text must serialize");
+        let script = TOAST_FOOTPRINT_PROBE.replace("__NOTICE_MESSAGE_JSON__", &encoded);
+        let probe = control.eval(&script).expect("toast footprint probe must execute");
+        let notice_context = format!("{context}, {notice_kind}");
+        eprintln!("[qa] toast footprint ({notice_context}): {probe}");
+        toast_footprint_verdict(&notice_context, &probe).unwrap_or_else(|refusal| panic!("{refusal}"));
+    }
+}
+
+/// Recreates `native.rs::gpu_crash_notice` using a bounded, source-shaped startup marker reason.
+/// `backend.rs::marker_text` stores this form during native window startup before recovery reports it.
+fn gpu_recovery_notice_for_probe() -> String {
+    let backend = if cfg!(target_os = "windows") { "DX12" } else { "METAL" };
+    let what = format!("GPU startup (backends {backend}) started (unix time 1700000000)");
+    format!(
+        "Ember closed unexpectedly while starting the GPU last time ({what}), so GPU rendering is now off and photos render on the CPU. To try the GPU again, turn on Settings ▸ Performance ▸ Use the GPU for rendering; to try another graphics backend, start Ember with LIGHTCRAFT_GPU_BACKEND=dx12, vulkan or off."
+    )
+}
+
+#[test]
+fn toast_footprint_verdict_names_covered_controls_and_fails_closed() {
+    // Hosted Windows runner at 1024x788 before #254 was fixed: the default bottom-centre row sat on the stage footer's Info button.
+    let covered = json!({
+        "placement": "bottom-center",
+        "viewport": {"width": 1024, "height": 788},
+        "probe": {"left": 404.0, "top": 734.0, "right": 620.0, "bottom": 772.0},
+        "hits": [{"tag": "BUTTON", "id": null, "className": "rk-btn rk-btn--ghost rk-btn--sm", "label": "Info", "rect": {"left": 465.3, "top": 754.4, "right": 497.7, "bottom": 778.6}}],
+    });
+    let refusal = toast_footprint_verdict("preferences stage view", &covered).expect_err("a toast row over the Info button must fail");
+    for expected in ["preferences stage view", "1 control(s)", "bottom-center", "\"label\":\"Info\""] {
+        assert!(refusal.contains(expected), "the refusal must name {expected}: {refusal}");
+    }
+    // Top-centre, in the titlebar's empty middle: nothing underneath.
+    let clear = json!({"placement": "top-center", "viewport": {"width": 1024, "height": 788}, "emptyBandHeight": 0.0, "probe": {"left": 404.0, "top": 16.0, "right": 620.0, "bottom": 54.0}, "hits": []});
+    assert_eq!(toast_footprint_verdict("preferences stage view", &clear), Ok(()));
+    let nonempty_band = json!({"placement": "bottom-center", "viewport": {"width": 1024, "height": 788}, "emptyBandHeight": 24.0, "probe": {"left": 404.0, "top": 16.0, "right": 620.0, "bottom": 54.0}, "hits": []});
+    assert!(toast_footprint_verdict("preferences stage view", &nonempty_band).is_err(), "an empty toast band with height must fail");
+    // A probe that could not measure must never read as clean.
+    for broken in [json!({"error": "toast stack [data-rk-toasts] is not mounted"}), json!({}), json!({"hits": "none"}), Value::Null] {
+        assert!(toast_footprint_verdict("broken probe", &broken).is_err(), "{broken} must not pass");
+    }
+}
+
+/// Page helpers shared by every native click aimed at a DOM element: `describe(node)` names an element, and `clickGeometry(node)` reports
+/// where the element's centre is, what `document.elementFromPoint` finds there, and whether that is the target itself, one of its
+/// descendants or the `<label>` that owns it. Those are the only cases where a native pointer click at that point reaches the target.
+const CLICK_GEOMETRY_JS: &str = r#"
+const describe = (value) => value ? { tag: value.tagName, id: value.id || null, aria: value.getAttribute('aria-label'), title: value.getAttribute('title'), className: typeof value.className === 'string' ? value.className : (value.getAttribute('class') || ''), text: (value.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80) } : null;
+const clickGeometry = (node) => {
+    const rect = node.getBoundingClientRect();
+    const x = rect.x + rect.width / 2;
+    const y = rect.y + rect.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    const owner = hit && hit.closest ? hit.closest('label') : null;
+    const reaches = Boolean(hit) && (hit === node || node.contains(hit) || Boolean(owner && owner.control === node));
+    return { x, y, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, target: describe(node), hit: describe(hit), reaches, viewport: { width: window.innerWidth, height: window.innerHeight, scale: window.devicePixelRatio } };
+};
+"#;
+
+/// Reads back what `click_dom`'s capture listeners saw and disarms them.
+const READ_CLICK_DIAGNOSTIC_JS: &str = "return (() => { const events = window.__rkClickDiagnostic || []; if (window.__rkClickDiagnosticCleanup) window.__rkClickDiagnosticCleanup(); delete window.__rkClickDiagnostic; delete window.__rkClickDiagnosticCleanup; return events; })();";
+
+/// Names an element reported by `describe` as `tag#id.class "text"`.
+fn element_label(element: &Value) -> String {
+    let Some(tag) = element["tag"].as_str() else {
+        return "no element".to_string();
+    };
+    let mut label = tag.to_ascii_lowercase();
+    if let Some(id) = element["id"].as_str().filter(|id| !id.is_empty()) {
+        label = format!("{label}#{id}");
+    }
+    for class in element["className"].as_str().unwrap_or_default().split_whitespace() {
+        label = format!("{label}.{class}");
+    }
+    match element["text"].as_str().filter(|text| !text.is_empty()) {
+        Some(text) => format!("{label} {text:?}"),
+        None => label,
+    }
+}
+
+/// Why a native click at the centre of a target must not be sent: another element (a toast, popover, overlay) owns that point, so the pointer
+/// would go there instead and the journey would fail later, far from the cause. `None` when the point reaches the target. A click is never
+/// waited for, retried or dismissed around, and fails closed: geometry that does not say `reaches: true` is refused.
+fn click_refusal(geometry: &Value) -> Option<String> {
+    if geometry["reaches"].as_bool() == Some(true) {
+        return None;
+    }
+    Some(format!(
+        "covered by {}; target={}; viewport={}x{}",
+        element_label(&geometry["hit"]),
+        element_label(&geometry["target"]),
+        geometry["viewport"]["width"],
+        geometry["viewport"]["height"],
+    ))
+}
+
+#[test]
+fn click_refusal_names_the_element_covering_the_target_and_fails_closed() {
+    // The hosted Windows runner's failing click, rect and viewport as logged: the footer Info button's centre lay under a notice toast.
+    let mut geometry = json!({
+        "hit": {"aria": null, "className": "rk-toast rk-toast--info", "tag": "DIV", "title": null},
+        "rect": {"height": 24.1875, "width": 32.359375, "x": 465.328125, "y": 754.40625},
+        "target": {"aria": null, "className": "rk-btn rk-btn--ghost rk-btn--sm", "tag": "BUTTON", "title": null},
+        "viewport": {"height": 788, "scale": 1, "width": 1024},
+        "x": 481.5078125,
+        "y": 766.5,
+    });
+    assert!(click_refusal(&geometry).is_some(), "geometry that does not say the point reaches its target must be refused");
+    geometry["reaches"] = json!(false);
+    let refusal = click_refusal(&geometry).expect("a click whose centre lies under a toast must be refused");
+    for expected in ["covered by div.rk-toast.rk-toast--info;", "target=button.rk-btn.rk-btn--ghost.rk-btn--sm;", "viewport=1024x788"] {
+        assert!(refusal.contains(expected), "the refusal must name {expected}: {refusal}");
+    }
+    // The cover's id and text are named when the page reports them.
+    geometry["hit"]["id"] = json!("cover");
+    geometry["hit"]["text"] = json!("Import Photos finished");
+    let refusal = click_refusal(&geometry).expect("a covered click must be refused");
+    assert!(refusal.contains("covered by div#cover.rk-toast.rk-toast--info \"Import Photos finished\";"), "{refusal}");
+    // A point nothing owns (outside the viewport) is refused too.
+    geometry["hit"] = Value::Null;
+    assert!(click_refusal(&geometry).is_some_and(|refusal| refusal.starts_with("covered by no element;")));
+    // Only a boolean `true` lets the click through.
+    for not_reaching in [json!("true"), json!(1), Value::Null] {
+        geometry["reaches"] = not_reaching;
+        assert!(click_refusal(&geometry).is_some(), "{} must not count as reaching the target", geometry["reaches"]);
+    }
+    geometry["reaches"] = json!(true);
+    assert_eq!(click_refusal(&geometry), None);
+}
+
 fn click_dom(control: &rightkit_qa::control::Control, selector: &str, message: &str) {
     wait_for_dom(
         control,
@@ -369,15 +587,20 @@ fn click_dom(control: &rightkit_qa::control::Control, selector: &str, message: &
     );
     let geometry = control
         .eval(&format!(
-            "return (() => {{ const node = document.querySelector({selector:?}); if (!node) return null; const rect = node.getBoundingClientRect(); const x = rect.x + rect.width / 2; const y = rect.y + rect.height / 2; const hit = document.elementFromPoint(x, y); const describe = (value) => value ? {{ tag: value.tagName, aria: value.getAttribute('aria-label'), title: value.getAttribute('title'), className: value.className }} : null; window.__rkClickDiagnostic = []; const capture = (event) => {{ const target = event.target && event.target.closest ? event.target.closest('button,[role=button]') : event.target; if (window.__rkClickDiagnostic.length < 64) window.__rkClickDiagnostic.push({{ type: event.type, isTrusted: event.isTrusted, clientX: event.clientX, clientY: event.clientY, target: describe(target), selected: target?.classList?.contains('selected') === true }}); }}; window.__rkClickDiagnosticCleanup = () => {{ ['pointerdown', 'pointerup', 'click'].forEach((type) => document.removeEventListener(type, capture, true)); }}; ['pointerdown', 'pointerup', 'click'].forEach((type) => document.addEventListener(type, capture, true)); return {{ x, y, rect: {{ x: rect.x, y: rect.y, width: rect.width, height: rect.height }}, target: describe(node), hit: describe(hit), viewport: {{ width: window.innerWidth, height: window.innerHeight, scale: window.devicePixelRatio }} }}; }})();"
+            "return (() => {{ {CLICK_GEOMETRY_JS} const node = document.querySelector({selector:?}); if (!node) return null; const geometry = clickGeometry(node); window.__rkClickDiagnostic = []; const capture = (event) => {{ const target = event.target && event.target.closest ? event.target.closest('button,[role=button]') : event.target; if (window.__rkClickDiagnostic.length < 64) window.__rkClickDiagnostic.push({{ type: event.type, isTrusted: event.isTrusted, clientX: event.clientX, clientY: event.clientY, target: describe(target), selected: target?.classList?.contains('selected') === true }}); }}; window.__rkClickDiagnosticCleanup = () => {{ ['pointerdown', 'pointerup', 'click'].forEach((type) => document.removeEventListener(type, capture, true)); }}; ['pointerdown', 'pointerup', 'click'].forEach((type) => document.addEventListener(type, capture, true)); return geometry; }})();"
         ))
         .expect("DOM click geometry query must execute");
     let x = geometry["x"].as_f64().expect("DOM click x must be numeric");
     let y = geometry["y"].as_f64().expect("DOM click y must be numeric");
+    if let Some(refusal) = click_refusal(&geometry) {
+        // Fail at the cause, with the cover still in the page for the failure screenshot and DOM dump: no waiting for it to go away, no retry,
+        // no dismissing it and no scripted click, which would each hide the overlap from a real user's pointer.
+        control.eval(READ_CLICK_DIAGNOSTIC_JS).unwrap_or(Value::Null);
+        eprintln!("[qa] click selector={selector:?} refused geometry={geometry}");
+        panic!("{message}: {selector:?} is {refusal}");
+    }
     let result = control.click(x, y, "left", 1);
-    let events = control
-        .eval("return (() => { const events = window.__rkClickDiagnostic || []; if (window.__rkClickDiagnosticCleanup) window.__rkClickDiagnosticCleanup(); delete window.__rkClickDiagnostic; delete window.__rkClickDiagnosticCleanup; return events; })();")
-        .unwrap_or(Value::Null);
+    let events = control.eval(READ_CLICK_DIAGNOSTIC_JS).unwrap_or(Value::Null);
     eprintln!("[qa] click selector={selector:?} geometry={geometry} events={events}");
     result.expect(message);
 }
@@ -2014,6 +2237,7 @@ fn native_hidden_control_journeys() {
                     control.screenshot_to(&dark).expect("dark theme screenshot must be captured");
                     assert!(dark.is_file());
                     assert_library_header_contrast(control, "dark");
+                    assert_toast_footprint_clear(control, "preferences library view");
                     click_dom(control, ".rk-top button.rk-seg__item[title='Develop']", "Develop segment must select actual detail view");
                     wait_for_dom(control, "return document.querySelector('.stage-detail') !== null && document.querySelector('.lc-library-workspace') === null && document.querySelector('.lc-filmstrip') !== null;");
                     assert_filmstrip_context_contrast(control, "dark");
@@ -2218,7 +2442,10 @@ fn native_hidden_control_journeys() {
                     if snapshot(control)["active"].is_null() {
                         task_result(control, "library.import", json!({"paths": [inputs.png], "mode": "add"}));
                     }
-                    wait_for_dom(control, "return document.querySelector('.lc-stage-layout') !== null && document.querySelector('.info-overlay') !== null;");
+                    wait_for_dom(control, "return document.querySelector('.lc-stage-layout') !== null && document.querySelector('.info-overlay') !== null && document.querySelector('.footer-right button') !== null;");
+                    // #254: a finished-task notice raised by the import above must not sit on the footer controls clicked next (the wait above
+                    // proves those controls are rendered, so the probe cannot pass for want of anything to cover).
+                    assert_toast_footprint_clear(control, "preferences stage view before the footer clicks");
                     let exposure_overlay = control.eval("return document.querySelector('.info-overlay')?.textContent || '';").expect("Exposure overlay must render");
                     click_dom(control, ".footer-right button:first-child", "Info control must cycle Exposure to Off");
                     wait_for_dom(control, "return document.querySelector('.info-overlay') === null;");
@@ -2487,10 +2714,14 @@ fn native_hidden_control_journeys() {
                     wait_for_dom(control, "return document.querySelector('.lc-library-workspace') !== null;");
                     enable_grid_info(control);
                     wait_for_rendered_preview(control, ".lc-photo-cell.is-active img.lc-photo-preview", None);
-                    let cell = control.eval("return (() => { const rect = document.querySelector('.lc-photo-cell.is-active')?.getBoundingClientRect(); return rect ? {x: rect.x + rect.width / 2, y: rect.y + rect.height / 2} : null; })();")
+                    let cell = control
+                        .eval(&format!("return (() => {{ {CLICK_GEOMETRY_JS} const node = document.querySelector('.lc-photo-cell.is-active'); return node ? clickGeometry(node) : null; }})();"))
                         .expect("active photo native context menu coordinates must be readable");
-                    control.click(cell["x"].as_f64().expect("photo x required"), cell["y"].as_f64().expect("photo y required"), "right", 1)
-                        .expect("native right click must open photo context menu");
+                    let (cell_x, cell_y) = (cell["x"].as_f64().expect("photo x required"), cell["y"].as_f64().expect("photo y required"));
+                    if let Some(refusal) = click_refusal(&cell) {
+                        panic!("native right click on the active photo is {refusal}");
+                    }
+                    control.click(cell_x, cell_y, "right", 1).expect("native right click must open photo context menu");
                     // RightKit ContextMenu rows: each rating is a checkable row; pick "5 stars" by its text.
                     let photo_menu = r#"[role=menu][aria-label="Photo actions"]"#;
                     wait_for_dom(control, &format!("return document.querySelector({photo_menu:?}) !== null;"));
@@ -2541,11 +2772,12 @@ fn native_hidden_control_journeys() {
                         control.key("G").expect("populated library route must execute");
                         wait_for_rendered_preview(control, "img.lc-photo-preview", None);
                         wait_for_rendered_preview(control, "img.lc-filmstrip-preview", None);
-                        for (width, height) in [(1280_u64, 800_u64), (1600_u64, 1000_u64)] {
+                        for (width, height) in [(960_u64, 640_u64), (1024_u64, 788_u64), (1280_u64, 800_u64), (1600_u64, 1000_u64)] {
                             set_native_viewport(control, width, height);
                             wait_for_dom(control, "return document.querySelector('.lc-library-workspace') !== null;");
                             assert_layout_settled(control, ".lc-library-workspace");
                             assert_workspace_design(control);
+                            assert_toast_footprint_clear(control, &format!("library view at {width}x{height}"));
                             let viewport = control
                                 .eval("return {width: window.innerWidth, height: window.innerHeight};")
                                 .expect("viewport query must execute");
@@ -2567,6 +2799,7 @@ fn native_hidden_control_journeys() {
                             wait_for_dom(control, "return document.querySelector('input[id=\"ctl-light.exposure\"]') !== null;");
                             assert_primary_editing_usable(control);
                             assert_workspace_design(control);
+                            assert_toast_footprint_clear(control, &format!("develop view at {width}x{height}"));
                             let route = control
                                 .eval("return document.querySelector('.stage-view-mode select')?.value || '';")
                                 .expect("develop route readback must execute");
@@ -2821,6 +3054,7 @@ fn native_hidden_control_journeys() {
                         assert_eq!(tail_page["offset"].as_u64(), Some(1536));
                         assert_eq!(tail_page["photos"].as_array().map(Vec::len), Some(512), "tail page must contain final 512 photos");
                         let first_id = first_page["photos"][0]["id"].as_u64().expect("first page must expose photo id");
+                        let first_name = first_page["photos"][0]["fileName"].as_str().expect("first page must expose photo file name").to_string();
                         let _selected = run(control, "library.select", json!({"ids": [first_id], "active": first_id, "mode": "replace"}));
                         let selected_snapshot = snapshot(control);
                         assert_eq!(selected_snapshot["active"].as_u64(), Some(first_id), "scalability selection snapshot must identify first page photo");
@@ -2832,6 +3066,9 @@ fn native_hidden_control_journeys() {
                         let initial_name = initial["first"].as_str().unwrap_or_default().to_string();
                         assert!(!initial_name.is_empty(), "initial grid must expose first filename");
                         assert!(initial["scrollHeight"].as_f64().unwrap_or(0.0) > initial["clientHeight"].as_f64().unwrap_or(0.0), "2048-photo grid must have scrollable height: {initial}");
+                        // The control channel changes the host selection without telling the page; the page catches up on its next
+                        // snapshot poll (up to 1.2 s idle), so wait for the selected photo's cell instead of asserting once.
+                        wait_for_active_grid_preview(control, &first_name, None);
                         assert_active_grid_is_bounded(control);
                         assert_grid_geometry_retains_focus_and_preview(control);
                         let grid_style = control
@@ -3288,9 +3525,13 @@ fn native_hidden_control_journeys() {
                         choose_inspector_panel(control, "edit");
                         wait_for_dom(control, "return document.querySelector('.lc-histogram svg path[stroke=\"#df6464\"]')?.getAttribute('d')?.includes('L') === true && document.querySelector('.lc-histogram__footer')?.textContent.includes('samples') === true;");
                         let curve_before = snapshot(control)["develop"]["curve"].clone();
-                        let curve_heading = control.eval("return (() => { const button = [...document.querySelectorAll('.lc-inspector__section-head')].find(node => node.querySelector('span:nth-child(2)')?.textContent.trim() === 'Tone Curve'); if (!button) return null; button.scrollIntoView({block: 'center'}); const rect = button.getBoundingClientRect(); return {x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, open: button.getAttribute('data-open') === 'true'}; })();").expect("Tone Curve section must expose its actual heading");
+                        let curve_heading = control.eval(&format!("return (() => {{ {CLICK_GEOMETRY_JS} const button = [...document.querySelectorAll('.lc-inspector__section-head')].find(node => node.querySelector('span:nth-child(2)')?.textContent.trim() === 'Tone Curve'); if (!button) return null; button.scrollIntoView({{block: 'center'}}); return {{ ...clickGeometry(button), open: button.getAttribute('data-open') === 'true' }}; }})();")).expect("Tone Curve section must expose its actual heading");
                         if curve_heading["open"].as_bool() != Some(true) {
-                            control.click(curve_heading["x"].as_f64().expect("curve heading x must be numeric"), curve_heading["y"].as_f64().expect("curve heading y must be numeric"), "left", 1).expect("collapsed Tone Curve section must open by pointer");
+                            let (heading_x, heading_y) = (curve_heading["x"].as_f64().expect("curve heading x must be numeric"), curve_heading["y"].as_f64().expect("curve heading y must be numeric"));
+                            if let Some(refusal) = click_refusal(&curve_heading) {
+                                panic!("collapsed Tone Curve section heading is {refusal}");
+                            }
+                            control.click(heading_x, heading_y, "left", 1).expect("collapsed Tone Curve section must open by pointer");
                         }
                         wait_for_dom(control, "return document.querySelector('.lc-curve-picker > button') !== null;");
                         let scrolled = control.eval("return (() => { const button = document.querySelector('.lc-curve-picker > button'); if (!button) return false; button.scrollIntoView({block: 'center', inline: 'nearest'}); return true; })();").expect("curve preset control must scroll into view");

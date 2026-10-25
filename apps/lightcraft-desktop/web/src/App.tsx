@@ -212,10 +212,14 @@ function WorkspaceLayout() {
 
 function LocalizedShell({ children }: { children: ReactNode }) {
   const { t } = useDesktop();
+  // Notices use RightKit's existing toast band below the shell; its normal-flow space keeps notices clear of workspace controls.
+  // Finished tasks stay listed in the Tasks activity stack, so a newer task notice replacing an older one loses nothing; a non-task
+  // notice (a warning) can be replaced by a newer one before it is read.
   return <ShellProvider
     bridge={shell.bridge()}
     themeStore={themeStore()}
     platform={getPlatform()}
+    toastOptions={{ dedupe: 'newest', maxVisible: 1 }}
     paletteLabels={{ placeholder: t('Search or run a command…'), title: t('Command palette'), empty: t('No matches.'), results: t('Results') }}
     helpTitle={t('Keyboard shortcuts')}
   >{children}</ShellProvider>;
