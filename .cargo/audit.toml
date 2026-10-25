@@ -1,0 +1,8 @@
+# Reasons live in deny.toml [advisories] ignore.
+[advisories]
+ignore = [
+  "RUSTSEC-2024-0429",
+  "RUSTSEC-2026-0367",
+  "RUSTSEC-2026-0368",
+  "RUSTSEC-2026-0369",
+]
