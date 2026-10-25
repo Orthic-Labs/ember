@@ -548,7 +548,6 @@ fn qa_window_state(app: &AppHandle<Wry>) -> Result<Value, String> {
 }
 
 #[cfg(feature = "qa-native")]
-#[cfg(feature = "qa-native")]
 fn control_dispatch(app: &AppHandle<Wry>, name: &str, raw: &str) -> Result<String, String> {
     let args = control_args(raw)?;
     let result = match name {
