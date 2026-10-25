@@ -212,10 +212,16 @@ function WorkspaceLayout() {
 
 function LocalizedShell({ children }: { children: ReactNode }) {
   const { t } = useDesktop();
+  // Notices raise toasts (Workspace above). RightKit's default bottom-centre stack sits on the 44px stage footer and the filmstrip and takes
+  // their clicks, so the stack goes top-centre, into the titlebar's empty middle, one row at a time: a second row would land on the Library
+  // header. Finished tasks stay listed in the Tasks activity stack, so a newer task notice replacing an older one loses nothing; a non-task
+  // notice (a warning) can be replaced by a newer one before it is read.
   return <ShellProvider
     bridge={shell.bridge()}
     themeStore={themeStore()}
     platform={getPlatform()}
+    toastPlacement="top-center"
+    toastOptions={{ dedupe: 'newest', maxVisible: 1 }}
     paletteLabels={{ placeholder: t('Search or run a command…'), title: t('Command palette'), empty: t('No matches.'), results: t('Results') }}
     helpTitle={t('Keyboard shortcuts')}
   >{children}</ShellProvider>;

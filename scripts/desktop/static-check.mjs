@@ -129,7 +129,7 @@ function checkSourceContracts() {
   if (!gate.includes("@rightkit/release/managed-cargo.mjs") || !gate.includes("generate-lockfile") || !gate.includes("--locked")) fail("desktop gate must use managed Cargo adapter & bounded lock bootstrap");
   if (!candidate.includes("cargoCompilerArtifacts") || !candidate.includes("materializeArtifacts") || candidate.includes("config.candidate") || candidate.includes("config.qualification")) fail("candidate must consume Cargo compiler records through real release config");
   if (!installed.includes("runCargoSync") || !installed.includes('"native_qualification"') || installed.includes("target.command")) fail("installed qualification must invoke fixed RightKit QA Rust test through managed Cargo");
-  for (const token of ["rightkit_qa::control", "Mode::Hidden", "RIGHTKIT_QA_UI_BINARY", "stalePreview", "lightroomImport", "catalogRecovery"]) {
+  for (const token of ["rightkit_qa::control", "Mode::Hidden", "RIGHTKIT_QA_UI_BINARY", "stalePreview", "lightroomImport", "catalogRecovery", "assert_toast_footprint_clear", "click_refusal"]) {
     if (!nativeQa.includes(token)) fail(`native qualification is missing executed control contract ${token}`);
   }
   if (!nativeHost.includes("rightkit_qa::embedded::Control") || !nativeHost.includes("build_if_enabled") || !nativeHost.includes("qa-native")) fail("native app must register debug-gated rightkit-qa");
@@ -145,6 +145,12 @@ function checkSourceContracts() {
   for (const token of ["DEFAULT_MAX_ITEMS", "DEFAULT_MAX_BYTES", "DEFAULT_TTL"]) if (!previewStore.includes(token)) fail(`preview store missing bounded contract ${token}`);
   const web = readFileSync(path.join(repoRoot, "apps/lightcraft-desktop/web/src/library/libraryData.ts"), "utf8");
   if (!/MAX_SLICE = 512/.test(web) || !/generation/.test(web)) fail("library slice cache must remain generation-bound & capped");
+  // #254: RightKit's default bottom-centre toast stack covers and takes clicks meant for the stage footer & filmstrip. Notices go top-centre,
+  // one row at a time (a second row lands on the Library header). Native QA measures the real footprint (assert_toast_footprint_clear).
+  const shell = readFileSync(path.join(repoRoot, "apps/lightcraft-desktop/web/src/App.tsx"), "utf8");
+  const provider = /<ShellProvider\b[\s\S]*?<\/ShellProvider>/.exec(shell)?.[0] ?? "";
+  if (!/\btoastPlacement="top-center"/.test(provider)) fail("ShellProvider must place toasts top-centre so they never cover the stage footer or filmstrip (#254)");
+  if (!/\btoastOptions=\{\{[^}]*\bmaxVisible: 1\b[^}]*\}\}/.test(provider)) fail("ShellProvider must show one toast at a time so a second row never covers the Library header (#254)");
 }
 
 checkInstallIdentity();
