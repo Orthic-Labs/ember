@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "_comment": "Advisory exceptions for this Cargo workspace (RightKit class A policy, as ci/advisory-exceptions.json in RightKit). deny.toml and .cargo/audit.toml must match it exactly; approvedBy needs a person.",
+  "exceptions": [
+    {
+      "id": "RUSTSEC-2024-0429",
+      "crate": "glib",
+      "affectedVersions": [
+        "0.18.5"
+      ],
+      "dependents": [
+        "atk 0.18.2",
+        "cairo-rs 0.18.5",
+        "gdk 0.18.2",
+        "gdk-pixbuf 0.18.5",
+        "gdkx11 0.18.2",
+        "gio 0.18.4",
+        "gtk 0.18.2",
+        "javascriptcore-rs 1.1.2",
+        "libappindicator 0.9.0",
+        "pango 0.18.3",
+        "soup3 0.5.0",
+        "webkit2gtk 2.0.2"
+      ],
+      "path": "atk -> glib",
+      "owner": "Adrian (app owner)",
+      "rationale": "glib arrives only through tauri's Linux/BSD-gated GTK dependency (tao, wry, webkit2gtk); the Tauri desktop release targets are Windows and macOS only. Invalidated the moment any GTK (Linux or BSD) Tauri target ships.",
+      "evidence": "deny.toml [advisories].ignore reason; Cargo.lock reverse dependencies of glib",
+      "reviewBy": "2026-11-24",
+      "approvedBy": "pending: Adrian"
+    },
+    {
+      "id": "RUSTSEC-2026-0367",
+      "crate": "zip",
+      "affectedVersions": [
+        "4.6.1",
+        "7.4.0",
+        "9.1.0"
+      ],
+      "dependents": [
+        "candle-core 0.9.2",
+        "rightkit-models 0.5.1",
+        "tauri-plugin-updater 2.14.0"
+      ],
+      "path": "candle-core -> zip",
+      "owner": "Adrian (app owner)",
+      "rationale": "tauri-plugin-updater 2.14.0 (the latest) requires zip ^4 as an optional Windows-only dependency; the updater installs only bytes returned by its minisign-verified download, so no unsigned archive is ever extracted.",
+      "evidence": "deny.toml [advisories].ignore reason; Cargo.lock reverse dependencies of zip",
+      "reviewBy": "2026-11-24",
+      "approvedBy": "pending: Adrian"
+    },
+    {
+      "id": "RUSTSEC-2026-0368",
+      "crate": "zip",
+      "affectedVersions": [
+        "4.6.1",
+        "7.4.0",
+        "9.1.0"
+      ],
+      "dependents": [
+        "candle-core 0.9.2",
+        "rightkit-models 0.5.1",
+        "tauri-plugin-updater 2.14.0"
+      ],
+      "path": "candle-core -> zip",
+      "owner": "Adrian (app owner)",
+      "rationale": "tauri-plugin-updater 2.14.0 (the latest) requires zip ^4 as an optional Windows-only dependency; the updater installs only bytes returned by its minisign-verified download, so no unsigned archive is ever extracted.",
+      "evidence": "deny.toml [advisories].ignore reason; Cargo.lock reverse dependencies of zip",
+      "reviewBy": "2026-11-24",
+      "approvedBy": "pending: Adrian"
+    },
+    {
+      "id": "RUSTSEC-2026-0369",
+      "crate": "zip",
+      "affectedVersions": [
+        "4.6.1",
+        "7.4.0",
+        "9.1.0"
+      ],
+      "dependents": [
+        "candle-core 0.9.2",
+        "rightkit-models 0.5.1",
+        "tauri-plugin-updater 2.14.0"
+      ],
+      "path": "candle-core -> zip",
+      "owner": "Adrian (app owner)",
+      "rationale": "tauri-plugin-updater 2.14.0 (the latest) requires zip ^4 as an optional Windows-only dependency; the updater installs only bytes returned by its minisign-verified download, so no unsigned archive is ever extracted.",
+      "evidence": "deny.toml [advisories].ignore reason; Cargo.lock reverse dependencies of zip",
+      "reviewBy": "2026-11-24",
+      "approvedBy": "pending: Adrian"
+    }
+  ]
+}
