@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' blob: data: lightcraft-preview: http://lightcraft-preview.localhost; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost lightcraft-preview: http://lightcraft-preview.localhost; font-src 'self'; script-src 'self'",
+      "csp": "default-src 'self'; img-src 'self' blob: data: lightcraft-preview: http://lightcraft-preview.localhost; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost lightcraft-preview: http://lightcraft-preview.localhost; font-src 'self'; script-src 'self'; frame-ancestors 'none'",
       "capabilities": [
         "main"
       ]
