@@ -365,8 +365,8 @@ fn assert_filmstrip_context_contrast(control: &rightkit_qa::control::Control, mo
 /// `[data-rk-toasts]` stack, in the slot a lone toast takes (first for a top placement, last for a bottom one), measures it, hit-tests every
 /// 2px across it for the interactive elements underneath and removes it again, all in one synchronous task: React never sees the row and no
 /// live toast is needed. The probe sets `animation: none` (the entry animation starts 8px off its slot) so the settled geometry is measured,
-/// and `pointer-events: none` so the hit test sees what lies under the row. The message is the longest of the task notices ("Build Previews
-/// finished", "Import Photos finished", "Review Import finished").
+/// and `pointer-events: none` so the hit test sees what lies under the row. The message is a typical task notice ("Build Previews finished");
+/// longer ones exist (the LRCAT import and inspect notices, startup warnings), so this guards the common width, not every notice.
 const TOAST_FOOTPRINT_PROBE: &str = r#"return (() => {
     const stack = document.querySelector('[data-rk-toasts]');
     if (!stack) return { error: 'toast stack [data-rk-toasts] is not mounted' };
@@ -2415,8 +2415,9 @@ fn native_hidden_control_journeys() {
                     if snapshot(control)["active"].is_null() {
                         task_result(control, "library.import", json!({"paths": [inputs.png], "mode": "add"}));
                     }
-                    wait_for_dom(control, "return document.querySelector('.lc-stage-layout') !== null && document.querySelector('.info-overlay') !== null;");
-                    // #254: a finished-task notice raised by the import above must not sit on the footer controls clicked next.
+                    wait_for_dom(control, "return document.querySelector('.lc-stage-layout') !== null && document.querySelector('.info-overlay') !== null && document.querySelector('.footer-right button') !== null;");
+                    // #254: a finished-task notice raised by the import above must not sit on the footer controls clicked next (the wait above
+                    // proves those controls are rendered, so the probe cannot pass for want of anything to cover).
                     assert_toast_footprint_clear(control, "preferences stage view before the footer clicks");
                     let exposure_overlay = control.eval("return document.querySelector('.info-overlay')?.textContent || '';").expect("Exposure overlay must render");
                     click_dom(control, ".footer-right button:first-child", "Info control must cycle Exposure to Off");
