@@ -1,4 +1,0 @@
-error: process didn't exit successfully: `rustc -vV` (exit status: 125)
---- stderr
-rightkit managed-agent: rustc is GitHub Actions only for /Volumes/D/claude/ember; direct Cargo is blocked. Local builds need a .rightkit-local-build.json naming this repository. Use this repository's documented local unsigned-installer command when .rightkit-local-development.json authorizes it; otherwise push changes & use managed CI
-

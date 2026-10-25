@@ -23,3 +23,6 @@ plan/
 *.tsbuildinfo
 # Tauri sidecar staging: the AV1 worker copied in by scripts/desktop/build-native.mjs
 /apps/lightcraft-desktop/binaries/
+
+# Legion audit run output (lens packets, per-run epoch keys) stays local; never commit it.
+.audit/
