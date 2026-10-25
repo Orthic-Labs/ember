@@ -38,6 +38,19 @@ allow = [
 confidence-threshold = 0.9
 unused-allowed-license = "allow"
 
+# Permissive licences outside the default list, allowed for the one crate that carries each.
+[[licenses.exceptions]]
+crate = "epaint_default_fonts"
+allow = ["Ubuntu-font-1.0"]
+
+[[licenses.exceptions]]
+crate = "jpeg-encoder"
+allow = ["IJG"]
+
+[[licenses.exceptions]]
+crate = "libfuzzer-sys"
+allow = ["NCSA"]
+
 [licenses.private]
 ignore = true
 
