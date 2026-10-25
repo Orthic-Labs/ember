@@ -3027,6 +3027,7 @@ fn native_hidden_control_journeys() {
                         assert_eq!(tail_page["offset"].as_u64(), Some(1536));
                         assert_eq!(tail_page["photos"].as_array().map(Vec::len), Some(512), "tail page must contain final 512 photos");
                         let first_id = first_page["photos"][0]["id"].as_u64().expect("first page must expose photo id");
+                        let first_name = first_page["photos"][0]["fileName"].as_str().expect("first page must expose photo file name").to_string();
                         let _selected = run(control, "library.select", json!({"ids": [first_id], "active": first_id, "mode": "replace"}));
                         let selected_snapshot = snapshot(control);
                         assert_eq!(selected_snapshot["active"].as_u64(), Some(first_id), "scalability selection snapshot must identify first page photo");
@@ -3038,6 +3039,9 @@ fn native_hidden_control_journeys() {
                         let initial_name = initial["first"].as_str().unwrap_or_default().to_string();
                         assert!(!initial_name.is_empty(), "initial grid must expose first filename");
                         assert!(initial["scrollHeight"].as_f64().unwrap_or(0.0) > initial["clientHeight"].as_f64().unwrap_or(0.0), "2048-photo grid must have scrollable height: {initial}");
+                        // The control channel changes the host selection without telling the page; the page catches up on its next
+                        // snapshot poll (up to 1.2 s idle), so wait for the selected photo's cell instead of asserting once.
+                        wait_for_active_grid_preview(control, &first_name, None);
                         assert_active_grid_is_bounded(control);
                         assert_grid_geometry_retains_focus_and_preview(control);
                         let grid_style = control
