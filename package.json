@@ -7,25 +7,6 @@
   "engines": {
     "node": "26.8.1"
   },
-  "scripts": {
-    "dev": "vite --config apps/lightcraft-desktop/web/vite.config.ts",
-    "typecheck": "tsc --noEmit -p apps/lightcraft-desktop/web/tsconfig.json",
-    "build": "vite build --config apps/lightcraft-desktop/web/vite.config.ts",
-    "ci:desktop": "node scripts/desktop/gate.mjs",
-    "rightgit:sync": "right-git sync .",
-    "rightgit:drift": "right-git drift .",
-    "dev:build:mac": "right-release dev --platform mac",
-    "dev:build:win": "right-release dev --platform win",
-    "desktop:static": "node scripts/desktop/static-check.mjs",
-    "desktop:artifact:build": "node scripts/desktop/dev-artifact.mjs",
-    "desktop:fixtures": "node --test scripts/desktop/fixtures-contract.test.mjs",
-    "release:admit": "node scripts/desktop/admit.mjs",
-    "release:stage-summary": "node scripts/desktop/stage-summary.mjs",
-    "release:candidate:build": "node scripts/desktop/candidate.mjs build",
-    "release:candidate:check": "node scripts/desktop/candidate.mjs check",
-    "release:qualify:installed": "node scripts/desktop/installed-qualification.mjs",
-    "release:evidence:verify": "node scripts/desktop/evidence-verify.mjs"
-  },
   "dependencies": {
     "@rightkit/app-update": "0.4.0",
     "@rightkit/i18n": "0.1.0",
