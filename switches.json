@@ -557,7 +557,7 @@
       "name": "SystemRoot",
       "class": "S6",
       "channel": "env",
-      "anchor": "scripts/desktop/finalize-candidate.mjs:95",
+      "anchor": "scripts/desktop/finalize-candidate.mjs:98",
       "valueType": "enum",
       "note": "OS-provided; used for default folders, the dev-install path in right-release.config.mjs and the release scripts. Selects no test mode, root or executable of its own."
     },
@@ -605,7 +605,7 @@
       "name": "GITHUB_ACTIONS",
       "class": "S6",
       "channel": "env",
-      "anchor": "scripts/desktop/build-native.mjs:9",
+      "anchor": "scripts/desktop/build-native.mjs:12",
       "valueType": "bool",
       "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
     },
@@ -637,7 +637,7 @@
       "name": "RUNNER_TEMP",
       "class": "S6",
       "channel": "env",
-      "anchor": "scripts/desktop/build-native.mjs:35",
+      "anchor": "scripts/desktop/build-native.mjs:38",
       "valueType": "enum",
       "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
     },
@@ -653,7 +653,7 @@
       "name": "LEGION_UNSIGNED_CANDIDATE_ROOT",
       "class": "S6",
       "channel": "env",
-      "anchor": "scripts/desktop/finalize-candidate.mjs:61",
+      "anchor": "scripts/desktop/finalize-candidate.mjs:64",
       "valueType": "enum",
       "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
     },
@@ -717,7 +717,7 @@
       "name": "RIGHT_GIT_RELEASE_ARCHITECTURE",
       "class": "S6",
       "channel": "env",
-      "anchor": "scripts/desktop/finalize-candidate.mjs:18",
+      "anchor": "scripts/desktop/finalize-candidate.mjs:21",
       "valueType": "enum",
       "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
     },
@@ -725,7 +725,7 @@
       "name": "RIGHT_GIT_RELEASE_PLATFORM",
       "class": "S6",
       "channel": "env",
-      "anchor": "scripts/desktop/finalize-candidate.mjs:17",
+      "anchor": "scripts/desktop/finalize-candidate.mjs:20",
       "valueType": "enum",
       "note": "Release script only (scripts/desktop, run by the release workflows); not part of any bundle. S6 until bogusyogi/rightkit#1070 lets scripts/ be declared non-shipped."
     },
