@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "engines": {
-    "node": "26.8.1"
+    "node": "26.12.1"
   },
   "dependencies": {
     "@rightkit/app-update": "0.4.2",
